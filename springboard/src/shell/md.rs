@@ -53,14 +53,17 @@ pub fn classify(line: &str) -> LineInfo {
     let rest = &chars[indent..];
     let starts = |p: &str| rest.len() >= p.chars().count() && rest.iter().zip(p.chars()).all(|(a, b)| *a == b);
     let info = |block, len: usize, ind: usize| LineInfo { block, prefix: ind + len, indent: ind };
+    // a line has one paragraph style: a checkbox marker after a heading marker (`## - [ ] Item`, as a checklist line
+    // turned into a heading used to be written) belongs to the heading's marker, not its text (`stray_check`)
+    let heading = |block, len: usize| info(block, len + check_marker_len(&rest[len..]), 0);
     if starts("### ") {
-        return info(Block::Subheading, 4, 0);
+        return heading(Block::Subheading, 4);
     }
     if starts("## ") {
-        return info(Block::Heading, 3, 0);
+        return heading(Block::Heading, 3);
     }
     if starts("# ") {
-        return info(Block::Title, 2, 0);
+        return heading(Block::Title, 2);
     }
     if starts("> ") && indent == 0 {
         return info(Block::Quote, 2, 0);
@@ -90,6 +93,48 @@ pub fn classify(line: &str) -> LineInfo {
 
 /// Leading spaces that make a line monostyled.
 const MONO_INDENT: usize = 4;
+
+/// The length of a checkbox marker (`- [ ] `, `- [x] `, `- [X] `) at the start of `rest`, else 0.
+fn check_marker_len(rest: &[char]) -> usize {
+    let is = |p: &str| rest.len() >= 6 && rest.iter().zip(p.chars()).all(|(a, b)| *a == b);
+    if is("- [ ] ") || is("- [x] ") || is("- [X] ") {
+        6
+    } else {
+        0
+    }
+}
+
+/// The chars of a checkbox marker that follows a heading marker (`## - [ ] Item two`): the line is a heading (the
+/// first marker decides, and the reference keeps a paragraph in one style, so a heading is never also a checklist
+/// item), and this part of its marker is not drawn at all, so the heading reads "Item two". Empty for any other line.
+pub fn stray_check(line: &str) -> Range<usize> {
+    let info = classify(line);
+    let marker = match info.block {
+        Block::Title => 2,
+        Block::Heading => 3,
+        Block::Subheading => 4,
+        _ => return 0..0,
+    };
+    marker.min(info.prefix)..info.prefix
+}
+
+/// The number of leading chars of a heading line (`# `, `## `, `### `, with a checkbox marker after it) that are its
+/// marker: the editor does not draw them, as the reference's headings carry their style without marker characters.
+/// 0 for any other line.
+pub fn heading_marker(line: &str) -> usize {
+    let info = classify(line);
+    match info.block {
+        Block::Title | Block::Heading | Block::Subheading => info.prefix,
+        _ => 0,
+    }
+}
+
+/// One line as the note list's snippet shows it: its block marker (heading, list, checklist, quote, code indent) and
+/// its emphasis markers taken out, so `## - [ ] Item` and `> **said**` read `Item` and `said`.
+pub fn plain_line(line: &str) -> String {
+    let content: String = line.chars().skip(classify(line).prefix).collect();
+    strip_inline(&content)
+}
 
 /// Inline emphasis of a span.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,6 +215,22 @@ pub fn spans(line: &str, start: usize) -> Vec<Span> {
     }
     flush(&mut out, run, n);
     out
+}
+
+/// The run of `style` whose text holds the char boundary `c` of `line` (inline content from `start`, as `spans` reads
+/// it), at either end of the text included: the text's char range and its marker's length. `None` when `c` is not in
+/// such a run.
+pub fn emphasis_at(line: &str, start: usize, c: usize, style: Style) -> Option<(Range<usize>, usize)> {
+    let all = spans(line, start);
+    let k = all.iter().position(|s| s.style == style && !s.marker && s.range.start <= c && c <= s.range.end)?;
+    let marker = k.checked_sub(1).and_then(|m| all.get(m)).filter(|m| m.marker)?;
+    Some((all[k].range.clone(), marker.range.len()))
+}
+
+/// One line's text with its emphasis markers taken out (`**b**` reads `b`), for titles and previews.
+pub fn strip_inline(line: &str) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    spans(line, 0).into_iter().filter(|s| !s.marker).flat_map(|s| chars[s.range].to_vec()).collect()
 }
 
 /// What Enter does at the end of a list line.
@@ -320,6 +381,107 @@ pub fn toggle_wrap(text: &str, sel: Range<usize>, marker: &str) -> Replace {
     Replace { range: a..b, with: format!("{marker}{inner}{marker}"), select: a + ml..b + ml }
 }
 
+/// Where `marker` already wraps `chars[s..e]`: the outer range (markers included) and the inner text's range. Each
+/// marker may sit just outside the range or be its own first or last chars (a selection that runs across a line end
+/// takes in the closing marker of that line). A lone `*` never matches half of `**`.
+fn wrapped_by(chars: &[char], s: usize, e: usize, m: &[char]) -> Option<(Range<usize>, Range<usize>)> {
+    let ml = m.len();
+    let at = |i: usize| i + ml <= chars.len() && chars[i..i + ml] == *m;
+    let star = ml == 1 && m[0] == '*';
+    // for `*`: no star just before `l` or at `r`, so the marker at `l` is not one half of `**`
+    let lone = |l: usize, r: usize| !star || ((l == 0 || chars[l - 1] != '*') && chars.get(r) != Some(&'*'));
+    let left = if s >= ml && at(s - ml) && lone(s - ml, s) {
+        (s - ml, s)
+    } else if at(s) && lone(s, s + ml) {
+        (s, s + ml)
+    } else {
+        return None;
+    };
+    let right = if at(e) && lone(e, e + ml) {
+        (e, e + ml)
+    } else if e >= ml && at(e - ml) && lone(e - ml, e) {
+        (e - ml, e)
+    } else {
+        return None;
+    };
+    (left.1 <= right.0 && left.0 < right.0).then(|| (left.0..right.1, left.1..right.0))
+}
+
+/// Cmd+B (and the other inline styles) on a selection: Markdown emphasis lives inside one line, so a selection that
+/// covers several lines is styled line by line. Each line's part of the selection, without its block marker (`# `,
+/// `- [ ] `, ...) and without the spaces at its ends, is wrapped in `marker`; blank parts are left alone. When every
+/// part is already wrapped the markers come off instead. `select` covers the styled text from the first part to the
+/// last, so pressing the key again toggles back. Within one line this is `toggle_wrap` with the block marker kept
+/// outside the emphasis.
+pub fn toggle_wrap_lines(text: &str, sel: Range<usize>, marker: &str) -> Replace {
+    let chars: Vec<char> = text.chars().collect();
+    let m: Vec<char> = marker.chars().collect();
+    let ml = m.len();
+    let (a, b) = (sel.start.min(chars.len()), sel.end.min(chars.len()));
+    let (a, b) = (a.min(b), a.max(b));
+    if a == b {
+        return toggle_wrap(text, a..b, marker);
+    }
+    // the lines the selection touches, and each line's styled part
+    let first = chars[..a].iter().rposition(|c| *c == '\n').map_or(0, |i| i + 1);
+    let last = chars[b..].iter().position(|c| *c == '\n').map_or(chars.len(), |i| b + i);
+    let mut parts = vec![];
+    let mut ls = first;
+    while ls <= last {
+        let le = chars[ls..last].iter().position(|c| *c == '\n').map_or(last, |i| ls + i);
+        let line: String = chars[ls..le].iter().collect();
+        let mut s = a.max(ls + classify(&line).prefix.min(le - ls));
+        let mut e = b.min(le);
+        while s < e && chars[s].is_whitespace() {
+            s += 1;
+        }
+        while e > s && chars[e - 1].is_whitespace() {
+            e -= 1;
+        }
+        if s < e {
+            parts.push((s, e));
+        }
+        ls = le + 1;
+    }
+    if parts.is_empty() {
+        // nothing to style: hand back the touched lines unchanged, like every other result, and keep the selection
+        return Replace { range: first..last, with: chars[first..last].iter().collect(), select: a..b };
+    }
+    let found: Vec<_> = parts.iter().map(|&(s, e)| wrapped_by(&chars, s, e, &m)).collect();
+    let unwrap = found.iter().all(Option::is_some);
+    // rebuild the touched lines, mapping the first part's start and the last part's end into the new text
+    let mut with = String::new();
+    let (mut at, mut len) = (first, 0usize);
+    let (mut sel_a, mut sel_b) = (first, first);
+    for (k, &(s, e)) in parts.iter().enumerate() {
+        // a part that is already styled is left as it is when the others get the style
+        let wrap = !unwrap && found[k].is_none();
+        let (outer, inner) = match &found[k] {
+            Some(f) if unwrap => f.clone(),
+            _ => (s..e, s..e),
+        };
+        let keep: String = chars[at..outer.start].iter().collect();
+        len += keep.chars().count();
+        with.push_str(&keep);
+        if k == 0 {
+            sel_a = first + len + if wrap { ml } else { 0 };
+        }
+        let body: String = chars[inner.clone()].iter().collect();
+        if wrap {
+            len += inner.len() + 2 * ml;
+            with.push_str(&format!("{marker}{body}{marker}"));
+            sel_b = first + len - ml;
+        } else {
+            len += inner.len();
+            with.push_str(&body);
+            sel_b = first + len;
+        }
+        at = outer.end;
+    }
+    with.extend(chars[at..last].iter());
+    Replace { range: first..last, with, select: sel_a..sel_b }
+}
+
 /// A web address as it goes into a link: a missing scheme becomes `https://`, spaces and brackets are escaped. `None`
 /// when nothing is left after the scheme.
 fn link_target(raw: &str) -> Option<String> {
@@ -385,7 +547,7 @@ pub fn to_plain(text: &str) -> String {
         .map(|line| {
             let info = classify(line);
             let content: String = line.chars().skip(info.prefix).collect();
-            let body: String = spans(&content, 0).into_iter().filter(|s| !s.marker).flat_map(|s| content.chars().skip(s.range.start).take(s.range.len()).collect::<Vec<_>>()).collect();
+            let body = strip_inline(&content);
             match info.block {
                 Block::Check(done) => format!("{} {body}", if done { "[x]" } else { "[ ]" }),
                 Block::Bullet => format!("\u{2022} {body}"),
@@ -401,6 +563,43 @@ pub fn to_plain(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// E2E11 11: `## - [ ] Item two` drew as a heading with the raw checkbox marker in it.
+    #[test]
+    fn a_heading_is_never_also_a_checklist_item() {
+        let line = "## - [ ] Item two";
+        assert_eq!(classify(line), LineInfo { block: Block::Heading, prefix: 9, indent: 0 }, "the heading wins, the checkbox is marker");
+        assert_eq!(stray_check(line), 3..9, "the checkbox part of the marker is hidden");
+        assert_eq!(stray_check("# - [x] Done"), 2..8);
+        assert_eq!(stray_check("### - [X] Sub"), 4..10);
+        assert_eq!(stray_check("## Plain heading"), 3..3, "nothing hidden in a plain heading");
+        assert_eq!(stray_check("- [ ] item"), 0..0, "a checklist item keeps its checkbox");
+        assert_eq!(stray_check("## 1. Introduction").len(), 0, "a numbered heading keeps its number");
+        assert_eq!(toggle_check(line), None, "no checkbox to tick on a heading");
+        assert_eq!(continue_list(line), Continue::None, "Enter after a heading starts body text");
+        assert_eq!(to_plain(line), "Item two");
+        assert_eq!(set_block(line, Block::Body), "Item two", "the style change drops the whole marker");
+        assert_eq!(set_block(line, Block::Check(false)), "- [ ] Item two");
+    }
+
+    #[test]
+    fn heading_markers_are_hidden_and_snippets_drop_block_markers() {
+        // E2E12 finding 3: the editor drew the `##` of every heading in grey and the list snippet showed it raw
+        assert_eq!(heading_marker("## heading two"), 3);
+        assert_eq!(heading_marker("# Title"), 2);
+        assert_eq!(heading_marker("### Sub"), 4);
+        assert_eq!(heading_marker("## - [ ] item"), 9, "a stray checkbox marker is part of the heading's marker");
+        assert_eq!(heading_marker("- [ ] item"), 0);
+        assert_eq!(heading_marker("#hashtag"), 0);
+        assert_eq!(plain_line("## heading two"), "heading two");
+        assert_eq!(plain_line("## - [ ] item"), "item");
+        assert_eq!(plain_line("- [x] done"), "done");
+        assert_eq!(plain_line("- milk"), "milk");
+        assert_eq!(plain_line("3. third"), "third");
+        assert_eq!(plain_line("> **said**"), "said");
+        assert_eq!(plain_line("\u{2013} dash"), "dash");
+        assert_eq!(plain_line("plain *it*"), "plain it");
+    }
 
     #[test]
     fn classifies_block_styles() {
@@ -523,6 +722,56 @@ mod tests {
         assert_eq!(r.with, "i");
         let r = toggle_wrap("**b**", 2..3, "*");
         assert_eq!(r.with, "*b*", "italic does not unwrap half of a bold pair");
+    }
+
+    #[test]
+    fn wrapping_a_multi_line_selection_styles_each_line_inside_its_block_marker() {
+        // Cmd+A, Cmd+B (E2E W2-2): every line becomes bold on its own, the title keeps its "# " outside the markers
+        let text = "# Title\n\nbody text\n- item ";
+        let r = toggle_wrap_lines(text, 0..text.chars().count(), "**");
+        assert_eq!(r.range, 0..text.chars().count());
+        assert_eq!(r.with, "# **Title**\n\n**body text**\n- **item** ");
+        let chars: Vec<char> = r.with.chars().collect();
+        assert_eq!(chars[r.select.clone()].iter().collect::<String>(), "Title**\n\n**body text**\n- **item");
+        for line in r.with.lines().filter(|l| !l.trim().is_empty()) {
+            let content: String = line.chars().skip(classify(line).prefix).collect();
+            assert!(spans(&content, 0).iter().any(|s| s.style == Style::Bold && !s.marker), "{line} is bold");
+        }
+        assert_eq!(classify(r.with.lines().next().unwrap()).block, Block::Title, "the title is still a title");
+        // pressing it again with that selection takes the markers off
+        let back = toggle_wrap_lines(&r.with, r.select.clone(), "**");
+        assert_eq!(back.with, text);
+        // a part that is already bold stays as it is while the rest gets the style
+        let mixed = toggle_wrap_lines("**a**\nb", 0..7, "**");
+        assert_eq!(mixed.with, "**a**\n**b**");
+    }
+
+    #[test]
+    fn emphasis_at_finds_the_styled_run_under_the_caret_and_strip_inline_drops_markers() {
+        // "a **bold** c": the bold text is chars 4..8 with a 2-char marker
+        assert_eq!(emphasis_at("a **bold** c", 0, 8, Style::Bold), Some((4..8, 2)), "at its end");
+        assert_eq!(emphasis_at("a **bold** c", 0, 6, Style::Bold), Some((4..8, 2)), "inside");
+        assert_eq!(emphasis_at("a **bold** c", 0, 2, Style::Bold), None, "before the markers");
+        assert_eq!(emphasis_at("a **bold** c", 0, 10, Style::Bold), None, "after them");
+        assert_eq!(emphasis_at("a **bold** c", 0, 6, Style::Italic), None, "another style");
+        assert_eq!(emphasis_at("x *i* y", 0, 3, Style::Italic), Some((3..4, 1)));
+        assert_eq!(strip_inline("**E2E bold test** plain"), "E2E bold test plain");
+        assert_eq!(strip_inline("a ~~b~~ `c` ==d=="), "a b c d");
+        assert_eq!(strip_inline("i++ and 2 * 3"), "i++ and 2 * 3", "unpaired marks stay");
+    }
+
+    #[test]
+    fn wrapping_within_one_line_matches_toggle_wrap() {
+        let r = toggle_wrap_lines("a word b", 2..6, "**");
+        assert_eq!((r.range, r.with.as_str(), r.select), (0..8, "a **word** b", 4..8));
+        let r = toggle_wrap_lines("a **word** b", 4..8, "**");
+        assert_eq!((r.with.as_str(), r.select), ("a word b", 2..6));
+        let r = toggle_wrap_lines("## Heading", 0..10, "*");
+        assert_eq!(r.with, "## *Heading*", "the heading marker stays outside");
+        let r = toggle_wrap_lines("x **b** y", 4..5, "*");
+        assert_eq!(r.with, "x ***b*** y", "italic does not unwrap half of a bold pair");
+        let r = toggle_wrap_lines("a\n\nb", 1..3, "**");
+        assert_eq!((r.range, r.with.as_str(), r.select), (0..4, "a\n\nb", 1..3), "a selection of blank lines changes nothing");
     }
 
     #[test]

@@ -7,7 +7,8 @@
   app-control.py call APP METHOD [JSON]    one JSON-RPC call; prints the result
 
 APP is the reverse-DNS id (is.olibuijr.notes.desktop) or a socket path.
-Sockets live in $XDG_RUNTIME_DIR/bifrost/apps/<id>.sock and accept only this user.
+Sockets live in the app's data directory, <root>/appdata/<id>/control.sock (root is $BIFROST_SHELL_DIR,
+default /var/lib/springboard; the same rule as bifrost_core::app_control_socket), and accept only the app's user.
 """
 import glob
 import json
@@ -18,13 +19,12 @@ import sys
 TIMEOUT = 2.0
 
 
-def socket_dir():
-    base = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
-    return os.path.join(base, "bifrost", "apps")
+def data_root():
+    return os.path.join(os.environ.get("BIFROST_SHELL_DIR") or "/var/lib/springboard", "appdata")
 
 
 def path_for(app):
-    return app if app.endswith(".sock") else os.path.join(socket_dir(), f"{app}.sock")
+    return app if app.endswith(".sock") else os.path.join(data_root(), app, "control.sock")
 
 
 def rpc(app, method, params=None):
@@ -60,13 +60,13 @@ def rpc(app, method, params=None):
 
 def cmd_list(_):
     found = False
-    for path in sorted(glob.glob(os.path.join(socket_dir(), "*.sock"))):
+    for path in sorted(glob.glob(os.path.join(data_root(), "*", "control.sock"))):
         try:
             info = rpc(path, "app.info")
             print(f"{info['id']:40} pid {info['pid']:<8} {info['data']}")
             found = True
         except SystemExit:
-            print(f"{os.path.basename(path)[:-5]:40} (not answering: stale socket)")
+            print(f"{os.path.basename(os.path.dirname(path)):40} (not answering: stale socket)")
     if not found:
         print("no apps with a control socket")
 

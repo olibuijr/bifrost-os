@@ -3,7 +3,7 @@
 //! and the pointer. The shell owns the session and does the saving (`Shell::finish_capture`); this module holds the rules,
 //! the toolbar layout and the drawing, and has no state of its own outside a `Session`.
 
-use super::ui::{Ui, Weight, CARD_BG, SECONDARY, TINT, WHITE};
+use super::ui::{Ui, Weight, CARD_BG, SECONDARY, TINT, accent_now, WHITE};
 use crate::gfx::{pack, Image, Surface};
 use crate::layout::Rect;
 use crate::symbols::Symbol;
@@ -534,7 +534,7 @@ impl Session {
         let hover = (!self.menu && !self.drag.active()).then(|| buttons.iter().find(|(_, r, _)| r.contains(self.at.0, self.at.1)).map(|(t, r, _)| (*t, *r))).flatten();
         for (tool, r, img) in buttons {
             if self.is_on(tool) {
-                s.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, r.h as f32 / 2.0, TINT);
+                s.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, r.h as f32 / 2.0, accent_now());
             }
             s.blit(&img, r.x + (r.w - img.w as i32) / 2, r.y + (r.h - img.h as i32) / 2, 255, 255);
         }

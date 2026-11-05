@@ -127,7 +127,7 @@ impl Files {
     }
     /// A click in the sidebar: a row opens its place, and the Eject text of a removable volume ejects it.
     pub(crate) fn sidebar_click(&mut self, x: f32, y: f32) {
-        let Some(id) = self.sidebar().hit(self.sidebar_bounds(), SIDEBAR_SCROLL, x, y) else { return };
+        let Some(id) = self.sidebar().hit(self.sidebar_bounds(), self.sidebar_scroll(), x, y) else { return };
         let Some(place) = self.places().into_iter().nth(id.saturating_sub(100) as usize) else { return };
         match place.eject {
             Some(device) if x > self.side() - EJECT_W => self.eject_volume(&place.label, &device, &place.path),
@@ -159,6 +159,14 @@ impl Files {
         self.notice = Some(notice);
         true
     }
+    /// How far the source list can scroll: its rows past the bottom of the column (`SIDEBAR_SCROLL` is the header band).
+    pub(crate) fn side_scroll_max(&self) -> f32 {
+        (self.sidebar().content_height() - SIDEBAR_SCROLL - self.sidebar_bounds().h).max(0.)
+    }
+    /// The scroll the source list draws and hits with: the header band plus the user's scroll, kept within the list.
+    pub(crate) fn sidebar_scroll(&self) -> f32 {
+        SIDEBAR_SCROLL + self.side_scroll.clamp(0., self.side_scroll_max())
+    }
     pub(crate) fn sidebar_id(&self, path: &Path) -> Option<u32> {
         self.places().iter().position(|p| p.path == path).map(|i| 100 + i as u32)
     }
@@ -188,6 +196,24 @@ mod tests {
         assert_eq!(neutral_of("Computer"), Some(true));
         assert_eq!(neutral_of("Trash"), Some(true));
         assert_eq!(neutral_of("Red"), Some(false), "a tag keeps its colour dot");
+    }
+
+    #[test]
+    fn a_short_window_scrolls_the_sidebar_down_to_the_last_tag() {
+        let mut files = fixture(vec![]);
+        files.h = 420.;
+        let gray = files.sidebar_id(&tag_path(Tag::Gray)).expect("the Gray tag row");
+        // the bottom edge of the Gray row under the current scroll
+        let bottom = |files: &Files| {
+            let list = files.sidebar();
+            let index = list.items.iter().position(|i| matches!(i, SidebarItem::Row { id, .. } if *id == gray)).unwrap();
+            let r = list.item_rect(index, files.sidebar_bounds(), files.sidebar_scroll());
+            r.y + r.h
+        };
+        assert!(bottom(&files) > files.h, "the last tag is cut off at this height");
+        // an offset past the end is held at the end of the list
+        files.side_scroll = f32::MAX;
+        assert!(bottom(&files) <= files.h, "scrolled to the end, the last tag is in view");
     }
 
     #[test]

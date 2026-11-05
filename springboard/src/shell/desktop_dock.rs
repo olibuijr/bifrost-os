@@ -2,9 +2,15 @@
 //! It also draws what an app sets on its Dock tile through the `dock` service: a progress bar and an attention bounce.
 use super::{apps,Shell,Effect,AppId,desktop_bar::Menu,desk::{Rect,DOCK_TRASH},dock_stack::DOCK_STACK};
 use super::ui::{FILL_GRAY,LINK};
+#[cfg(any(test, feature = "desktop-wayland"))]
+use super::ui::MAC_CALLOUT_PT;
 use crate::gfx::Surface;
 use bifrost_ui::values::Progress;
 use bifrost_render::motion::{self,Anim,Curve,Kind};
+pub(super) const DOCK_LABEL_MAX_WIDTH_PT: f32 = 240.0;
+pub(super) const DOCK_LABEL_PAD_X_PT: f32 = 10.0;
+pub(super) const DOCK_LABEL_PAD_Y_PT: f32 = 5.0;
+pub(super) const DOCK_LABEL_GAP_PT: f32 = 8.0;
 #[derive(Clone,Copy,PartialEq,Debug)] pub enum Position {Bottom,Left,Right}
 #[derive(Clone,Debug)] pub struct Preferences {pub position:Position,pub size:f32,pub autohide:bool,pub pinned:Vec<String>,
  /// pointer magnification (`dock_magnification`) and the size, in pt, of the icon under the pointer (`dock_magnification_size`)
@@ -31,7 +37,7 @@ impl Shell {
  pub(super) fn dock_change(&mut self,change:Change,t:f64)->Vec<Effect>{
   match change {
    Change::Open(index)=>{self.dock_start_bounce(index,t);if index<apps().len(){self.desk_open(apps()[index].id,t);} #[cfg(feature="desktop-wayland")] if index>apps().len(){if let Some(w)=self.desk.as_ref().and_then(|d|d.linux_apps.get(index-apps().len()-1)).and_then(|a|a.windows.first()){return vec![Effect::ActivateForeign(w.id)];}else if let Some(a)=self.desk.as_ref().and_then(|d|d.linux_apps.get(index-apps().len()-1)){let id=a.app_id.clone();crate::bare::sys::spawn_named("launch-apps", move||{let _=std::process::Command::new("/usr/bin/bifrost-apps").arg(id).status();});}}},
-   Change::Quit(index)=>{if index<apps().len(){let app=apps()[index].id;#[cfg(feature="desktop-wayland")]if let AppId::External(slot)=app {if let Some(p)=super::apphost::installed().get(slot as usize){let effects=self.desk.as_ref().unwrap().native_windows.iter().filter(|w|w.app_id==p.manifest.wayland_app_id).map(|w|Effect::ForeignWindowAction(w.id,false)).collect::<Vec<_>>();if !effects.is_empty(){return effects;}}}if let AppId::External(slot)=app{self.desk_quit_app(slot);}else{self.desk_close_app(app);}} #[cfg(feature="desktop-wayland")] if index>apps().len(){if let Some(a)=self.desk.as_ref().and_then(|d|d.linux_apps.get(index-apps().len()-1)){return a.windows.iter().map(|w|Effect::ForeignWindowAction(w.id,false)).collect();}}},
+   Change::Quit(index)=>{if index<apps().len(){let app=apps()[index].id;#[cfg(feature="desktop-wayland")]if let AppId::External(slot)=app {if let Some(p)=super::apphost::installed().get(slot as usize){let effects=self.desk.as_ref().unwrap().native_windows.iter().filter(|w|w.app_id==p.manifest.wayland_app_id).map(|w|Effect::ForeignWindowAction(w.id,false)).collect::<Vec<_>>();if !effects.is_empty(){return effects;}}}if let AppId::External(slot)=app{self.desk_quit_requested(slot);}else{self.desk_close_app(app);}} #[cfg(feature="desktop-wayland")] if index>apps().len(){if let Some(a)=self.desk.as_ref().and_then(|d|d.linux_apps.get(index-apps().len()-1)){return a.windows.iter().map(|w|Effect::ForeignWindowAction(w.id,false)).collect();}}},
    Change::Pin(index)=>{let Some(key)=self.dock_app_key(index) else{return vec![];};let p=&mut self.desk.as_mut().unwrap().dock_preferences;if let Some(at)=p.pinned.iter().position(|id|id==&key){p.pinned.remove(at);}else{p.pinned.push(key);}},
    Change::Position(position)=>self.desk.as_mut().unwrap().dock_preferences.position=position,
    Change::Size(delta)=>{let p=&mut self.desk.as_mut().unwrap().dock_preferences;p.size=(p.size+delta).clamp(32.,80.);},
@@ -41,7 +47,15 @@ impl Shell {
    Change::Magnification(on)=>{let d=self.desk.as_mut().unwrap();d.dock_preferences.magnification=on;d.dock_ptr=None;d.dock_mag=None;},
    Change::MagnifiedSize(delta)=>{let p=&mut self.desk.as_mut().unwrap().dock_preferences;p.magnified=(p.magnified+delta).clamp(48.,128.);},
   }
+  // Filled windows follow the newly available frame; ordinary windows keep the person's chosen size.
+  self.reflow_filled_windows();
   self.dock_preferences().save(&self.data_dir);self.dirty=true;vec![]
+ }
+ /// Refits every filled (zoomed) window to the visible frame of its display; other windows keep their size.
+ pub(super) fn reflow_filled_windows(&mut self){
+  let m=self.desk_metrics();let mut resized=Vec::new();
+  if let Some(d)=self.desk.as_mut(){for i in 0..d.wins.len(){let w=d.wins[i];let area=d.area_for(&m,w.r);if w.maximized&&!w.full&&w.r!=area{d.wins[i].r=area;resized.push(i);}}}
+  for i in resized{self.desk_layout(i);}
  }
  pub(super) fn dock_app_key(&self,index:usize)->Option<String>{if let Some(a)=apps().get(index){return Some(a.icon.into());} #[cfg(feature="desktop-wayland")]if index>apps().len(){return self.desk.as_ref()?.linux_apps.get(index-apps().len()-1).map(|a|format!("linux:{}",a.app_id));}None}
 #[cfg(feature = "desktop-wayland")]
@@ -54,28 +68,30 @@ impl Shell {
    let p=self.dock_preferences();
    let edge=match p.position{Position::Bottom=>y>=self.h as f32-self.ui.pt(4.),Position::Left=>x<=self.ui.pt(4.),Position::Right=>x>=self.w as f32-self.ui.pt(4.)};
    let inside=bar.contains(x,y);
-   let in_zone=self.dock_is_visible()&&(inside||zone.contains(x,y));
+   let (_,live)=self.dock_live(bar,&rects,now);
+   let in_zone=self.dock_is_visible()&&(inside||zone.contains(x,y)||self.dock_press(&live).iter().any(|r|r.contains(x,y)));
    let magnify=in_zone&&p.magnification;
-   let menu=self.desktop_menu==Some(Menu::Dock);
+   let menu=matches!(self.desktop_menu,Some(Menu::Dock|Menu::Stack));
    let cur=self.dock_mag_amount(now);
    let d=self.desk.as_mut().unwrap();
    if magnify!=d.dock_ptr.is_some(){d.dock_mag=Some(Anim{from:cur,to:if magnify{1.}else{0.},start:now,kind:Kind::DockMagnify,curve:Curve::EaseOut});self.dirty=true;}
    let moved=d.dock_ptr!=magnify.then_some((x,y));d.dock_ptr=magnify.then_some((x,y));if moved&&magnify{self.dirty=true;}
-   // the hovered icon comes from the layout centred on this pointer, the one drawn and pressed next (W2-23): the
-   // layout of the previous pointer put the label, and a quick press, on a neighbour
-   let hov=if in_zone{self.dock_live(bar,&rects,now).1.iter().position(|r|r.contains(x,y))}else{None};
+   // the hovered icon comes from the row magnified about this pointer, the one drawn and pressed next (W2-23): the
+   // layout of the previous pointer put the label, and a quick press, on a neighbour; `dock_tick` re-tests it per frame
+   let hov=if in_zone{self.dock_hit(bar,&rects,x,y,now)}else{None};
+   self.dock_set_hover(hov,t);
    let d=self.desk.as_mut().unwrap();
-   if d.dock_hover!=hov{d.dock_label_last=d.dock_hover;d.dock_label_ms=t;d.dock_hover=hov;self.dirty=true;}
-   if edge||inside||menu {d.dock_hide_at=None;dock_reveal(d,now);if !d.dock_visible{self.dirty=true;}}
+   if d.dock_label_off.is_some_and(|p|p!=(x,y)){d.dock_label_off=None;self.dirty=true;}
+   if edge||in_zone||menu {d.dock_hide_at=None;dock_reveal(d,now);if !d.dock_visible{self.dirty=true;}}
    else if d.dock_autohides()&&d.dock_hide_at.is_none(){d.dock_hide_at=Some(t+550.);}
    return Some(vec![]);
   }
-  if let Pointer::Context(x,y)=event {let m=self.desk_metrics();let (list,bar,rects)=self.desk_dock(&m);if self.desk.as_ref().unwrap().dock_visible&&bar.contains(x,y){let target=rects.iter().position(|r|r.contains(x,y)).map(|i|list[i]).filter(|i|*i!=apps().len()&&*i!=super::desk::DOCK_TRASH&&*i!=DOCK_STACK&&dock_min_index(*i).is_none());let d=self.desk.as_mut().unwrap();d.dock_menu_target=target;d.dock_menu_anchor=(x,y);self.desktop_menu=Some(Menu::Dock);self.dirty=true;return Some(vec![]);}}
+  if let Pointer::Context(x,y)=event {let m=self.desk_metrics();let (list,bar,rects)=self.desk_dock(&m);let (bar,slid)=self.dock_slid(bar,&rects,t/1000.);let rects=self.dock_magnified(&slid,t/1000.);let plate=dock_plate(bar,&slid,&rects,self.dock_preferences().position!=Position::Bottom);let press=self.dock_press(&rects);if self.dock_is_visible()&&(plate.contains(x,y)||press.iter().any(|r|r.contains(x,y))){let target=press.iter().position(|r|r.contains(x,y)).map(|i|list[i]).filter(|i|*i!=apps().len()&&*i!=super::desk::DOCK_TRASH&&*i!=DOCK_STACK&&dock_min_index(*i).is_none());let d=self.desk.as_mut().unwrap();d.dock_menu_target=target;d.dock_menu_anchor=(x,y);self.desktop_menu=Some(Menu::Dock);self.dirty=true;return Some(vec![]);}}
   None
  }
- pub fn desktop_pointer(&mut self,x:f32,y:f32,context:bool,t:f64){if self.modal_layer.is_some(){return;}if !context{self.pointer_hover(x,y);self.note_pointer_y(y);self.notify_hover(x,y,t);}#[cfg(feature="desktop-wayland")] if !context&&self.desk_active()&&!self.is_locked(){self.arrange_hover(x,y,t);self.desktop_menu_hover_at(x,y,t);}if !context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();let d=self.desk.as_mut().unwrap();let over=match d.pick(&m,x,y){Some((i,super::desk::Hit::Light(_)))=>Some(d.wins[i].app),_=>None};if d.lights_hover!=over{d.lights_hover=over;self.dirty=true;}}if self.dock_pointer(if context{Pointer::Context(x,y)}else{Pointer::Hover(x,y)},t).is_some(){return;}if context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();if let Some((i,super::desk::Hit::Content))=self.desk.as_ref().unwrap().pick(&m,x,y){let w=self.desk.as_ref().unwrap().wins[i];let b=w.body(&m);if let AppId::External(slot)=w.app {if let Some(Some(host))=self.ext.get_mut(slot as usize){host.send(&bifrost_proto::ToApp::Context{x:x-b.x as f32,y:y-b.y as f32});}}}}}
+ pub fn desktop_pointer(&mut self,x:f32,y:f32,context:bool,t:f64){if self.modal_layer.is_some(){return;}if !context{self.note_pointer_y(y);self.pointer_hover(x,y);self.hover_speech_at(x,y,t);self.notify_hover(x,y,t);}#[cfg(feature="desktop-wayland")] if !context&&self.desk_active()&&!self.is_locked(){self.arrange_hover(x,y,t);self.desktop_menu_hover_at(x,y,t);}if !context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();let revealed=self.desk_reveal_at(x,y);let d=self.desk.as_mut().unwrap();let over=match revealed{Some((i,super::desk::RevealHit::Light(_)))=>Some(d.wins[i].app),Some(_)=>None,None=>match d.pick(&m,x,y){Some((i,super::desk::Hit::Light(_)))=>Some(d.wins[i].app),_=>None}};if d.lights_hover!=over{d.lights_hover=over;self.dirty=true;}}if self.dock_pointer(if context{Pointer::Context(x,y)}else{Pointer::Hover(x,y)},t).is_some(){return;}if context&&self.desk_active()&&!self.is_locked(){let m=self.desk_metrics();let (picked,y)=match self.desk_reveal_at(x,y){Some((i,super::desk::RevealHit::App(ly)))=>(Some((i,super::desk::Hit::Content)),ly),Some(_)=>(None,y),None=>(self.desk.as_ref().unwrap().pick(&m,x,y),y)};if let Some((i,super::desk::Hit::Content))=picked{let w=self.desk.as_ref().unwrap().wins[i];let b=w.body(&m);if let AppId::External(slot)=w.app {if let Some(Some(host))=self.ext.get_mut(slot as usize){host.send(&bifrost_proto::ToApp::Context{x:x-b.x as f32,y:y-b.y as f32});}}}}}
  pub(super) fn dock_tick(&mut self,t:f64){
-  let now=t/1000.;let menu_open=self.desktop_menu==Some(Menu::Dock);
+  let now=t/1000.;let menu_open=matches!(self.desktop_menu,Some(Menu::Dock|Menu::Stack));
   // the Downloads stack re-lists its folder every few seconds (never per frame)
   let stack_changed=self.desk.as_mut().is_some_and(|d|d.stack_refresh(now));if stack_changed{self.dirty=true;}
   let keep_flags:Vec<bool>=self.desk.as_ref().map(|d|d.dock_bounce.iter().map(|&(i,start)|{let el=now-start;el<BOUNCE_MAX_S&&(!self.dock_item_running(i)||el<motion::duration(Kind::DockBounce) as f64)}).collect()).unwrap_or_default();
@@ -90,29 +106,62 @@ impl Shell {
   }
   let d=self.desk.as_mut().unwrap();
   if d.dock_vis_anim.as_ref().is_some_and(|a|a.done(now)){let hide=d.dock_vis_anim.as_ref().is_some_and(|a|a.to<0.5);if hide{d.dock_visible=false;}d.dock_vis_anim=None;self.dirty=true;}
+  // the row keeps moving under a resting pointer while it grows, shrinks or slides in, so the hovered icon (its label,
+  // a press latched from it) is hit-tested again against the row this frame draws, not the one of the last pointer event
+  if let Some((x,y))=self.desk.as_ref().and_then(|d|d.dock_ptr){
+   let m=self.desk_metrics();let (_,bar,rects)=self.desk_dock(&m);
+   let hov=self.dock_hit(bar,&rects,x,y,now);self.dock_set_hover(hov,t);
+  }
+ }
+ /// The Dock slot whose press area (`dock_press`) contains (`x`, `y`) in the row drawn at `now` seconds: slid, then
+ /// magnified about the current pointer and clamped to the screen. Hover, labels, press, release and the context menu
+ /// all use this one geometry.
+ pub(super) fn dock_hit(&self,bar:Rect,rects:&[Rect],x:f32,y:f32,now:f64)->Option<usize>{
+  self.dock_press(&self.dock_live(bar,rects,now).1).iter().position(|r|r.contains(x,y))
+ }
+ /// Sets the hovered Dock slot, starting the label cross-fade when it changes (`t` ms).
+ fn dock_set_hover(&mut self,hov:Option<usize>,t:f64){
+  let Some(d)=self.desk.as_mut()else{return;};
+  if d.dock_hover!=hov{d.dock_label_last=d.dock_hover;d.dock_label_ms=t;d.dock_hover=hov;self.dirty=true;}
  }
  /// Whether a dock list entry is an app the user keeps in the Dock (not the Apps icon, Trash, the Downloads stack, a minimized window or a recent).
  pub(super) fn dock_removable(&self,entry:usize)->bool{entry!=apps().len()&&entry!=DOCK_TRASH&&dock_min_index(entry).is_none()&&self.dock_section(entry)==0}
  pub(super) fn dock_reorder(&mut self,from:usize,to:usize,after:bool){let Some(key)=self.dock_app_key(from)else{return;};let target=self.dock_app_key(to);let d=self.desk.as_mut().unwrap();d.dock_preferences.pinned.retain(|s|s!=&key);let at=target.and_then(|key|d.dock_preferences.pinned.iter().position(|s|s==&key)).map(|at|at+after as usize).unwrap_or(d.dock_preferences.pinned.len());d.dock_preferences.pinned.insert(at.min(d.dock_preferences.pinned.len()),key);d.dock_preferences.save(&self.data_dir);self.dirty=true;}
  pub(super) fn dock_is_visible(&self)->bool{self.desk.as_ref().is_some_and(|d|!d.dock_autohides()||d.dock_visible)}
- /// The Dock's surface: the overlay grown along the axis by the room the magnified plate can take (fixed while the
- /// Dock is shown, so the window server is not asked for a new size every magnification frame). Only the plate drawn
- /// now takes the pointer (`dock_input_rect`), so the ends of the surface let clicks through to the windows below.
+ /// A stable surface with room for magnified icons, bounce, labels and shadow. Transparent margins do not take input.
+ #[cfg(any(test, feature = "desktop-wayland"))]
  pub(super) fn dock_surface_rect(&self)->Rect {
   if !self.dock_is_visible(){return self.dock_overlay_rect();}
-  let m=self.desk_metrics();let (_,bar,_)=self.desk_dock(&m);let room=self.dock_axis_room();
-  if self.dock_preferences().position==Position::Bottom{Rect{x:bar.x-room,w:bar.w+2*room,..bar}}else{Rect{y:bar.y-room,h:bar.h+2*room,..bar}}
+  let m=self.desk_metrics();let (_,bar,rects)=self.desk_dock(&m);let p=self.dock_preferences();
+  let shadow=self.ui.pt(super::desk::SHADOW_REACH_PT).ceil() as i32;
+  let label_h=self.ui.pt(2.*MAC_CALLOUT_PT+2.*DOCK_LABEL_PAD_Y_PT+DOCK_LABEL_GAP_PT).ceil() as i32;
+  let label_w=self.ui.pt(DOCK_LABEL_MAX_WIDTH_PT+2.*DOCK_LABEL_PAD_X_PT+DOCK_LABEL_GAP_PT).ceil() as i32;
+  let max=self.ui.pt(if p.magnification{p.magnified.max(p.size)}else{p.size}).ceil() as i32;
+  let base=rects.first().map_or(max,|r|r.w.min(r.h));
+  let grow=(max-base).max(0)+max/2;
+  let vertical=p.position!=Position::Bottom;
+  let along=self.dock_axis_room().max(if vertical{label_h/2}else{label_w/2})+shadow;
+  let inward=grow+if vertical{label_w}else{label_h}+shadow;
+  let r=match p.position{
+   Position::Bottom=>Rect{x:bar.x-along,y:bar.y-inward,w:bar.w+2*along,h:bar.h+inward+shadow},
+   Position::Left=>Rect{x:bar.x-shadow,y:bar.y-along,w:bar.w+inward+shadow,h:bar.h+2*along},
+   Position::Right=>Rect{x:bar.x-inward,y:bar.y-along,w:bar.w+inward+shadow,h:bar.h+2*along},
+  };
+  let x=r.x.max(0);let y=r.y.max(m.menubar);
+  Rect{x,y,w:(r.x+r.w).min(self.w).saturating_sub(x).max(1),h:(r.y+r.h).min(self.h).saturating_sub(y).max(1)}
  }
- /// The Dock surface's input region (surface px, from `surface` = `dock_surface_rect`): the plate drawn now.
+ /// The plate and magnified icons take input; labels and the surface's unused margins let clicks through.
+ #[cfg(any(test, feature = "desktop-wayland"))]
  pub(super) fn dock_input_rect(&self,surface:Rect)->Option<[i32;4]>{
   if !self.dock_is_visible(){return None;}
-  let p=self.dock_overlay_rect();Some([p.x-surface.x.max(0),p.y-surface.y.max(0),p.w,p.h])
+  let m=self.desk_metrics();let (_,bar,rects)=self.desk_dock(&m);let (_,live)=self.dock_live(bar,&rects,self.desk_t/1000.);
+  let mut p=self.dock_overlay_rect();for r in live{let x=p.x.min(r.x);let y=p.y.min(r.y);p=Rect{x,y,w:(p.x+p.w).max(r.x+r.w)-x,h:(p.y+p.h).max(r.y+r.h)-y};}
+  let x=p.x.max(surface.x);let y=p.y.max(surface.y);let right=(p.x+p.w).min(surface.x+surface.w);let bottom=(p.y+p.h).min(surface.y+surface.h);
+  Some([x-surface.x,y-surface.y,(right-x).max(0),(bottom-y).max(0)])
  }
  /// The Dock as it is drawn now: the plate (grown by magnification), or the strip at the edge that reveals a hidden Dock.
- pub(super) fn dock_overlay_rect(&self)->Rect {let m=self.desk_metrics();let (_,bar,_)=self.desk_dock(&m);if self.dock_is_visible(){
-  // the plate where the Dock rests: an autohide slide moves the drawing inside the fixed surface, not the surface
-  let now=self.desk_t/1000.;let plate=self.dock_plate_at(now);let slid=self.dock_slid(bar,&[],now).0;
-  Rect{x:plate.x-(slid.x-bar.x),y:plate.y-(slid.y-bar.y),..plate}
+ pub(super) fn dock_overlay_rect(&self)->Rect {let m=self.desk_metrics();if self.dock_is_visible(){
+  self.dock_plate_at(self.desk_t/1000.)
  }else{let p=self.ui.pt(3.) as i32;match self.dock_preferences().position {Position::Bottom=>Rect{x:0,y:self.h-p,w:self.w,h:p},Position::Left=>Rect{x:0,y:m.menubar,w:p,h:self.h-m.menubar},Position::Right=>Rect{x:self.w-p,y:m.menubar,w:p,h:self.h-m.menubar}}}}
 }
 
@@ -147,25 +196,40 @@ pub fn magnify_factor(dist:f32,radius:f32)->f32{if radius<=0.||dist>=radius{0.}e
 pub(super) fn fade(c:u32,k:f32)->u32{let k=k.clamp(0.,1.);let m=|shift:u32|((((c>>shift)&255) as f32*k).round() as u32)<<shift;m(0)|m(8)|m(16)|m(24)}
 /// Magnifies a row of equal square icon `rects` around `ptr` (a coordinate along the dock axis: x unless `vertical`).
 /// Sizes follow `magnify_factor` between the base size and `max`, quantised to 2 px so scaled icons cache well; gaps are
-/// kept, the row stays centred where it was, and icons keep their far edge (`far`: bottom or right) or near edge, so they
-/// grow into the screen.
+/// kept, and icons keep their far edge (`far`: bottom or right) or near edge, so they grow into the screen.
+///
+/// The row grows about the pointer, as the reference Dock does: the point of the resting row under the pointer (a
+/// fraction of an icon, or of the gap between two) is the same fraction of the same icon or gap in the magnified row,
+/// and it stays under the pointer, so the icons before it grow away to the start and those after it to the end. The
+/// icon under the pointer is therefore the icon drawn under it at every magnification amount (E2E N5: the row used to
+/// stay centred on its resting middle, which slid a neighbour under a pointer away from the middle). A pointer beyond
+/// either end of the row keeps that end where it rests. `Shell::dock_magnified` clamps the ends to the screen after.
 pub fn magnified_rects(rects:&[Rect],vertical:bool,far:bool,ptr:f32,max:i32,radius:f32,amount:f32)->Vec<Rect>{
  if rects.is_empty()||amount<=0.{return rects.to_vec();}
  let (start,len):(fn(&Rect)->i32,fn(&Rect)->i32)=if vertical{(|r|r.y,|r|r.h)}else{(|r|r.x,|r|r.w)};
  let base=len(&rects[0]);
  let sizes:Vec<i32>=rects.iter().map(|r|{let c=start(r) as f32+len(r) as f32/2.;let f=magnify_factor((c-ptr).abs(),radius)*amount.min(1.);base+(((max-base).max(0) as f32*f/2.).round() as i32)*2}).collect();
- let last=&rects[rects.len()-1];
- let old_span=start(last)+len(last)-start(&rects[0]);
  let gaps:Vec<i32>=rects.windows(2).map(|w|start(&w[1])-start(&w[0])-len(&w[0])).collect();
- let new_span:i32=sizes.iter().sum::<i32>()+gaps.iter().sum::<i32>();
- let mut at=start(&rects[0])-(new_span-old_span)/2;
- let mut out=Vec::with_capacity(rects.len());
- for (i,r) in rects.iter().enumerate(){
-  let n=sizes[i];
-  out.push(if vertical{let x=if far{r.x+r.w-n}else{r.x};Rect{x,y:at,w:n,h:n}}else{let y=if far{r.y+r.h-n}else{r.y};Rect{x:at,y,w:n,h:n}});
-  at+=n+gaps.get(i).copied().unwrap_or(0);
- }
- out
+ // the magnified row laid out from 0
+ let mut at=0;let mut starts=Vec::with_capacity(rects.len());
+ for (i,sz) in sizes.iter().enumerate(){starts.push(at);at+=sz+gaps.get(i).copied().unwrap_or(0);}
+ // the anchor: a resting coordinate `a` and where the same point lies in the magnified row (`q`)
+ let n=rects.len();let last=&rects[n-1];
+ let (a,q)=if ptr<=start(&rects[0]) as f32{(start(&rects[0]) as f32,0.)}
+  else if ptr>=(start(last)+len(last)) as f32{((start(last)+len(last)) as f32,(starts[n-1]+sizes[n-1]) as f32)}
+  else{
+   let mut anchor=(ptr,(starts[n-1]+sizes[n-1]) as f32);
+   for (i,r) in rects.iter().enumerate(){
+    let (s0,l)=(start(r) as f32,len(r) as f32);
+    if ptr<s0+l{anchor=(ptr,starts[i] as f32+(ptr-s0).max(0.)/l.max(1.)*sizes[i] as f32);break;}
+    let g=gaps.get(i).copied().unwrap_or(0) as f32;
+    // gaps keep their width, so the pointer keeps its distance past the icon before it
+    if ptr<s0+l+g{anchor=(ptr,(starts[i]+sizes[i]) as f32+(ptr-s0-l));break;}
+   }
+   anchor
+  };
+ let offset=(a-q).round() as i32;
+ rects.iter().enumerate().map(|(i,r)|{let sz=sizes[i];let at=starts[i]+offset;if vertical{let x=if far{r.x+r.w-sz}else{r.x};Rect{x,y:at,w:sz,h:sz}}else{let y=if far{r.y+r.h-sz}else{r.y};Rect{x:at,y,w:sz,h:sz}}}).collect()
 }
 impl Shell {
  /// Where a dock list entry sits in the section order: 0 kept in the Dock, 1 recents (running, not kept), 2 minimized windows and the Trash.
@@ -194,11 +258,16 @@ impl Shell {
   #[cfg(feature="desktop-wayland")] if entry>apps().len(){return d.linux_apps.get(entry-apps().len()-1).is_some_and(|a|!a.windows.is_empty());}
   false
  }
- /// Whether the app of built-in or installed entry `entry` (an index into `apps()`) itself has a window.
+ /// Whether the app of built-in or installed entry `entry` (an index into `apps()`) has a window (main or extra), or is an SDK app
+ /// still running after it ordered its main window out (Cmd+W on its last document).
  pub(super) fn dock_entry_running(&self,entry:usize)->bool{
   let Some(d)=self.desk.as_ref()else{return false;};
   let Some(app)=apps().get(entry)else{return false;};
-  #[allow(unused_mut)] let mut running=d.index_of(app.id).is_some();
+  // any window counts, an extra one too: an app whose main window was closed keeps its tile and dot while a compose or
+  // document window of it is open, so that window is not an orphan the Dock knows nothing about
+  let mut running=d.has_window_of(app.id);
+  // the app keeps its tile and running dot with no window (E2E13 1); a click reopens its window (`desk_open`)
+  if let AppId::External(slot)=app.id{running|=self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h|h.running()&&h.main_ordered_out);}
   #[cfg(feature="desktop-wayland")] if let AppId::External(slot)=app.id{running|=self.foreign_running(slot as usize)||super::apphost::installed().get(slot as usize).is_some_and(|p|!p.manifest.wayland_app_id.is_empty()&&d.native_windows.iter().any(|w|w.app_id==p.manifest.wayland_app_id));}
   running
  }
@@ -243,7 +312,7 @@ impl Shell {
   match self.dock_preferences().position{Position::Bottom=>(0,-lift),Position::Left=>(lift,0),Position::Right=>(-lift,0)}
  }
  /// The area around the dock where the pointer magnifies it: the capsule plus the room magnified icons need.
- pub(super) fn dock_zone(&self,bar:Rect)->Rect{let p=self.dock_preferences();if !p.magnification{return bar;}let grow=(self.ui.pt(p.magnified)-self.ui.pt(p.size)).max(0.) as i32;Rect{x:bar.x-grow,y:bar.y-grow,w:bar.w+2*grow,h:bar.h+2*grow}}
+ pub(super) fn dock_zone(&self,bar:Rect)->Rect{let p=self.dock_preferences();if !p.magnification{return bar;}let base=bar.w.min(bar.h) as f32*p.size/(p.size+2.*super::desk::DOCK_PAD_PT);let grow=(self.ui.pt(p.magnified)-base).max(0.).ceil() as i32;Rect{x:bar.x-grow,y:bar.y-grow,w:bar.w+2*grow,h:bar.h+2*grow}}
  /// Magnification amount 0..1 at `now` seconds.
  pub(super) fn dock_mag_amount(&self,now:f64)->f32{self.desk.as_ref().map_or(0.,|d|match &d.dock_mag{Some(a)=>a.value(now),None=>if d.dock_ptr.is_some(){1.}else{0.}})}
  /// The dock capsule and icon slots shifted by the autohide slide at `now` seconds.
@@ -255,15 +324,36 @@ impl Shell {
   let sh=|r:&Rect|Rect{x:r.x+dx,y:r.y+dy,..*r};
   (sh(&bar),rects.iter().map(sh).collect())
  }
+ /// The press areas of the icon slots `live` (as `dock_live` gives them): each grown along the Dock's axis by half the
+ /// gap to its neighbour (`desk::dock_press_rects`). Press, release, the hovered icon (its label) and the context menu
+ /// all hit-test these, so the icon a pointer in the gap magnifies and names is the one a click opens (E2E N5).
+ pub(super) fn dock_press(&self,live:&[Rect])->Vec<Rect>{super::desk::dock_press_rects(live,self.dock_preferences().position!=Position::Bottom)}
  /// Icon slots as drawn and hit-tested now: slid, then magnified around the pointer.
  pub(super) fn dock_live(&self,bar:Rect,rects:&[Rect],now:f64)->(Rect,Vec<Rect>){let (bar,slid)=self.dock_slid(bar,rects,now);let live=self.dock_magnified(&slid,now);(bar,live)}
  pub(super) fn dock_magnified(&self,rects:&[Rect],now:f64)->Vec<Rect>{
   let Some(d)=self.desk.as_ref()else{return rects.to_vec();};
   let p=&d.dock_preferences;
   let Some((px,py))=d.dock_ptr.filter(|_|p.magnification&&d.dock_grab_magnifies())else{return rects.to_vec();};
-  let max=self.ui.pt(p.magnified).round() as i32;
+  let cross=if p.position==Position::Bottom{self.h-self.desktop_bar_height() as i32}else{self.w};
+  let max=(self.ui.pt(p.magnified).round() as i32).min(cross*2/3).max(rects.first().map_or(1,|r|r.w));
   let (vertical,far,ptr)=match p.position{Position::Bottom=>(false,true,px),Position::Left=>(true,false,py),Position::Right=>(true,true,py)};
-  magnified_rects(rects,vertical,far,ptr,max,max as f32*1.6,self.dock_mag_amount(now))
+  let amount=self.dock_mag_amount(now);let radius=max as f32*1.6;
+  let mut live=magnified_rects(rects,vertical,far,ptr,max,radius,amount);
+  let edge=self.ui.pt(super::desk::DOCK_MARGIN_PT).round() as i32;
+  let base=rects.first().map_or(1,|r|r.w);let pad=(self.ui.pt(super::desk::DOCK_PAD_PT)*base as f32/self.ui.pt(p.size).max(1.)).floor() as i32;
+  let lo=if vertical{self.desktop_bar_height() as i32+edge+pad}else{edge+pad};
+  let hi=if vertical{self.h-edge-pad}else{self.w-edge-pad};
+  let span=|row:&[Rect]|row.first().zip(row.last()).map_or(0,|(a,b)|if vertical{b.y+b.h-a.y}else{b.x+b.w-a.x});
+  if span(&live)>hi-lo{
+   let(mut low,mut high)=(0.,amount);for _ in 0..10{let mid=(low+high)*0.5;let row=magnified_rects(rects,vertical,far,ptr,max,radius,mid);if span(&row)<=hi-lo{low=mid;live=row;}else{high=mid;}}
+   if span(&live)>hi-lo{live=rects.to_vec();}
+  }
+  if let(Some(first),Some(last))=(live.first(),live.last()){
+   let(start,end)=if vertical{(first.y,last.y+last.h)}else{(first.x,last.x+last.w)};
+   let shift=if start<lo{lo-start}else if end>hi{hi-end}else{0};
+   for r in &mut live{if vertical{r.y+=shift;}else{r.x+=shift;}}
+  }
+  live
  }
  /// The Dock plate drawn now: the capsule grown along the Dock's axis around the magnified row (W2-24).
  pub(super) fn dock_plate_at(&self,now:f64)->Rect{
@@ -273,6 +363,7 @@ impl Shell {
  }
  /// How far (px) the plate can grow past the resting capsule at each end of its axis while magnified: the growth with
  /// the pointer on the middle icon (where the most icons are inside the radius) plus one magnified icon of slack.
+ #[cfg(any(test, feature = "desktop-wayland"))]
  pub(super) fn dock_axis_room(&self)->i32{
   let p=self.dock_preferences();if !p.magnification{return 0;}
   let m=self.desk_metrics();let (_,bar,rects)=self.desk_dock(&m);
@@ -284,6 +375,21 @@ impl Shell {
   let (a,b)=if vertical{(plate.h,bar.h)}else{(plate.w,bar.w)};
   ((a-b).max(0)+1)/2+(max-rects[0].w.min(rects[0].h)).max(0)
  }
+ /// The hover label of Dock list entry `entry`: the app's name, "Applications" for the Apps grid icon (as the reference
+ /// labels it, E2E6 5), Trash, the Downloads stack, a minimized window's app, or a native client's id; empty for none.
+ pub(super) fn dock_label_text(&self,entry:usize)->String{
+  if entry<apps().len(){return apps()[entry].name.to_string();}
+  if entry==apps().len(){return "Applications".into();}
+  if entry==super::desk::DOCK_TRASH{return "Trash".into();}
+  if entry==super::dock_stack::DOCK_STACK{return "Downloads".into();}
+  if let Some(wi)=dock_min_index(entry){
+   return self.desk.as_ref().and_then(|d|d.wins.get(wi)).and_then(|w|apps().iter().find(|a|a.id==w.app)).map_or(String::new(),|a|a.name.to_string());
+  }
+  self.dock_linux_name(entry)
+ }
+ /// True while a Dock context menu or the Downloads stack is open: the hover label is not drawn then, as in the
+ /// reference (the stack's popover covered all but the tail of "Downloads", E2E8 7).
+ pub(super) fn dock_label_hidden_by_menu(&self)->bool{matches!(self.desktop_menu,Some(Menu::Dock|Menu::Stack))}
  /// The hover label's slot and opacity at `t` ms: fading in for the hovered slot, out for the one just left.
  pub(super) fn dock_label_state(&self,t:f64)->(Option<usize>,f32){
   let Some(d)=self.desk.as_ref()else{return(None,0.);};
@@ -335,6 +441,134 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
 
 #[cfg(test)]mod tests {
  use super::*;
+
+ /// E2E6 5: the Apps grid icon labels "Applications" on hover like every other icon labels its name; Trash keeps its own.
+ #[test]
+ fn the_apps_grid_icon_is_labelled_applications(){
+  let sh=desktop(2560,1440);
+  assert_eq!(sh.dock_label_text(apps().len()),"Applications");
+  assert_eq!(sh.dock_label_text(super::super::desk::DOCK_TRASH),"Trash");
+  assert_eq!(sh.dock_label_text(0),apps()[0].name);
+ }
+ /// E2E8 7: the Downloads label must not show through the open stack, nor over a Dock context menu.
+ #[test]
+ fn an_open_stack_or_dock_menu_hides_the_hover_label(){
+  let mut sh=desktop(2560,1440);
+  assert!(!sh.dock_label_hidden_by_menu());
+  sh.desktop_menu=Some(Menu::Stack);assert!(sh.dock_label_hidden_by_menu());
+  sh.desktop_menu=Some(Menu::Dock);assert!(sh.dock_label_hidden_by_menu());
+  sh.desktop_menu=None;assert!(!sh.dock_label_hidden_by_menu());
+ }
+ /// A click on an icon puts its name away: it stays away over a resting pointer and returns once the pointer moves.
+ #[test]
+ fn a_click_silences_the_hover_label_until_the_pointer_moves(){
+  let mut sh=desktop(1280,800);
+  {let p=&mut sh.desk.as_mut().unwrap().dock_preferences;p.position=Position::Bottom;p.magnification=false;}
+  let m=sh.desk_metrics();let(_,_,rest)=sh.desk_dock(&m);
+  let(x,y)=((rest[1].x+rest[1].w/2) as f32,(rest[1].y+rest[1].h/2) as f32);
+  sh.desktop_pointer(x,y,false,1000.);
+  sh.desk.as_mut().unwrap().dock_label_off=Some((x,y));
+  sh.desktop_pointer(x,y,false,1100.);
+  assert!(sh.desk.as_ref().unwrap().dock_label_off.is_some(),"a pointer at rest keeps the label away");
+  sh.desktop_pointer(x+3.,y,false,1200.);
+  assert!(sh.desk.as_ref().unwrap().dock_label_off.is_none(),"a moved pointer brings it back");
+ }
+ fn desktop(w:i32,h:i32)->Shell{
+  let mut sh=crate::shell::tests::desktop_shell();sh.w=w;sh.h=h;
+  sh.screen=crate::shell::Screen::Home;sh.anim=None;
+  let d=sh.desk.as_mut().unwrap();d.wins.clear();d.dock_preferences.autohide=false;d.dock_preferences.magnification=true;
+  sh
+ }
+
+ #[test]
+ fn dock_keeps_a_small_edge_gap_at_every_size_and_fits_the_complete_row(){
+  for(w,h)in[(640,480),(1280,800),(2560,1440)]{for size in[32.,48.,80.]{for position in[Position::Bottom,Position::Left,Position::Right]{
+   let mut sh=desktop(w,h);let p=&mut sh.desk.as_mut().unwrap().dock_preferences;p.size=size;p.position=position;
+   let m=sh.desk_metrics();let(list,bar,rects)=sh.desk_dock(&m);let edge=sh.ui.pt(super::super::desk::DOCK_MARGIN_PT).round() as i32;
+   assert_eq!(list.len(),rects.len());assert_eq!(list.last(),Some(&DOCK_TRASH));assert!(list.contains(&DOCK_STACK));
+   match position{
+    Position::Bottom=>{assert_eq!(h-bar.y-bar.h,edge);assert!((2*bar.x+bar.w-w).abs()<=1);},
+    Position::Left=>assert_eq!(bar.x,edge),
+    Position::Right=>assert_eq!(w-bar.x-bar.w,edge),
+   }
+   assert!(bar.x>=0&&bar.y>=m.menubar&&bar.x+bar.w<=w&&bar.y+bar.h<=h,"{position:?}, {w}x{h}, size {size}: {bar:?}");
+   let a=super::super::desk::Desk::area(&m);
+   assert!(a.x+a.w<=bar.x||bar.x+bar.w<=a.x||a.y+a.h<=bar.y||bar.y+bar.h<=a.y,"the work area excludes the resting Dock");
+  }}}
+ }
+
+ #[test]
+ fn magnified_icons_stay_on_screen_and_their_top_takes_their_context_menu(){
+  for position in[Position::Bottom,Position::Left,Position::Right]{
+   let mut sh=desktop(1280,800);sh.desk.as_mut().unwrap().dock_preferences.position=position;
+   let m=sh.desk_metrics();let(list,bar,rest)=sh.desk_dock(&m);let k=1;let r=rest[k];
+   sh.desktop_pointer((r.x+r.w/2) as f32,(r.y+r.h/2) as f32,false,1000.);sh.desk_t=1300.;
+   let surface=sh.dock_surface_rect();let(_,live)=sh.dock_live(bar,&rest,1.3);let r=live[k];
+   for r in&live{assert!(r.x>=0&&r.y>=m.menubar&&r.x+r.w<=sh.w&&r.y+r.h<=sh.h);}
+   let(x,y)=match position{Position::Bottom=>((r.x+r.w/2) as f32,r.y as f32+1.),Position::Left=>((r.x+r.w-2) as f32,(r.y+r.h/2) as f32),Position::Right=>(r.x as f32+1.,(r.y+r.h/2) as f32)};
+   let input=sh.dock_input_rect(surface).unwrap();let hit=Rect{x:surface.x+input[0],y:surface.y+input[1],w:input[2],h:input[3]};
+   assert!(hit.contains(x,y),"the visible magnified icon takes input above the resting plate");
+   sh.dock_pointer(Pointer::Context(x,y),1300.);
+   assert_eq!(sh.desk.as_ref().unwrap().dock_menu_target,Some(list[k]),"the drawn icon, not its neighbour");
+  }
+ }
+
+ /// E2E N5: the gap between two icons belongs to the nearer one for the hovered label and the context menu too, as it
+ /// does for press and release, so the icon named under the pointer is the one a click or a right-click acts on.
+ #[test]
+ fn the_gap_next_to_an_icon_names_it_and_takes_its_context_menu(){
+  let mut sh=desktop(1280,800);
+  {let p=&mut sh.desk.as_mut().unwrap().dock_preferences;p.position=Position::Bottom;p.magnification=false;}
+  let m=sh.desk_metrics();let(list,_,rest)=sh.desk_dock(&m);let k=1;
+  let gap=rest[k+1].x-(rest[k].x+rest[k].w);assert!(gap>=2,"icons sit apart: {gap}");
+  let(x,y)=((rest[k].x+rest[k].w) as f32+0.5,(rest[k].y+rest[k].h/2) as f32);
+  assert!(!rest[k].contains(x,y)&&!rest[k+1].contains(x,y),"the point is in the gap");
+  sh.desktop_pointer(x,y,false,1000.);
+  assert_eq!(sh.desk.as_ref().unwrap().dock_hover,Some(k),"the label names the nearer icon");
+  sh.dock_pointer(Pointer::Context(x,y),1000.);
+  assert_eq!(sh.desk.as_ref().unwrap().dock_menu_target,Some(list[k]),"its context menu, not the Dock's own");
+ }
+
+ #[test]
+ fn a_dock_surface_contains_every_visible_icon_label_and_shadow(){
+  struct Reset;impl Drop for Reset{fn drop(&mut self){bifrost_render::glass::set_thread_gpu(None);}}
+  let _reset=Reset;bifrost_render::glass::set_thread_gpu(Some(true));
+  for position in[Position::Bottom,Position::Left,Position::Right]{
+   let mut sh=desktop(1280,800);sh.desk.as_mut().unwrap().dock_preferences.position=position;
+   let m=sh.desk_metrics();let(_,_,rest)=sh.desk_dock(&m);let r=rest[1];
+   sh.desktop_pointer((r.x+r.w/2) as f32,(r.y+r.h/2) as f32,false,1000.);sh.desk_t=1300.;
+   let surface=sh.dock_surface_rect();let mut px=vec![0;sh.w as usize*sh.h as usize];
+   let mut out=Surface{w:sh.w as usize,h:sh.h as usize,stride:sh.w as usize,px:&mut px,y0:0};
+   sh.draw_desk_dock(&mut out,&m,1300.);
+   // The menu bar owns the top strip; side-Dock shadows are clipped beneath it.
+   for(y,row)in px.chunks(sh.w as usize).enumerate().skip(m.menubar as usize){for(x,p)in row.iter().enumerate(){if *p!=0{assert!(surface.contains(x as f32,y as f32),"{position:?}: painted pixel {x},{y} was cropped by {surface:?}");}}}
+   let before=surface;sh.desk_t=1600.;assert_eq!(sh.dock_surface_rect(),before,"hover frames keep a stable surface");
+  }
+ }
+
+ #[test]
+ fn autohide_keeps_a_hovered_magnified_icon_visible_above_the_plate(){
+  let mut sh=desktop(1280,800);sh.desk.as_mut().unwrap().dock_preferences.autohide=true;
+  let m=sh.desk_metrics();let(_,bar,rest)=sh.desk_dock(&m);let r=rest[1];
+  sh.desktop_pointer((r.x+r.w/2) as f32,(r.y+r.h/2) as f32,false,1000.);
+  let r=sh.dock_live(bar,&rest,1.3).1[1];assert!(r.y<bar.y);
+  sh.desktop_pointer((r.x+r.w/2) as f32,r.y as f32+1.,false,1300.);
+  assert!(sh.desk.as_ref().unwrap().dock_hide_at.is_none());
+  sh.dock_tick(2500.);assert!(sh.dock_is_visible());
+ }
+
+ #[test]
+ fn dock_changes_resize_all_filled_windows_and_keep_floating_sizes(){
+  let mut sh=desktop(1280,800);let m=sh.desk_metrics();
+  let d=sh.desk.as_mut().unwrap();let a=d.open(&m,AppId::Settings,(600,400));d.toggle_zoom(&m,a);
+  let b=d.open(&m,AppId::Terminal,(640,420));d.toggle_zoom(&m,b);
+  let c=d.open(&m,AppId::AppStore,(500,350));let floating=d.wins[c].r;
+  sh.dock_change(Change::Position(Position::Left),1000.);let area=super::super::desk::Desk::area(&sh.desk_metrics());
+  let d=sh.desk.as_ref().unwrap();assert_eq!(d.wins[a].r,area);assert_eq!(d.wins[b].r,area);assert_eq!(d.wins[c].r,floating);
+  sh.dock_change(Change::Autohide,2000.);let area=super::super::desk::Desk::area(&sh.desk_metrics());
+  assert_eq!(area.x,0);assert_eq!(area.w,sh.w);assert_eq!(area.y+area.h,sh.h);
+ }
+
  #[test]fn dock_choices_survive_restart(){let path=std::env::temp_dir().join(format!("bifrost-dock-{}",std::process::id()));std::fs::create_dir_all(&path).unwrap();let p=Preferences{position:Position::Right,size:72.,autohide:true,magnification:false,magnified:96.,pinned:vec!["bifrost.settings".into(),"linux:firefox".into()]};p.save(&path);let q=Preferences::load(&path);assert_eq!(q.position,p.position);assert_eq!(q.size,72.);assert!(q.autohide);assert!(!q.magnification);assert_eq!(q.magnified,96.);assert_eq!(q.pinned,p.pinned);std::fs::remove_dir_all(path).unwrap();}
  #[test]fn magnify_falls_off_with_a_cosine(){assert_eq!(magnify_factor(0.,100.),1.);assert!((magnify_factor(50.,100.)-0.5).abs()<1e-5);assert_eq!(magnify_factor(100.,100.),0.);assert_eq!(magnify_factor(500.,100.),0.);}
  #[test]fn magnified_row_grows_around_the_pointer_and_stays_centred(){
@@ -344,6 +578,65 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
   assert_eq!(out[2].y+out[2].h,row[2].y+row[2].h,"icons keep the bottom edge");
   let (a,b)=(row[0].x+row[4].x+row[4].w,out[0].x+out[4].x+out[4].w);assert!((a-b).abs()<=2,"centred");
   assert_eq!(magnified_rects(&row,false,true,0.,96,150.,0.),row);
+ }
+ /// E2E N5: the row grows about the pointer, so the icon (or gap) under the pointer in the resting row is the icon (or
+ /// gap) drawn under it at every amount, for a pointer anywhere along the row; a pointer past an end keeps that end.
+ #[test]fn the_magnified_row_keeps_the_pointed_icon_under_the_pointer(){
+  let row:Vec<Rect>=(0..12).map(|i|Rect{x:300+i*58,y:700,w:48,h:48}).collect();
+  let (first,end)=(row[0].x,row[11].x+row[11].w);
+  for amount in[0.2,0.5,1.]{for p in (first-30)..(end+30){
+   let ptr=p as f32+0.5;
+   let out=magnified_rects(&row,false,true,ptr,96,150.,amount);
+   if p<first{assert_eq!(out[0].x,first,"a pointer before the row keeps its start ({p}, {amount})");continue;}
+   if p>=end{assert_eq!(out[11].x+out[11].w,end,"a pointer past the row keeps its end ({p}, {amount})");continue;}
+   let i=row.iter().position(|r|p<r.x+r.w).unwrap();
+   if p>=row[i].x{
+    assert!(out[i].contains(ptr,724.),"pointer {p} on resting icon {i} is on drawn icon {i} ({amount}): {:?}",out[i]);
+   }else{
+    // in the gap before icon i: still between the same two drawn icons
+    assert!(ptr>=(out[i-1].x+out[i-1].w) as f32-1.&&ptr<=out[i].x as f32+1.,"pointer {p} in gap {}..{i} stays in it ({amount})",i-1);
+   }
+   assert!(out[0].x<=first&&out[11].x+out[11].w>=end,"both ends grow away from the pointer");
+  }}
+  // the growth is shared about the pointer: on the middle of the row both ends move out alike
+  let mid=(row[5].x+row[5].w+row[6].x) as f32/2.;let out=magnified_rects(&row,false,true,mid,96,150.,1.);
+  assert!(((first-out[0].x)-(out[11].x+out[11].w-end)).abs()<=2,"symmetric about the pointer");
+ }
+
+ /// The pointer on each icon's centre, in each gap and at both ends, along the whole Dock: the hovered slot (its label)
+ /// is the slot drawn under the pointer in that frame, while the row grows and once it has grown, and a press there
+ /// resolves the same slot, for every Dock position; on a Bottom Dock with room to grow it is the icon that rested there.
+ #[test]fn the_hovered_dock_icon_is_the_one_drawn_under_the_pointer_across_the_dock(){
+  for(w,h,positions)in[(1920,1080,vec![Position::Bottom]),(1280,800,vec![Position::Bottom,Position::Left,Position::Right])]{for position in positions{
+   let probe={let mut sh=desktop(w,h);sh.desk.as_mut().unwrap().dock_preferences.position=position;sh};
+   let m=probe.desk_metrics();let(_,bar,rest)=probe.desk_dock(&m);let vertical=position!=Position::Bottom;
+   let at=|along:f32,r:&Rect|if vertical{((r.x+r.w/2) as f32,along)}else{(along,(r.y+r.h/2) as f32)};
+   let (s0,l0)=(|r:&Rect|if vertical{r.y}else{r.x},|r:&Rect|if vertical{r.h}else{r.w});
+   let mut points=vec![];
+   for k in 0..rest.len(){
+    points.push((at(s0(&rest[k]) as f32+l0(&rest[k]) as f32/2.,&rest[k]),Some(k)));
+    if let Some(n)=rest.get(k+1){let g=s0(n)-s0(&rest[k])-l0(&rest[k]);if g>=2{points.push((at((s0(&rest[k])+l0(&rest[k])) as f32+(g/2) as f32-0.5,&rest[k]),None));}}
+   }
+   // the row's two ends, on the plate's padding
+   points.push((at(s0(&rest[0]) as f32-1.,&rest[0]),None));
+   let last=rest[rest.len()-1];points.push((at((s0(&last)+l0(&last)) as f32,&last),None));
+   for((x,y),expect)in points{
+    let mut sh=desktop(w,h);sh.desk.as_mut().unwrap().dock_preferences.position=position;
+    sh.desktop_pointer(x,y,false,1000.);
+    for t in[1050.,1300.]{
+     sh.dock_tick(t);
+     let drawn=sh.dock_hit(bar,&rest,x,y,t/1000.);
+     assert_eq!(sh.desk.as_ref().unwrap().dock_hover,drawn,"{position:?} {w}x{h} at ({x},{y}), {t} ms: the label names the drawn icon");
+     if let(1920,Some(k))=(w,expect){
+      assert_eq!(drawn,Some(k),"at ({x},{y}), {t} ms: the icon that rested under the pointer stays under it");
+      assert!(sh.dock_live(bar,&rest,t/1000.).1[k].contains(x,y),"the pointer is on the drawn icon itself");
+     }
+    }
+    let hov=sh.desk.as_ref().unwrap().dock_hover;
+    let press=sh.dock_press(&sh.dock_live(bar,&rest,1.3).1);
+    assert_eq!(press.iter().position(|r|r.contains(x,y)),hov,"a press resolves the slot the label names");
+   }
+  }}
  }
  /// W2-24: the plate grows along the axis with the magnified row and keeps the end padding; at rest it is the capsule.
  #[test]fn the_plate_grows_with_the_magnified_row(){

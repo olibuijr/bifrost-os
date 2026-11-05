@@ -176,8 +176,15 @@ impl Document {
         self.sizes.get(self.source_of(page)?).copied()
     }
 
-    /// The box the thumbnail of shown page `page` fits, known without drawing it. The sidebar lays rows out from this.
+    /// The box the thumbnail of shown page `page` fits, turned with the page, known without drawing it. The sidebar lays
+    /// rows out from this.
     pub fn thumb_box(&self, page: usize) -> Option<(usize, usize)> {
+        let (w, h) = self.thumb_fit(page)?;
+        Some(model::turn_size(w, h, self.turn_of(page)))
+    }
+
+    /// The box the unturned thumbnail of shown page `page` is fitted into.
+    fn thumb_fit(&self, page: usize) -> Option<(usize, usize)> {
         let (w, h) = self.page_size(page)?;
         Some(fit_box(w, h, THUMB_W, 2 * THUMB_W))
     }
@@ -249,18 +256,19 @@ impl Document {
         true
     }
 
-    /// The thumbnail of shown page `page`. It is asked of the worker the first time and drawn when the answer comes
-    /// back; None until then.
+    /// The thumbnail of shown page `page`, turned as the page is. It is asked of the worker the first time and drawn
+    /// when the answer comes back; None until then.
     pub fn thumb(&self, page: usize) -> Option<Rc<Image>> {
         let src = self.source_of(page)?;
-        let (w, h) = self.thumb_box(page)?;
-        let key = Key { thumb: true, page: src, w, h };
+        let (w, h) = self.thumb_fit(page)?;
+        let quarters = self.turn_of(page);
+        let key = Key { thumb: true, page: src, w, h, quarters };
         if let Some(t) = self.drawn.borrow().get(&key) {
             return Some(t.clone());
         }
         match &self.source {
             Source::Picture(img) => {
-                let t = Rc::new(img.resized(w, h));
+                let t = Rc::new(model::rotate(&img.resized(w, h), quarters));
                 self.drawn.borrow_mut().insert(key, t.clone());
                 Some(t)
             }
@@ -278,7 +286,7 @@ impl Document {
         match &self.source {
             Source::Picture(img) => Some(img.clone()),
             Source::Pdf { .. } => {
-                let key = Key { thumb: false, page: src, w: DOCUMENT_RENDER_BOUNDS.0, h: DOCUMENT_RENDER_BOUNDS.1 };
+                let key = Key { thumb: false, page: src, w: DOCUMENT_RENDER_BOUNDS.0, h: DOCUMENT_RENDER_BOUNDS.1, quarters: 0 };
                 if let Some(img) = self.drawn.borrow().get(&key) {
                     return Some(img.clone());
                 }
@@ -484,6 +492,18 @@ mod tests {
         let b = doc.thumb(0).expect("a thumbnail");
         assert!(Rc::ptr_eq(&a, &b));
         assert!(doc.thumb(1).is_none());
+    }
+
+    #[test]
+    fn thumbnails_turn_with_their_page() {
+        let mut doc = picture_doc(400, 200);
+        doc.set_turn(0, 1);
+        assert_eq!(doc.thumb_box(0), Some((66, THUMB_W)));
+        let t = doc.thumb(0).expect("a thumbnail");
+        assert_eq!((t.w, t.h), (66, THUMB_W));
+        doc.set_turn(0, 0);
+        let t = doc.thumb(0).expect("a thumbnail");
+        assert_eq!((t.w, t.h), (THUMB_W, 66));
     }
 
     #[test]

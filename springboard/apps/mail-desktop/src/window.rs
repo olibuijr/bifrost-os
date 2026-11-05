@@ -178,6 +178,8 @@ const KEY_V: u32 = 47;
 const KEY_A: u32 = 30;
 const KEY_C: u32 = 46;
 const KEY_X: u32 = 45;
+/// evdev D: Cmd+D is Don't Save on the Save This Message question.
+const KEY_D: u32 = 32;
 const KEY_BACKSPACE_CHORD: u32 = 14;
 /// The evdev codes of Up and Down Arrow, as they arrive in a chord (Shift-Up, Shift-Down; the manifest's `edit_keys`).
 const KEY_UP_CHORD: u32 = 103;
@@ -312,6 +314,12 @@ pub struct MailWindow {
     /// An immediate send is on its way from the compose window it was sent from: that window stays the active one until
     /// the answer comes back.
     pub sending: bool,
+    /// The sheet slot belongs to a compose window (`compose_windows`): its message fills that window, and `w` x `h` is
+    /// that window's size, not the main window's.
+    pub in_compose_window: bool,
+    /// The button of the Save This Message question that Tab moved the focus ring to, left to right: Don't Save, Cancel,
+    /// Save. `None` until Tab; Space presses it.
+    pub question_focus: Option<u8>,
     /// The Previous, Next and Done buttons of the find bar where they were drawn last frame.
     pub find_hits: Option<[Rect; 3]>,
     /// Where the open message's text starts in the reader's scrolled content, the height of a line, and the height of the
@@ -354,7 +362,7 @@ fn open_has_files(mail: &Mail) -> bool {
     mail.open.and_then(|uid| mail.attachments.get(&uid)).is_some_and(|files| !files.is_empty())
 }
 
-/// What a right-click on a message offers, in the order of macOS Mail's message context menu: the Message and Move menu
+/// What a right-click on a message offers, in the order of the reference mail app's message context menu: the Message and Move menu
 /// items that act on one message (`None` is a separator line).
 const CONTEXT_MENU: [Option<u32>; 21] = [
     Some(MENU_NEW_VIEWER),
@@ -405,9 +413,20 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
     let loaded = open && open_body_loaded(mail);
     let targets = mail.move_targets();
     let shown_targets = &targets[..targets.len().min(MENU_TARGETS_SHOWN)];
-    let mut message = vec![
+    // File, as the reference Mail has it: the shell's File menu (Close Window, Minimize, Print) takes these at its top
+    // and puts the Print item where its own Print stands
+    let file = vec![
         AppMenuItem::new(MENU_NEW, "New Message").key("cmd+n"),
-        AppMenuItem::new(MENU_NEW_VIEWER, "New Viewer Window").enabled(open),
+        AppMenuItem::new(MENU_NEW_VIEWER, "Open Message").key("cmd+o").enabled(open),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_SAVE_AS, "Save As...").key("cmd+shift+s").enabled(loaded),
+        AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+alt+a").enabled(open_has_files(mail)),
+        AppMenuItem::new(MENU_EXPORT_PDF, "Export as PDF...").enabled(loaded),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_IMPORT_MBOX, "Import Mailboxes...").enabled(!mail.accounts.is_empty()),
+        AppMenuItem::print(MENU_PRINT).enabled(open),
+    ];
+    let mut message = vec![
         AppMenuItem::new(MENU_REPLY, "Reply").key("cmd+shift+r").enabled(open),
         AppMenuItem::new(MENU_REPLY_ALL, "Reply All").key("cmd+alt+r").enabled(open_has_others(mail)),
         AppMenuItem::new(MENU_FORWARD, "Forward").key("cmd+shift+f").enabled(loaded),
@@ -439,8 +458,10 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
     }
     message.push(AppMenuItem::new(MENU_CLEAR_FLAG, "Clear Flag").depth(1).enabled(open && flagged.is_some()));
     let muted = mail.open.is_some_and(|uid| mail.is_muted(uid));
+    // the open message was read when it was opened; after Mark as Unread the item turns into Mark as Read
+    let unread = mail.open.and_then(|uid| mail.flags_of(uid)).is_some_and(|f| !f.contains(Flag::Seen));
     message.extend([
-        AppMenuItem::new(MENU_UNREAD, "Mark as Unread").enabled(open),
+        AppMenuItem::new(MENU_UNREAD, if unread { "Mark as Read" } else { "Mark as Unread" }).enabled(open),
         AppMenuItem::new(MENU_MUTE, if muted { "Unmute" } else { "Mute" }).enabled(open),
         AppMenuItem::new(MENU_REMIND, "Remind Me...").enabled(open),
         AppMenuItem::new(MENU_IGNORE_FOLLOW_UP, "Ignore Follow-Up").enabled(mail.open.is_some_and(|uid| mail.has_reminder(uid))),
@@ -450,11 +471,6 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_ADD_TO_CONTACTS, "Add Sender to Contacts").enabled(open),
         AppMenuItem::new(MENU_REMOVE_ATTACHMENTS, "Remove Attachments").enabled(open_has_files(mail)),
-        AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+alt+a").enabled(open_has_files(mail)),
-        AppMenuItem::new(MENU_SAVE_AS, "Save As...").key("cmd+shift+s").enabled(loaded),
-        AppMenuItem::new(MENU_EXPORT_PDF, "Export as PDF...").enabled(loaded),
-        AppMenuItem::separator(),
-        AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(open),
     ]);
 
     // Move To and Copy To list the account's mailboxes, so they have a menu of their own: one menu holds 48 items
@@ -493,7 +509,6 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_ERASE_TRASH, "Erase Deleted Items").enabled(mail.find_mailbox(&TRASH_NAMES).is_some()),
         AppMenuItem::new(MENU_ERASE_JUNK, "Erase Junk Mail").enabled(mail.find_mailbox(&JUNK_NAMES).is_some()),
         AppMenuItem::separator(),
-        AppMenuItem::new(MENU_IMPORT_MBOX, "Import Mailbox...").enabled(!mail.accounts.is_empty()),
         AppMenuItem::new(MENU_EXPORT_MBOX, "Export Mailbox...").enabled(!mail.accounts.is_empty()),
         AppMenuItem::separator(),
         AppMenuItem::submenu("Rules"),
@@ -591,6 +606,7 @@ pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(mail.find.is_some()),
     ];
     vec![
+        AppMenu { title: "File".into(), items: file },
         AppMenu { title: "Message".into(), items: message },
         AppMenu { title: "Move".into(), items: moves },
         AppMenu { title: "Mailbox".into(), items: mailbox },
@@ -662,6 +678,8 @@ impl MailWindow {
             found_rects: Vec::new(),
             remote_memo: None,
             sending: false,
+            in_compose_window: false,
+            question_focus: None,
             find_hits: None,
             reader_metrics: (0.0, 0.0, 0.0),
             press: None,
@@ -736,6 +754,8 @@ impl MailWindow {
             self.next_poll = t + POLL_MS;
             self.poll();
         }
+        // a mailbox shown from its kept rows selects its message again without waiting for the listing
+        self.take_reopen(&ctx.ui);
         self.run_queue(ctx);
         self.ensure_address_book(ctx);
         self.read_open_message(ctx);
@@ -881,7 +901,7 @@ impl MailWindow {
     }
 
     /// A press, drag or release at (`x`, `y`) with the modifier keys held for it: a click on a message with Cmd toggles it
-    /// in the selection and with Shift extends the selection from the anchor (`NSEvent.modifierFlags`).
+    /// in the selection and with Shift extends the selection from the anchor (the reference event modifier flags).
     pub fn touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32, t: f64, mods: ModifierFlags) -> bool {
         match kind {
             TouchKind::Down => {
@@ -925,7 +945,7 @@ impl MailWindow {
             let region = self.region(ui, x, y);
             self.scroller(region).is_some_and(|scroll| scroll.wheel(dy))
         } else if let Some(Sheet::Compose(compose)) = &mut self.mail.sheet {
-            crate::draw::scroll_message(ui, compose, w, h, dy)
+            crate::draw::scroll_message(ui, compose, w, h, self.in_compose_window, dy)
         } else {
             false
         };
@@ -938,11 +958,32 @@ impl MailWindow {
             return self.chord(&ctx.ui, key, mods);
         }
         if self.mail.sheet.is_none() {
+            if self.mail.search_focused && self.search_key(ctx, &k) {
+                return true;
+            }
             // Up and Down Arrow move the selection in the message list (the find bar takes no arrows)
             if let KeyInput::Code(code @ (KEY_UP | KEY_DOWN)) = k {
                 return self.step_selection(&ctx.ui, code == KEY_DOWN);
             }
             return self.find_key(k);
+        }
+        if matches!(self.mail.sheet, Some(Sheet::Question(_))) {
+            // the question has no fields behind it: Tab moves the focus ring over its three buttons, Space presses the
+            // focused one, and no other text reaches the hidden message
+            match &k {
+                KeyInput::Code(KEY_TAB) => self.question_focus = Some(self.question_focus.map_or(0, |f| (f + 1) % 3)),
+                KeyInput::Text(s) if s == " " => match self.question_focus {
+                    Some(0) => self.discard_question(),
+                    Some(1) => self.cancel_sheet(),
+                    Some(_) => self.submit(ctx),
+                    None => {}
+                },
+                _ => {}
+            }
+            if matches!(&k, KeyInput::Code(KEY_TAB) | KeyInput::Text(_)) {
+                self.dirty = true;
+                return true;
+            }
         }
         self.ensure_address_book(ctx);
         // the suggestions under a recipient field: the arrows move through them, Return and Tab take the highlighted
@@ -1018,6 +1059,17 @@ impl MailWindow {
         true
     }
 
+    /// Back in a mailbox: the message it had selected is selected and opened again, from its kept rows at once or from
+    /// the first listing.
+    fn take_reopen(&mut self, ui: &Ui) {
+        let Some(uid) = self.mail.reopen.take() else { return };
+        self.open_message(uid);
+        if let Some(index) = self.mail.visible_lines().iter().position(|l| l.row.uid == uid) {
+            self.scroll_list_to(ui, index);
+        }
+        self.dirty = true;
+    }
+
     /// Scrolls the message list just far enough that line `index` is in view.
     fn scroll_list_to(&mut self, ui: &Ui, index: usize) {
         let offset = self.list_scroll.offset();
@@ -1029,6 +1081,34 @@ impl MailWindow {
 
     /// Keys for the find bar over the reader, when no sheet is open: text goes to the search, Return steps to the next
     /// match, Escape closes the bar. False when the bar is not open (the key is not Mail's).
+    /// A key while the toolbar's search field has the keyboard: typing filters the list live, Return also asks the
+    /// server, Escape clears the text and then leaves the field. False for a key the field does not take (the arrows).
+    fn search_key(&mut self, _ctx: &Ctx, k: &KeyInput) -> bool {
+        match k {
+            KeyInput::Text(s) => {
+                let text: String = s.chars().filter(|c| !c.is_control()).collect();
+                self.mail.type_search(&text);
+                self.list_scroll = Scroller::new();
+            }
+            KeyInput::Code(KEY_BACKSPACE) => {
+                self.mail.backspace_search();
+                self.list_scroll = Scroller::new();
+            }
+            KeyInput::Code(KEY_RETURN) => self.search_server(),
+            KeyInput::Code(KEY_ESCAPE) => {
+                if self.mail.search_shown().is_empty() {
+                    self.mail.search_focused = false;
+                } else {
+                    self.mail.set_search_text(String::new());
+                    self.list_scroll = Scroller::new();
+                }
+            }
+            KeyInput::Code(_) => return false,
+        }
+        self.dirty = true;
+        true
+    }
+
     fn find_key(&mut self, k: KeyInput) -> bool {
         if self.mail.find.is_none() || self.mail.open.is_none() {
             return false;
@@ -1093,6 +1173,12 @@ impl MailWindow {
         let primary = mods & (CHORD_CTRL | CHORD_META) != 0;
         if key == KEY_V && primary {
             return self.paste();
+        }
+        // Cmd+D on the Save This Message question is Don't Save
+        if key == KEY_D && mods & CHORD_META != 0 && mods & (CHORD_ALT | CHORD_CTRL) == 0 && matches!(self.mail.sheet, Some(Sheet::Question(_))) {
+            self.discard_question();
+            self.dirty = true;
+            return true;
         }
         if self.mail.sheet.is_none() {
             // Shift-Up and Shift-Down Arrow extend the selection in the message list from its anchor
@@ -1176,6 +1262,13 @@ impl MailWindow {
 
     pub fn paste(&mut self) -> bool {
         let Some(text) = clipboard::text() else { return false };
+        if self.mail.sheet.is_none() && self.mail.search_focused {
+            let text: String = text.chars().filter(|c| !c.is_control()).collect();
+            self.mail.type_search(&text);
+            self.list_scroll = Scroller::new();
+            self.dirty = true;
+            return true;
+        }
         if self.mail.sheet.is_none() {
             // pasting into the find bar
             let Some(bar) = self.mail.find.as_mut().filter(|_| self.mail.open.is_some()) else { return false };
@@ -1364,6 +1457,7 @@ impl MailWindow {
 
     /// Cancel on a sheet: a question goes back to the message it asked about; any other sheet closes.
     fn cancel_sheet(&mut self) {
+        self.question_focus = None;
         match self.mail.sheet.take() {
             Some(Sheet::Question(compose)) => self.mail.sheet = Some(Sheet::Compose(compose)),
             _ => self.mail.close_sheet(),
@@ -1372,6 +1466,7 @@ impl MailWindow {
 
     /// Save This Message: the message is saved to Drafts and its window closes.
     fn save_question(&mut self, compose: &Compose) {
+        self.question_focus = None;
         self.save_draft(compose);
         self.mail.sheet_done = true;
         self.mail.close_sheet();
@@ -1379,6 +1474,7 @@ impl MailWindow {
 
     /// Don't Save: the message and its saved copy in Drafts are dropped, and the window closes.
     fn discard_question(&mut self) {
+        self.question_focus = None;
         if let Some(Sheet::Question(compose)) = self.mail.sheet.clone() {
             self.discard_draft(&compose);
         }
@@ -1397,7 +1493,7 @@ impl MailWindow {
     /// signs in, else a file in the data directory.
     pub fn save_draft(&mut self, compose: &Compose) {
         let key = compose.draft_id.clone();
-        let raw = match self.mail.draft_for_save(compose).render(&key, now_unix()) {
+        let raw = match self.mail.draft_for_save(compose).render_draft(&key, now_unix()) {
             Ok(raw) => raw,
             Err(e) => {
                 self.mail.status = e;
@@ -1490,10 +1586,21 @@ impl MailWindow {
         }
     }
 
-    /// File > New Viewer Window: the open message goes into a viewer window of its own.
+    /// File > Open Message: the open message goes into a viewer window of its own.
     fn new_viewer(&mut self) {
         if let Some(uid) = self.mail.open {
-            self.viewer_requests.push(uid);
+            self.open_viewer(uid);
+        }
+    }
+
+    /// Asks for a viewer window on `uid` and marks the message read, as opening a message in its own window does in the
+    /// reference, also after Mark as Unread on the message the reader already shows. The row changes at once; the
+    /// server is told in the background.
+    fn open_viewer(&mut self, uid: u32) {
+        self.viewer_requests.push(uid);
+        if self.mail.flags_of(uid).is_some_and(|f| !f.contains(Flag::Seen)) {
+            self.mail.mark_seen_locally(uid);
+            self.change_message(uid, Change::Flag { flag: Flag::Seen, on: true });
         }
     }
 
@@ -1526,7 +1633,7 @@ impl MailWindow {
         }
     }
 
-    /// A right-click at (`x`, `y`): on a message, it becomes the selection (as in macOS Mail) and its context menu opens
+    /// A right-click at (`x`, `y`): on a message, it becomes the selection (as in the reference mail app) and its context menu opens
     /// there; the choice comes back as a menu action (`Input::ContextAction`). False anywhere else or under a sheet.
     pub fn context(&mut self, ctx: &Ctx, x: f32, y: f32) -> bool {
         if self.mail.sheet.is_some() {
@@ -1574,7 +1681,12 @@ impl MailWindow {
                     self.move_open_to(&target);
                 }
             }
-            MENU_FIND => self.mail.open_search(),
+            // Cmd+F puts the cursor in the toolbar's search field, as in the reference Mail
+            MENU_FIND => {
+                if self.mail.sheet.is_none() {
+                    self.mail.search_focused = true;
+                }
+            }
             MENU_SAVE => self.save_attachments(ctx),
             MENU_SHOW_ALL => self.mail.apply_search(""),
             MENU_THREADS => {
@@ -1789,13 +1901,7 @@ impl MailWindow {
                     self.note(format!("{}: {mailbox} read, {count} message{}", self.account_name(&account), if count == 1 { "" } else { "s" }));
                     self.mail.drafts_mailbox = listing.drafts.clone();
                     let notices = self.mail.apply_listing_of(&account, &mailbox, listing.uid_validity, listing.mailboxes, listing.messages);
-                    // back in a mailbox: the message it had selected is selected and opened again
-                    if let Some(uid) = self.mail.reopen.take() {
-                        self.open_message(uid);
-                        if let Some(index) = self.mail.visible_lines().iter().position(|l| l.row.uid == uid) {
-                            self.scroll_list_to(&ctx.ui, index);
-                        }
-                    }
+                    self.take_reopen(&ctx.ui);
                     // a message a rule moves or reads raises no notification
                     let quiet = self.apply_rules_to_arrivals();
                     for notice in notices {
@@ -1899,7 +2005,7 @@ impl MailWindow {
                 }
                 self.mail.status = "Sent".into();
             }
-            Err(e) if id == 0 => self.mail.status = format!("The message was not sent: {e}"),
+            Err(e) if id == 0 => self.compose_failed(format!("The message was not sent: {e}")),
             Err(e) => {
                 if let Some(compose) = self.drafts.remove(&id).filter(|_| self.mail.sheet_is_free_for_compose()) {
                     self.mail.sheet = Some(Sheet::Compose(compose));
@@ -2943,24 +3049,36 @@ impl MailWindow {
         sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::search(transport.as_ref(), &account, &password, &mailbox, &query, &criteria));
     }
 
+    /// A Send that did not go out: the reason goes on the compose sheet, so it shows in the window of the message it is
+    /// about rather than in the main window's footer. With no compose sheet open it goes to the footer.
+    fn compose_failed(&mut self, reason: String) {
+        match &mut self.mail.sheet {
+            Some(Sheet::Compose(compose)) => compose.error = reason,
+            _ => self.mail.status = reason,
+        }
+    }
+
     /// Sends the message now, or queues it: Send Later (the "Send in" field) waits as long as it says, and the undo-send
     /// delay of the settings holds every message back for a few seconds. A queued message goes out from `run_queue`.
     fn send(&mut self, compose: &Compose) {
+        if let Some(Sheet::Compose(open)) = &mut self.mail.sheet {
+            open.error.clear();
+        }
         let draft = match self.mail.draft_from(compose) {
             Ok(draft) => draft,
             Err(e) => {
-                self.mail.status = e;
+                self.compose_failed(e);
                 return;
             }
         };
         let Some(account) = self.mail.current().cloned() else {
-            self.mail.status = "Add an account first".into();
+            self.compose_failed("Add an account first".into());
             return;
         };
         let wait = match self.send_delay(compose) {
             Ok(wait) => wait,
             Err(e) => {
-                self.mail.status = e;
+                self.compose_failed(e);
                 return;
             }
         };
@@ -2971,7 +3089,7 @@ impl MailWindow {
         let text = match draft.render(&id, unix) {
             Ok(text) => text,
             Err(e) => {
-                self.mail.status = e;
+                self.compose_failed(e);
                 return;
             }
         };
@@ -2997,7 +3115,7 @@ impl MailWindow {
             return;
         }
         let Some(password) = self.mail.password(&account).map(str::to_string) else {
-            self.mail.status = format!("No password is saved for {}", account.name);
+            self.compose_failed(format!("No password is saved for {}", account.name));
             return;
         };
         self.mail.status = "Sending".into();
@@ -3301,10 +3419,14 @@ impl MailWindow {
 
     fn tap(&mut self, ctx: &Ctx, x: f32, y: f32, t: f64, mods: ModifierFlags) -> bool {
         let hit = self.hit(&ctx.ui, x, y);
+        // a click anywhere but the toolbar's search field takes the keyboard from it
+        let was_searching = std::mem::take(&mut self.mail.search_focused);
+        self.dirty |= was_searching && !matches!(hit, crate::draw::Hit::Search);
         // every click counts, so a click elsewhere in between breaks a double-click; `t` is milliseconds
         let scale = ctx.ui.pt(1.0).max(f32::EPSILON);
         let clicks = self.clicks.press(t, x / scale, y / scale);
         match hit {
+            crate::draw::Hit::Search => self.mail.search_focused = true,
             crate::draw::Hit::Button(button) => match button {
                 crate::draw::Button::Refresh => self.refresh_selected(),
                 crate::draw::Button::Compose => self.compose(),
@@ -3347,7 +3469,7 @@ impl MailWindow {
                 self.last_tap = Some(uid);
                 if double {
                     self.clicks = ClickCounter::default();
-                    self.viewer_requests.push(uid);
+                    self.open_viewer(uid);
                 } else {
                     self.open_message(uid);
                 }
@@ -3413,7 +3535,7 @@ impl MailWindow {
             crate::draw::Hit::Cancel => self.cancel_sheet(),
             crate::draw::Hit::Discard => self.discard_question(),
             crate::draw::Hit::Primary => self.submit(ctx),
-            crate::draw::Hit::None => return false,
+            crate::draw::Hit::None => return was_searching,
         }
         self.dirty = true;
         true
@@ -3459,7 +3581,7 @@ fn picker_focused(mail: &Mail) -> bool {
 fn edit_enabled(mail: &Mail) -> (bool, bool, bool, bool) {
     let Some(form) = mail.sheet.as_ref().map(Sheet::form) else {
         // the message list takes Select All (every message it shows)
-        return (!mail.visible_lines().is_empty(), false, false, mail.open.is_some() && mail.find.is_some());
+        return (!mail.visible_lines().is_empty(), false, false, mail.search_focused || (mail.open.is_some() && mail.find.is_some()));
     };
     let typed = !picker_focused(mail);
     let has_text = typed && form.fields.get(form.focus).is_some_and(|f| !f.value.is_empty());
@@ -3602,6 +3724,28 @@ mod tests {
             assert!(seen.insert(item.id), "{} repeats id {}", item.title, item.id);
         }
         assert!(seen.contains(&MENU_ATTACH) && seen.contains(&MENU_FIND_IN_MESSAGE) && seen.contains(&(MENU_RULE_BASE + 11)));
+    }
+
+    #[test]
+    fn the_file_menu_is_mails_own_and_prints_in_the_shells_place() {
+        let menus = menus(&busy_mail(false), false);
+        let file = menus.iter().find(|m| m.title == "File").expect("a File menu");
+        let titles: Vec<&str> = file.items.iter().filter(|i| !i.separator).map(|i| i.title.as_str()).collect();
+        assert_eq!(titles, ["New Message", "Open Message", "Save As...", "Save Attachments...", "Export as PDF...", "Import Mailboxes...", "Print\u{2026}"]);
+        let print = file.items.iter().find(|i| i.id == MENU_PRINT).unwrap();
+        assert!(print.prints && print.enabled, "the shell's File > Print… becomes Mail's");
+        let message = menus.iter().find(|m| m.title == "Message").unwrap();
+        assert!(!message.items.iter().any(|i| [MENU_NEW, MENU_NEW_VIEWER, MENU_PRINT, MENU_SAVE_AS].contains(&i.id)), "each item is in one menu");
+    }
+
+    #[test]
+    fn mark_as_unread_turns_into_mark_as_read_on_an_unread_message() {
+        let title = |mail: &Mail| menus(mail, false).iter().flat_map(|m| &m.items).find(|i| i.id == MENU_UNREAD).unwrap().title.clone();
+        let mut mail = busy_mail(false);
+        mail.set_flag_locally(1, Flag::Seen, true);
+        assert_eq!(title(&mail), "Mark as Unread");
+        mail.set_flag_locally(1, Flag::Seen, false);
+        assert_eq!(title(&mail), "Mark as Read");
     }
 
     #[test]

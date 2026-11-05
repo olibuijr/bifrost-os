@@ -43,6 +43,57 @@ class Ax(unittest.TestCase):
         with mock.patch.object(midget, "control_text", return_value='error: no element "x"\n'):
             self.assertEqual(midget.ax_press("x"), (False, 'error: no element "x"'))
 
+    def test_scope_names_one_window(self):
+        rows = [{"address": a, "role": "button", "name": "Save", "value": "", "enabled": True} for a in (
+            "os/settings/general/save", "app/is.olibuijr.mail.desktop/button/save", "app/is.olibuijr.notes.desktop/button/save")]
+        self.assertEqual(midget.ax_scope(rows, "mail"), ("app/is.olibuijr.mail.desktop", []))
+        self.assertEqual(midget.ax_scope(rows, "os/settings"), ("os/settings", []))
+        self.assertEqual(midget.ax_scope(rows, "Settings"), ("os/settings", []))
+        scope, cands = midget.ax_scope(rows, "olibuijr")
+        self.assertIsNone(scope)
+        self.assertEqual(cands, ["app/is.olibuijr.mail.desktop", "app/is.olibuijr.notes.desktop"])
+        scope, cands = midget.ax_scope(rows, "nothing")
+        self.assertIsNone(scope)
+        self.assertEqual(len(cands), 3, "nothing matched: every scope is offered")
+
+    def test_match_by_address_suffix_or_name_with_an_optional_role(self):
+        rows = [
+            {"address": "app/x/button/save", "role": "button", "name": "Save", "value": "", "enabled": True},
+            {"address": "app/x/list/mail/save", "role": "row", "name": "Save", "value": "", "enabled": True},
+            {"address": "app/x/button/cancel", "role": "button", "name": "Cancel", "value": "", "enabled": True},
+        ]
+        self.assertEqual([r["address"] for r in midget.ax_match(rows, "save")], ["app/x/button/save", "app/x/list/mail/save"])
+        self.assertEqual([r["address"] for r in midget.ax_match(rows, "save", role="button")], ["app/x/button/save"])
+        self.assertEqual([r["address"] for r in midget.ax_match(rows, "app/x/button/save")], ["app/x/button/save"])
+        self.assertEqual([r["address"] for r in midget.ax_match(rows, "cancel")], ["app/x/button/cancel"])
+        self.assertEqual([r["address"] for r in midget.ax_match(rows, "CANCEL")], ["app/x/button/cancel"])
+        self.assertEqual(midget.ax_match(rows, "nope"), [])
+
+    def test_press_scoped_to_a_window_presses_the_one_address_or_explains(self):
+        listing = ("os/settings/general/about\trow\tAbout\t\tenabled\n"
+                   "app/is.olibuijr.mail.desktop/list/inbox/hello\trow\tHello\t\tenabled\n"
+                   "app/is.olibuijr.mail.desktop/button/reply\tbutton\tReply\t\tenabled\n"
+                   "app/is.olibuijr.mail.desktop/menu/reply\tmenuitem\tReply\t\tenabled\n"
+                   "app/is.olibuijr.notes.desktop/button/reply\tbutton\tReply\t\tenabled\n")
+        sent = []
+
+        def control(line, timeout=15):
+            sent.append(line)
+            return listing if line.startswith("ax list") else "ok " + line.split(" ", 2)[2] + "\n"
+        with mock.patch.object(midget, "control_text", control), mock.patch("sys.stdout"):
+            self.assertEqual(midget.cmd_press(["Hello", "--in", "mail"]), 0)
+            self.assertEqual(sent[-1], "ax press app/is.olibuijr.mail.desktop/list/inbox/hello")
+            self.assertEqual(midget.cmd_press(["Reply", "--in", "mail"]), 1, "two Reply elements in Mail: ambiguous")
+            self.assertEqual(midget.cmd_press(["Reply", "--in", "mail", "--role", "button"]), 0)
+            self.assertEqual(sent[-1], "ax press app/is.olibuijr.mail.desktop/button/reply")
+            self.assertEqual(midget.cmd_press(["Reply", "--in", "desktop"]), 2, "two apps match the scope word")
+            self.assertEqual(midget.cmd_press(["Nope", "--in", "mail"]), 1)
+            self.assertEqual(midget.cmd_press([]), 2)
+            self.assertEqual(midget.cmd_press(["About", "--bogus"]), 2)
+        with mock.patch.object(midget, "cmd_control", return_value=0) as plain, mock.patch("sys.stdout"):
+            self.assertEqual(midget.cmd_press(["General > Software Update"]), 0)
+            plain.assert_called_once_with(["ax", "press", "General > Software Update"])
+
     def test_wait_returns_when_the_value_matches_and_times_out_otherwise(self):
         with mock.patch.object(midget, "control_text", return_value=LISTING):
             self.assertEqual(midget.cmd_wait(["automatic-updates", "--value", "on", "--timeout", "2"]), 0)

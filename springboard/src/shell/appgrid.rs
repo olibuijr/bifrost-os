@@ -3,7 +3,7 @@
 //! between pages, Esc or a click outside to close. The wallpaper and the windows stay visible around the panel (the
 //! exported surface is masked to the capsule and the panel).
 //!
-//! Reordering: with a pointer (the desktop), dragging an icon picks it up at once, as the reference's Launchpad does;
+//! Reordering: with a pointer (the desktop), dragging an icon picks it up at once, as the reference's Applications grid does;
 //! on a touch screen a press held for `HOLD_MS` picks it up (it lifts under the finger even before it moves), so a
 //! plain swipe there still pages. A drag that starts on empty space pages everywhere. While an icon is held the
 //! others make room at the slot under the pointer, holding it at the panel's left or right edge turns the page, and
@@ -306,6 +306,28 @@ pub(super) struct AppGrid {
     icons: HashMap<(usize, usize), Image>,
     /// every window's minimized flag from before the grid hid them; restored when the grid closes
     pub(super) saved: Vec<(AppId, bool)>,
+    /// the other client's window that was active when the grid opened (the app whose menus the bar shows), if any
+    bar_foreign: Option<u32>,
+    /// how far the grid is shown (0..1) as last drawn: the backdrop fades with it (`overlay_backdrop`)
+    veil: f32,
+}
+
+/// The dim the open grid lays over the whole desktop behind it (premultiplied black at this alpha, 35%): the windows of
+/// other clients, which the grid cannot hide as it hides the shell's, go dim behind it as the reference's desktop
+/// does behind its blur (E2E6 6).
+const BACKDROP_ALPHA: f32 = 89.0;
+
+/// Lays a black veil of `alpha` (0..255) under the premultiplied pixels `px` (source-over of `px` on the veil): clear
+/// pixels become the veil, opaque ones stay as they are.
+fn backdrop_under(px: &mut [u32], alpha: u32) {
+    if alpha == 0 {
+        return;
+    }
+    for p in px {
+        let a = *p >> 24;
+        let out = a + (alpha.min(255) * (255 - a) + 127) / 255;
+        *p = (*p & 0x00ff_ffff) | (out.min(255) << 24);
+    }
 }
 
 fn catalogue() -> Vec<(String, String)> {
@@ -328,6 +350,23 @@ impl AppGrid {
     /// The grid is on screen but animating out: a toggle then brings it back instead of asking it to close again.
     pub(super) fn closing(&self) -> bool {
         self.open && self.closing.is_some()
+    }
+
+    /// While the grid is open (not closing): the app whose menus the bar keeps. `Some(Some(id))` is another client's
+    /// window that was active when the grid opened, `Some(None)` none was (a shell window was in front, see
+    /// `bar_front`); `None` when the grid is not up and the bar follows the live windows (Lead (a)).
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn bar_foreign(&self) -> Option<Option<u32>> {
+        (self.open && self.closing.is_none()).then_some(self.bar_foreign)
+    }
+
+    /// While the grid is open (not closing): the shell window that was in front when it opened (the grid hid every
+    /// window; `saved` holds them back to front with their own minimized flags).
+    pub(super) fn bar_front(&self) -> Option<AppId> {
+        if !self.open || self.closing.is_some() {
+            return None;
+        }
+        self.saved.iter().rev().find(|(_, minimized)| !*minimized).map(|(app, _)| *app)
     }
 
     /// The veil's rectangle (x, y, w, h px): between the menu bar and the Dock. On the window server the grid is
@@ -413,6 +452,9 @@ impl AppGrid {
         self.lifted = None;
         self.selected = None;
         self.scroll_acc = 0.0;
+        // the bar keeps the app in front: hiding the shell's windows makes the window server activate another client's
+        // window, which must not take the menu bar while the grid is up (Lead (a))
+        self.bar_foreign = sh.foreign_front_window();
         if self.saved.is_empty() {
             if let Some(d) = sh.desk.as_mut() {
                 self.saved = d.wins.iter().map(|w| (w.app, w.minimized)).collect();
@@ -430,10 +472,20 @@ impl AppGrid {
             return;
         }
         if let Some(d) = sh.desk.as_mut() {
+            let mut shown = Vec::new();
             for (app, min) in std::mem::take(&mut self.saved) {
                 if let Some(w) = d.wins.iter_mut().find(|w| w.app == app) {
                     w.minimized = min;
+                    if !min {
+                        shown.push(app);
+                    }
                 }
+            }
+            // the grid destroyed their toplevels and the window server activated another client's window meanwhile: the
+            // windows come back over it in their own order, not only the front one (E2E5 1). When another client's
+            // window was in front as the grid opened, they stay where the window server maps them.
+            if self.bar_foreign.is_none() {
+                d.note_restack(&shown);
             }
         }
         sh.desk_refocus();
@@ -665,6 +717,15 @@ impl AppGrid {
         mask
     }
 
+    /// Puts the backdrop under the exported surface's masked pixels (`overlay_mask`): the whole veil dims what is behind
+    /// it, faded with the grid's opening and closing.
+    #[allow(dead_code)] // the window-server export is the desktop-wayland build's
+    pub(super) fn overlay_backdrop(&self, px: &mut [u32]) {
+        if self.open {
+            backdrop_under(px, (BACKDROP_ALPHA * self.veil.clamp(0.0, 1.0)).round() as u32);
+        }
+    }
+
     fn dot_at(&self, lay: &Lay, pages: usize, x: f32, y: f32) -> Option<usize> {
         if pages < 2 || (y - lay.dots_y).abs() > 14.0 * lay.pt {
             return None;
@@ -730,6 +791,7 @@ impl AppGrid {
             }
             None => opening,
         };
+        self.veil = p;
         let a = (255.0 * p) as u32;
         let ui = &sh.ui;
         // the capsule header: glass like the Search field, the store glyph, the query (or its placeholder) and "..."
@@ -872,6 +934,10 @@ impl AppGrid {
         if self.ensure_icon(sh, app, size) {
             if let Some(img) = self.icons.get(&(app, size)) {
                 s.blit(img, ix as i32, cy as i32, 255, alpha);
+                // the package icon is a fixed picture: the grid shows today's date on Calendar as the Dock does
+                if apps().get(app).is_some_and(|a| a.icon == super::desk::CALENDAR_TILE) {
+                    sh.calendar_tile_face(s, sh.ui.s, (ix, cy, size as f32, size as f32), (sh.info.wday, sh.info.mday), alpha);
+                }
             }
         }
         let name = apps().get(app).map_or("", |a| a.name);
@@ -892,6 +958,30 @@ impl AppGrid {
 mod tests {
     use super::*;
 
+    /// E2E6 6: the grid's surface no longer leaves the desktop around it clear (another client's window showed there
+    /// as if the grid were not open): clear pixels become the dim veil, the opaque capsule and panel are untouched, an
+    /// anti-aliased edge sits over the veil, and a grid fading to nothing lays no veil.
+    #[test]
+    fn the_backdrop_dims_what_the_grid_leaves_clear() {
+        let mut px = vec![0u32, 0xff20_3040, 0x8010_1010];
+        backdrop_under(&mut px, 89);
+        assert_eq!(px[0], 89 << 24, "clear: premultiplied black at the veil's alpha");
+        assert_eq!(px[1], 0xff20_3040, "opaque: as drawn");
+        assert_eq!(px[2] & 0x00ff_ffff, 0x0010_1010, "an edge keeps its colour");
+        assert!((px[2] >> 24) > 0x80 && (px[2] >> 24) < 0xff, "and gains the veil under it");
+        let mut clear = vec![0u32; 4];
+        backdrop_under(&mut clear, 0);
+        assert!(clear.iter().all(|&p| p == 0));
+        let mut grid = AppGrid::default();
+        let mut px = vec![0u32; 2];
+        grid.overlay_backdrop(&mut px);
+        assert!(px.iter().all(|&p| p == 0), "a closed grid exports no veil");
+        grid.open = true;
+        grid.veil = 1.0;
+        grid.overlay_backdrop(&mut px);
+        assert!(px.iter().all(|&p| p == (BACKDROP_ALPHA as u32) << 24), "fully open: the whole veil");
+    }
+
     fn all() -> Vec<(String, String)> {
         ["Settings", "Term", "Photos", "Files", "App Store"].iter().map(|n| (n.to_lowercase().replace(' ', "."), n.to_string())).collect()
     }
@@ -910,6 +1000,7 @@ mod tests {
         assert_eq!(CHIPS[chip_for_manifest("x", " photo & video ")], "Creativity");
         assert_eq!(CHIPS[chip_for_manifest("x", "Music")], "Entertainment");
         assert_eq!(CHIPS[chip_for_manifest("x", "Books")], "Information & Reading");
+        assert_eq!(CHIPS[chip_for_manifest("x", "News")], "Information & Reading");
         assert_eq!(CHIPS[chip_for_manifest("x", "Something new")], "Other");
         assert_eq!(CHIPS[chip_for_manifest("is.olibuijr.messages.desktop", "Productivity")], "Social", "the id table wins over the category");
         assert!(MANIFEST_CHIP.iter().chain(ID_CHIP).all(|&(_, c)| c < CHIPS.len()));
@@ -990,7 +1081,7 @@ mod tests {
     #[test]
     fn a_pointer_drag_lifts_at_once_and_a_touch_only_after_the_hold() {
         let slop = 8.0;
-        assert!(lifts(true, 40.0, 20.0, slop), "a mouse drag on an icon picks it up (Launchpad)");
+        assert!(lifts(true, 40.0, 20.0, slop), "a mouse drag on an icon picks it up (Applications grid)");
         assert!(!lifts(true, 40.0, 4.0, slop), "a click that barely moves does not");
         assert!(lifts(true, HOLD_MS, 0.0, slop));
         assert!(!lifts(false, 40.0, 300.0, slop), "a quick swipe on a touch screen pages");
@@ -1049,6 +1140,26 @@ mod overlay_tests {
         assert!(!frame_ids(&sh).contains(&8), "the frame it closes in drops the surface");
     }
 
+    /// E2E12 4: the exported grid surface, above every toplevel (VEIL rank), carries the dim backdrop over the whole veil
+    /// outside the capsule and the panel, so another client's window behind it goes dim with the wallpaper.
+    #[test]
+    fn the_exported_grid_surface_dims_everything_around_the_capsule_and_panel() {
+        let mut sh = open_grid();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        let mut grid = std::mem::take(&mut sh.overview.grid);
+        grid.draw(&sh, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1e9);
+        sh.overview.grid = grid;
+        let pixels = vec![0u32; w * h];
+        let frames = sh.desktop_chrome_frames(&pixels, w, h);
+        let f = frames.iter().find(|f| f.id == crate::shell::chrome_ids::APP_GRID).expect("the grid surface");
+        assert!(crate::bare::wayland::chrome_z(f.id) > crate::bare::wayland::chrome_z(crate::shell::chrome_ids::DOCK), "above the windows and the Dock");
+        let veil = (super::BACKDROP_ALPHA as u32) << 24;
+        for (x, y) in [(0, 0), (f.width - 1, 0), (0, f.height - 1), (f.width - 1, f.height - 1)] {
+            assert_eq!(f.pixels[y * f.width + x], veil, "the corner ({x}, {y}) of the veil is dimmed");
+        }
+    }
+
     #[test]
     fn the_apps_icon_while_the_grid_animates_out_opens_it_again() {
         let mut sh = open_grid();
@@ -1058,6 +1169,108 @@ mod overlay_tests {
         sh.appgrid_toggle(2.2);
         finish(&mut sh);
         assert!(!sh.overview.grid.visible(), "and the next one closes it");
+    }
+
+    /// Lead (a): the grid hides the windows, and the window server then activates another client's window; the bar keeps
+    /// the app that was in front (its name and menus), the screen stays that app, and Esc with a bar menu open over the
+    /// grid closes the menu first, leaving the grid up.
+    #[test]
+    fn the_bar_keeps_the_front_app_under_the_grid_and_escape_closes_its_menu_first() {
+        use crate::shell::apps::AppId;
+        use crate::shell::desktop_bar::{FrontApp, Menu};
+        use crate::shell::overview::{KeyMods, KEY_ESC};
+        let mut sh = desktop_shell();
+        sh.anim = None;
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, AppId::Terminal, (900, 600));
+        }
+        sh.screen = Screen::App(AppId::Terminal);
+        sh.appgrid_toggle(1.0);
+        assert!(sh.overview.grid.visible());
+        assert!(sh.desk.as_ref().unwrap().front().is_none(), "the grid hid the window");
+        assert!(sh.front_app() == FrontApp::Desk(AppId::Terminal), "the bar keeps the app that was in front");
+        sh.desk_sync_extra_windows();
+        assert_eq!(sh.screen, Screen::App(AppId::Terminal), "the per-tick refocus leaves the screen to that app");
+        sh.desktop_menu = Some(Menu::App);
+        let mods = KeyMods { ctrl: false, cmd: false, shift: false };
+        assert!(!sh.hw_overview_key(KEY_ESC, true, mods, false, 2.0), "Esc is the open menu's, not the grid's");
+        sh.hw_shortcut(Shortcut::Back, 2.0);
+        assert!(sh.desktop_menu.is_none(), "the first Esc closes the menu");
+        assert!(sh.overview.grid.visible() && !sh.overview.grid.closing(), "and the grid stays up");
+        sh.hw_shortcut(Shortcut::Back, 3.0);
+        finish(&mut sh);
+        assert!(!sh.overview.grid.visible(), "the second Esc closes the grid");
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w| w.app), Some(AppId::Terminal));
+        assert!(sh.overview.grid.bar_front().is_none() && sh.overview.grid.bar_foreign().is_none(), "the bar follows the live windows again");
+    }
+
+    /// E2E5 1: the grid destroyed the windows' toplevels and the window server activated another client's window; when
+    /// the grid closes the window server is told every window that comes back, bottom first, so they all stack over that
+    /// window in their order (only the front one came back over FilmCraft). When another client's window was in front as
+    /// the grid opened, nothing is restacked over it.
+    #[test]
+    fn closing_the_grid_brings_every_window_back_in_its_order_over_other_clients() {
+        use crate::shell::apps::AppId;
+        use crate::shell::desk::win_id;
+        let mut sh = desktop_shell();
+        sh.anim = None;
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, AppId::Terminal, (900, 600));
+            d.open(&m, AppId::Photos, (900, 600));
+            d.open(&m, AppId::Settings, (900, 600));
+            let p = d.index_of(AppId::Photos).unwrap();
+            d.wins[p].minimized = true;
+        }
+        sh.screen = Screen::App(AppId::Settings);
+        sh.take_wayland_restack();
+        sh.appgrid_toggle(1.0);
+        assert!(sh.take_wayland_restack().is_empty(), "opening the grid restacks nothing");
+        sh.appgrid_toggle(2.0);
+        finish(&mut sh);
+        let want: Vec<u32> = [AppId::Terminal, AppId::Settings].into_iter().filter_map(win_id).collect();
+        assert_eq!(want.len(), 2);
+        assert_eq!(sh.take_wayland_restack(), want, "the shown windows, bottom first; the minimized one stays in the Dock");
+        // another client's window was in front when the grid opened: the shell's windows are not lifted over it
+        sh.desk.as_mut().unwrap().native_windows.push(crate::bare::wayland::ForeignWindow { id: 40, title: "Film".into(), app_id: "x.film".into(), active: true, maximized: false, minimized: false });
+        sh.appgrid_toggle(3.0);
+        sh.appgrid_toggle(4.0);
+        finish(&mut sh);
+        assert!(sh.take_wayland_restack().is_empty());
+    }
+
+    /// E2E5 5: Overview hides the windows and the window server then activates another client's window; the bar keeps
+    /// the app that was in front when Overview opened, as under the Apps grid, until Overview has gone.
+    #[test]
+    fn the_bar_keeps_the_front_app_under_overview() {
+        use crate::shell::apps::AppId;
+        use crate::shell::desktop_bar::FrontApp;
+        let mut sh = desktop_shell();
+        sh.anim = None;
+        let m = sh.desk_metrics();
+        {
+            let d = sh.desk.as_mut().unwrap();
+            d.wins.clear();
+            d.open(&m, AppId::Terminal, (900, 600));
+        }
+        sh.screen = Screen::App(AppId::Terminal);
+        // a native window behind, inactive while Terminal is in front
+        sh.desk.as_mut().unwrap().native_windows.push(crate::bare::wayland::ForeignWindow { id: 41, title: "Film".into(), app_id: "x.film".into(), active: false, maximized: false, minimized: false });
+        sh.overview_toggle(1.0);
+        assert!(sh.overview.open, "Overview opens");
+        assert!(sh.desk.as_ref().unwrap().front().is_none(), "Overview hid the window");
+        // the window server activates the native window once the shell's toplevel is gone
+        sh.desk.as_mut().unwrap().native_windows[0].active = true;
+        assert!(sh.front_app() == FrontApp::Desk(AppId::Terminal), "the bar keeps Terminal, not the activated window");
+        sh.desk_sync_extra_windows();
+        assert_eq!(sh.screen, Screen::App(AppId::Terminal), "the per-tick refocus leaves the screen to that app");
+        assert_eq!(sh.bar_held_front(), Some(AppId::Terminal));
+        assert_eq!(sh.bar_held_foreign(), Some(None));
     }
 
     #[test]

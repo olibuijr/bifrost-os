@@ -507,16 +507,23 @@ pub fn screen_capture_declared(app_id: &str, declared: bool) -> bool {
 /// picture and saves it, so the app needs no `screen` entry in its manifest. The first call of an app that has not
 /// been asked queues the sheet and fails; a refusal fails with its reason.
 pub fn require_screenshot_consent(app_id: &str) -> Result<(), String> {
-    match privacy_permissions::access(app_id).status(Media::Screen) {
+    let status = privacy_permissions::access(app_id).status(Media::Screen);
+    match status {
         Status::Authorized => Ok(()),
-        Status::NotDetermined => {
+        Status::NotDetermined | Status::Denied => {
             let name = apphost::installed().iter().find(|a| a.manifest.id == app_id).map(|a| a.manifest.name.clone()).unwrap_or_else(|| app_id.to_string());
-            privacy_permissions::queue_prompt(app_id, &name, Kind::Media(Media::Screen), "");
-            Err("screen recording is not authorized yet: the person has been asked".into())
+            if status == Status::NotDetermined {
+                privacy_permissions::queue_prompt(app_id, &name, Kind::Media(Media::Screen), "");
+            }
+            Err(screen_off_message(&name))
         }
         Status::Restricted => Err("screen recording is restricted on this system".into()),
-        Status::Denied => Err("the person did not allow screen recording for this app".into()),
     }
+}
+
+/// The plain line a capture shows while the person has not allowed screen recording for the app.
+pub fn screen_off_message(app_name: &str) -> String {
+    format!("Screen recording is off for {app_name}.")
 }
 
 #[cfg(test)]
@@ -529,6 +536,11 @@ mod tests {
         assert!(!screen_capture_declared(SCREEN_CAPTURE_APP_ID, false), "the manifest must declare it");
         assert!(!screen_capture_declared("is.olibuijr.preview.desktop", true), "a legacy `screen` entry grants nothing");
         assert!(!screen_capture_declared("is.example.recorder", true));
+    }
+
+    #[test]
+    fn a_refused_screen_capture_names_the_app_in_plain_words() {
+        assert_eq!(screen_off_message("Viewer"), "Screen recording is off for Viewer.");
     }
 
     #[test]

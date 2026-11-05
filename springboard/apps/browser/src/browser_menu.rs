@@ -101,7 +101,7 @@ impl MainMenu {
             }
             TouchKind::Move => {
                 if let Some((start, scroll, dragging)) = self.drag {
-                    if dragging || (py - start).abs() > EDGE {
+                    if bifrost_app::pans_now() && (dragging || (py - start).abs() > EDGE) {
                         self.scroll = (scroll + start - py).clamp(0.0, self.limit(bounds));
                         self.drag = Some((start, scroll, true));
                     }

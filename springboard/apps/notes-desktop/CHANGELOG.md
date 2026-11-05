@@ -1,5 +1,63 @@
 # Changelog
 
+## 1.24.13
+
+- Creating a folder closes a note that is not in it; the folder name field no longer covers the list; Escape clears the search first.
+
+## 1.24.12
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 1.24.11
+
+- The Delete Permanently alert takes Cmd+D, Cmd+., the Tab focus ring and Space.
+
+## 1.24.10
+
+- Pasted text no longer gets a stray # at the end, and the Share button opens the Share menu.
+
+## 1.24.9
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 1.24.8
+
+- Headings show no Markdown marker: the `##` (and `###`, or a `#` after the first line) of a heading is hidden as the title's `# ` and the emphasis markers are. A click or the arrows put the caret after the hidden marker, so typing at the start of a heading stays in the heading; Backspace there turns the line into body text and Return opens a line above it.
+- The note list's snippet line drops block markers too: a heading, list, checklist or quote line reads as its text ("## Plan" shows "Plan").
+- Delete Permanently asks with the kit's alert sheet, as TextEdit's confirmations do: hung from the title bar with the question "Are you sure you want to delete this note?" in bold, the informative text under it, and Delete and Cancel stacked full width.
+
+## 1.24.7
+
+- A heading line that also carries a checkbox marker (`## - [ ] Item two`, as older versions wrote a checklist item turned into a heading) shows as the heading "Item two": a paragraph has one style, the heading wins, and the checkbox marker is no longer drawn as text. Changing its style, exporting and copying as plain text drop the marker too.
+
+## 1.24.6
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 1.24.5
+
+- Look Up (Ctrl+Cmd+D) and the Services menu work in a note: Notes answers the shell's request for the selection with the selected text (plain, without Markdown markers) of the note or note window that has the keys, and reports the open note's text and caret, so with only a caret in a word Look Up defines that word.
+- The Look Up popover opens just below the caret or selection in the note instead of under the menu bar at the centre of the screen.
+
+## 1.24.4
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
+## 1.24.3 — 2026-10-25
+
+- Built against the SDK whose alerts wrap their title and message: the Delete Permanently alert ("This note will be deleted immediately. You can’t undo this action.") shows the whole sentence instead of cutting it off with an ellipsis. The alert already goes through the shared sheet (`widgets::sheet`, `Sheet::hit`), so its buttons follow the taller panel.
+
+## 1.24.2 — 2026-10-24
+
+- Bold, italic, strike-through, underline, highlight and code read as rich text: the editor no longer shows their Markdown markers, the caret, clicks, Backspace and Delete pass over them, and the note list's titles and previews leave them out. The note file keeps its Markdown.
+- Cmd+B (and the other text styles) with the caret in text that already has the style turns it off for the typing that follows, instead of adding another pair of markers.
+- Note > Delete Note and Cmd+Backspace on a note in Recently Deleted delete it permanently instead of failing with "Note exists in destination", after an alert asks first ("This note will be deleted immediately. You can't undo this action."); Delete Permanently shows the same alert.
+- Cmd+B inside bold text splits the run only once you type, so no empty marker pair stays in the note when you move on. Deleting the space between two styled runs no longer removes their markers or merges them.
+
+## 1.24.1 — 2026-10-24
+
+- Bold, Italic and the other text styles on a selection that spans several lines style each line on its own, after its heading or list marker, so the whole selection turns bold instead of showing the markers as text; the same command takes the style off again.
+
 ## 1.24.0 — 2026-10-23
 
 - Text selection with the mouse (drag, double and triple click, Shift-click) and the standard editing keys; Cut, Copy, Paste and Select All work and are enabled in the Edit menu.

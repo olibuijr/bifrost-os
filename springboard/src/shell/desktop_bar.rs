@@ -10,7 +10,7 @@ use super::{AppId,Screen,Effect,Event,desktop_network,ui::{WHITE,SECONDARY,CELL,
 use crate::gfx::{Image,Surface};
 /// The overlay surface (the whole screen) the system sheets and alerts are drawn into on the desktop (`Shell::modal_layer`).
 #[cfg(feature = "desktop-wayland")]
-pub(super) const MODAL_CHROME_ID:u32=15;
+pub(super) const MODAL_CHROME_ID:u32=super::chrome_ids::MODAL;
 /// Width of a menu extra's button, in pt (Golden Gate spaces menu extras about 8 pt apart).
 #[cfg(feature = "desktop-wayland")]
 const STATUS_ICON_PT:f32=30.;
@@ -66,14 +66,17 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document,
     /// the window menu under a window's green button (`desk::Desk::arrange`): Fill, Centre, Move & Resize, Full Screen
-    Arrange}
+    Arrange,
+    /// the Dock's open Downloads stack (`dock_stack`): a fan or a grid of the folder's newest items, drawn and
+    /// hit-tested by the stack, not as rows
+    Stack}
 #[cfg(feature = "desktop-wayland")]
 #[derive(Clone)] pub(super) enum Action {Submenu(Menu),Window(super::utility_window::Kind),Script(u8),Foreign(u32),Settings(&'static str),Desktop,Arrange(super::AppId,super::desk::Arrange),Close,Quit,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),InputMethod(String),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,OnScreenKeyboard,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,LowPowerMode(bool),HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String),About,AppSettings(u8),Hide,HideOthers,UnhideAll}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
 #[cfg(feature = "desktop-wayland")]
-pub(super) struct Row {pub(super) text:String,pub(super) action:Option<Action>,sep:bool,key:Option<String>,symbol:Option<crate::symbols::Symbol>,indent:bool,search:bool,header:bool}
+pub(super) struct Row {pub(super) text:String,pub(super) action:Option<Action>,sep:bool,key:Option<String>,symbol:Option<crate::symbols::Symbol>,indent:bool,search:bool,header:bool,art:bool}
 /// How an app's menu extra (`NativeStatusItem`) shows on the bar.
 #[cfg(any(test, feature = "desktop-wayland"))]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -153,6 +156,11 @@ pub(super) struct MenuScrollState {pub(super) menu:Option<Menu>,pub(super) offse
 /// Height of the Help menu's search field, in pt.
 #[cfg(feature = "desktop-wayland")]
 const HELP_FIELD_PT:f32=30.;
+/// The Now Playing menu's cover row, and the cover's side inside it (the row less its padding), in pt.
+#[cfg(feature = "desktop-wayland")]
+const MENU_ART_ROW_PT:f32=52.;
+#[cfg(feature = "desktop-wayland")]
+const MENU_ART_PT:f32=40.;
 /// The gap between the menu bar and an open menu (Golden Gate).
 #[cfg(feature = "desktop-wayland")]
 const MENU_GAP_PT:f32=6.;
@@ -217,9 +225,10 @@ pub(super) const FLYOUT_SAFE_MS:f64=300.;
 #[cfg(feature = "desktop-wayland")]
 const FLYOUT_OVERLAP_PT:f32=3.;
 /// The chrome surface of the first cascading submenu (the menu it cascades from is id 1); a submenu of a submenu is
-/// the next id. Each level is its own overlay surface above the windows, cut from the shell's frame as id 1 is.
+/// the next id, within the range `chrome_ids` reserves (`FLYOUT_SLOTS` levels). Each level is its own overlay surface
+/// above the windows, cut from the shell's frame as id 1 is.
 #[cfg(feature = "desktop-wayland")]
-pub(super) const FLYOUT_CHROME_ID:u32=17;
+pub(super) const FLYOUT_CHROME_ID:u32=super::chrome_ids::FLYOUT_FIRST;
 /// The pointer's dealings with the cascading submenus (`NativeMenu`): a submenu waiting out `FLYOUT_OPEN_MS`, a row of
 /// a parent the pointer crosses on its way into the open submenu (it takes over only after `FLYOUT_SAFE_MS` at rest),
 /// and the pointer's last position (the apex of the safe triangle).
@@ -275,15 +284,16 @@ pub(super) fn in_safe_triangle(apex:(f32,f32),p:(f32,f32),sub:(f32,f32,f32,f32),
 }
 /// Top and height in pt (from the popup's top edge) of each row, and the popup's total height.
 #[cfg(feature = "desktop-wayland")]
-pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_PT;let v=rows.iter().map(|r|{let h=if r.sep{MENU_SEP_PT}else if r.search{HELP_FIELD_PT}else{MENU_ROW_PT};let s=(y,h);y+=h;s}).collect();(v,y+MENU_PAD_PT)}
+pub(super) fn menu_spans(rows:&[Row])->(Vec<(f32,f32)>,f32) {let mut y=MENU_PAD_PT;let v=rows.iter().map(|r|{let h=if r.sep{MENU_SEP_PT}else if r.art{MENU_ART_ROW_PT}else if r.search{HELP_FIELD_PT}else{MENU_ROW_PT};let s=(y,h);y+=h;s}).collect();(v,y+MENU_PAD_PT)}
 /// Key equivalents the shell really handles (`NativeMenuItem.keyEquivalent`), as `bifrost_ui::keys` combos; the menus show them
 /// in Golden Gate notation and `menu_key_equivalents_parse_and_do_not_conflict` checks the table.
 #[cfg(feature = "desktop-wayland")]
 pub(super) const MENU_KEYS:&[(&str,&str)]=&[("Close Window","cmd+w"),("Minimize","cmd+m"),("Minimize Window","cmd+m"),("Undo","cmd+z"),("Redo","cmd+shift+z"),("Cut","cmd+x"),("Copy","cmd+c"),("Paste","cmd+v"),("Select All","cmd+a"),("Quit","cmd+q"),("Lock Screen","ctrl+cmd+q"),("Force Quit\u{2026}","alt+cmd+escape"),("Log Out","shift+cmd+q"),("Settings…","cmd+,"),("Hide","cmd+h"),("Hide Others","alt+cmd+h"),("Search","cmd+space"),("App Switcher","cmd+tab"),("Back","escape"),("Print\u{2026}","cmd+p")];
 #[cfg(feature = "desktop-wayland")]
-impl Row {fn indented(mut self)->Self {self.indent=true;self} fn symbol(mut self,sym:crate::symbols::Symbol)->Self {self.symbol=Some(sym);self} fn key(mut self,combo:&str)->Self {self.key=bifrost_ui::keys::KeyCombo::parse(combo).map(|c|c.to_string());self} fn separator()->Self {Self{text:String::new(),action:None,sep:true,key:None,symbol:None,indent:false,search:false,header:false}} fn action(text:impl Into<String>,action:Action)->Self {Self{text:text.into(),action:Some(action),sep:false,key:None,symbol:None,indent:false,search:false,header:false}} fn label(text:impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:false,header:false}}}
+impl Row {fn indented(mut self)->Self {self.indent=true;self} fn symbol(mut self,sym:crate::symbols::Symbol)->Self {self.symbol=Some(sym);self} fn key(mut self,combo:&str)->Self {self.key=bifrost_ui::keys::KeyCombo::parse(combo).map(|c|c.to_string());self} fn separator()->Self {Self{text:String::new(),action:None,sep:true,key:None,symbol:None,indent:false,search:false,header:false,art:false}} fn action(text:impl Into<String>,action:Action)->Self {Self{text:text.into(),action:Some(action),sep:false,key:None,symbol:None,indent:false,search:false,header:false,art:false}} fn label(text:impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:false,header:false,art:false}}}
 #[cfg(feature = "desktop-wayland")]
-impl Row {fn search(text: impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:true,header:false}} fn header(text: impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:false,header:true}}}
+impl Row {fn search(text: impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:true,header:false,art:false}} /// The Now Playing menu's first row when the session has a cover: the cover beside the title, taller than a text row.
+    fn artwork(text: impl Into<String>)->Self {Self{art:true,..Self::label(text)}} fn header(text: impl Into<String>)->Self {Self{text:text.into(),action:None,sep:false,key:None,symbol:None,indent:false,search:false,header:true,art:false}}}
 /// One row of a Photos menu: its title (with a check mark for a setting that is on), its key equivalent, and its
 /// action when the command can run now (greyed out otherwise).
 #[cfg(feature = "desktop-wayland")]
@@ -338,7 +348,7 @@ pub(super) fn app_item_parent(menu:&bifrost_proto::AppMenu,item:usize)->Option<u
 /// Rows of one level of app menu `mi` (`app_level_items`).
 #[cfg(feature = "desktop-wayland")]
 fn app_level_rows(slot:u8,mi:u8,menu:&bifrost_proto::AppMenu,header:Option<usize>)->Vec<Row> {
-    app_level_items(menu,header).into_iter().filter(|&k|!menu.items[k].prints).map(|k|{
+    app_level_items(menu,header).into_iter().filter(|&k|!menu.items[k].prints&&!menu.items[k].no_print&&!is_settings_item(&menu.items[k])).map(|k|{
         let i=&menu.items[k];
         if i.submenu&&!i.separator {
             let text=format!("{}{}",if i.checked{"\u{2713} "}else{""},i.title);
@@ -361,6 +371,28 @@ fn app_item_row(slot:u8,i:&bifrost_proto::AppMenuItem)->Row {
 pub(super) fn app_print_row(slot:u8,menus:&[bifrost_proto::AppMenu])->Option<Row> {
     menus.iter().flat_map(|m|m.items.iter()).find(|i|i.prints&&!i.separator&&!i.submenu).map(|i|app_item_row(slot,&bifrost_proto::AppMenuItem{depth:0,checked:false,..i.clone()}))
 }
+/// An app's own Settings… item (`cmd+,` on an enabled top-level item): the shell shows it in the application menu, where the
+/// reference keeps it (HIG "The menu bar", App menu), and leaves it out of the app's own menus.
+#[cfg(feature = "desktop-wayland")]
+fn is_settings_item(i:&bifrost_proto::AppMenuItem)->bool {
+    i.depth==0&&i.enabled&&i.id!=0&&!i.separator&&!i.submenu&&i.key.eq_ignore_ascii_case("cmd+,")
+}
+/// What the application menu's Settings… runs for an app that declares its own Settings… item, `None` without one.
+#[cfg(feature = "desktop-wayland")]
+pub(super) fn app_settings_action(slot:u8,menus:&[bifrost_proto::AppMenu])->Option<Action> {
+    menus.iter().flat_map(|m|m.items.iter()).find(|i|is_settings_item(i)).map(|i|Action::AppMenu(slot,i.id))
+}
+/// Whether the app declared it has nothing to print (`AppMenuItem::no_print`): the shell then leaves its File > Print… out.
+#[cfg(feature = "desktop-wayland")]
+pub(super) fn app_hides_print(menus:&[bifrost_proto::AppMenu])->bool {
+    menus.iter().flat_map(|m|m.items.iter()).any(|i|i.no_print)
+}
+/// Takes the shell's File > Print… (the window snapshot) out of `rows`, with the separator that set it apart.
+#[cfg(feature = "desktop-wayland")]
+fn drop_shell_print_row(rows:&mut Vec<Row>) {
+    rows.retain(|r|!(r.text=="Print\u{2026}"&&matches!(r.action,None|Some(Action::Print))));
+    if rows.last().is_some_and(|r|r.sep) {rows.pop();}
+}
 /// Rows of an app's context menu (`ToShell::ContextMenu`): a separator row for `ContextItem::separator`, a disabled item as a
 /// label (secondary ink), an enabled one as a choice that goes back to the app as `ToApp::ContextAction`, and a key
 /// equivalent right-aligned. A separator at either end or next to another is dropped, so an app may build its groups
@@ -380,18 +412,34 @@ pub(super) fn context_rows(slot:u8,items:&[bifrost_proto::ContextItem])->Vec<Row
     rows
 }
 /// The enabled item whose key equivalent is `ch` with the chord modifiers `mods` (`CHORD_*`), `NativeMenu.performKeyEquivalent:`.
+/// The plus key and the equals key are one key equivalent (Zoom In answers both), whatever the layout puts them on.
 pub(super) fn app_menu_chord(menus:&[bifrost_proto::AppMenu],ch:char,mods:u32)->Option<u32> {
     use bifrost_proto::{CHORD_ALT,CHORD_CTRL,CHORD_META,CHORD_SHIFT};
-    let ch=ch.to_ascii_lowercase();
-    menus.iter().flat_map(|m|m.items.iter()).filter(|i|i.enabled&&!i.separator&&!i.submenu&&i.id!=0).find(|i|{
+    let find=|ch:char|menus.iter().flat_map(|m|m.items.iter()).filter(|i|i.enabled&&!i.separator&&!i.submenu&&i.id!=0).find(|i|{
         bifrost_ui::keys::KeyCombo::parse(&i.key).is_some_and(|c|c.key==bifrost_ui::keys::Key::Char(ch)&&c.cmd==(mods&CHORD_META!=0)&&c.ctrl==(mods&CHORD_CTRL!=0)&&c.alt==(mods&CHORD_ALT!=0)&&c.shift==(mods&CHORD_SHIFT!=0))
-    }).map(|i|i.id)
+    }).map(|i|i.id);
+    let ch=ch.to_ascii_lowercase();
+    find(ch).or_else(||(ch=='+').then(||find('=')).flatten())
+}
+/// The enabled item whose key equivalent the key `code` with the chord modifiers `mods` presses, read through the active layout:
+/// the character the key types, else (with Shift held) the symbol Shift gives it with Shift taken out of the chord, so Cmd+Shift+0
+/// is Cmd+= on an Icelandic keyboard and Cmd+Shift+= is Cmd++ on a U.S. one.
+pub(super) fn chord_menu_id(menus:&[bifrost_proto::AppMenu],code:u16,mods:u32)->Option<u32> {
+    chord_menu_id_in(menus,super::evkeys::layout(),code,mods)
+}
+/// `chord_menu_id` on the layout `layout` (an index into the installer's `LAYOUTS`).
+pub(super) fn chord_menu_id_in(menus:&[bifrost_proto::AppMenu],layout:usize,code:u16,mods:u32)->Option<u32> {
+    use bifrost_proto::CHORD_SHIFT;
+    super::evkeys::chord_char_in(layout,code).and_then(|c|app_menu_chord(menus,c,mods)).or_else(||{
+        let shifted=(mods&CHORD_SHIFT!=0).then(||super::evkeys::char_in(layout,code,true)).flatten().filter(|c|!c.is_alphabetic())?;
+        app_menu_chord(menus,shifted,mods&!CHORD_SHIFT)
+    })
 }
 /// Whether the key `code` with the chord modifiers `mods` is a key equivalent of an enabled item in `menus`. Key equivalents go to the
 /// app in front first: the shell closes or minimizes a window with Cmd+W or Cmd+M only when the app does not take the chord (a tabbed
 /// app's Close Tab keeps Cmd+W while it has a tab to close).
 pub(super) fn chord_in_menus(menus:&[bifrost_proto::AppMenu],code:u16,mods:u32)->bool {
-    super::evkeys::char_for(code,false).and_then(|c|app_menu_chord(menus,c,mods)).is_some()
+    chord_menu_id(menus,code,mods).is_some()
 }
 /// What quitting (Cmd+Q, the App menu's Quit) does to the app in front. Cmd+W only ever closes the window.
 #[cfg(feature = "desktop-wayland")]
@@ -518,13 +566,29 @@ pub(super) fn changed_bar_rects(before:&[(Menu,f32,f32,String)],after:&[(Menu,f3
     }
     merged.into_iter().map(|(a,b)|(a,0,b-a,height)).collect()
 }
+/// A document window's name in the Window menu, as its title bar reads: the reference lists an edited document's window
+/// with the "– Edited" its title carries (the reference window's document-edited flag).
+pub(super) fn window_menu_title(title: &str, edited: bool) -> String {
+    if edited { format!("{title} \u{2013} Edited") } else { title.to_string() }
+}
+
 impl Shell {
-    /// The Window menu's name for an open window: an extra window's title from its app's table, else the app's name.
+    /// The Window menu's name for an open window: an extra window's title from its app's table, a hosted app's main
+    /// window by the title it set (`ToShell::DocumentState`, as Mail names its window after the mailbox shown), else
+    /// the app's name.
     pub(super) fn window_menu_name(&self, app: super::AppId) -> String {
         if let super::AppId::ExternalWindow(slot, id) = app {
             if let Some(Some(h)) = self.ext.get(slot as usize) {
                 if let Some(w) = h.windows.of_app(&h.id).into_iter().find(|w| w.id == u32::from(id)) {
                     return w.title.clone();
+                }
+            }
+        }
+        if let super::AppId::External(slot) = app {
+            if let Some(Some(h)) = self.ext.get(slot as usize) {
+                if !h.doc_title.is_empty() {
+                    // the title as the window shows it: an edited document reads "Untitled – Edited" (E2E9 7)
+                    return window_menu_title(&h.doc_title, h.doc_edited);
                 }
             }
         }
@@ -551,12 +615,29 @@ impl Shell {
         Vec::new()
     }
 }
+/// The other clients' windows the Window menu lists: those of the app in front only (the app of the window the window
+/// server reports active, once each), as the menu of a shell app lists only that app's windows. With no such window in
+/// front the list is empty and the menu lists the front shell app's windows instead.
+#[cfg(feature="desktop-wayland")]
+pub(super) fn front_app_foreign_windows<'a>(windows:impl Iterator<Item=&'a crate::bare::wayland::ForeignWindow>+Clone)->Vec<&'a crate::bare::wayland::ForeignWindow> {
+    let Some(front)=windows.clone().find(|w|w.active) else {return Vec::new()};
+    let mut seen=std::collections::HashSet::new();
+    windows.filter(|w|w.app_id==front.app_id&&seen.insert(w.id)).collect()
+}
 #[cfg(feature="desktop-wayland")]
 impl Shell {
     /// A bar label fitted into `max_px` (`Ui::fit`), from the chrome text cache.
     pub(super) fn fit_chrome(&self,text:&str,pt:f32,max_px:f32)->String {self.chrome_text.borrow_mut().fit(&self.ui,text,pt,max_px)}
     fn foreign_active(&self)->Option<u32> {
-        self.desk.as_ref().and_then(|d|d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).find(|w|w.active).map(|w|w.id))
+        let d=self.desk.as_ref()?;
+        let mut all=d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter()));
+        // the Apps grid hides the shell's windows and the window server then activates another client's window: the bar
+        // keeps the app that was in front when the grid opened (Lead (a): FilmCraft took the bar from Mail)
+        if let Some(front)=self.bar_held_foreign() {
+            let front=front?;
+            return all.any(|w|w.id==front).then_some(front);
+        }
+        all.find(|w|w.active).map(|w|w.id)
     }
     fn sdk_commands(&self)->Option<bifrost_proto::Commands> {
         if self.foreign_active().is_some(){return None;}
@@ -754,10 +835,14 @@ impl Shell {
             if menu==Menu::File {
                 if let Some(print)=app_print_row(slot,self.app_menus()) {
                     if let Some(r)=rows.iter_mut().find(|r|r.text=="Print\u{2026}"&&matches!(r.action,None|Some(Action::Print))) {*r=print;}
-                }
+                } else if app_hides_print(self.app_menus()) {drop_shell_print_row(&mut rows);}
             }
             let merged:Vec<Row>=self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title)==Some(menu)).flat_map(|(i,m)|app_menu_rows(slot,i as u8,m)).collect();
-            if !merged.is_empty() {if !rows.is_empty(){rows.insert(0,Row::separator());}for r in merged.into_iter().rev(){rows.insert(0,r);}}
+            // Edit keeps the shell's Undo, Cut, Copy, Paste and Select All first (the reference's order); the app's own items
+            // (Find, Spelling and Grammar, ...) follow them. The other menus put the app's items first.
+            if menu==Menu::Edit {
+                if !merged.is_empty() {if !rows.is_empty(){rows.push(Row::separator());}rows.extend(merged);}
+            } else if !merged.is_empty() {if !rows.is_empty(){rows.insert(0,Row::separator());}for r in merged.into_iter().rev(){rows.insert(0,r);}}
         }
         rows
     }
@@ -856,7 +941,7 @@ impl Shell {
     }
     fn own_menu_rows(&self,menu:Menu)->Vec<Row> {
         match menu {
-            Menu::Document=>Vec::new(),
+            Menu::Document|Menu::Stack=>Vec::new(),
             Menu::Image=>self.photo_image_rows(),
             // each enabled source, the active one checked; picking one makes it the source (`kb_layouts::set_active`)
             Menu::Scripts=>super::scripts_menu::folder().map(|d|super::scripts_menu::list(&d).iter().enumerate().map(|(i,n)|Row::action(super::scripts_menu::title(n),Action::Script(i as u8))).collect()).unwrap_or_default(),
@@ -874,7 +959,7 @@ impl Shell {
             Menu::Arrange=>self.arrange_rows(),
             Menu::Dock=>{use super::desktop_dock::{Change,Position};let p=self.dock_preferences();let d=self.desk.as_ref().unwrap();let mut rows=Vec::new();if let Some(index)=d.dock_menu_target{let name=super::apps().get(index).map(|a|a.name).unwrap_or("Application");rows.push(Row::label(name));rows.push(Row::action("Open / Show",Action::Dock(Change::Open(index))));let pinned=self.dock_app_key(index).is_some_and(|key|p.pinned.contains(&key));rows.push(Row::action(if pinned{"Remove from Dock"}else{"Keep in Dock"},Action::Dock(Change::Pin(index))));rows.push(Row::action("Quit",Action::Dock(Change::Quit(index))));if let Some(AppId::External(slot))=super::apps().get(index).map(|a|a.id){if let Some(Some(host))=self.ext.get(slot as usize){for (id,title) in host.windows.menu_items(&host.id){if let Ok(n)=u16::try_from(id){rows.push(Row::action(title,Action::Open(AppId::ExternalWindow(slot,n))));}}if !host.windows.of_app(&host.id).is_empty(){rows.push(Row::separator());}let quick=self.quick_actions_for(slot as usize);for (i,item) in quick.iter().enumerate(){rows.push(Row::action(item.title.clone(),Action::QuickAction(slot,i as u8)));}if !quick.is_empty(){rows.push(Row::separator());}for item in &host.dock_menu{rows.push(if item.enabled{Row::action(item.title.clone(),Action::DockMenu(slot,item.id))}else{Row::label(item.title.clone())});}if !host.dock_menu.is_empty(){rows.push(Row::separator());}}}}rows.push(Row::label("Dock"));for (label,position) in [("Bottom",Position::Bottom),("Left",Position::Left),("Right",Position::Right)] {rows.push(Row::action(format!("{} {}",if p.position==position{"✓"}else{" "},label),Action::Dock(Change::Position(position))));}rows.push(Row::action(format!("{} Automatically hide and show",if p.autohide{"✓"}else{" "}),Action::Dock(Change::Autohide)));rows.push(Row::action("Smaller Icons",Action::Dock(Change::Size(-8.))));rows.push(Row::action("Larger Icons",Action::Dock(Change::Size(8.))));rows},
             Menu::App=>self.application_menu_rows(),
-            Menu::Services=>services_rows(super::services_route::menu_entries()),
+            Menu::Services=>services_rows(super::services_route::menu_entries(self.front_selection())),
             // About This Computer, the settings and the store, Recent Items (a submenu), Force Quit, the power rows, then Lock Screen
             // and Log Out with the account's name (Golden Gate's system menu)
             Menu::System=>{use super::power_menu::PowerAction;use super::utility_window::Kind;let user=self.fit_chrome(super::utility_window::user_name(),13.,self.ui.pt(180.));vec![Row::action("About This Computer",Action::Window(Kind::About)),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator(),Row::action("Recent Items",Action::Submenu(Menu::Recent)),Row::separator(),Row::action("Force Quit…",Action::Window(Kind::ForceQuit)).key("alt+cmd+escape"),Row::separator(),Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock).key("ctrl+cmd+q"),Row::action(format!("Log Out {user}…"),Action::Window(Kind::LogOut)).key("shift+cmd+q")]},
@@ -888,14 +973,14 @@ impl Shell {
             // the Bluetooth extra: the radio, then each paired or connected device (connect or disconnect), then its pane
             Menu::Bluetooth=>{let bt=&self.info.bt;let mut rows=vec![Row::action(if bt.on(){"Turn Bluetooth Off"}else{"Turn Bluetooth On"},Action::Bluetooth(crate::bare::bluetooth::Cmd::Enable(!bt.on())))];if bt.on(){rows.push(Row::separator());for d in bt.devices.iter().filter(|d|d.paired||d.connected).take(8) {if bt.busy.as_deref()==Some(d.addr.as_str()){rows.push(Row::label(format!("{}…",d.label())));}else{let cmd=if d.connected{crate::bare::bluetooth::Cmd::Disconnect(d.addr.clone())}else{crate::bare::bluetooth::Cmd::Connect(d.addr.clone())};rows.push(Row::action(format!("{} {}",if d.connected{"✓"}else{" "},d.label()),Action::Bluetooth(cmd)));}}}rows.push(Row::separator());rows.push(Row::action("Bluetooth Settings…",Action::Settings("Bluetooth")));rows},
             // title and position as labels, then the transport: an enabled row sends its remote command to the owner
-            Menu::NowPlaying=>super::now_playing_menu::panel().map(|p|{let mut rows=vec![Row::label(p.title),Row::label(p.position),Row::separator()];rows.extend(p.transport.into_iter().map(|(c,text,on)|if on {Row::action(text,Action::Media(c))} else {Row::label(text)}));rows}).unwrap_or_default(),
+            Menu::NowPlaying=>super::now_playing_menu::panel().map(|p|{let mut rows=vec![if p.artwork{Row::artwork(p.title)}else{Row::label(p.title)},Row::label(p.position),Row::separator()];rows.extend(p.transport.into_iter().map(|(c,text,on)|if on {Row::action(text,Action::Media(c))} else {Row::label(text)}));rows}).unwrap_or_default(),
             // the app's View: the Terminal's text sizes, then Enter Full Screen as every app's View ends; the Dock's settings
             // are not an app's (they live in the Dock's menu and Settings > Desktop & Dock)
             Menu::View=>{let mut v=Vec::new();if self.term_front(){v.extend([Row::action("Actual Size",Action::Term(TermKey::ActualSize)).key("cmd+0"),Row::action("Bigger",Action::Term(TermKey::Bigger)).key("cmd+="),Row::action("Smaller",Action::Term(TermKey::Smaller)).key("cmd+-"),Row::separator()]);}v.push(self.full_screen_row().key("ctrl+cmd+f"));v},
             // Window: Minimize and Zoom (also in File), Bring All to Front, then every open window by name, the front one checked.
             // Bring All to Front is on whenever there is a window, and the halves and Center are on in the window server's
             // session too: the shell asks it to place the window (`desk_tile_window`), as the green button's menu does (E2E-15)
-            Menu::Window=>{let Some(d)=self.desk.as_ref() else{return Vec::new();};let enabled=self.foreign_active().is_some()||d.front().is_some();let front=d.front().map(|w|w.app);let mut rows=vec![(if enabled{Row::action("Minimize",Action::Minimize)}else{Row::label("Minimize")}).key("cmd+m"),if enabled{Row::action("Zoom",Action::Zoom)}else{Row::label("Zoom")},self.full_screen_row(),Row::separator(),if !d.wins.is_empty(){Row::action("Bring All to Front",Action::ShowAll)}else{Row::label("Bring All to Front")},Row::action("Show Desktop",Action::Desktop)];let tile_on=self.foreign_active().is_none()&&d.front().is_some();rows.push(Row::separator());rows.extend([("Left Half",super::desk::Tile::Left,"ctrl+cmd+left"),("Right Half",super::desk::Tile::Right,"ctrl+cmd+right"),("Fill",super::desk::Tile::Fill,"ctrl+cmd+up"),("Center",super::desk::Tile::Center,"ctrl+cmd+down")].map(|(l,t,k)|if tile_on{Row::action(l,Action::Tile(t)).key(k)}else{Row::label(l).key(k)}));rows.push(if tile_on{Row::action("Return to Previous Size",Action::RestoreSize)}else{Row::label("Return to Previous Size")});rows.push(if d.wins.len()>=2{Row::action("Next Window",Action::CycleWindow).key("cmd+`")}else{Row::label("Next Window")});let front_parent=d.front().map(|w|w.app.parent());let mut open:Vec<(String,super::AppId)>=d.wins.iter().filter(|w|Some(w.app.parent())==front_parent).map(|w|(self.window_menu_name(w.app),w.app)).collect();open.sort_by_key(|(name,_)|name.to_lowercase());let foreign:Vec<&crate::bare::wayland::ForeignWindow>=d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).collect();if !open.is_empty()||!foreign.is_empty(){rows.push(Row::separator());}rows.extend(open.into_iter().take(12).map(|(name,app)|Row::action(format!("{} {}",if front==Some(app)&&self.foreign_active().is_none(){"✓"}else{" "},name),Action::Open(app))));rows.extend(foreign.into_iter().take(12).map(|w|Row::action(format!("{} {}",if w.active{"✓"}else{" "},self.fit_chrome(if w.title.is_empty(){w.app_id.as_str()}else{w.title.as_str()},13.,self.ui.pt(300.))),Action::Foreign(w.id))));rows},
+            Menu::Window=>{let Some(d)=self.desk.as_ref() else{return Vec::new();};let enabled=self.foreign_active().is_some()||d.front().is_some();let front=d.front().map(|w|w.app);let mut rows=vec![(if enabled{Row::action("Minimize",Action::Minimize)}else{Row::label("Minimize")}).key("cmd+m"),if enabled{Row::action("Zoom",Action::Zoom)}else{Row::label("Zoom")},self.full_screen_row(),Row::separator(),if !d.wins.is_empty(){Row::action("Bring All to Front",Action::ShowAll)}else{Row::label("Bring All to Front")},Row::action("Show Desktop",Action::Desktop)];let tile_on=self.foreign_active().is_some()||d.front().is_some();rows.push(Row::separator());rows.extend([("Left Half",super::desk::Tile::Left,"ctrl+cmd+left"),("Right Half",super::desk::Tile::Right,"ctrl+cmd+right"),("Fill",super::desk::Tile::Fill,"ctrl+cmd+up"),("Center",super::desk::Tile::Center,"ctrl+cmd+down")].map(|(l,t,k)|if tile_on{Row::action(l,Action::Tile(t)).key(k)}else{Row::label(l).key(k)}));rows.push(if tile_on{Row::action("Return to Previous Size",Action::RestoreSize)}else{Row::label("Return to Previous Size")});rows.push(if d.wins.len()>=2{Row::action("Next Window",Action::CycleWindow).key("cmd+`")}else{Row::label("Next Window")});let foreign=if self.foreign_active().is_some(){front_app_foreign_windows(d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())))}else{Vec::new()};let front_parent=if foreign.is_empty(){d.front().map(|w|w.app.parent()).or_else(||self.bar_held_front().map(|a|a.parent()))}else{None};let mut open:Vec<(String,super::AppId)>=d.wins.iter().filter(|w|Some(w.app.parent())==front_parent).map(|w|(self.window_menu_name(w.app),w.app)).collect();open.sort_by_key(|(name,_)|name.to_lowercase());if !open.is_empty()||!foreign.is_empty(){rows.push(Row::separator());}rows.extend(open.into_iter().take(12).map(|(name,app)|Row::action(format!("{} {}",if front==Some(app)&&self.foreign_active().is_none(){"✓"}else{" "},name),Action::Open(app))));rows.extend(foreign.into_iter().take(12).map(|w|Row::action(format!("{} {}",if w.active{"✓"}else{" "},self.fit_chrome(if w.title.is_empty(){w.app_id.as_str()}else{w.title.as_str()},13.,self.ui.pt(300.))),Action::Foreign(w.id))));rows},
             Menu::File=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();
             // an app that keeps Cmd+W for its own Close Tab leaves the window the shifted chord (Close Window is Shift+Cmd+W then)
             let close_key=if self.app_owns_close(){"cmd+shift+w"}else{"cmd+w"};let mut rows=vec![(if enabled{Row::action("Close Window",Action::Close)}else{Row::label("Close Window")}).key(close_key),(if enabled{Row::action("Minimize Window",Action::Minimize)}else{Row::label("Minimize Window")}).key("cmd+m"),if enabled {Row::action("Maximize / Restore Window",Action::Zoom)}else{Row::label("Maximize / Restore Window")}];if self.term_front(){rows.splice(0..0,[Row::action("New Tab",Action::Term(TermKey::NewTab)).key("cmd+t"),Row::separator()]);rows[2]=Row::action("Close Tab",Action::Term(TermKey::CloseTab)).key("cmd+w");}if self.foreign_active().is_none(){rows.push(Row::separator());rows.push((if enabled{Row::action("Print\u{2026}",Action::Print)}else{Row::label("Print\u{2026}")}).key("cmd+p"));}rows},
@@ -993,16 +1078,19 @@ impl Shell {
     /// The rectangle (px) of the first menu level, `menu`: under its bar item, under the green button, at the pointer
     /// for a context menu, or the Dock's menu and the open or save panel.
     fn root_popup_rect(&self,menu:Menu)->Option<(usize,usize,usize,usize)> {
-        if menu==Menu::Dock{return self.dock_popup_rect();}if menu==Menu::Arrange{
+        if menu==Menu::Dock{return self.dock_popup_rect();}if menu==Menu::Stack{return self.stack_popup_rect();}if menu==Menu::Arrange{
             // under the green button, kept on the screen like a context menu (the size is the drawn rows')
-            let a=self.desk.as_ref()?.arrange?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize;
+            let a=self.desk.as_ref()?.arrange?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);
             let area=super::desk::Desk::area(&self.desk_metrics());
+            // a menu held to the area's height (it scrolls) must not round a pixel past it, or its last row is cut
+            let height=(self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize).min(area.h.max(1) as usize);
             let (x,y)=context_menu_origin((a.x,a.y),(width,height),(0,area.y,self.w,area.h));
             return Some((x,y,width,height));
         }if menu==Menu::Document{return self.doc_panel_rect();}if menu==Menu::Context{
             // the size is the drawn rows' (`menu_spans`, the same call the bar menus use), so the surface fits its items
-            let c=self.desktop_context.as_ref()?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);let height=self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize;
+            let c=self.desktop_context.as_ref()?;let rows=self.menu_rows(menu);let width=self.menu_width(&rows);
             let area=super::desk::Desk::area(&self.desk_metrics());
+            let height=(self.ui.pt(self.menu_scroll_for(menu,&rows).height).ceil() as usize).min(area.h.max(1) as usize);
             let (x,y)=context_menu_origin((c.x,c.y),(width,height),(0,area.y,self.w,area.h));
             return Some((x,y,width,height));
         }// the Recent Items submenu hangs from the system menu's bar item
@@ -1018,6 +1106,8 @@ impl Shell {
         // previous frame and only the pixels that changed are presented
         if !bifrost_render::glass::gpu(){return Some(vec![(0,0,self.w,self.h)]);}
         let mut v=vec![(0,0,self.w,self.desktop_bar_height() as i32)];
+        // the band a full-screen window reveals under the shown bar (`draw_desk_reveal`), cleared again once the bar hides
+        if let Some((_,rv))=self.desk_reveal(){v.push((0,rv.top,self.w,rv.band));}
         // the open menu owes its shadow on every side, the top one up into the gap under the bar; the same rect is
         // cleared on the frame after it closes (desk_regions keeps it), so no shadow line is left behind
         // (each cascading submenu as well)
@@ -1029,12 +1119,14 @@ impl Shell {
         for r in [self.cc_desk_rect(),self.center_desk_rect()].into_iter().flatten() {let (x,y,w,h)=r;v.push(((x-g).max(0.) as i32,(y-g).max(0.) as i32,(w+2.*g) as i32,(h+2.*g) as i32));}
         if let Some(((x,y,w,h),_))=self.quicksearch.desk_overlay(&self.ui,self.w){v.push((x as i32,y as i32,w as i32,h as i32));}
         if let Some(((x,y,w,h),_))=self.assistant.desk_overlay(&self.ui,self.w){v.push((x as i32,y as i32,w as i32,h as i32));}
-        // the Quick Look card floats over the windows: the GPU presenter keeps its region (cleared again once it closes)
+        // the Preview card floats over the windows: the GPU presenter keeps its region (cleared again once it closes)
         if let Some((x,y,w,h))=self.quick_look_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
         // the Cmd+Tab strip floats over the windows the same way (cleared again once it closes)
         if let Some((x,y,w,h))=self.cmdtab_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
         // the system menu's card (Force Quit, About, Log Out) is an overlay surface above the windows as well
         if let Some((x,y,w,h))=self.utility_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
+        // and the Look Up popover
+        if let Some((x,y,w,h))=self.look_up_rect(){v.push((x as i32,y as i32,w as i32,h as i32));}
         // a tablet's on-screen keyboard, from its resting top to the bottom edge: drawn here while it slides, and its
         // rows cleared again on the frame after it is gone
         if self.desk_keyboard_visible(){let top=self.kb_top().max(0.) as i32;v.push((0,top,self.w,self.h-top));}
@@ -1043,6 +1135,9 @@ impl Shell {
         // (the previous frame's rect too, through `desk_regions`), and the frame after it leaves clears its last one;
         // without it every slide-out frame was painted over the one before and the smeared card stayed (W5-4)
         if let Some(r)=self.banner_damage_rect(self.desk_t){v.push(r);}
+        // the drag image follows the pointer over the wallpaper: each frame clears where it was (`desk_regions`) and where it
+        // is, and the frame after the drop clears the last one; without it every position stayed painted (a fan of icons)
+        if let Some(r)=self.dnd_rect(){v.push(r);}
         Some(v)
     }
     pub(super) fn draw_desktop_bar(&self,s:&mut Surface) {
@@ -1109,6 +1204,8 @@ impl Shell {
     }
     fn draw_menu_level(&self,s:&mut Surface,menu:Menu,(x,y,w,h):(usize,usize,usize,usize),sel:Option<usize>) {
         if menu==Menu::Document{self.draw_doc_dim(s);}
+        // the stack's fan has no panel: its items float over the desktop; its grid is drawn on the menu material below
+        if menu==Menu::Stack&&self.stack_layout().is_some_and(|l|l.style==super::dock_stack::Style::Fan){self.draw_stack_popover(s);return;}
         if bifrost_render::glass::gpu()&&bifrost_render::appearance::reduce_transparency() {
             let r=self.ui.pt(MENU_RADIUS_PT);
             s.fill_rect(x,y,w,h,0);super::desk::soft_shadow(s,&self.ui,x as f32,y as f32,w as f32,h as f32,r);s.fill_rrect(x as f32,y as f32,w as f32,h as f32,r,MENU_SOLID.now());
@@ -1124,6 +1221,7 @@ impl Shell {
         }
         self.draw_popup_edge(s,x,y,w,h);
         if menu==Menu::Document{self.draw_doc_panel(s,x,y,w,h);return;}
+        if menu==Menu::Stack{self.draw_stack_popover(s);return;}
         let rows=self.menu_rows(menu);let (spans,_)=menu_spans(&rows);
         // a menu taller than its room shows the rows between its scroll arrows, moved up by the offset
         let sc=self.menu_scroll_for(menu,&rows);
@@ -1134,9 +1232,14 @@ impl Shell {
             let top=top-sc.offset;
             if row.sep{s.fill_rect(x+self.ui.pt(12.) as usize,(y as f32+self.ui.pt(top+rh/2.)) as usize,w.saturating_sub(self.ui.pt(24.) as usize),1,super::ui::SEPARATOR_C.now());continue;}
             if row.search{self.draw_help_field(s,x,y,w,top,rh,&row.text);continue;}
+            if row.art{
+                // the cover at the text edge, the title centred beside it; the glyph stands in without a cover
+                let side=self.ui.pt(MENU_ART_PT) as i32;let ay=(y as f32+self.ui.pt(top+rh/2.)) as i32-side/2;
+                super::switcher::draw_scaled(s,&super::services::now_playing::artwork_or_glyph(64),crate::layout::Rect{x:x as i32+self.ui.pt(lead) as i32,y:ay,w:side,h:side},self.ui.pt(5.),255);
+                self.label(&row.text,13.,Weight::Regular,LABEL.now(),|im|s.blit(im,x as i32+self.ui.pt(lead+MENU_ART_PT+8.) as i32,(y as f32+self.ui.pt(top+rh/2.)-im.h as f32/2.) as i32,255,255));continue;}
             if row.header{self.label(&row.text,10.,Weight::Regular,SECONDARY,|im|s.blit(im,x as i32+self.ui.pt(lead) as i32,(y as f32+self.ui.pt(top+rh/2.)-im.h as f32/2.) as i32,255,255));continue;}
             let hi=sel==Some(i)&&row.action.is_some();
-            if hi{s.fill_rrect(x as f32+self.ui.pt(5.),y as f32+self.ui.pt(top),w as f32-self.ui.pt(10.),self.ui.pt(rh),self.ui.pt(8.),super::ui::MENU_HIGHLIGHT);}
+            if hi{s.fill_rrect(x as f32+self.ui.pt(5.),y as f32+self.ui.pt(top),w as f32-self.ui.pt(10.),self.ui.pt(rh),self.ui.pt(8.),super::ui::menu_highlight());}
             let mid=y as f32+self.ui.pt(top+rh/2.);
             if hi&&self.help_search.marker {if let Some(im)=self.ui.symbols.render(crate::symbols::Symbol::ChevronRight,self.ui.pt(10.),super::ui::MENU_HIGHLIGHT_TEXT) {s.blit(&im,x as i32+self.ui.pt(6.) as i32,(mid-im.h as f32/2.) as i32,255,255);}}
             let ink=if row.action.is_some(){if hi{super::ui::MENU_HIGHLIGHT_TEXT}else{LABEL.now()}}else{SECONDARY};
@@ -1170,6 +1273,21 @@ impl Shell {
             if let (Event::Up(x,y),Some((left,top,_,_)))=(event,self.desktop_popup_rect()) {self.doc_click(x-left as f32,y-top as f32,t);}
             return Some(vec![]);
         }
+        // the open Downloads stack takes the pointer on its parts only (the grid's panel; the fan's icons and name
+        // capsules, `stack_takes`). A press elsewhere closes it and goes on as it would have (another Dock icon opens,
+        // a window is clicked), as in the reference; a press on its own Dock icon only closes it. A release on an
+        // item opens it, on Open in Files opens the folder
+        if self.desktop_menu==Some(Menu::Stack) {
+            match event {
+                Event::Down(x,y)=>{
+                    if self.stack_takes(x,y){return Some(vec![]);}
+                    self.desktop_menu=None;self.desktop_menu_row=None;self.dirty=true;
+                    if self.stack_on_icon(x,y){return Some(vec![]);}
+                },
+                Event::Up(x,y)=>{if self.stack_takes(x,y){self.stack_click(x,y,t);}return Some(vec![]);},
+                _=>{},
+            }
+        }
         match event {
             // Golden Gate: the clock opens Notification Center (notifications and widgets), as on Golden Gate
             Event::Down(x,y) if self.clock_hit(x,y)&&self.desktop_menu.is_none()&&self.desk.is_some()=>{if self.notify.center.is_hidden(){self.open_notification_center(t);}else{self.notify.center.hide();}self.dirty=true;Some(vec![])},
@@ -1192,12 +1310,12 @@ impl Shell {
     /// Menu width in px: at least 264 pt, wider when a title and its key equivalent would touch (menus size to their content).
     fn menu_width(&self,rows:&[Row])->usize {
         use std::hash::{Hash,Hasher};
-        let mut h=std::collections::hash_map::DefaultHasher::new();self.ui.pt(1.).to_bits().hash(&mut h);for r in rows{r.text.hash(&mut h);r.key.hash(&mut h);}
+        let mut h=std::collections::hash_map::DefaultHasher::new();self.ui.pt(1.).to_bits().hash(&mut h);for r in rows{r.text.hash(&mut h);r.key.hash(&mut h);r.art.hash(&mut h);}
         let key=h.finish();if let Some((k,w))=self.desktop_menu_width.get(){if k==key{return w;}}
         let width=self.menu_width_measured(rows);self.desktop_menu_width.set(Some((key,width)));width
     }
     fn menu_width_measured(&self,rows:&[Row])->usize {
-        let lead=if rows.iter().any(|r|r.symbol.is_some()){self.ui.pt(20.)}else{0.};let need=rows.iter().filter(|r|!r.search).map(|r|{let t=self.measure_chrome(&r.text,13.,Weight::Regular);let k=r.key.as_ref().map_or(0.,|k|self.ui.pt(24.)+self.measure_chrome(&shortcut_spaced(k),13.,Weight::Regular));t+k}).fold(0.,f32::max)+self.ui.pt(32.)+lead;
+        let lead=if rows.iter().any(|r|r.symbol.is_some()){self.ui.pt(20.)}else{0.};let need=rows.iter().filter(|r|!r.search).map(|r|{let t=self.measure_chrome(&r.text,13.,Weight::Regular)+if r.art{self.ui.pt(MENU_ART_PT+8.)}else{0.};let k=r.key.as_ref().map_or(0.,|k|self.ui.pt(24.)+self.measure_chrome(&shortcut_spaced(k),13.,Weight::Regular));t+k}).fold(0.,f32::max)+self.ui.pt(32.)+lead;
         need.max(self.ui.pt(264.)).ceil() as usize
     }
     /// The row under `rel` px below the popup's top edge (separators count as rows, but have no action).
@@ -1230,7 +1348,7 @@ impl Shell {
     }
     /// The wheel over an open menu scrolls it (when it is taller than its room) and is used up there.
     pub(super) fn desktop_menu_wheel(&mut self,x:f32,y:f32,dy:f32)->bool {
-        let Some(deepest)=self.desktop_menu else{return false;};if matches!(deepest,Menu::Dock|Menu::Document){return false;}
+        let Some(deepest)=self.desktop_menu else{return false;};if matches!(deepest,Menu::Dock|Menu::Document|Menu::Stack){return false;}
         // the wheel over any open level is the menus'; it scrolls the level under the pointer
         let Some((_,menu,_))=self.menu_level_at(x,y) else{return false;};
         if !dy.is_finite() {return true;}
@@ -1259,10 +1377,20 @@ impl Shell {
         let selectable:Vec<bool>=self.menu_rows(menu).iter().map(|r|r.action.is_some()).collect();
         step_index(&selectable,self.menu_row_of(menu),dir)
     }
+    /// A shortcut opens another surface (`Shortcut::opens_surface`: Search, the switcher, a card): the open menu-bar
+    /// menu, context menu, Dock menu or Downloads stack closes first, as in the reference, so it neither stays on
+    /// screen over the new surface nor keeps taking the keys meant for it. An app's open or save panel
+    /// (`Menu::Document`) stays: its app still waits for the answer.
+    pub(super) fn desktop_menu_dismiss(&mut self) {
+        if self.desktop_menu.is_none()||self.desktop_menu==Some(Menu::Document) {return;}
+        self.desktop_menu=None;self.desktop_menu_row=None;self.desktop_flyout=Flyout::default();self.help_reset();self.desktop_menu_scroll=MenuScrollState::default();self.dirty=true;
+    }
     /// Keys while a bar menu is open: Up/Down move, Left/Right switch menus, Return chooses, Esc closes. None when no menu is open.
     pub(super) fn desktop_menu_key(&mut self,code:u16,t:f64)->Option<Vec<Effect>> {
         let menu=self.desktop_menu?;if !self.desk_active()||self.is_locked(){return None;}
         if menu==Menu::Document{self.doc_key(code,t);return Some(vec![]);}
+        // the open stack takes Esc, its arrows, Return and typing (`stack_key`); any other key closes it and goes on (None)
+        if menu==Menu::Stack{return self.stack_key(code,t);}
         if menu==Menu::Help {if let Some(fx)=self.help_key(code) {return Some(fx);}}
         let mut bar=vec![Menu::System,Menu::App];bar.extend(bar_after_app(self.app_menus(),self.photos_front()));
         self.dirty=true;
@@ -1288,17 +1416,18 @@ impl Shell {
         let items:Vec<MenuItem>=rows.iter().enumerate().map(|(i,r)|if r.sep{MenuItem::separator()}else{MenuItem::new(i as u32,r.text.trim_start_matches(|c:char|c=='\u{2713}'||c==' ')).enabled(r.action.is_some())}).collect();
         let mut model=self.desktop_menu_typed.take().unwrap_or_else(||Model::new(Vec::new()));
         model.items=items;model.highlighted=self.menu_row_of(menu);
-        if let Some(i)=model.type_select(c,t){self.desktop_menu_row=Some((menu,i));self.menu_reveal(menu,i);}
+        if let Some(i)=type_select_at(&mut model,c,t){self.desktop_menu_row=Some((menu,i));self.menu_reveal(menu,i);}
         self.desktop_menu_typed=Some(model);
     }
     /// Pointer movement with a menu open, at the time of the last input (`desktop_menu_hover_at`).
+    #[cfg(test)]
     pub(super) fn desktop_menu_hover(&mut self,x:f32,y:f32) {let t=self.last_input;self.desktop_menu_hover_at(x,y,t);}
     /// Pointer movement with a menu open at `t` ms: highlight the row under it, and a bar title switches the open menu (as
     /// Golden Gate does). A row that opens a submenu opens it beside the row once the pointer rested there for
     /// `FLYOUT_OPEN_MS` (`desktop_menu_flyout_tick`). Moving onto another row of a parent closes its submenu, unless the
     /// pointer heads for the submenu (`in_safe_triangle`): then that row takes over only after a rest of `FLYOUT_SAFE_MS`.
     pub(super) fn desktop_menu_hover_at(&mut self,x:f32,y:f32,t:f64) {
-        let Some(menu)=self.desktop_menu else{return;};if matches!(menu,Menu::Dock|Menu::Document){return;}
+        let Some(menu)=self.desktop_menu else{return;};if matches!(menu,Menu::Dock|Menu::Document|Menu::Stack){return;}
         // the pointer left a surface: each menu level is a surface of its own, and the window server sends a Leave when
         // the pointer crosses from a menu onto the submenu beside it, before the first motion there. A Leave is no move
         // away from the menus (the green-button menu's W3-5); the next real motion says where the pointer is.
@@ -1396,8 +1525,8 @@ impl Shell {
                     Action::QuickAction(slot,index)=>{if let Some(item)=self.quick_actions_for(slot as usize).get(index as usize).cloned(){self.record_quick_action(slot as usize,&item.kind);if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::QuickAction{kind:item.kind,user_info:item.user_info});}}},
                     Action::DockMenu(slot,id)=>{if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::ContextAction(id));}},
                     Action::Arrange(app,what)=>self.desk_arrange(app,what,t),
-                    Action::Tile(t)=>{if self.foreign_active().is_none(){self.desk_tile_front(t);}},
-                    Action::RestoreSize=>{if self.foreign_active().is_none(){self.desk_restore_front();}},
+                    Action::Tile(t)=>effects.extend(self.desk_tile_front(t)),
+                    Action::RestoreSize=>effects.extend(self.desk_restore_front()),
                     Action::CycleWindow=>{self.desk_cycle_window(false);let t=self.last_input;self.cmdtab_release(t);},
                     Action::Script(i)=>{if let Some(dir)=super::scripts_menu::folder(){if let Some(name)=super::scripts_menu::list(&dir).get(i as usize){if let Err(e)=super::scripts_menu::run(&dir,name){eprintln!("springboard: script {name}: {e}");}}}self.dirty=true;},
                     Action::InputSource(i)=>{if let Some(l)=super::kb_layouts::Layout::ALL.get(i as usize) {super::kb_layouts::set_active(*l);self.input_layout_selected(*l);self.show_input_source(*l,t);}self.dirty=true;},
@@ -1432,7 +1561,7 @@ impl Shell {
                     Action::Scan=>desktop_network::send(desktop_network::Request::Wifi(super::WifiAction::Scan)),
                     Action::Select(ssid)=>desktop_network::send(desktop_network::Request::Wifi(super::WifiAction::Select(ssid))),
                     Action::Power(profile)=>desktop_network::send(desktop_network::Request::Power(profile)),
-                    Action::Lock=>effects.extend(self.sleep_screen()),
+                    Action::Lock=>effects.extend(self.lock_screen()),
                     Action::Sleep=>{effects.extend(self.sleep_screen());effects.push(super::Effect::SleepSystem)}
                     Action::Halt(power)=>effects.push(Effect::Power(power)),
                     Action::Media(command)=>{super::services::now_playing::send(command);},
@@ -1517,9 +1646,14 @@ impl Shell {
     }
     /// Close or minimize the front window (the File menu and Ctrl+W / Ctrl+M).
     pub(super) fn desk_window_close_or_minimize(&mut self,minimize:bool)->Vec<Effect> {
-        let mut effects=Vec::new();
-        if let Some(id)=self.foreign_active(){effects.push(Effect::ForeignWindowAction(id,minimize));}else if let Some(app)=self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app){if minimize {let t=self.last_input;if let Some(i)=self.desk.as_ref().and_then(|d|d.index_of(app)){self.desk_minimize_window(i,t);}else{self.desk_refocus();}}else{self.desk_close_app(app);}}
-        effects
+        if let Some(id)=self.foreign_active(){return vec![Effect::ForeignWindowAction(id,minimize)];}
+        // the active app with no window has nothing to close or minimize: the window under it is another app's
+        if self.desk_windowless_front().is_some(){return Vec::new();}
+        let Some(app)=self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app) else {return Vec::new()};
+        if !minimize {self.desk_close_requested(app);return Vec::new();}
+        let t=self.last_input;
+        match self.desk.as_ref().and_then(|d|d.index_of(app)) {Some(i)=>self.desk_minimize_window(i,t),None=>self.desk_refocus()}
+        Vec::new()
     }
     /// Quits the front app (Cmd+Q and the App menu's Quit); `quit_step` decides what that means for the window in front.
     pub(super) fn desk_quit_front(&mut self)->Vec<Effect> {
@@ -1528,10 +1662,11 @@ impl Shell {
             let foreign:Vec<(u32,&str,bool)>=desk.map(|d|d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).map(|w|(w.id,w.app_id.as_str(),w.active)).collect()).unwrap_or_default();
             let installed=super::apphost::installed();
             let sdk_slot=|app_id:&str|installed.iter().position(|a|a.manifest.id==app_id).filter(|slot|self.ext.get(*slot).and_then(Option::as_ref).is_some_and(|h|h.running()&&h.route()==super::apphost::Route::Direct)).map(|slot|slot as u8);
-            quit_step(&foreign,sdk_slot,desk.and_then(|d|d.front()).map(|w|w.app))
+            // the active app with no window is the one Quit quits, not the app of the window under it
+            quit_step(&foreign,sdk_slot,self.desk_windowless_front().or_else(||desk.and_then(|d|d.front()).map(|w|w.app)))
         };
         match step {
-            QuitStep::App(slot)=>{self.desk_quit_app(slot);Vec::new()}
+            QuitStep::App(slot)=>{self.desk_quit_requested(slot);Vec::new()}
             QuitStep::Windows(ids)=>ids.into_iter().map(|id|Effect::ForeignWindowAction(id,false)).collect(),
             QuitStep::Window(app)=>{self.desk_close_app(app);Vec::new()}
             QuitStep::Nothing=>Vec::new(),
@@ -1548,7 +1683,9 @@ impl Shell {
         if let Some(id)=self.foreign_active() {
             if let Some(w)=self.desk.as_ref().and_then(|d|d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).find(|w|w.id==id)) {return FrontApp::Foreign(w.app_id.clone());}
         }
-        match self.desk.as_ref().and_then(|d|d.front()) {Some(w)=>FrontApp::Desk(w.app.parent()),None=>FrontApp::Nothing}
+        // under the Apps grid every window is hidden: the app in front is the one that was in front when it opened
+        // the active app with no window (`Desk::windowless_front`) keeps the application menu
+        match self.desk_windowless_front().or_else(||self.desk.as_ref().and_then(|d|d.front()).map(|w|w.app)).or_else(||self.bar_held_front()) {Some(app)=>FrontApp::Desk(app.parent()),None=>FrontApp::Nothing}
     }
     /// The installed app (its slot) the front app is: an SDK app on the shell desk, or one the window server runs under its
     /// Wayland app id.
@@ -1563,6 +1700,10 @@ impl Shell {
     /// opens its own; the desktop (no app in front) opens System Settings. None for an app with no settings: the row is left out.
     pub(super) fn front_app_settings(&self)->Option<Action> {
         if self.front_app()==FrontApp::Nothing {return Some(Action::Settings(""));}
+        // an app with a Settings… item of its own (cmd+,) runs that one
+        if let FrontApp::Desk(AppId::External(slot))=self.front_app() {
+            if let Some(action)=app_settings_action(slot,self.app_menus()) {return Some(action);}
+        }
         let slot=self.front_installed_slot()?;
         let has=super::apphost::installed().get(slot).is_some_and(|a|!a.manifest.settings_panes.is_empty());
         (has&&slot<=u8::MAX as usize).then(||Action::AppSettings(slot as u8))
@@ -1596,7 +1737,8 @@ impl Shell {
     pub(super) fn desk_hide_front(&mut self)->Vec<Effect> {
         let effects=match self.front_app() {
             FrontApp::Foreign(app_id)=>{let ids=self.foreign_ids_where(|a|a==app_id.as_str());self.hide_foreign(ids)}
-            FrontApp::Desk(app)=>{if let Some(d)=self.desk.as_mut(){d.hide_app(app);}Vec::new()}
+            // hiding the active app that has no window hands the front to the window under it
+            FrontApp::Desk(app)=>{if let Some(d)=self.desk.as_mut(){d.hide_app(app);d.windowless_front.set(None);}Vec::new()}
             FrontApp::Nothing=>Vec::new(),
         };
         self.desk_refocus();
@@ -1665,7 +1807,7 @@ impl Shell {
         let g=self.ui.pt(super::desk::SHADOW_REACH_PT);
         let bar=self.desktop_bar_height();
         // the surface starts under the menu bar: the shadow margin above a panel must not cover the bar's items
-        [(4,self.cc_desk_rect()),(5,self.center_desk_rect())].into_iter().filter_map(|(id,r)|r.map(|r|(id,panel_overlay_rect(r,g)))).map(|(id,(x,y,w,h))|{let top=y.max(bar);(id,x,top,w,(y+h).saturating_sub(top))}).collect()
+        [(super::chrome_ids::CONTROL_CENTER,self.cc_desk_rect()),(super::chrome_ids::NOTIFICATION_CENTER,self.center_desk_rect())].into_iter().filter_map(|(id,r)|r.map(|r|(id,panel_overlay_rect(r,g)))).map(|(id,(x,y,w,h))|{let top=y.max(bar);(id,x,top,w,(y+h).saturating_sub(top))}).collect()
     }
     #[cfg(feature="desktop-wayland")]
     pub fn desktop_chrome_frames(&self,pixels:&[u32],width:usize,height:usize)->Vec<crate::bare::wayland::ChromeFrame> {
@@ -1677,9 +1819,22 @@ impl Shell {
         let surface_of=|p|popup_surface_rect(p,self.desktop_bar_height() as i32,self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2,self.ui.pt(2.) as i32,(width,height));
         let levels=self.menu_level_rects();
         let popup=levels.first().map(|&(_,p,_)|surface_of(p));
-        let flyouts:Vec<_>=levels.iter().skip(1).map(|&(_,p,_)|surface_of(p)).collect();
-        let mut frames=Vec::new();for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_surface_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(popup.map(|(r,_)|(1,r.0,r.1,r.2,r.3))).chain(self.desk_panel_overlays()) {
-            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}if id==2&&!self.dock_is_visible(){data.fill(0);}let input=match id {1=>popup.map(|(_,menu)|menu),2=>self.dock_input_rect(self.dock_surface_rect()),_=>None};frames.push(crate::bare::wayland::ChromeFrame{id,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input});
+        let flyouts:Vec<_>=levels.iter().skip(1).take(super::chrome_ids::FLYOUT_SLOTS as usize).map(|&(_,p,_)|surface_of(p)).collect();
+        let mut frames=Vec::new();
+        // the band a full-screen window reveals under the menu bar (`desk_reveal`): its toolbar or title bar with the traffic
+        // lights, above the window. It is cut first so the menus and panels opened from the bar stack over it, and it is left
+        // clear where they cover it (their surfaces hold those pixels, and composing them twice would double the material)
+        if let Some((_,rv))=self.desk_reveal() {
+            let y=rv.top.max(0) as usize;let h=(rv.band.max(0) as usize).min(height.saturating_sub(y));
+            if h>0&&width>0 {
+                let mut data=Vec::with_capacity(width*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width..row*width+width]);}
+                let covers=popup.iter().chain(flyouts.iter()).map(|&(r,_)|r).chain(self.desk_panel_overlays().into_iter().map(|(_,x,y,w,h)|(x,y,w,h)));
+                for cover in covers {clear_covered(&mut data,(0,y as i32,width,h),cover);}
+                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::REVEAL,x:0,y:y as i32,width,height:h,pixels:data,input:None});
+            }
+        }
+        for (id,x,y,w,h) in std::iter::once((0,0,0,width,self.desktop_bar_height())).chain({let r=self.dock_surface_rect();std::iter::once((2,r.x.max(0) as usize,r.y.max(0) as usize,r.w.max(0) as usize,r.h.max(0) as usize))}).chain(popup.map(|(r,_)|(1,r.0,r.1,r.2,r.3))).chain(self.desk_panel_overlays()) {
+            let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}if id==2&&!self.dock_is_visible(){data.fill(0);}let input=match id {1=>popup.map(|(_,menu)|menu),2=>self.dock_input_rect(self.dock_surface_rect()),_=>None};let dock=if id==2{use crate::bare::wayland::{DockEdge,DockPlacement};use super::desktop_dock::Position;let m=self.desk_metrics();Some(match self.dock_preferences().position{Position::Bottom=>DockPlacement{edge:DockEdge::Bottom,reserve:m.dock_bottom},Position::Left=>DockPlacement{edge:DockEdge::Left,reserve:m.dock_left},Position::Right=>DockPlacement{edge:DockEdge::Right,reserve:m.dock_right}})}else{None};let shape=if id==1{self.stack_input_shape(x as i32,y as i32)}else{Vec::new()};frames.push(crate::bare::wayland::ChromeFrame{shape,dock,id,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input});
         }
         // The cascading submenus: ids FLYOUT_CHROME_ID onwards, overlay surfaces above the menu they cascade from (each is
         // created after its parent, so it stacks above it), cut with room for the shadow and taking the pointer over the
@@ -1689,7 +1844,7 @@ impl Shell {
         for (k,&((x,y,w,h),input)) in flyouts.iter().enumerate() {
             let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));if w==0||h==0{continue;}
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
-            frames.push(crate::bare::wayland::ChromeFrame{id:FLYOUT_CHROME_ID+k as u32,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input:Some(input)});
+            frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:FLYOUT_CHROME_ID+k as u32,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input:Some(input)});
         }
         for f in frames.iter_mut() {
             let level=if f.id==1 {0} else if f.id>=FLYOUT_CHROME_ID&&((f.id-FLYOUT_CHROME_ID) as usize)<flyouts.len() {(f.id-FLYOUT_CHROME_ID) as usize+1} else {continue};
@@ -1702,7 +1857,7 @@ impl Shell {
             if w>0&&h>0 {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
                 Self::desk_banner_mask(&mut data,w,h,input);
-                frames.push(crate::bare::wayland::ChromeFrame{id:super::notify::desk_banner::BANNER_CHROME_ID,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input:Some(input)});
+                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::notify::desk_banner::BANNER_CHROME_ID,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input:Some(input)});
             }
         }
         // Search: id 3, an overlay surface above every window that takes the keyboard while it is open
@@ -1712,7 +1867,7 @@ impl Shell {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
                 let mask=crop_mask(&mask,ow,w,h);
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-                frames.push(crate::bare::wayland::ChromeFrame{id:3,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::SEARCH,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
         // the assistant panel: id 6, an overlay surface like Search (its keyboard is exclusive while it is open)
@@ -1722,14 +1877,14 @@ impl Shell {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
                 let mask=crop_mask(&mask,ow,w,h);
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-                frames.push(crate::bare::wayland::ChromeFrame{id:6,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::ASSISTANT,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
-        // Quick Look: id 7, an overlay surface above every window (its keys come from the shell's own keyboard reader)
+        // Preview: id 7, an overlay surface above every window (its keys come from the shell's own keyboard reader)
         if let Some(((x,y,w,h),mask))=self.quick_look_overlay() {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-            frames.push(crate::bare::wayland::ChromeFrame{id:7,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+            frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::QUICK_LOOK,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
         }
         // The Cmd+Tab strip: id 13, an overlay surface above every window, listed only while it is open. It takes neither
         // the pointer (an empty input region, as the sweep's id 10) nor the keyboard (never exclusive): the modifier release
@@ -1737,14 +1892,22 @@ impl Shell {
         if let Some(((x,y,w,h),mask))=self.cmdtab_overlay() {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-            frames.push(crate::bare::wayland::ChromeFrame{id:13,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:Some([0,0,0,0])});
+            frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::SWITCHER,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:Some([0,0,0,0])});
         }
         // The system menu's card (Force Quit, About, Log Out): an overlay surface above every window, like the file preview. It takes the
         // pointer over its whole card; its keys come from the shell's own keyboard reader.
         if let Some(((x,y,w,h),mask))=self.utility_overlay() {
             let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
             let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-            frames.push(crate::bare::wayland::ChromeFrame{id:super::utility_window::CHROME_ID,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+            frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::utility_window::CHROME_ID,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+        }
+        // The Look Up popover: an overlay surface above every window, like a menu (its rank is the panels', `chrome_z`).
+        // Drawn only into the shell's frame it lay under the app windows and only its top line showed (E2E8 2). It takes
+        // the pointer over its card; its keys (Escape) come from the shell's own keyboard reader.
+        if let Some(((x,y,w,h),mask))=self.look_up_overlay() {
+            let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
+            let mut image=Image{w,h,px:data};image.apply_mask(&mask);
+            frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::look_up_popover::CHROME_ID,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
         }
         // The Apps grid: id 8, an overlay surface above every window that takes the keyboard while it is
         // open. It spans the veil only, so the menu bar and the Dock stay their own surfaces and stay usable. It is
@@ -1753,22 +1916,24 @@ impl Shell {
             let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));
             if w>0&&h>0 {
                 let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
-                // the surface spans the veil so a click anywhere closes the grid, but only the capsule and the panel are opaque
+                // the surface spans the veil so a click anywhere closes the grid; the capsule and the panel are opaque, the rest a dim backdrop
                 let mask=self.overview.grid.overlay_mask(self,(x,y,w,h));
                 let mut image=Image{w,h,px:data};image.apply_mask(&mask);
-                frames.push(crate::bare::wayland::ChromeFrame{id:8,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
+                // and the rest of the veil dims the desktop behind it, other clients' windows included (E2E6 6)
+                self.overview.grid.overlay_backdrop(&mut image.px);
+                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::APP_GRID,x:x as i32,y:y as i32,width:w,height:h,pixels:image.px,input:None});
             }
         }
         // Overview: id 9, an overlay surface above every window that takes the keyboard while it is open,
         // on the same rectangle as the Apps grid (the menu bar and the Dock stay their own surfaces). Listed only while
         // Overview is open or animating; the frame it ends in drops the surface. A desktop switch's sweep is id 10: the same
         // rectangle with an empty input region, so it takes neither the pointer nor the keyboard.
-        for (id,rect,input) in [(9,self.overview.overlay_rect(self),None),(10,self.overview.slide_overlay_rect(self),Some([0,0,0,0]))] {
+        for (id,rect,input) in [(super::chrome_ids::OVERVIEW,self.overview.overlay_rect(self),None),(super::chrome_ids::SWEEP,self.overview.slide_overlay_rect(self),Some([0,0,0,0]))] {
             if let Some((x,y,w,h))=rect {
                 let w=w.min(width.saturating_sub(x));let h=h.min(height.saturating_sub(y));
                 if w>0&&h>0 {
                     let mut data=Vec::with_capacity(w*h);for row in y..y+h {data.extend_from_slice(&pixels[row*width+x..row*width+x+w]);}
-                    frames.push(crate::bare::wayland::ChromeFrame{id,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input});
+                    frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id,x:x as i32,y:y as i32,width:w,height:h,pixels:data,input});
                 }
             }
         }
@@ -1777,21 +1942,21 @@ impl Shell {
         // the system sheets and alerts (id 15, the whole screen): a surface above the windows that takes the pointer and the
         // keyboard until the sheet is answered. Drawn into the shell's own frame, under the windows, a sheet was hidden
         // behind them and left its veil on the wallpaper (MA6).
-        // the announcement caption (id 17) and the screen reader's focus ring (id 18): above every window and the menu bar,
+        // the announcement caption (CAPTION_CHROME_ID) and the screen reader's focus ring (FOCUS_RING_CHROME_ID): above every window, the menu bar and every other chrome surface (`chrome_z`),
         // taking neither the pointer nor the keyboard
-        for (id,layer) in [(11,&self.capture_layer),(12,&self.shot_layer),(MODAL_CHROME_ID,&self.modal_layer),(17,&self.a11y_layers[0]),(18,&self.a11y_layers[1])] {
+        for (id,layer) in [(super::chrome_ids::CAPTURE,&self.capture_layer),(super::chrome_ids::SHOT,&self.shot_layer),(MODAL_CHROME_ID,&self.modal_layer),(crate::bare::wayland::CAPTION_CHROME_ID,&self.a11y_layers[0]),(crate::bare::wayland::FOCUS_RING_CHROME_ID,&self.a11y_layers[1])] {
             if let Some(l)=layer {
-                if l.image.w>0&&l.image.h>0 {frames.push(crate::bare::wayland::ChromeFrame{id,x:l.x,y:l.y,width:l.image.w,height:l.image.h,pixels:l.image.px.clone(),input:l.input});}
+                if l.image.w>0&&l.image.h>0 {frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id,x:l.x,y:l.y,width:l.image.w,height:l.image.h,pixels:l.image.px.clone(),input:l.input});}
             }
         }
-        // a tablet's on-screen keyboard: id 16 (7 is Quick Look), an overlay surface above every window from its resting top to the bottom
+        // a tablet's on-screen keyboard: id 16 (7 is Preview), an overlay surface above every window from its resting top to the bottom
         // edge (drawn only into the desktop frame, the windows covered it). It stays up for the whole slide: the frame
         // is clear above the sliding keyboard, so the surface keeps one size and the slide plays inside it.
         if self.desk_keyboard_visible() {
             let top=(self.kb_top().max(0.0) as usize).min(height);
             if top<height&&width>0 {
                 let data=pixels[top*width..height*width].to_vec();
-                frames.push(crate::bare::wayland::ChromeFrame{id:16,x:0,y:top as i32,width,height:height-top,pixels:data,input:None});
+                frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::KEYBOARD,x:0,y:top as i32,width,height:height-top,pixels:data,input:None});
             }
         }
         frames
@@ -1807,18 +1972,7 @@ fn crop_mask(mask:&[u8],stride:usize,w:usize,h:usize)->Vec<u8> {
 }
 
 #[cfg(all(test,feature="desktop-wayland"))]
-mod crop_tests {
-    use super::crop_mask;
-    #[test]
-    fn a_clipped_card_keeps_its_mask_rows() {
-        // a 4 x 3 mask, rows 0..3 hold 1, 2, 3
-        let mask=[1,1,1,1, 2,2,2,2, 3,3,3,3];
-        // clipped to 4 x 2 (the bottom row ran off the screen): rows 1 and 2 stay whole
-        assert_eq!(crop_mask(&mask,4,4,2),vec![1,1,1,1,2,2,2,2]);
-        // clipped to 3 x 3 (the right side ran off): the row stride is still 4
-        assert_eq!(crop_mask(&mask,4,3,3),vec![1,1,1,2,2,2,3,3,3]);
-    }
-}
+mod crop_tests;
 
 /// The menu bar for the element map (`axmap`): the six app menus with their rows. The first menu is `App` (its title is the
 /// front app's name, which changes), the rest are named as shown. Separators are left out; a disabled row has no action.
@@ -1887,125 +2041,19 @@ pub(super) fn wallpaper_is_light(wp: crate::gfx::View, rows: usize) -> bool {
 /// Mean luma above which white menu bar text loses contrast and the bar switches to dark text.
 const BAR_LIGHT_LUMA: u64 = 160;
 
-#[cfg(test)]
-mod bar_ink_tests {
-    use super::wallpaper_is_light;
-    use crate::gfx::{pack, View};
-
-    fn view(w: usize, h: usize, f: impl Fn(usize) -> u32) -> Vec<u32> {
-        (0..w * h).map(|i| f(i / w)).collect()
-    }
-
-    #[test]
-    fn white_and_light_grey_wallpapers_get_dark_bar_text() {
-        let px = view(64, 40, |_| pack(255, 255, 255, 255));
-        assert!(wallpaper_is_light(View { w: 64, h: 40, px: &px }, 8));
-        let px = view(64, 40, |_| pack(200, 200, 200, 255));
-        assert!(wallpaper_is_light(View { w: 64, h: 40, px: &px }, 8));
-    }
-
-    #[test]
-    fn dark_and_mid_grey_wallpapers_keep_white_bar_text() {
-        let px = view(64, 40, |_| pack(0, 0, 0, 255));
-        assert!(!wallpaper_is_light(View { w: 64, h: 40, px: &px }, 8));
-        let px = view(64, 40, |_| pack(128, 128, 128, 255));
-        assert!(!wallpaper_is_light(View { w: 64, h: 40, px: &px }, 8));
-    }
-
-    #[test]
-    fn only_the_band_under_the_bar_counts() {
-        // a light sky over a dark landscape: the bar sits on the sky
-        let px = view(64, 40, |y| if y < 8 { pack(235, 225, 210, 255) } else { pack(10, 10, 10, 255) });
-        assert!(wallpaper_is_light(View { w: 64, h: 40, px: &px }, 8));
-        let px = view(64, 40, |y| if y < 8 { pack(10, 10, 10, 255) } else { pack(250, 250, 250, 255) });
-        assert!(!wallpaper_is_light(View { w: 64, h: 40, px: &px }, 8));
-    }
-
-    #[test]
-    fn green_weighs_more_than_blue() {
-        // perceived lightness, not a plain channel average: pure green is light, pure blue is dark
-        let px = view(16, 8, |_| pack(0, 255, 0, 255));
-        assert!(wallpaper_is_light(View { w: 16, h: 8, px: &px }, 8));
-        let px = view(16, 8, |_| pack(0, 0, 255, 255));
-        assert!(!wallpaper_is_light(View { w: 16, h: 8, px: &px }, 8));
-    }
-
-    #[test]
-    fn an_empty_wallpaper_is_not_light() {
-        assert!(!wallpaper_is_light(View { w: 0, h: 0, px: &[] }, 8));
-    }
-}
+/// The kit's type-select for a key typed at `t` ms: `Menu::type_select` counts its typing window
+/// (`TYPE_SELECT_SECS`) in seconds, as the Dock's stack passes it.
+#[cfg(any(test, feature = "desktop-wayland"))]
+fn type_select_at(model:&mut bifrost_ui::menu::Menu,c:char,t:f64)->Option<usize> {model.type_select(c,t/1000.0)}
 
 #[cfg(test)]
-mod menu_damage_tests {
-    use super::{popup_damage_rect, popup_surface_rect};
+mod type_select_tests;
 
-    const SCREEN: (usize, usize) = (1000, 800);
+#[cfg(test)]
+mod bar_ink_tests;
 
-    #[test]
-    fn the_exported_surface_is_the_popup_and_its_shadow() {
-        // the damage rectangle of the popup at (100, 34) 200 x 150 is (88, 28, 224, 170)
-        let (surface, menu) = popup_surface_rect((100, 34, 200, 150), 28, 12, 2, SCREEN);
-        assert_eq!(surface, (88, 28, 224, 170));
-        assert_eq!(menu, [12, 6, 200, 150], "the popup inside it: 12 px of shadow to its left, 6 px up to the bar");
-    }
-
-    #[test]
-    fn the_surface_is_clipped_to_the_screen_and_the_menu_rectangle_follows() {
-        // at the left edge the shadow is cut at x 0, so the popup starts 5 px in
-        let (surface, menu) = popup_surface_rect((5, 34, 100, 40), 28, 12, 2, SCREEN);
-        assert_eq!(surface, (0, 28, 117, 60));
-        assert_eq!(menu, [5, 6, 100, 40]);
-        // at the right edge it is cut at the screen's width: 888 + 112 = 1000
-        let (surface, menu) = popup_surface_rect((900, 34, 90, 40), 28, 12, 2, SCREEN);
-        assert_eq!(surface, (888, 28, 112, 60));
-        assert_eq!(menu, [12, 6, 90, 40]);
-        // at the bottom it is cut at the screen's height: 748 + 52 = 800
-        let (surface, menu) = popup_surface_rect((100, 760, 200, 30), 28, 12, 2, SCREEN);
-        assert_eq!(surface, (88, 748, 224, 52));
-        assert_eq!(menu, [12, 12, 200, 30]);
-    }
-
-    #[test]
-    fn the_menu_rectangle_stays_inside_the_surface_and_is_smaller_than_it() {
-        for popup in [(100, 200, 264, 150), (0, 34, 300, 100), (700, 600, 300, 200)] {
-            let ((sx, sy, sw, sh), menu) = popup_surface_rect(popup, 28, 12, 2, SCREEN);
-            assert!(menu[0] >= 0 && menu[1] >= 0, "{popup:?}: the menu starts inside the surface");
-            assert!(menu[0] + menu[2] <= sw as i32 && menu[1] + menu[3] <= sh as i32, "{popup:?}: and ends inside it");
-            assert_eq!((sx as i32 + menu[0], sy as i32 + menu[1]), (popup.0 as i32, popup.1 as i32), "{popup:?}: at the popup's screen position");
-            assert!(sw as i32 > menu[2] && sh as i32 > menu[3], "{popup:?}: there is shadow to show");
-        }
-    }
-
-    // A menu bar 28 px tall, a shadow reach of 12 px (10 pt + 2 at scale 1) and a 2 px lip.
-    #[test]
-    fn a_menu_below_the_bar_owes_its_shadow_up_to_the_bar() {
-        // popup at (100, 34) 200 x 150: the top shadow would start at y 22, clamped to the bar's bottom (28);
-        // left 88, right 100 + 200 + 12 = 312 (width 224); bottom 34 + 150 + 12 + 2 = 198 (height 170)
-        assert_eq!(popup_damage_rect((100, 34, 200, 150), 28, 12, 2), (88, 28, 224, 170));
-    }
-
-    #[test]
-    fn a_popup_lower_on_screen_starts_its_damage_above_its_top_edge() {
-        // top shadow starts at 70 - 12 = 58, which is inside the gap under the bar, so it is damaged
-        let (_, top, _, _) = popup_damage_rect((10, 70, 100, 80), 28, 12, 2);
-        assert_eq!(top, 58);
-    }
-
-    #[test]
-    fn a_menu_at_the_left_edge_is_clamped_to_the_screen() {
-        // x 5 - 12 is negative, so the rectangle starts at 0 and reaches 5 + 100 + 12 = 117 (width 117);
-        // top 34 - 12 = 22 clamps to 28; bottom 34 + 40 + 12 + 2 = 88 (height 60)
-        assert_eq!(popup_damage_rect((5, 34, 100, 40), 28, 12, 2), (0, 28, 117, 60));
-    }
-
-    #[test]
-    fn the_rectangle_always_contains_the_popup() {
-        let (x, y, w, h) = popup_damage_rect((300, 34, 180, 220), 28, 12, 2);
-        assert!(x <= 300 && y <= 34);
-        assert!(x + w >= 300 + 180 && y + h >= 34 + 220);
-    }
-}
+#[cfg(test)]
+mod menu_damage_tests;
 
 /// A panel's overlay rectangle in whole px: the panel grown by its shadow reach `g`, clipped at the screen's top-left.
 #[cfg(any(test, feature = "desktop-wayland"))]
@@ -2015,46 +2063,10 @@ fn panel_overlay_rect((x,y,w,h):(f32,f32,f32,f32),g:f32)->(usize,usize,usize,usi
 }
 
 #[cfg(all(test, feature = "desktop-wayland"))]
-mod chrome_cache_tests {
-    use crate::shell::ui::Weight;
-
-    #[test]
-    fn the_bar_lays_out_from_cached_widths_the_same_way_twice() {
-        let sh = crate::shell::tests::desktop_shell();
-        let first = sh.menu_buttons();
-        assert_eq!(first, sh.menu_buttons(), "a frame that lays the bar out again gets the same menus");
-        assert_eq!(sh.measure_chrome("Control", 13.0, Weight::Semibold), sh.ui.measure("Control", 13.0, Weight::Semibold));
-        assert_eq!(sh.fit_chrome("a very long network name indeed", 13.0, 40.0), sh.ui.fit("a very long network name indeed", 13.0, 40.0));
-    }
-}
+mod chrome_cache_tests;
 
 #[cfg(test)]
-mod panel_overlay_tests {
-    #[test]
-    fn a_panel_overlay_covers_the_panel_and_its_shadow() {
-        assert_eq!(super::panel_overlay_rect((100.,50.,200.,300.),10.),(90,40,220,320));
-        assert_eq!(super::panel_overlay_rect((5.,5.,20.,20.),10.),(0,0,35,35),"clipped at the top-left corner");
-    }
-
-    /// E2E NC2: the column opens under the menu bar, and its overlay surface (shadow margin included) starts there too,
-    /// so the bar's status items and clock stay visible and take their clicks.
-    #[cfg(feature="desktop-wayland")]
-    #[test]
-    fn a_panel_overlay_starts_under_the_menu_bar() {
-        let mut sh=crate::shell::tests::desktop_shell();
-        sh.anim=None;
-        // the fixture starts on the lock screen, where the column does not open
-        sh.screen=crate::shell::Screen::Home;
-        sh.open_desk_notification_center(1.0);
-        let bar=sh.desktop_bar_height();
-        let overlays=sh.desk_panel_overlays();
-        let column=overlays.iter().find(|o|o.0==5).expect("the open column is an overlay surface");
-        assert!(column.2>=bar,"the surface starts at y {} under the {bar} px bar",column.2);
-        assert!(column.4>0,"and has height");
-        let top=sh.center_desk_rect().expect("the column is open").1;
-        assert!(top>=bar as f32,"the column itself is under the bar");
-    }
-}
+mod panel_overlay_tests;
 
 /// One row of the Help menu's results: a group heading, a Menu Items hit (an index into the menu items), or a
 /// Help Topics hit (an index into the topics).
@@ -2129,843 +2141,40 @@ pub(super) fn step_index(selectable: &[bool], current: Option<usize>, dir: i32) 
 pub(super) fn input_menu_visible(sources:usize,keyboard_open:bool,setting:bool)->bool {sources>1||keyboard_open||setting}
 
 #[cfg(test)]
-mod help_search_tests {
-    use super::*;
-    use crate::shell::helpbook::Hit;
-
-    fn entry(menu: Menu, row: usize, title: &str, enabled: bool) -> (Menu, usize, helpbook::MenuItem) {
-        (menu, row, help_item(match menu { Menu::Edit => "Edit", Menu::Window => "Window", _ => "App" }, title, enabled))
-    }
-
-    #[test]
-    fn check_marks_and_indents_are_left_out_of_the_title() {
-        let item = help_item("Edit", "\u{2713} Copy", true);
-        assert_eq!(item.title, "Copy");
-        assert_eq!(item.menu, "Edit");
-        assert!(item.enabled);
-        assert_eq!(help_item("View", "    Larger Icons", false).title, "Larger Icons");
-    }
-
-    #[test]
-    fn menu_items_group_before_topics_and_empty_groups_are_left_out() {
-        assert_eq!(
-            help_groups(&[3, 1], 2),
-            vec![HelpRow::Header("Menu Items"), HelpRow::Item(3), HelpRow::Item(1), HelpRow::Header("Help Topics"), HelpRow::Topic(0), HelpRow::Topic(1)]
-        );
-        assert_eq!(help_groups(&[], 1), vec![HelpRow::Header("Help Topics"), HelpRow::Topic(0)], "no Menu Items heading without hits");
-        assert_eq!(help_groups(&[0], 0), vec![HelpRow::Header("Menu Items"), HelpRow::Item(0)]);
-        assert_eq!(help_groups(&[], 0), vec![HelpRow::Header("No Results")]);
-    }
-
-    #[test]
-    fn a_menu_query_resolves_to_the_row_that_holds_the_item() {
-        let entries = vec![
-            entry(Menu::Edit, 4, "Copy", true),
-            entry(Menu::Edit, 5, "Paste", false),
-            entry(Menu::Window, 2, "Copy Window", true),
-        ];
-        assert_eq!(help_hits(&entries, "copy"), vec![(Menu::Edit, 4), (Menu::Window, 2)], "whole-word titles in menu order");
-        assert_eq!(help_hits(&entries, "paste"), vec![(Menu::Edit, 5)], "a disabled item is still found");
-        assert!(help_hits(&entries, "print").is_empty());
-        assert!(help_hits(&entries, "  ").is_empty());
-    }
-
-    #[test]
-    fn topics_come_from_the_front_book_and_the_system_book_only() {
-        let hit = |app: &str, title: &str| Hit { app: app.into(), app_name: app.into(), slug: title.into(), title: title.into(), anchor: None, score: 1 };
-        let hits = vec![hit("is.olibuijr.other", "A"), hit("com.front", "B"), hit(helpbook::SYSTEM_BOOK, "C"), hit("com.front", "D")];
-        let kept: Vec<String> = help_topic_hits(hits.clone(), Some("com.front"), 8).into_iter().map(|h| h.title).collect();
-        assert_eq!(kept, vec!["B", "C", "D"]);
-        let one: Vec<String> = help_topic_hits(hits, None, 1).into_iter().map(|h| h.title).collect();
-        assert_eq!(one, vec!["C"], "no front book: only the system book, limited");
-    }
-
-    #[test]
-    fn keyboard_steps_skip_headers_and_wrap() {
-        let sel = [false, true, false, true];
-        assert_eq!(step_index(&sel, None, 1), Some(1), "down from nothing lands on the first choice");
-        assert_eq!(step_index(&sel, Some(1), 1), Some(3));
-        assert_eq!(step_index(&sel, Some(3), 1), Some(1), "down wraps to the top");
-        assert_eq!(step_index(&sel, None, -1), Some(3), "up from nothing lands on the last choice");
-        assert_eq!(step_index(&sel, Some(1), -1), Some(3), "up wraps to the bottom");
-        assert_eq!(step_index(&[false, false], None, 1), None, "no choices");
-        assert_eq!(step_index(&[], Some(0), 1), None);
-    }
-}
+mod help_search_tests;
 
 /// Where a context menu opens: at the pointer, flipped left or up when it would leave the area, held inside when neither fits.
 #[cfg(test)]
-mod context_menu_origin_tests {
-    use super::context_menu_origin;
-
-    // the area under the bar and above the Dock: 1000 x 600 px, its top at y 30
-    const AREA: (i32, i32, i32, i32) = (0, 30, 1000, 600);
-
-    #[test]
-    fn a_menu_that_fits_opens_with_its_corner_at_the_pointer() {
-        assert_eq!(context_menu_origin((300., 200.), (264, 400), AREA), (300, 200));
-    }
-
-    #[test]
-    fn a_menu_flips_left_at_the_right_edge_and_up_at_the_bottom_edge() {
-        // 1000 - 264 = 736: a pointer at 800 leaves no room to the right
-        assert_eq!(context_menu_origin((800., 200.), (264, 100), AREA), (536, 200), "its right edge is the pointer");
-        // the area ends at 630: a 100 px menu at 560 would end at 660
-        assert_eq!(context_menu_origin((300., 560.), (264, 100), AREA), (300, 460), "its bottom edge is the pointer");
-        assert_eq!(context_menu_origin((800., 560.), (264, 100), AREA), (536, 460), "both at once");
-        // a menu that ends exactly at the edge stays where it opened
-        assert_eq!(context_menu_origin((736., 530.), (264, 100), AREA), (736, 530));
-    }
-
-    #[test]
-    fn a_menu_larger_than_the_area_is_held_inside_it_from_the_top_left() {
-        assert_eq!(context_menu_origin((300., 300.), (264, 700), AREA), (300, 30), "too tall to flip: held at the top");
-        assert_eq!(context_menu_origin((10., 300.), (2000, 10), AREA), (0, 300), "wider than the screen: held at the left");
-    }
-
-    #[test]
-    fn a_pointer_outside_the_area_is_pulled_in() {
-        assert_eq!(context_menu_origin((-20., 5.), (264, 100), AREA), (0, 30));
-    }
-}
+mod context_menu_origin_tests;
 
 /// An app's context menu in the shell: the rows come from its items and the surface is as tall as they are.
 #[cfg(all(test, feature = "desktop-wayland"))]
-mod context_menu_shell_tests {
-    use super::*;
-    use bifrost_proto::ContextItem;
-
-    fn items() -> Vec<ContextItem> {
-        vec![
-            ContextItem::new(1, "Open"),
-            ContextItem::new(2, "Get Info").key("cmd+i"),
-            ContextItem::separator(),
-            ContextItem::new(3, "Paste").enabled(false).key("cmd+v"),
-        ]
-    }
-
-    /// A desktop shell with `items()` open as a context menu for a pointer at (x, y).
-    fn open_at(x: f32, y: f32) -> Shell {
-        let mut sh = crate::shell::tests::desktop_shell();
-        sh.desktop_context = Some(ContextMenu { slot: 0, x, y, items: items() });
-        sh.desktop_menu = Some(Menu::Context);
-        sh
-    }
-
-    #[test]
-    fn the_surface_is_as_tall_as_its_rows_and_separators() {
-        let sh = open_at(300., 200.);
-        let (_, _, w, h) = sh.desktop_popup_rect().unwrap();
-        // edge padding, three rows, one separator, edge padding
-        let pt = 2. * MENU_PAD_PT + 3. * MENU_ROW_PT + MENU_SEP_PT;
-        assert_eq!(h, sh.ui.pt(pt).ceil() as usize);
-        assert_eq!(h, sh.ui.pt(menu_spans(&sh.menu_rows(Menu::Context)).1).ceil() as usize, "the height the rows are drawn with");
-        assert!((h as f32) < sh.ui.pt(8. + 36. * 4.), "not a fixed 36 pt per item");
-        assert!(w >= sh.ui.pt(264.) as usize, "as wide as the bar menus");
-    }
-
-    #[test]
-    fn it_opens_at_the_pointer_and_flips_at_the_screen_edges() {
-        let sh = open_at(300., 200.);
-        let (x, y, _, _) = sh.desktop_popup_rect().unwrap();
-        assert_eq!((x, y), (300, 200), "top-left at the pointer");
-        // near the bottom of the work area: above the pointer
-        let area = crate::shell::desk::Desk::area(&sh.desk_metrics());
-        let low = area.y + area.h - 10;
-        let sh = open_at(300., low as f32);
-        let (x, y, _, h) = sh.desktop_popup_rect().unwrap();
-        assert_eq!((x, y + h), (300, low as usize), "its bottom edge is the pointer");
-        // near the right edge: left of the pointer
-        let right = sh.w - 10;
-        let sh = open_at(right as f32, 200.);
-        let (x, y, w, _) = sh.desktop_popup_rect().unwrap();
-        assert_eq!((x + w, y), (right as usize, 200), "its right edge is the pointer");
-    }
-
-    /// E2E N6: under the window server the popup is a chrome surface cropped to the menu, so its shadow was cut off and
-    /// a menu over white content had no edge. The surface now has room for the shadow; only the menu takes input.
-    #[test]
-    fn the_exported_surface_has_room_for_the_shadow_and_only_the_menu_takes_input() {
-        let mut sh = open_at(300., 400.);
-        sh.anim = None;
-        // the fixture starts on the lock screen, where no chrome is exported
-        sh.screen = crate::shell::Screen::Home;
-        let (w, h) = (sh.w as usize, sh.h as usize);
-        let pixels = vec![0u32; w * h];
-        let (px, py, pw, ph) = sh.desktop_popup_rect().unwrap();
-        let frames = sh.desktop_chrome_frames(&pixels, w, h);
-        let f = frames.iter().find(|f| f.id == 1).expect("an open menu is exported");
-        assert_eq!(f.pixels.len(), f.width * f.height);
-        assert_eq!(f.input, Some([px as i32 - f.x, py as i32 - f.y, pw as i32, ph as i32]), "the menu's own rectangle, in surface px");
-        let reach = sh.ui.pt(crate::shell::desk::SHADOW_REACH_PT) as i32;
-        assert!(f.x <= px as i32 - reach && f.y <= py as i32 - reach, "room for the shadow left of and above the menu");
-        assert!(f.x + f.width as i32 >= (px + pw) as i32 + reach && f.y + f.height as i32 >= (py + ph) as i32 + reach, "and right of and below it");
-        assert!(frames.iter().filter(|f| f.id != 1 && f.id != 2).all(|f| f.input.is_none()), "the other chrome takes the whole surface");
-        // W2-24: the Dock's surface has room for a magnified plate at both ends; only the plate drawn now takes input
-        if let Some(d) = frames.iter().find(|f| f.id == 2) {
-            let plate = sh.dock_overlay_rect();
-            assert_eq!(d.input, Some([plate.x - d.x, plate.y - d.y, plate.w, plate.h]), "the plate, in surface px");
-            assert!(d.x <= plate.x && d.x + d.width as i32 >= plate.x + plate.w, "the surface holds the plate");
-        }
-    }
-
-    /// The shadow does not change what a click does: the menu's rectangle decides, a press on the shadow closes the menu.
-    #[test]
-    fn hit_testing_uses_the_menu_rectangle_not_the_shadow() {
-        let mut sh = open_at(300., 400.);
-        sh.anim = None;
-        // the fixture starts on the lock screen, where no chrome is exported
-        sh.screen = crate::shell::Screen::Home;
-        let (px, py, _, _) = sh.desktop_popup_rect().unwrap();
-        let (w, h) = (sh.w as usize, sh.h as usize);
-        let pixels = vec![0u32; w * h];
-        let f = sh.desktop_chrome_frames(&pixels, w, h).into_iter().find(|f| f.id == 1).unwrap();
-        let on_shadow = (px as f32 - 3., py as f32 + 10.);
-        assert!(f.x as f32 <= on_shadow.0, "the point is inside the exported surface");
-        sh.desktop_bar_event(Event::Down(px as f32 + 5., py as f32 + 5.), 1.);
-        assert!(sh.desktop_menu.is_some(), "a press inside the menu keeps it open");
-        sh.desktop_bar_event(Event::Down(on_shadow.0, on_shadow.1), 2.);
-        assert!(sh.desktop_menu.is_none(), "a press on the shadow, outside the menu, closes it");
-    }
-
-    /// Both draw paths give the menu a shadow around it and a one-pixel edge in the separator colour.
-    #[test]
-    fn the_popup_is_drawn_with_a_shadow_and_a_hairline_edge() {
-        let sh = open_at(300., 400.);
-        let (w, h) = (sh.w as usize, sh.h as usize);
-        let (px, py, pw, ph) = sh.desktop_popup_rect().unwrap();
-        let mut buf = vec![0u32; w * h];
-        sh.draw_desktop_popup(&mut Surface { w, h, stride: w, px: &mut buf, y0: 0 });
-        let alpha = |x: usize, y: usize| buf[y * w + x] >> 24;
-        let cx = px + pw / 2;
-        let reach = sh.ui.pt(crate::shell::desk::SHADOW_REACH_PT) as usize;
-        assert!((1..=reach + 2).any(|d| alpha(cx, py + ph + d) > 0), "a shadow below the menu");
-        assert!((1..=reach + 2).any(|d| alpha(px - d, py + ph / 2) > 0), "and beside it");
-        assert_eq!(alpha(cx, py + ph + 3 * reach), 0, "none beyond its reach");
-        let edge = buf[py * w + cx];
-        let want = crate::shell::ui::separator_now();
-        assert_eq!(edge >> 24, 0xff, "the edge is opaque");
-        for shift in [0, 8, 16] {
-            let (a, b) = ((edge >> shift & 0xff) as i32, (want >> shift & 0xff) as i32);
-            assert!((a - b).abs() <= 3, "the top edge is the separator colour (channel at {shift}: {a} vs {b})");
-        }
-    }
-
-    #[test]
-    fn rows_follow_the_items_and_disabled_items_are_labels() {
-        let mut list = vec![ContextItem::separator()];
-        list.extend(items());
-        list.extend([ContextItem::separator(), ContextItem::separator()]);
-        let rows = context_rows(4, &list);
-        assert_eq!(rows.len(), 4, "a separator at either end is dropped");
-        assert!(matches!(rows[0].action, Some(Action::Context(4, 1))), "a choice goes back to the app with its id");
-        assert!(rows[0].key_text().is_none());
-        assert_eq!((rows[1].text.as_str(), rows[1].key_text()), ("Get Info", Some("\u{2318}I")));
-        assert!(rows[2].is_separator());
-        assert_eq!(rows[3].text, "Paste", "the key equivalent is not part of the title");
-        assert!(rows[3].action.is_none(), "a disabled item is a label in the secondary ink, not a choice");
-        assert_eq!(rows[3].key_text(), Some("\u{2318}V"));
-        let doubled = context_rows(0, &[ContextItem::new(1, "A"), ContextItem::separator(), ContextItem::separator(), ContextItem::new(2, "B")]);
-        assert_eq!(doubled.len(), 3, "two separators in a row are one");
-    }
-
-    #[test]
-    fn hovering_a_row_highlights_it_and_the_bar_does_not_take_over_the_menu() {
-        let mut sh = open_at(300., 200.);
-        let (x, y, _, _) = sh.desktop_popup_rect().unwrap();
-        let (spans, _) = menu_spans(&sh.menu_rows(Menu::Context));
-        let (top, h) = spans[1];
-        sh.desktop_menu_hover(x as f32 + 12., y as f32 + sh.ui.pt(top + h / 2.));
-        assert_eq!(sh.menu_row_of(Menu::Context), Some(1));
-        sh.desktop_menu_hover(x as f32 + 12., 4.);
-        assert_eq!(sh.desktop_menu, Some(Menu::Context), "crossing the bar keeps the context menu");
-        assert_eq!(sh.menu_row_of(Menu::Context), None);
-    }
-}
+mod context_menu_shell_tests;
 
 /// Which bar items a new reading repaints: the changed label's rectangle and what moved with it, not the whole bar.
 #[cfg(all(test, feature = "desktop-wayland"))]
-mod changed_bar_item_tests {
-    use super::{changed_bar_rects, Menu};
-
-    fn item(menu: Menu, left: f32, width: f32, label: &str) -> (Menu, f32, f32, String) {
-        (menu, left, width, label.to_string())
-    }
-
-    #[test]
-    fn the_same_layout_changes_nothing() {
-        let bar = vec![item(Menu::App, 40., 80., "Music"), item(Menu::Cpu, 1900., 70., "CPU 3%")];
-        assert!(changed_bar_rects(&bar, &bar, 2560, 44, 8).is_empty());
-    }
-
-    #[test]
-    fn a_new_cpu_label_of_the_same_width_damages_only_that_label() {
-        let before = vec![item(Menu::App, 40., 80., "Music"), item(Menu::Cpu, 1900., 70., "CPU 3%"), item(Menu::Memory, 1970., 70., "RAM 40%")];
-        let after = vec![item(Menu::App, 40., 80., "Music"), item(Menu::Cpu, 1900., 70., "CPU 4%"), item(Menu::Memory, 1970., 70., "RAM 40%")];
-        // the label's span, 8 px more on each side
-        let rects = changed_bar_rects(&before, &after, 2560, 44, 8);
-        assert_eq!(rects, vec![(1892, 0, 86, 44)]);
-        let pixels: i32 = rects.iter().map(|r| r.2 * r.3).sum();
-        assert!(pixels < 2560 * 44 / 10, "far less than the bar: {pixels}");
-    }
-
-    #[test]
-    fn a_wider_label_also_damages_the_item_that_moved_with_it() {
-        let before = vec![item(Menu::Cpu, 1900., 70., "CPU 9%"), item(Menu::Memory, 1970., 70., "RAM 9%")];
-        // RAM grew by 10 px, so CPU moved left by 10 and both changed
-        let after = vec![item(Menu::Cpu, 1890., 70., "CPU 9%"), item(Menu::Memory, 1960., 80., "RAM 10%")];
-        let rects = changed_bar_rects(&before, &after, 2560, 44, 0);
-        assert_eq!(rects, vec![(1890, 0, 150, 44)]);
-    }
-
-    #[test]
-    fn items_that_appeared_or_went_and_the_screen_edges_are_handled() {
-        let before = vec![item(Menu::App, 0., 50., "A")];
-        let after = vec![item(Menu::Cpu, 2540., 40., "CPU 1%")];
-        let rects = changed_bar_rects(&before, &after, 2560, 44, 8);
-        assert_eq!(rects, vec![(0, 0, 58, 44), (2532, 0, 28, 44)], "a gone item and a new one, clipped to the screen");
-    }
-}
+mod changed_bar_item_tests;
 
 /// An app's menu extra shows its title or a symbol the bar draws, never the first letter of the app's name (E2E MB1).
 #[cfg(test)]
-mod status_face_tests {
-    use super::*;
-
-    #[test]
-    fn a_title_wins_and_a_drawable_symbol_shows_as_an_icon() {
-        assert_eq!(status_face("Quick", "square.and.pencil"), Some(StatusFace::Text("Quick".into())));
-        assert_eq!(status_face("", "square.and.pencil"), Some(StatusFace::Icon("square.and.pencil".into())), "Notes' extra");
-        assert_eq!(status_face("", "checklist"), Some(StatusFace::Icon("checklist".into())), "Reminders' extra");
-        assert_eq!(status_face("", "wifi"), Some(StatusFace::Icon("wifi".into())), "a symbol of the shell's own set");
-    }
-
-    #[test]
-    fn an_item_with_no_title_and_no_symbol_the_bar_draws_is_not_shown() {
-        assert_eq!(status_face("", ""), None, "no letter stands in for it");
-        assert_eq!(status_face("", "unknown.symbol.name"), None);
-    }
-}
+mod status_face_tests;
 
 /// The Recent Items submenu opens in place of the system menu and keeps the keyboard path (Right in, Left out).
 #[cfg(all(test, feature = "desktop-wayland"))]
-mod submenu_tests {
-    use super::*;
-
-    fn open_system() -> Shell {
-        let mut sh = crate::shell::tests::desktop_shell();
-        sh.screen = Screen::Home;
-        sh.anim = None;
-        sh.desktop_menu = Some(Menu::System);
-        sh
-    }
-
-    #[test]
-    fn right_opens_the_submenu_of_the_highlighted_row_and_left_goes_back() {
-        let mut sh = open_system();
-        let at = sh.menu_row_texts(Menu::System).iter().position(|t| t == "Recent Items").unwrap();
-        sh.desktop_menu_row = Some((Menu::System, at));
-        let _ = sh.desktop_menu_key(106, 1.);
-        assert_eq!(sh.desktop_menu, Some(Menu::Recent));
-        let _ = sh.desktop_menu_key(105, 2.);
-        assert_eq!(sh.desktop_menu, Some(Menu::System));
-        // Right on a row without a submenu still moves to the next bar menu
-        sh.desktop_menu_row = Some((Menu::System, 0));
-        let _ = sh.desktop_menu_key(106, 3.);
-        assert_eq!(sh.desktop_menu, Some(Menu::App));
-    }
-
-    #[test]
-    fn a_click_on_recent_items_opens_the_submenu_and_keeps_a_popup() {
-        let mut sh = open_system();
-        let rows = sh.menu_rows(Menu::System);
-        let at = rows.iter().position(|r| r.text == "Recent Items").unwrap();
-        let (x, top, w, _) = sh.desktop_popup_rect().unwrap();
-        let (spans, _) = menu_spans(&rows);
-        let y = top as f32 + sh.ui.pt(spans[at].0 + spans[at].1 / 2.);
-        let fx = sh.desktop_bar_event(Event::Up((x + w / 2) as f32, y), 1.);
-        assert!(fx.is_some());
-        assert_eq!(sh.desktop_menu, Some(Menu::Recent), "the click opens the submenu instead of closing the menu");
-        assert!(sh.desktop_popup_rect().is_some());
-    }
-}
+mod submenu_tests;
 
 /// An app's submenus are levels of their own: the menu lists the header, the header's level its direct children.
 #[cfg(test)]
-mod app_level_tests {
-    use super::{app_item_parent, app_level_items, menu_scroll, MENU_ARROW_PT};
-    use bifrost_proto::{AppMenu, AppMenuItem};
-
-    fn format() -> AppMenu {
-        AppMenu { title: "Format".into(), items: vec![
-            AppMenuItem::submenu("Font"),                 // 0
-            AppMenuItem::new(1, "Show Fonts").depth(1),   // 1
-            AppMenuItem::submenu("Kern").depth(1),        // 2
-            AppMenuItem::new(2, "Use Default").depth(2),  // 3
-            AppMenuItem::new(3, "Tighten").depth(2),      // 4
-            AppMenuItem::new(4, "Bold").depth(1),         // 5
-            AppMenuItem::submenu("Text"),                 // 6
-            AppMenuItem::new(5, "Align Left").depth(1),   // 7
-            AppMenuItem::separator(),                     // 8
-            AppMenuItem::new(6, "Make Plain Text"),       // 9
-        ] }
-    }
-
-    #[test]
-    fn each_level_lists_its_own_items_only() {
-        let m = format();
-        assert_eq!(app_level_items(&m, None), vec![0, 6, 8, 9]);
-        assert_eq!(app_level_items(&m, Some(0)), vec![1, 2, 5], "Font: its items, Kern's header but not Kern's items");
-        assert_eq!(app_level_items(&m, Some(2)), vec![3, 4]);
-        assert_eq!(app_level_items(&m, Some(6)), vec![7]);
-        assert!(app_level_items(&m, Some(1)).is_empty(), "an item that is no submenu has no level");
-        assert!(app_level_items(&m, Some(99)).is_empty());
-    }
-
-    #[test]
-    fn an_item_knows_the_header_it_sits_under() {
-        let m = format();
-        assert_eq!(app_item_parent(&m, 0), None);
-        assert_eq!(app_item_parent(&m, 2), Some(0));
-        assert_eq!(app_item_parent(&m, 4), Some(2));
-        assert_eq!(app_item_parent(&m, 5), Some(0), "back out of Kern, still in Font");
-        assert_eq!(app_item_parent(&m, 7), Some(6));
-    }
-
-    #[test]
-    fn a_menu_that_fits_does_not_scroll() {
-        let sc = menu_scroll(300., 800., 50.);
-        assert_eq!((sc.height, sc.offset, sc.up, sc.down), (300., 0., false, false));
-    }
-
-    #[test]
-    fn a_tall_menu_scrolls_between_its_arrows() {
-        let (content, room) = (2000., 600.);
-        let top = menu_scroll(content, room, 0.);
-        assert_eq!((top.height, top.up, top.down), (room, false, true), "at the top: only the bottom arrow");
-        assert_eq!(top.window(), (0., room - MENU_ARROW_PT));
-        let mid = menu_scroll(content, room, 700.);
-        assert!(mid.up && mid.down);
-        let end = menu_scroll(content, room, 1e9);
-        assert_eq!((end.offset, end.up, end.down), (content - room, true, false), "clamped to the end: only the top arrow");
-        assert_eq!(menu_scroll(content, room, -5.).offset, 0.);
-        assert_eq!(menu_scroll(content, room, f32::NAN).offset, 0.);
-        // a row under the bottom arrow does not show; revealing it scrolls just enough
-        assert!(top.shows(0., 24.));
-        assert!(!top.shows(room - 20., 24.));
-        let o = top.reveal(content, 900., 24.);
-        let after = menu_scroll(content, room, o);
-        assert!(after.shows(900., 24.), "revealed at offset {o}");
-        // and back up: a row above the top arrow
-        let o = after.reveal(content, 100., 24.);
-        assert!(menu_scroll(content, room, o).shows(100., 24.), "revealed at offset {o}");
-        // the first and last rows scroll all the way, so no arrow covers them
-        assert_eq!(after.reveal(content, 5., 24.), 0.);
-        assert_eq!(top.reveal(content, content - 29., 24.), content - room);
-    }
-
-    #[test]
-    fn a_tiny_room_still_leaves_a_row_between_the_arrows() {
-        let sc = menu_scroll(1000., 10., 0.);
-        let (lo, hi) = sc.window();
-        assert!(hi - lo >= 24., "{lo}..{hi}");
-    }
-}
+mod app_level_tests;
 
 /// Where a cascading submenu opens, the safe triangle, and the parent surface cleared under a submenu's surface.
 #[cfg(test)]
-mod flyout_geometry_tests {
-    use super::{clear_covered, flyout_origin, in_safe_triangle, Flyout, Menu, FLYOUT_OPEN_MS, FLYOUT_SAFE_MS};
-
-    const AREA: (i32, i32, i32, i32) = (0, 40, 1000, 700);
-
-    #[test]
-    fn a_submenu_opens_right_of_its_parent_with_its_first_row_level_with_the_header() {
-        // a 200 px menu at x 100, header row at y 160, a 180 x 120 submenu
-        assert_eq!(flyout_origin((100, 50, 200, 300), 160, (180, 120), AREA, 4, 8, true), (296, 152, true));
-    }
-
-    #[test]
-    fn it_opens_left_without_room_on_the_right_and_keeps_going_left() {
-        assert_eq!(flyout_origin((700, 50, 200, 300), 160, (180, 120), AREA, 4, 8, true), (524, 152, false), "no room right of 900");
-        // the next level keeps the left side while it has room, even though the right would fit too
-        assert_eq!(flyout_origin((400, 50, 200, 300), 160, (180, 120), AREA, 4, 8, false), (224, 152, false));
-        // and turns right again once the left runs out
-        assert_eq!(flyout_origin((100, 50, 200, 300), 160, (180, 120), AREA, 4, 8, false), (296, 152, true));
-    }
-
-    #[test]
-    fn a_submenu_that_fits_on_neither_side_goes_where_there_is_more_room_inside_the_area() {
-        let (x, _, right) = flyout_origin((300, 50, 500, 300), 160, (600, 120), AREA, 4, 8, true);
-        assert!(!right, "300 px on the left, 200 on the right");
-        assert_eq!(x, 0);
-        let (x, _, right) = flyout_origin((100, 50, 500, 300), 160, (600, 120), AREA, 4, 8, true);
-        assert!(right);
-        assert_eq!(x, 400, "held inside the area: 1000 - 600");
-    }
-
-    #[test]
-    fn a_submenu_is_held_inside_the_area_vertically() {
-        assert_eq!(flyout_origin((100, 50, 200, 700), 680, (180, 120), AREA, 4, 8, true).1, 620, "pushed up from the bottom edge");
-        assert_eq!(flyout_origin((100, 50, 200, 300), 20, (180, 120), AREA, 4, 8, true).1, 40, "never above the area");
-        assert_eq!(flyout_origin((100, 50, 200, 300), 20, (180, 900), AREA, 4, 8, true).1, 40, "a submenu taller than the area starts at its top");
-    }
-
-    #[test]
-    fn the_safe_triangle_covers_moves_toward_the_submenu_only() {
-        let sub = (300., 100., 200., 300.);
-        let apex = (150., 120.);
-        assert!(in_safe_triangle(apex, (250., 200.), sub, true), "down and toward the near edge");
-        assert!(in_safe_triangle(apex, (280., 110.), sub, true), "up and toward it, below its top corner");
-        assert!(!in_safe_triangle(apex, (140., 200.), sub, true), "away from it");
-        assert!(!in_safe_triangle(apex, (200., 60.), sub, true), "above its top corner");
-        assert!(!in_safe_triangle(apex, (200., 400.), sub, true), "steeper than its bottom corner");
-        // a submenu on the left: the near edge is its right side
-        let left = (0., 100., 100., 300.);
-        assert!(in_safe_triangle((250., 120.), (150., 200.), left, false));
-        assert!(!in_safe_triangle((250., 120.), (260., 200.), left, false));
-        // a degenerate triangle (the apex on the edge's line) holds nothing
-        assert!(!in_safe_triangle((300., 120.), (300., 150.), sub, true));
-        assert!(!in_safe_triangle((f32::NAN, 0.), (1., 1.), sub, true));
-    }
-
-    #[test]
-    fn the_part_a_submenu_surface_covers_is_cleared_and_nothing_else() {
-        // a 10 x 6 surface at (100, 50); the submenu's surface from (106, 52), running past the surface's right edge
-        let mut px = vec![1u32; 60];
-        clear_covered(&mut px, (100, 50, 10, 6), (106, 52, 50, 3));
-        for y in 0..6 {
-            for x in 0..10 {
-                let want = if x >= 6 && (2..5).contains(&y) { 0 } else { 1 };
-                assert_eq!(px[y * 10 + x], want, "({x}, {y})");
-            }
-        }
-        // a cover outside the surface changes nothing, nor does a buffer of the wrong size
-        let mut px = vec![1u32; 60];
-        clear_covered(&mut px, (100, 50, 10, 6), (300, 52, 50, 3));
-        clear_covered(&mut px[..30], (100, 50, 10, 6), (100, 50, 10, 6));
-        assert!(px.iter().all(|&p| p == 1));
-    }
-
-    #[test]
-    fn the_flyout_wakes_the_shell_at_the_earliest_of_its_timers() {
-        let mut f = Flyout::default();
-        assert_eq!(f.due(), None);
-        f.pending = Some((Menu::File, Menu::Recent, 100.));
-        assert_eq!(f.due(), Some(100. + FLYOUT_OPEN_MS));
-        f.deferred = Some((Menu::File, Some(2), 50.));
-        assert_eq!(f.due(), Some((50. + FLYOUT_SAFE_MS).min(100. + FLYOUT_OPEN_MS)));
-    }
-}
+mod flyout_geometry_tests;
 
 /// An app's submenus cascade beside their row (Right in, Left or Esc out, a click or a rest on the header), nest, and are searched by Help.
 #[cfg(all(test, feature = "desktop-wayland"))]
-mod app_submenu_tests {
-    use super::*;
-    use bifrost_proto::{AppMenu, AppMenuItem};
-
-    fn with_menus(menus: Vec<AppMenu>) -> (Shell, bifrost_proto::sys::Channel) {
-        // a landscape desktop, so a menu and two submenus fit side by side
-        let mut sh = crate::shell::tests::shell_sized(1920, 1200);
-        sh.desk = Some(crate::shell::desk::Desk::new());
-        sh.form = bifrost_ui::form_factor::FormFactor::Desktop;
-        sh.anim = None;
-        let (mine, theirs) = bifrost_proto::sys::socketpair_pair().unwrap();
-        let mut host = super::super::apphost::AppHost::with_channel("fixture", mine, None, bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false });
-        host.app_menus = menus;
-        sh.ext.push(Some(host));
-        sh.ext_fg = Some(0);
-        sh.screen = Screen::App(AppId::External(0));
-        (sh, theirs)
-    }
-
-    fn format(families: usize) -> AppMenu {
-        let mut items = vec![AppMenuItem::submenu("Font"), AppMenuItem::new(1, "Show Fonts").depth(1), AppMenuItem::submenu("Kern").depth(1), AppMenuItem::new(2, "Use Default").depth(2), AppMenuItem::separator().depth(1)];
-        items.extend((0..families).map(|i| AppMenuItem::new(100 + i as u32, &format!("Family {i}")).depth(1)));
-        items.extend([AppMenuItem::submenu("Text"), AppMenuItem::new(3, "Align Left").depth(1), AppMenuItem::separator(), AppMenuItem::new(4, "Make Plain Text")]);
-        AppMenu { title: "Format".into(), items }
-    }
-
-    fn texts(sh: &Shell, menu: Menu) -> Vec<String> {
-        sh.menu_rows(menu).into_iter().map(|r| r.text).collect()
-    }
-
-    #[test]
-    fn nested_submenus_cascade_beside_their_rows_and_close_one_level_at_a_time() {
-        let (mut sh, _app) = with_menus(vec![format(3)]);
-        assert_eq!(texts(&sh, Menu::Custom(0)), ["Font", "Text", "", "Make Plain Text"]);
-        sh.desktop_menu = Some(Menu::Custom(0));
-        sh.desktop_menu_row = Some((Menu::Custom(0), 0));
-        let _ = sh.desktop_menu_key(106, 1.);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "Right opens Font");
-        assert_eq!(texts(&sh, Menu::AppSub(0, 0)), ["Show Fonts", "Kern", "", "Family 0", "Family 1", "Family 2"], "no row back: Format stays open beside it");
-        assert_eq!(sh.menu_row_of(Menu::AppSub(0, 0)), Some(0), "the keyboard lands on Font's first item");
-        let kern = 1;
-        sh.desktop_menu_row = Some((Menu::AppSub(0, 0), kern));
-        let _ = sh.desktop_menu_key(106, 2.);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 2)), "and Kern inside it");
-        assert_eq!(texts(&sh, Menu::AppSub(0, 2)), ["Use Default"]);
-        assert_eq!(sh.bar_anchor(Menu::AppSub(0, 2)), Menu::Custom(0), "a nested submenu still hangs from Format's bar item");
-        assert_eq!(sh.menu_chain(), vec![Menu::Custom(0), Menu::AppSub(0, 0), Menu::AppSub(0, 2)]);
-        let levels = sh.menu_level_rects();
-        assert_eq!(levels.len(), 3, "Format, Font and Kern are all open");
-        // Format stays under its bar item; each submenu cascades beside its parent, its first row level with the header
-        let format_x = sh.menu_buttons().into_iter().find(|b| b.0 == Menu::Custom(0)).unwrap().1;
-        assert_eq!(levels[0].1 .0, (format_x as usize).min((sh.w as usize).saturating_sub(levels[0].1 .2)));
-        let overlap = sh.ui.pt(FLYOUT_OVERLAP_PT) as usize;
-        for k in 1..3 {
-            let ((px, _, pw, _), (cx, _, cw, _), right) = (levels[k - 1].1, levels[k].1, levels[k].2);
-            if right { assert_eq!(cx + overlap, px + pw, "level {k} opens right of its parent"); } else { assert_eq!(cx + cw, px + overlap, "level {k} opens left of its parent"); }
-        }
-        let (spans, _) = menu_spans(&sh.menu_rows(Menu::Custom(0)));
-        assert_eq!(levels[1].1 .1 as i32, levels[0].1 .1 as i32 + sh.ui.pt(spans[0].0) as i32 - sh.ui.pt(MENU_PAD_PT) as i32, "Font's first row is level with its header");
-        assert_eq!(sh.desktop_popup_rect(), Some(levels[2].1), "the open menu is the deepest level");
-        let _ = sh.desktop_menu_key(105, 3.);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "Left closes Kern");
-        assert_eq!(sh.menu_row_of(Menu::AppSub(0, 0)), Some(kern), "Kern's row in Font stays highlighted");
-        let _ = sh.desktop_menu_key(1, 4.);
-        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "Esc closes one level");
-        assert_eq!(sh.menu_row_of(Menu::Custom(0)), Some(0), "back on Font's row");
-        let _ = sh.desktop_menu_key(1, 5.);
-        assert_eq!(sh.desktop_menu, None, "Esc on the menu itself closes it");
-    }
-
-    /// Opens Format, then Font beside its row by the keyboard, and returns the two levels.
-    fn format_and_font(sh: &mut Shell) -> ((usize, usize, usize, usize), (usize, usize, usize, usize), bool) {
-        sh.desktop_menu = Some(Menu::Custom(0));
-        sh.desktop_menu_row = Some((Menu::Custom(0), 0));
-        let _ = sh.desktop_menu_key(106, 1.);
-        let levels = sh.menu_level_rects();
-        assert_eq!(levels.len(), 2);
-        (levels[0].1, levels[1].1, levels[1].2)
-    }
-
-    /// The centre of row `i` of `menu` drawn at `rect`, in screen px.
-    fn row_point(sh: &Shell, menu: Menu, rect: (usize, usize, usize, usize), i: usize) -> (f32, f32) {
-        let (spans, _) = menu_spans(&sh.menu_rows(menu));
-        (rect.0 as f32 + rect.2 as f32 / 2., rect.1 as f32 + sh.ui.pt(spans[i].0 + spans[i].1 / 2.))
-    }
-
-    #[test]
-    fn hovering_a_header_opens_its_submenu_after_the_delay_and_the_parent_stays_highlighted() {
-        let (mut sh, _app) = with_menus(vec![format(3)]);
-        sh.desktop_menu = Some(Menu::Custom(0));
-        let format = sh.desktop_popup_rect().unwrap();
-        let (x, y) = row_point(&sh, Menu::Custom(0), format, 0);
-        sh.desktop_menu_hover_at(x, y, 1000.);
-        assert_eq!(sh.menu_row_of(Menu::Custom(0)), Some(0), "the header row is highlighted at once");
-        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "the submenu waits for the delay");
-        assert_eq!(sh.desktop_flyout.due(), Some(1000. + FLYOUT_OPEN_MS), "the shell wakes for it");
-        sh.desktop_menu_flyout_tick(1000. + FLYOUT_OPEN_MS - 1.);
-        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)));
-        sh.desktop_menu_flyout_tick(1000. + FLYOUT_OPEN_MS);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "resting on Font opens it");
-        assert_eq!(sh.desktop_flyout.due(), None);
-        assert_eq!(sh.menu_level_rects().len(), 2, "Format stays open beside it");
-        // a pointer that only passes over a header does not open it
-        let (tx, ty) = row_point(&sh, Menu::Custom(0), format, 1);
-        sh.desktop_menu_hover_at(tx + sh.ui.pt(60.), ty, 2000.);
-        sh.desktop_menu_hover_at(tx + sh.ui.pt(60.), row_point(&sh, Menu::Custom(0), format, 3).1, 2050.);
-        sh.desktop_menu_flyout_tick(2050. + FLYOUT_OPEN_MS);
-        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "Font closed and Text never opened");
-        assert_eq!(sh.menu_row_of(Menu::Custom(0)), Some(3), "Make Plain Text is highlighted");
-    }
-
-    #[test]
-    fn a_diagonal_move_toward_the_submenu_keeps_it_open_and_a_rest_lets_the_row_take_over() {
-        let (mut sh, _app) = with_menus(vec![format(3)]);
-        let (format, font, right) = format_and_font(&mut sh);
-        let (hx, hy) = row_point(&sh, Menu::Custom(0), format, 0);
-        // from the far side of the header row, heading down toward the submenu's near edge
-        let start = if right { (format.0 as f32 + sh.ui.pt(20.), hy) } else { ((format.0 + format.2) as f32 - sh.ui.pt(20.), hy) };
-        sh.desktop_menu_hover_at(start.0, start.1, 100.);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "back on Font's row: Font stays open");
-        let text_y = row_point(&sh, Menu::Custom(0), format, 1).1;
-        let near = if right { (font.0 as f32 - 2., text_y) } else { ((font.0 + font.2) as f32 + 2., text_y) };
-        let step = (start.0 + (near.0 - start.0) * 0.9, text_y);
-        assert!(in_safe_triangle(start, step, (font.0 as f32, font.1 as f32, font.2 as f32, font.3 as f32), right), "the move heads for Font");
-        sh.desktop_menu_hover_at(step.0, step.1, 120.);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)), "crossing Text on the way does not switch the submenu");
-        assert_eq!(sh.menu_level_rects().len(), 2);
-        sh.desktop_menu_flyout_tick(120. + FLYOUT_SAFE_MS - 1.);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)));
-        // stopping there lets Text take over: Font closes, Text is highlighted and opens after its own delay
-        sh.desktop_menu_flyout_tick(120. + FLYOUT_SAFE_MS);
-        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "a rest on Text closes Font");
-        assert_eq!(sh.menu_row_of(Menu::Custom(0)), Some(1));
-        sh.desktop_menu_flyout_tick(120. + FLYOUT_SAFE_MS + FLYOUT_OPEN_MS);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 8)), "and Text opens");
-    }
-
-    #[test]
-    fn moving_away_from_the_submenu_switches_rows_at_once() {
-        let (mut sh, _app) = with_menus(vec![format(3)]);
-        let (format, _, right) = format_and_font(&mut sh);
-        let (_, hy) = row_point(&sh, Menu::Custom(0), format, 0);
-        // near the edge away from Font, then straight down: away from the submenu
-        let far = if right { format.0 as f32 + sh.ui.pt(8.) } else { (format.0 + format.2) as f32 - sh.ui.pt(8.) };
-        sh.desktop_menu_hover_at(far, hy, 100.);
-        let (_, py) = row_point(&sh, Menu::Custom(0), format, 3);
-        let back = if right { far - sh.ui.pt(2.) } else { far + sh.ui.pt(2.) };
-        sh.desktop_menu_hover_at(back, py, 110.);
-        assert_eq!(sh.desktop_menu, Some(Menu::Custom(0)), "Font closes");
-        assert_eq!(sh.menu_row_of(Menu::Custom(0)), Some(3), "Make Plain Text is highlighted");
-    }
-
-    #[test]
-    fn a_pointer_leave_between_the_menu_surfaces_closes_nothing() {
-        let (mut sh, _app) = with_menus(vec![format(3)]);
-        let (_, font, _) = format_and_font(&mut sh);
-        let (x, y) = row_point(&sh, Menu::AppSub(0, 0), font, 0);
-        sh.desktop_menu_hover_at(x, y, 100.);
-        sh.desktop_menu_hover_at(-100., -100., 110.);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 0)));
-        assert_eq!(sh.menu_row_of(Menu::AppSub(0, 0)), Some(0), "the highlight stays");
-        assert_eq!(sh.menu_level_rects().len(), 2);
-    }
-
-    #[test]
-    fn a_click_on_a_parent_row_or_a_header_works_while_a_submenu_is_open() {
-        let (mut sh, app) = with_menus(vec![format(3)]);
-        let (format, _, _) = format_and_font(&mut sh);
-        // a click on Text, another header, opens Text in place of Font
-        let (tx, ty) = row_point(&sh, Menu::Custom(0), format, 1);
-        let _ = sh.desktop_bar_event(Event::Up(tx, ty), 2.);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 8)), "the click opens Text at once");
-        assert_eq!(sh.menu_chain(), vec![Menu::Custom(0), Menu::AppSub(0, 8)]);
-        // a press inside either level keeps the menus open
-        let _ = sh.desktop_bar_event(Event::Down(tx, ty), 3.);
-        assert_eq!(sh.desktop_menu, Some(Menu::AppSub(0, 8)));
-        // a click on Make Plain Text in Format reaches the app
-        let (px, py) = row_point(&sh, Menu::Custom(0), format, 3);
-        let _ = sh.desktop_bar_event(Event::Up(px, py), 4.);
-        assert_eq!(sh.desktop_menu, None, "choosing an item closes every level");
-        let bifrost_proto::sys::Recv::Packet(packet, _) = app.recv(false).unwrap() else { panic!("no menu action") };
-        assert_eq!(bifrost_proto::ToApp::decode(&packet), Ok(bifrost_proto::ToApp::MenuAction(4)));
-    }
-
-    #[test]
-    fn each_submenu_is_an_overlay_surface_of_its_own_that_takes_the_pointer_over_the_submenu() {
-        let (mut sh, _app) = with_menus(vec![format(3)]);
-        let (_, font, _) = format_and_font(&mut sh);
-        let (w, h) = (sh.w as usize, sh.h as usize);
-        let pixels = vec![0xff10_2030u32; w * h];
-        let frames = sh.desktop_chrome_frames(&pixels, w, h);
-        let menu = frames.iter().find(|f| f.id == 1).expect("the menu's surface");
-        let sub = frames.iter().find(|f| f.id == FLYOUT_CHROME_ID).expect("the submenu's surface");
-        assert!(frames.iter().all(|f| f.id != FLYOUT_CHROME_ID + 1), "one surface per open submenu");
-        let [ix, iy, iw, ih] = sub.input.expect("only the submenu takes the pointer");
-        assert_eq!(((sub.x + ix) as usize, (sub.y + iy) as usize, iw as usize, ih as usize), font);
-        // where the submenu's surface lies over the menu's, the menu's surface is clear
-        let (mx, my) = ((sub.x - menu.x).max(0) as usize, (sub.y - menu.y).max(0) as usize);
-        if mx < menu.width && my < menu.height { assert_eq!(menu.pixels[my * menu.width + mx], 0); }
-        assert!(menu.pixels.iter().any(|&p| p != 0), "the rest of the menu shows");
-        // closing the submenu drops its surface
-        let _ = sh.desktop_menu_key(105, 2.);
-        assert!(sh.desktop_chrome_frames(&pixels, w, h).iter().all(|f| f.id != FLYOUT_CHROME_ID));
-    }
-
-    #[test]
-    fn a_click_on_a_submenu_item_reaches_the_app() {
-        let (mut sh, app) = with_menus(vec![format(3)]);
-        sh.desktop_menu = Some(Menu::AppSub(0, 0));
-        let rows = sh.menu_rows(Menu::AppSub(0, 0));
-        let at = rows.iter().position(|r| r.text == "Family 1").unwrap();
-        let (x, top, w, _) = sh.desktop_popup_rect().unwrap();
-        let (spans, _) = menu_spans(&rows);
-        let y = top as f32 + sh.ui.pt(spans[at].0 + spans[at].1 / 2.);
-        let _ = sh.desktop_bar_event(Event::Up((x + w / 2) as f32, y), 1.);
-        assert_eq!(sh.desktop_menu, None, "choosing an item closes the menu");
-        let bifrost_proto::sys::Recv::Packet(packet, _) = app.recv(false).unwrap() else { panic!("no menu action") };
-        assert_eq!(bifrost_proto::ToApp::decode(&packet), Ok(bifrost_proto::ToApp::MenuAction(101)));
-    }
-
-    #[test]
-    fn a_disabled_submenu_does_not_open() {
-        let (sh, _app) = with_menus(vec![AppMenu { title: "Playback".into(), items: vec![AppMenuItem::submenu("Speed").enabled(false), AppMenuItem::new(1, "1x").depth(1)] }]);
-        let rows = sh.menu_rows(Menu::Custom(0));
-        assert_eq!(rows.len(), 1);
-        assert!(rows[0].action.is_none());
-    }
-
-    #[test]
-    fn help_search_finds_items_inside_submenus() {
-        let (sh, _app) = with_menus(vec![format(3)]);
-        let entries = sh.help_entries();
-        let hit = entries.iter().find(|(_, _, item)| item.title == "Use Default").expect("a nested item is searched");
-        assert_eq!(hit.0, Menu::AppSub(0, 2));
-        assert!(hit.2.menu.contains("Kern"), "{}", hit.2.menu);
-        assert_eq!(hit.1, 0, "Use Default is Kern's first row: a cascading submenu has no row back");
-    }
-
-    #[test]
-    fn a_menu_taller_than_the_screen_scrolls_and_keeps_its_rows_reachable() {
-        let (mut sh, _app) = with_menus(vec![format(300)]);
-        let menu = Menu::AppSub(0, 0);
-        sh.desktop_menu = Some(menu);
-        let (x, top, w, h) = sh.desktop_popup_rect().unwrap();
-        assert!(top + h <= sh.h as usize, "the popup stays on the screen: {top}+{h} > {}", sh.h);
-        let rows = sh.menu_rows(menu);
-        let sc = sh.menu_scroll_for(menu, &rows);
-        assert!(sc.down && !sc.up, "a bottom arrow only");
-        // the last family is reachable by the keyboard: the highlight scrolls the menu
-        let last = rows.len() - 1;
-        sh.desktop_menu_row = Some((menu, last - 1));
-        let _ = sh.desktop_menu_key(108, 1.);
-        assert_eq!(sh.menu_row_of(menu), Some(last));
-        let sc = sh.menu_scroll_for(menu, &rows);
-        let (spans, _) = menu_spans(&rows);
-        assert!(sc.up && sc.shows(spans[last].0, spans[last].1), "the last row shows after Down");
-        // a click lands on the row drawn under the pointer, not the one the offset hides
-        let y = top as f32 + sh.ui.pt(spans[last].0 - sc.offset + spans[last].1 / 2.);
-        assert_eq!(sh.menu_row_at(menu, y - top as f32), Some(last));
-        // the wheel scrolls back up, and resting on the top arrow scrolls further each frame
-        assert!(sh.desktop_menu_wheel((x + w / 2) as f32, (top + h / 2) as f32, 240.));
-        let after = sh.menu_scroll_for(menu, &rows).offset;
-        assert!(after < sc.offset, "{after} < {}", sc.offset);
-        sh.desktop_menu_hover((x + w / 2) as f32, top as f32 + sh.ui.pt(MENU_ARROW_PT / 2.));
-        assert_eq!(sh.desktop_menu_scroll.arrow, -1);
-        assert!(sh.menu_autoscrolling());
-        sh.desktop_menu_autoscroll(10.);
-        sh.desktop_menu_autoscroll(60.);
-        assert!(sh.menu_scroll_for(menu, &rows).offset < after, "resting on the arrow scrolls");
-        for k in 0..2000 {
-            sh.desktop_menu_autoscroll(100. + k as f64 * 50.);
-        }
-        assert_eq!(sh.menu_scroll_for(menu, &rows).offset, 0.);
-        assert_eq!(sh.desktop_menu_scroll.arrow, 0, "it stops at the top");
-        assert!(!sh.menu_autoscrolling());
-    }
-}
+mod app_submenu_tests;
 
 /// E2E-15: the Window menu of a normal window offers every placement and Bring All to Front, as Golden Gate does.
 #[cfg(test)]
-mod window_menu_tests {
-    use super::Menu;
-    use crate::shell::{AppId, Screen};
-
-    #[test]
-    fn a_normal_window_enables_the_halves_center_and_bring_all_to_front() {
-        let mut sh = crate::shell::tests::desktop_shell();
-        sh.screen = Screen::Home;
-        sh.anim = None;
-        sh.desk_open(AppId::Settings, 0.0);
-        let rows = sh.menu_rows(Menu::Window);
-        for want in ["Left Half", "Right Half", "Fill", "Center", "Bring All to Front", "Return to Previous Size"] {
-            let row = rows.iter().find(|r| r.text.trim() == want).unwrap_or_else(|| panic!("{want} is in the Window menu"));
-            assert!(row.action.is_some(), "{want} is enabled for a normal window");
-        }
-    }
-
-    #[test]
-    fn with_no_window_the_placements_are_labels() {
-        let mut sh = crate::shell::tests::desktop_shell();
-        sh.screen = Screen::Home;
-        sh.anim = None;
-        let rows = sh.menu_rows(Menu::Window);
-        for want in ["Left Half", "Right Half", "Fill", "Center", "Bring All to Front"] {
-            let row = rows.iter().find(|r| r.text.trim() == want).unwrap_or_else(|| panic!("{want} is in the Window menu"));
-            assert!(row.action.is_none(), "{want} has nothing to act on without a window");
-        }
-    }
-}
+mod window_menu_tests;

@@ -2,7 +2,8 @@
 //! them as `key=0|1` lines to `/run/bifrost/user/accessibility` (`bifrost_render::appearance::DISPLAY_FILE`, written on
 //! every change); the window server reads the file again at most every `POLL` while it composes. Under Reduce
 //! Transparency (which Increase Contrast implies, as on the reference desktop) every material it backs, app sidebars
-//! and title bars included, is a flat opaque plate instead of a live blur.
+//! and title bars included, is a flat opaque plate instead of a live blur. The same file carries `dark=0|1`, the
+//! Light/Dark scheme every material's plate and tint follow (`apply_scheme`).
 
 use std::time::{Duration, Instant};
 
@@ -15,6 +16,9 @@ pub const POLL: Duration = Duration::from_millis(250);
 pub struct DisplayOptions {
     pub reduce_transparency: bool,
     pub increase_contrast: bool,
+    /// The shell's Light/Dark scheme (`dark=0|1`, the one its fade heads for): every material's plate and tint follow
+    /// it. None when the file has no such line (an older shell), and the start-up choice stays.
+    pub dark: Option<bool>,
 }
 
 /// The shell's `key=0|1` lines; missing or unknown keys read as off, and Increase Contrast implies Reduce Transparency.
@@ -26,6 +30,7 @@ pub fn parse(text: &str) -> DisplayOptions {
         match k.trim() {
             "reduce_transparency" => o.reduce_transparency = on,
             "increase_contrast" => o.increase_contrast = on,
+            "dark" => o.dark = Some(on),
             _ => {}
         }
     }
@@ -54,6 +59,17 @@ impl DisplayPoll {
     }
 }
 
+/// Makes the materials follow the shell's scheme when the file names one; true when it changed (a frame is due).
+pub fn apply_scheme(material_dark: &mut bool, o: &DisplayOptions) -> bool {
+    match o.dark {
+        Some(d) if d != *material_dark => {
+            *material_dark = d;
+            true
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,6 +82,18 @@ mod tests {
         let o = parse("reduce_transparency=0\nincrease_contrast=1\n");
         assert!(o.reduce_transparency && o.increase_contrast, "Increase Contrast turns Reduce Transparency on");
         assert_eq!(parse("garbage\nreduce_transparency=yes"), DisplayOptions::default());
+    }
+
+    #[test]
+    fn the_scheme_line_is_read_and_its_absence_keeps_the_start_up_choice() {
+        assert_eq!(parse("reduce_transparency=0\n").dark, None);
+        assert_eq!(parse("reduce_transparency=0\ndark=1\n").dark, Some(true));
+        assert_eq!(parse("dark=0\n").dark, Some(false));
+        let mut dark = true;
+        apply_scheme(&mut dark, &parse("dark=0\n"));
+        assert!(!dark, "a Light switch reaches the materials");
+        apply_scheme(&mut dark, &parse(""));
+        assert!(!dark, "a file without the line leaves it");
     }
 
     #[test]

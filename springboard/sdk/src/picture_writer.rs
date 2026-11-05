@@ -1,8 +1,9 @@
 //! Writes pictures with their metadata for apps. A writer takes one or more straight RGBA frames and writes one file in
-//! PNG, JPEG, GIF, BMP, TIFF or ICO, with an orientation, a capture date, a camera, the software that wrote it, a
+//! PNG, JPEG, GIF, BMP, TIFF, ICO or WebP, with an orientation, a capture date, a camera, the software that wrote it, a
 //! location, altitude, speed, direction and GPS time, the exposure and lens, a JPEG quality, a frame delay and a GIF loop count. Each format keeps the metadata it can
-//! carry (JPEG, PNG and TIFF keep the orientation, date, camera, software and location; GIF, BMP and ICO keep only the
-//! pixels and frame timing). WebP is read only.
+//! carry (JPEG, PNG, TIFF and WebP keep the orientation, date, camera, software and location; GIF, BMP and ICO keep
+//! only the pixels and frame timing). WebP is written lossless and still: the quality is not used and only the first
+//! frame is written.
 //!
 //! ```ignore
 //! let mut writer = PictureWriter::new(Format::Jpeg)
@@ -14,7 +15,7 @@
 //! let jpeg = writer.finish().unwrap();
 //! ```
 
-use crate::image_metadata::{decimal_to_dms, Format, GpsTime, Location};
+use crate::image_metadata::{decimal_to_dms, Descriptive, Format, GpsTime, Location};
 use bifrost_render::cg::image::CgImage;
 use bifrost_render::cg::imageio::exif::{Dict, PropValue};
 use bifrost_render::cg::imageio::{ImageDestination, WriteOptions};
@@ -42,11 +43,16 @@ pub struct PictureWriter {
     gps_time: Option<GpsTime>,
     speed_kmh: Option<f64>,
     direction_deg: Option<f64>,
+    descriptive: Descriptive,
+    max_side: Option<usize>,
+    background: Option<[u8; 3]>,
+    embed_thumbnail: bool,
+    for_sharing: bool,
     frames: Vec<(CgImage, u32)>,
 }
 
 impl PictureWriter {
-    /// A writer for `format`. Formats that cannot be written (WebP) make [`PictureWriter::finish`] return `None`.
+    /// A writer for `format`. Every format of `Format` can be written.
     pub fn new(format: Format) -> Self {
         PictureWriter {
             format,
@@ -69,6 +75,11 @@ impl PictureWriter {
             gps_time: None,
             speed_kmh: None,
             direction_deg: None,
+            descriptive: Descriptive::default(),
+            max_side: None,
+            background: None,
+            embed_thumbnail: false,
+            for_sharing: false,
             frames: Vec::new(),
         }
     }
@@ -177,6 +188,79 @@ impl PictureWriter {
         self
     }
 
+    /// The title (XMP `dc:title`, IPTC object name). Empty text is ignored.
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.descriptive.title = non_empty(title.into());
+        self
+    }
+
+    /// The caption (XMP `dc:description`, IPTC caption). Empty text is ignored.
+    pub fn caption(mut self, caption: impl Into<String>) -> Self {
+        self.descriptive.caption = non_empty(caption.into());
+        self
+    }
+
+    /// The keywords (XMP `dc:subject`, IPTC keywords), in order. Empty and repeated keywords are dropped.
+    pub fn keywords<S: Into<String>>(mut self, keywords: impl IntoIterator<Item = S>) -> Self {
+        self.descriptive.keywords.clear();
+        for k in keywords {
+            let k = k.into().trim().to_string();
+            if !k.is_empty() && !self.descriptive.keywords.contains(&k) {
+                self.descriptive.keywords.push(k);
+            }
+        }
+        self
+    }
+
+    /// The creator (XMP `dc:creator`, IPTC by-line). Empty text is ignored.
+    pub fn creator(mut self, name: impl Into<String>) -> Self {
+        self.descriptive.creators = non_empty(name.into()).into_iter().collect();
+        self
+    }
+
+    /// The copyright notice (XMP `dc:rights`, IPTC copyright). Empty text is ignored.
+    pub fn copyright(mut self, notice: impl Into<String>) -> Self {
+        self.descriptive.copyright = non_empty(notice.into());
+        self
+    }
+
+    /// The star rating (XMP `xmp:Rating`): 0 to 5, or -1 for rejected. Other values are ignored.
+    pub fn rating(mut self, stars: i8) -> Self {
+        if (-1..=5).contains(&stars) {
+            self.descriptive.rating = Some(stars);
+        }
+        self
+    }
+
+    /// Scales every frame down so that neither side is longer than `pixels` (aspect kept, never enlarged). Zero is
+    /// ignored.
+    pub fn max_side(mut self, pixels: usize) -> Self {
+        if pixels > 0 {
+            self.max_side = Some(pixels);
+        }
+        self
+    }
+
+    /// The colour transparent pixels are laid over in a format without alpha (JPEG); white when not set.
+    pub fn background(mut self, red: u8, green: u8, blue: u8) -> Self {
+        self.background = Some([red, green, blue]);
+        self
+    }
+
+    /// Embeds a small JPEG preview (at most 160 pixels a side) in a JPEG's EXIF block, which viewers and
+    /// [`crate::image_source::ImageSource::fast_thumbnail`] show without decoding the whole picture.
+    pub fn embed_thumbnail(mut self, on: bool) -> Self {
+        self.embed_thumbnail = on;
+        self
+    }
+
+    /// Converts frames that carry a colour profile to sRGB and writes no profile, so the picture looks the same in any
+    /// viewer.
+    pub fn optimize_for_sharing(mut self, on: bool) -> Self {
+        self.for_sharing = on;
+        self
+    }
+
     /// How many times an animation repeats; 0 repeats forever.
     pub fn loop_count(mut self, loop_count: u32) -> Self {
         self.loop_count = loop_count;
@@ -204,6 +288,10 @@ impl PictureWriter {
     pub fn finish(self) -> Option<Vec<u8>> {
         let mut dest = ImageDestination::new(self.format, self.frames.len())?;
         dest.loop_count = self.loop_count;
+        dest.max_pixel_size = self.max_side;
+        dest.background_color = self.background;
+        dest.embed_thumbnail = self.embed_thumbnail;
+        dest.optimize_color_for_sharing = self.for_sharing;
         for (image, delay_ms) in &self.frames {
             dest.add_image(image, Some(self.options(*delay_ms)));
         }
@@ -261,7 +349,10 @@ impl PictureWriter {
                 tiff.insert(key.into(), PropValue::Text(text.clone()));
             }
         }
-        WriteOptions { quality: self.quality, orientation: self.orientation, tiff, exif, gps, delay_ms: Some(delay_ms), ..Default::default() }
+        // The descriptive fields go in an XMP packet (JPEG, PNG, WebP) and, for JPEG, also as IPTC datasets.
+        let xmp = self.descriptive.xmp_packet().map(String::into_bytes);
+        let image_resources = self.descriptive.image_resources();
+        WriteOptions { quality: self.quality, orientation: self.orientation, tiff, exif, gps, delay_ms: Some(delay_ms), xmp, image_resources, ..Default::default() }
     }
 }
 
@@ -349,11 +440,18 @@ mod tests {
     }
 
     #[test]
-    fn no_frames_or_a_read_only_format_gives_nothing() {
+    fn no_frames_gives_nothing() {
         assert_eq!(PictureWriter::new(Format::Png).finish(), None);
-        let mut webp = PictureWriter::new(Format::Webp);
-        assert!(webp.add_frame(2, 1, two_pixels(), 0));
-        assert_eq!(webp.finish(), None);
+    }
+
+    #[test]
+    fn a_webp_keeps_orientation_date_and_location() {
+        let mut writer = PictureWriter::new(Format::Webp).orientation(3).date_taken("2026:10:24 08:15:00").location(Location { latitude: 64.25, longitude: -21.5 });
+        assert!(writer.add_frame(2, 1, two_pixels(), 0));
+        let info = image_metadata::read(&writer.finish().unwrap()).unwrap();
+        assert_eq!((info.format, info.width, info.height, info.orientation), (Format::Webp, 2, 1, 3));
+        assert_eq!(info.date_taken.as_deref(), Some("2026:10:24 08:15:00"));
+        assert!((info.location.unwrap().latitude - 64.25).abs() < 1e-9);
     }
 
     #[test]
@@ -400,5 +498,60 @@ mod tests {
         assert!(animation.is_animated());
         assert_eq!(animation.frames.iter().map(|f| f.delay_ms).collect::<Vec<_>>(), vec![80, 220]);
         assert_eq!(animation.loop_count, Some(3));
+    }
+
+    #[test]
+    fn title_caption_keywords_creator_copyright_and_rating_are_written_and_read_back() {
+        for format in [Format::Jpeg, Format::Png, Format::Webp] {
+            let mut writer = PictureWriter::new(format)
+                .title("Harbour at dawn")
+                .caption("Boats & nets <low tide>")
+                .keywords(["sea", "boats", "sea", " "])
+                .creator("Ann Example")
+                .copyright("2026 Ann Example")
+                .rating(4);
+            assert!(writer.add_frame(2, 1, two_pixels(), 0));
+            let d = image_metadata::read(&writer.finish().unwrap()).unwrap().descriptive;
+            assert_eq!(d.title.as_deref(), Some("Harbour at dawn"), "{format:?}");
+            assert_eq!(d.caption.as_deref(), Some("Boats & nets <low tide>"), "{format:?}");
+            assert_eq!(d.keywords, vec!["sea".to_string(), "boats".to_string()], "{format:?}: repeats and blanks dropped");
+            assert_eq!(d.creators, vec!["Ann Example".to_string()], "{format:?}");
+            assert_eq!(d.copyright.as_deref(), Some("2026 Ann Example"), "{format:?}");
+            assert_eq!(d.rating, Some(4), "{format:?}");
+        }
+    }
+
+    #[test]
+    fn a_jpeg_also_carries_the_fields_as_iptc_for_readers_that_look_only_there() {
+        let mut writer = PictureWriter::new(Format::Jpeg).caption("Low tide").keywords(["sea", "rocks"]).rating(9);
+        assert!(writer.add_frame(2, 1, two_pixels(), 0));
+        let bytes = writer.finish().unwrap();
+        let props = bifrost_render::cg::imageio::ImageSource::new(bytes).properties_at(0).unwrap();
+        let only_iptc = Descriptive::read(None, props.image_resources.as_deref());
+        assert_eq!(only_iptc.caption.as_deref(), Some("Low tide"));
+        assert_eq!(only_iptc.keywords, vec!["sea".to_string(), "rocks".to_string()]);
+        assert_eq!(only_iptc.rating, None, "a rating out of range is ignored, and IPTC has none");
+    }
+
+    #[test]
+    fn a_shared_jpeg_is_scaled_flattened_and_carries_a_preview() {
+        let mut writer = PictureWriter::new(Format::Jpeg).max_side(200).background(0, 0, 0).embed_thumbnail(true).optimize_for_sharing(true);
+        assert!(writer.add_frame(800, 400, vec![255, 255, 255, 0].repeat(800 * 400), 0));
+        let bytes = writer.finish().unwrap();
+        let src = crate::image_source::ImageSource::new(&bytes).unwrap();
+        assert_eq!(src.size(), (200, 100));
+        let preview = src.embedded_thumbnail().expect("a preview is embedded");
+        assert_eq!((preview.w, preview.h), (160, 80));
+        let px = src.decode().unwrap().px[0];
+        assert!((px & 0xff) < 30, "transparent white laid over black is black: {px:#010x}");
+    }
+
+    #[test]
+    fn a_picture_without_descriptive_fields_has_no_packet() {
+        let mut writer = PictureWriter::new(Format::Png).title("");
+        assert!(writer.add_frame(2, 1, two_pixels(), 0));
+        let bytes = writer.finish().unwrap();
+        assert!(image_metadata::read(&bytes).unwrap().descriptive.is_empty());
+        assert!(bifrost_render::cg::imageio::ImageSource::new(bytes).properties_at(0).unwrap().xmp.is_none());
     }
 }

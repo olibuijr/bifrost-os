@@ -4,6 +4,51 @@
 
 # Changelog
 
+## 0.15.0
+
+- Upstream deckcraft v0.15.0.
+  ## What's Changed
+  * WASM: open presenter view in a separate browser window (#729) by @FredApps in https://github.com/storytold/deckcraft/pull/730
+  * H.264: temporal direct mvs are scaled in i32 and clipped to the spec range by @SusieeTheLinuxUser in https://github.com/storytold/deckcraft/pull/1247
+  * PPTX: parse each tags part once and cap the tags an import copies (#1164) by @Naseq in https://github.com/storytold/deckcraft/pull/1373
+  * Allow resizing on all selected shapes (#1539) by @DominicTheD3v in https://github.com/storytold/deckcraft/pull/1558
+
+## 0.14.1
+
+- Upstream deckcraft v0.14.1.
+  ## What's Changed
+  * Use private directories for print previews by @Harrison-Booth in https://github.com/storytold/deckcraft/pull/1519
+  * Slideshow click targets follow animated shapes by @Harrison-Booth in https://github.com/storytold/deckcraft/pull/1521
+  * Add read-only slide action inspection by @Harrison-Booth in https://github.com/storytold/deckcraft/pull/1574
+  * Reject invalid index in transition commands instead of using selection by @Silvertree2010 in https://github.com/storytold/deckcraft/pull/1577
+
+## 0.13.1
+
+- Upstream deckcraft v0.13.1.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1502
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1507
+  * CI: workflows only call craft-common-actions at @main (AGENTS.md; windows-arm64 unpinned) by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1557
+  * Update prompt shows the app icon and accent color instead of a letter by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1561
+
+## 0.12.0
+
+- Upstream deckcraft v0.12.0.
+  ## What's Changed
+  * Migrate DeckCraft to egui 0.37 by @skylartaylor in https://github.com/storytold/deckcraft/pull/1350
+  * refactor: explicit imports in engine/anim/geom/model/render/text/pdf/ogg modules (SonarCloud S2208) by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1270
+  * Slides: Ctrl+Shift+click selects a range, also in the slide sorter by @Faabyy in https://github.com/storytold/deckcraft/pull/1107
+  * Reuse Slides: choose which slides of the other file to insert by @Faabyy in https://github.com/storytold/deckcraft/pull/1109
+
+## 0.11.1
+
+- Upstream deckcraft v0.11.1.
+  ## What's Changed
+  * packaging: [[ ]] tests, named positional parameters, explicit returns and a default case (SonarCloud S7688, S7679, S7682, S131) by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1212
+  * Use chrono instead of hand-rolled UTC conversion by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1116
+  * CI: one test binary per crate, nextest, line tables only by @aiongg in https://github.com/storytold/deckcraft/pull/1213
+  * CI: shared gate workflow; FreeBSD nightly and on release by @aiongg in https://github.com/storytold/deckcraft/pull/1214
+
 ## 0.10.0
 
 - Upstream deckcraft v0.10.0.

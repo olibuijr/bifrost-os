@@ -4,7 +4,7 @@
 //! apps that answer visual searches (`visual_search_panel`); circling an object first is how the person selects it.
 
 use super::switcher::draw_scaled;
-use super::ui::{Ui, Weight, BLACK, CARD_RADIUS_PT, CELL, SECONDARY, SEPARATOR, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_RED, SYSTEM_YELLOW, TINT, WHITE};
+use super::ui::{Ui, Weight, BLACK, CARD_RADIUS_PT, CELL, SECONDARY, SEPARATOR, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_RED, SYSTEM_YELLOW, TINT, accent_now, WHITE};
 use crate::gfx::{over, pack, scale, Image, Surface};
 use crate::layout::Rect;
 use std::path::PathBuf;
@@ -348,7 +348,7 @@ impl Markup {
                 }
                 Hit::Tool(t) => {
                     let on = self.tool == t;
-                    let fill = if on { TINT } else { pack(58, 58, 60, 255) };
+                    let fill = if on { accent_now() } else { pack(58, 58, 60, 255) };
                     s.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, CARD_RADIUS_PT * self.s, fill);
                     let label = TOOLS.iter().find(|(x, _)| *x == t).map_or("", |(_, l)| l);
                     let img = ui.text(label, 15.0, Weight::Medium, WHITE);

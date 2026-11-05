@@ -506,7 +506,30 @@ impl Layout {
 
 /// The shared Golden Gate toolbar model and the exact layout used to draw it and publish its controls.
 pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, tool: Tool, side: Side) -> (Toolbar, ToolbarLayout) {
-    let mut items: Vec<ToolbarItem> = Action::toolbar()
+    let mut items = toolbar_items(open, tool, side);
+    let scale = ui.pt(1.0).max(0.001);
+    let bounds = bifrost_app::controls::Rect {
+        x: lay.side as f32 / scale,
+        y: 0.0,
+        w: (lay.w - lay.side).max(0) as f32 / scale,
+        h: lay.bar.max(0) as f32 / scale,
+    };
+    // Preserve the old narrow-window behavior: actions that do not fit remain available from the menus, rather than
+    // exposing the kit's overflow affordance without an app-specific overflow menu.
+    let full = Toolbar::new(items.clone());
+    let first = widgets::toolbar_layout(ui, bounds, &full);
+    if !first.overflow.is_empty() {
+        items = items.into_iter().filter(|item| !first.overflow.contains(&item.id)).collect();
+    }
+    let bar = Toolbar::new(items);
+    let layout = widgets::toolbar_layout(ui, bounds, &bar);
+    (bar, layout)
+}
+
+/// The toolbar buttons with their glyphs, groups, enabled and selected state. Every button acts on the open document,
+/// so with none open they are all disabled and none shows the selected plate.
+fn toolbar_items(open: bool, tool: Tool, side: Side) -> Vec<ToolbarItem> {
+    Action::toolbar()
         .iter()
         .copied()
         .map(|action| {
@@ -540,26 +563,10 @@ pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, tool: Tool, side: Side) -> (To
                 Action::ShowOutline => side == Side::Outline,
                 _ => false,
             };
-            item.enabled(open).selected(selected)
+            // a disabled button never shows the selected plate: with no document the bar must read as inactive
+            item.enabled(open).selected(selected && open)
         })
-        .collect();
-    let scale = ui.pt(1.0).max(0.001);
-    let bounds = bifrost_app::controls::Rect {
-        x: lay.side as f32 / scale,
-        y: 0.0,
-        w: (lay.w - lay.side).max(0) as f32 / scale,
-        h: lay.bar.max(0) as f32 / scale,
-    };
-    // Preserve the old narrow-window behavior: actions that do not fit remain available from the menus, rather than
-    // exposing the kit's overflow affordance without an app-specific overflow menu.
-    let full = Toolbar::new(items.clone());
-    let first = widgets::toolbar_layout(ui, bounds, &full);
-    if !first.overflow.is_empty() {
-        items = items.into_iter().filter(|item| !first.overflow.contains(&item.id)).collect();
-    }
-    let bar = Toolbar::new(items);
-    let layout = widgets::toolbar_layout(ui, bounds, &bar);
-    (bar, layout)
+        .collect()
 }
 
 /// The thumbnail rows in content coordinates: (top, height) for each page, with the gap before.
@@ -933,7 +940,7 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
     }
     if let (Some(p), Some(sel)) = (placed, scene.selection) {
         let (x, y, w, h) = to_screen(&p, scene.view.quarters, sel);
-        s.stroke_rrect(x, y, w.max(1.0), h.max(1.0), 0.0, 1.5, ui::TINT);
+        s.stroke_rrect(x, y, w.max(1.0), h.max(1.0), 0.0, 1.5, ui::accent_now());
     }
     if let (Some(p), Some(at), true) = (placed, scene.loupe, cached) {
         if let Some(c) = cache.as_ref() {
@@ -989,7 +996,7 @@ fn draw_loupe(s: &mut Surface, ui: &Ui, p: &Placed, shown: &Image, at: (f32, f32
             }
         }
     }
-    s.stroke_rrect((cx - r) as f32, (cy - r) as f32, (2 * r) as f32, (2 * r) as f32, r as f32, 2.0, ui::TINT);
+    s.stroke_rrect((cx - r) as f32, (cy - r) as f32, (2 * r) as f32, (2 * r) as f32, r as f32, 2.0, ui::accent_now());
 }
 
 /// The contact sheet: every page's thumbnail in a grid, the shown page marked.
@@ -1096,7 +1103,16 @@ fn draw_color_panel(s: &mut Surface, ui: &Ui, lay: &Layout, sliders: &[Slider]) 
         let t = if slider.max > slider.min { (slider.value - slider.min) / (slider.max - slider.min) } else { 0.0 };
         let kx = tx as f32 + t.clamp(0.0, 1.0) * tw as f32;
         let radius = ui.pt(ui::CELL_RADIUS_PT);
-        s.fill_rrect(kx - radius, ty as f32 - radius, 2.0 * radius, 2.0 * radius, radius, ui::TINT);
+        s.fill_rrect(kx - radius, ty as f32 - radius, 2.0 * radius, 2.0 * radius, radius, ui::accent_now());
+    }
+}
+
+/// Fill and label colours of an Export As segment: the chosen one is filled with the user's accent, a disabled one is dim.
+fn segment_colours(enabled: bool, active: bool) -> (u32, u32) {
+    match (enabled, active) {
+        (false, _) => (ui::FIELD_BG.now(), ui::LABEL_2.now()),
+        (true, true) => (ui::accent_now(), ui::WHITE),
+        (true, false) => (ui::FIELD_BG.now(), ui::LABEL.now()),
     }
 }
 
@@ -1116,11 +1132,7 @@ fn draw_export_panel(s: &mut Surface, ui: &Ui, lay: &Layout, panel: &export_pane
         s.blit_colored(&img, x + pad, *y, ui::LABEL_2.now(), 255);
     }
     for b in &panel.buttons {
-        let (background, text) = match (b.enabled, b.active) {
-            (false, _) => (ui::FIELD_BG.now(), ui::LABEL_2.now()),
-            (true, true) => (ui::TINT, ui::WHITE),
-            (true, false) => (ui::FIELD_BG.now(), ui::LABEL.now()),
-        };
+        let (background, text) = segment_colours(b.enabled, b.active);
         s.fill_rrect(b.x as f32, b.y as f32, b.w as f32, b.h as f32, ui.pt(ui::SPACE_S), background);
         let img = ui.text(b.label, ui::MAC_FOOTNOTE_PT, Weight::Regular, text);
         let tx = b.x + (b.w - img.w as i32) / 2;
@@ -1406,6 +1418,23 @@ fn fill(s: &mut Surface, x: i32, y: i32, w: i32, h: i32, color: u32) {
 mod tests {
     use super::*;
 
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn the_chosen_export_segment_is_filled_with_the_accent_not_system_blue() {
+        use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let (chosen, green) = (segment_colours(true, true), ui::accent_now());
+        set_accent(keep);
+        assert_eq!(chosen, (green, ui::WHITE));
+        assert_ne!(chosen.0, ui::TINT);
+        assert_eq!(segment_colours(true, false).0, ui::FIELD_BG.now());
+        assert_eq!(segment_colours(false, true).0, ui::FIELD_BG.now(), "a disabled segment is never tinted");
+    }
+
     #[test]
     fn action_ids_round_trip_and_are_unique() {
         for (i, a) in ACTIONS.iter().enumerate() {
@@ -1413,6 +1442,16 @@ mod tests {
             assert_eq!(Action::from_id(a.id()), Some(*a));
         }
         assert_eq!(Action::from_id(999), None);
+    }
+
+    #[test]
+    fn toolbar_is_inactive_until_a_document_is_open() {
+        let closed = toolbar_items(false, Tool::Pan, Side::Pages);
+        assert!(!closed.is_empty());
+        assert!(closed.iter().all(|i| !i.enabled && !i.selected), "no control is live without a document");
+        let open = toolbar_items(true, Tool::Pan, Side::Pages);
+        assert!(open.iter().all(|i| i.enabled));
+        assert!(open.iter().any(|i| i.selected));
     }
 
     #[test]

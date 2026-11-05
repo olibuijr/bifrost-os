@@ -153,7 +153,7 @@ const TABLE: &[(&str, FamilyClass)] = &[
     ("hiragino maru gothic pro", CjkRounded), ("hiragino maru gothic pron", CjkRounded), ("ヒラギノ丸ゴ pron", CjkRounded),
     ("ヒラギノ丸ゴ pron w4", CjkRounded), ("ヒラギノ丸ゴ pro", CjkRounded), ("yuanti sc", CjkRounded), ("yuanti tc", CjkRounded),
     ("yuanti", CjkRounded), ("tsukushiamarugothic", CjkRounded), ("tsukushibmarugothic", CjkRounded),
-    // Apple reference faces with an installed open stand-in (noto-fonts, noto-fonts-cjk, ttf-liberation)
+    // Reference-vendor faces with an installed open stand-in (noto-fonts, noto-fonts-cjk, ttf-liberation)
     ("sf ns", GrotesqueSans), ("sf ns mono", Monospaced), ("sf ns rounded", Rounded), ("sf camera", GrotesqueSans),
     ("proxima nova", GrotesqueSans), ("produkt", GrotesqueSans), ("publico text", TransitionalSerif),
     ("publico headline", TransitionalSerif), ("stixgeneral", TransitionalSerif), ("stheiti light", CjkGothic),

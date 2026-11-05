@@ -10,6 +10,7 @@
 use crate::image_filter::FilterChain;
 use bifrost_render::gfx::Image;
 
+pub use bifrost_render::geometry_filters::{straighten_zoom, Placed};
 pub use bifrost_render::perspective::{homography, map_point, Homography, Point};
 pub use bifrost_render::render_destination::{
     render_into, Accumulator, ColorSpace, Destination, PixelFormat, Region,
@@ -19,6 +20,37 @@ pub use bifrost_render::render_destination::{
 /// bottom-left in the image) into an upright `out_w` by `out_h` image. `None` for a degenerate quad.
 pub fn perspective_correct(img: &Image, quad: [Point; 4], out_w: usize, out_h: usize) -> Option<Image> {
     bifrost_render::perspective::perspective_correct(img, quad, out_w, out_h)
+}
+
+/// Maps the corners of `img` (top-left, top-right, bottom-right, bottom-left) onto `corners`
+/// (`CIPerspectiveTransform`). The result covers the corners' bounding box; `Placed::x` and `y` say where
+/// its top-left pixel sits. `None` for degenerate or non-finite corners.
+pub fn perspective_transform(img: &Image, corners: [Point; 4]) -> Option<Placed> {
+    bifrost_render::geometry_filters::perspective_transform(img, corners)
+}
+
+/// As `perspective_transform`, but the output covers `extent` (`x`, `y`, `w`, `h`)
+/// (`CIPerspectiveTransformWithExtent`).
+pub fn perspective_transform_with_extent(img: &Image, corners: [Point; 4], extent: (i64, i64, usize, usize)) -> Option<Placed> {
+    bifrost_render::geometry_filters::perspective_transform_with_extent(img, corners, extent)
+}
+
+/// Resamples with the Lanczos-3 window to `scale` down and `scale * aspect_ratio` across
+/// (`CILanczosScaleTransform`; defaults 1 and 1).
+pub fn lanczos_scale_transform(img: &Image, scale: f32, aspect_ratio: f32) -> Option<Image> {
+    bifrost_render::geometry_filters::lanczos_scale_transform(img, scale, aspect_ratio)
+}
+
+/// Resamples with the cubic family `b`, `c` (`CIBicubicScaleTransform`; defaults scale 1, aspect ratio 1,
+/// b 0, c 0.75).
+pub fn bicubic_scale_transform(img: &Image, scale: f32, aspect_ratio: f32, b: f32, c: f32) -> Option<Image> {
+    bifrost_render::geometry_filters::bicubic_scale_transform(img, scale, aspect_ratio, b, c)
+}
+
+/// Turns `img` anticlockwise by `angle` radians and zooms so no corner shows through
+/// (`CIStraightenFilter`). The output has the input's size.
+pub fn straighten(img: &Image, angle: f32) -> Option<Image> {
+    bifrost_render::geometry_filters::straighten(img, angle)
 }
 
 /// Renders `img` into a fresh destination of the given size and format, with the whole image at the
@@ -118,6 +150,20 @@ mod tests {
     fn process_rejects_mismatched_frame() {
         let mut vf = VideoFilter::new(FilterChain::new());
         assert!(vf.process(&Image { w: 2, h: 2, px: vec![0; 3] }).is_none());
+    }
+
+    #[test]
+    fn geometry_filters_reach_apps() {
+        let img = opaque(4, 2, 0xff00_00ff);
+        let moved = perspective_transform(&img, [(1.0, 1.0), (5.0, 1.0), (5.0, 3.0), (1.0, 3.0)]).unwrap();
+        assert_eq!((moved.x, moved.y, moved.image.w, moved.image.h), (1, 1, 4, 2));
+        assert_eq!(moved.image, img);
+        let up = lanczos_scale_transform(&img, 2.0, 1.0).unwrap();
+        assert_eq!((up.w, up.h), (8, 4));
+        assert!(up.px.iter().all(|&p| p == 0xff00_00ff));
+        let cubic = bicubic_scale_transform(&img, 1.0, 0.5, 0.0, 0.75).unwrap();
+        assert_eq!((cubic.w, cubic.h), (2, 2));
+        assert_eq!(straighten(&img, 0.1).unwrap().px, img.px, "a flat picture stays flat");
     }
 
     #[test]

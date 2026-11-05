@@ -9,6 +9,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appCall, appMethods, listApps, rpc, RpcError, socketPath, socketDir } from "./client.ts";
 
+/** The socket of app `id` in data root `dir`, its data directory made first: `<dir>/<id>/control.sock`. */
+function sockIn(dir: string, id: string): string {
+	mkdirSync(join(dir, id), { recursive: true });
+	return join(dir, id, "control.sock");
+}
+
 type Handler = (req: { method: string; params: unknown }) => { result?: unknown; error?: { code: number; message: string } };
 
 // Like the Rust server: read up to the newline, answer once, close.
@@ -45,7 +51,7 @@ function appHandler({ method, params }: { method: string; params: unknown }) {
 function withDir(fn: (dir: string) => Promise<void>) {
 	return async () => {
 		const root = mkdtempSync(join(tmpdir(), "bifrost-ctl-"));
-		const dir = join(root, "bifrost", "apps");
+		const dir = join(root, "appdata");
 		mkdirSync(dir, { recursive: true });
 		try {
 			await fn(dir);
@@ -55,20 +61,26 @@ function withDir(fn: (dir: string) => Promise<void>) {
 	};
 }
 
-test("socketPath accepts reverse-DNS ids and rejects paths", () => {
-	assert.equal(socketPath("is.olibuijr.notes.desktop", "/d"), "/d/is.olibuijr.notes.desktop.sock");
+test("socketPath is control.sock in the app's data directory and rejects paths", () => {
+	const none = {} as NodeJS.ProcessEnv;
+	assert.equal(socketPath("is.olibuijr.notes.desktop", "/d", none), "/d/is.olibuijr.notes.desktop/control.sock");
 	for (const bad of ["../etc/passwd", "/tmp/x.sock", "a/b", "", ".hidden", "x".repeat(200)]) {
-		assert.throws(() => socketPath(bad, "/d"), RpcError, bad);
+		assert.throws(() => socketPath(bad, "/d", none), RpcError, bad);
 	}
 });
 
-test("socketDir honours XDG_RUNTIME_DIR and falls back to /run/user/<uid>", () => {
-	assert.equal(socketDir({ XDG_RUNTIME_DIR: "/r" } as NodeJS.ProcessEnv), "/r/bifrost/apps");
-	assert.equal(socketDir({} as NodeJS.ProcessEnv, 1234), "/run/user/1234/bifrost/apps");
+test("BIFROST_CONTROL names the socket explicitly", () => {
+	assert.equal(socketPath("is.olibuijr.notes.desktop", "/d", { BIFROST_CONTROL: "/x/c.sock" } as NodeJS.ProcessEnv), "/x/c.sock");
+	assert.throws(() => socketPath("../x", "/d", { BIFROST_CONTROL: "/x/c.sock" } as NodeJS.ProcessEnv), RpcError, "the id is still checked");
+});
+
+test("socketDir honours BIFROST_SHELL_DIR and falls back to /var/lib/springboard", () => {
+	assert.equal(socketDir({ BIFROST_SHELL_DIR: "/s" } as NodeJS.ProcessEnv), "/s/appdata");
+	assert.equal(socketDir({} as NodeJS.ProcessEnv), "/var/lib/springboard/appdata");
 });
 
 test("rpc round-trips a call and returns result", withDir(async (dir) => {
-	const sock = join(dir, "is.olibuijr.notes.desktop.sock");
+	const sock = sockIn(dir, "is.olibuijr.notes.desktop");
 	const server = await serve(sock, appHandler);
 	try {
 		const info = await rpc(sock, "app.info");
@@ -82,7 +94,7 @@ test("rpc round-trips a call and returns result", withDir(async (dir) => {
 }));
 
 test("error replies surface JSON-RPC code and message", withDir(async (dir) => {
-	const sock = join(dir, "a.sock");
+	const sock = sockIn(dir, "a");
 	const server = await serve(sock, appHandler);
 	try {
 		await assert.rejects(rpc(sock, "nope.nothing"), (e: unknown) => {
@@ -97,7 +109,7 @@ test("error replies surface JSON-RPC code and message", withDir(async (dir) => {
 }));
 
 test("appMethods lists what the app serves", withDir(async (dir) => {
-	const server = await serve(join(dir, "is.olibuijr.notes.desktop.sock"), appHandler);
+	const server = await serve(sockIn(dir, "is.olibuijr.notes.desktop"), appHandler);
 	try {
 		assert.deepEqual(await appMethods("is.olibuijr.notes.desktop", { dir }), ["app.info", "app.methods", "notes.list", "notes.get"]);
 	} finally {
@@ -106,10 +118,12 @@ test("appMethods lists what the app serves", withDir(async (dir) => {
 }));
 
 test("listApps reports answering apps and stale sockets", withDir(async (dir) => {
-	const server = await serve(join(dir, "is.olibuijr.notes.desktop.sock"), appHandler);
+	const server = await serve(sockIn(dir, "is.olibuijr.notes.desktop"), appHandler);
 	try {
-		// A plain file with a .sock name is not a live socket: connecting fails.
-		writeFileSync(join(dir, "is.olibuijr.dead.sock"), "");
+		// A plain file named control.sock is not a live socket: connecting fails.
+		writeFileSync(sockIn(dir, "is.olibuijr.dead"), "");
+		// A data directory without a socket is an app that is not serving: not listed.
+		mkdirSync(join(dir, "is.olibuijr.idle"));
 		writeFileSync(join(dir, "notes.txt"), "");
 		const apps = await listApps({ dir });
 		assert.deepEqual(apps.map((a) => a.id), ["is.olibuijr.dead", "is.olibuijr.notes.desktop"]);
@@ -122,7 +136,7 @@ test("listApps reports answering apps and stale sockets", withDir(async (dir) =>
 }));
 
 test("listApps is empty when the directory does not exist", async () => {
-	assert.deepEqual(await listApps({ dir: "/nonexistent/bifrost-test/apps" }), []);
+	assert.deepEqual(await listApps({ dir: "/nonexistent/bifrost-test/appdata" }), []);
 });
 
 test("an unreachable app gives a clear error", withDir(async (dir) => {
@@ -130,7 +144,7 @@ test("an unreachable app gives a clear error", withDir(async (dir) => {
 }));
 
 test("abort signal cancels a pending call", withDir(async (dir) => {
-	const sock = join(dir, "slow.sock");
+	const sock = sockIn(dir, "slow");
 	// Server that never replies.
 	const server = createServer(() => {});
 	await new Promise<void>((resolve) => server.listen(sock, () => resolve()));
@@ -146,32 +160,33 @@ test("abort signal cancels a pending call", withDir(async (dir) => {
 
 // ---- remote path: the real relay, run through a fake ssh that executes the command locally ----
 
-function withFakeSsh(fn: (runtime: string) => Promise<void>) {
+function withFakeSsh(fn: (appdata: string) => Promise<void>) {
 	return async () => {
 		const root = mkdtempSync(join(tmpdir(), "bifrost-remote-"));
-		const runtime = join(root, "runtime");
-		mkdirSync(join(runtime, "bifrost", "apps"), { recursive: true });
+		const shell = join(root, "shell");
+		mkdirSync(join(shell, "appdata"), { recursive: true });
 		// ssh <options...> <host> <command>: run the command with sh on this machine.
 		const fake = join(root, "fake-ssh");
 		writeFileSync(fake, '#!/bin/sh\nfor a; do last="$a"; done\nexec sh -c "$last"\n');
 		chmodSync(fake, 0o755);
-		const saved = { ssh: process.env.BIFROST_SSH, xdg: process.env.XDG_RUNTIME_DIR };
+		// the relay inherits the environment through the fake ssh, so it looks in <shell>/appdata
+		const saved = { ssh: process.env.BIFROST_SSH, shell: process.env.BIFROST_SHELL_DIR };
 		process.env.BIFROST_SSH = fake;
-		process.env.XDG_RUNTIME_DIR = runtime;
+		process.env.BIFROST_SHELL_DIR = shell;
 		try {
-			await fn(runtime);
+			await fn(join(shell, "appdata"));
 		} finally {
 			process.env.BIFROST_SSH = saved.ssh;
-			process.env.XDG_RUNTIME_DIR = saved.xdg;
+			process.env.BIFROST_SHELL_DIR = saved.shell;
 			if (saved.ssh === undefined) delete process.env.BIFROST_SSH;
-			if (saved.xdg === undefined) delete process.env.XDG_RUNTIME_DIR;
+			if (saved.shell === undefined) delete process.env.BIFROST_SHELL_DIR;
 			rmSync(root, { recursive: true, force: true });
 		}
 	};
 }
 
-test("remote: list and call go through the relay", withFakeSsh(async (runtime) => {
-	const server = await serve(join(runtime, "bifrost", "apps", "is.olibuijr.notes.desktop.sock"), appHandler);
+test("remote: list and call go through the relay", withFakeSsh(async (appdata) => {
+	const server = await serve(sockIn(appdata, "is.olibuijr.notes.desktop"), appHandler);
 	try {
 		const apps = await listApps({ host: "midget" });
 		assert.deepEqual(apps.map((a) => a.id), ["is.olibuijr.notes.desktop"]);
@@ -185,8 +200,8 @@ test("remote: list and call go through the relay", withFakeSsh(async (runtime) =
 	}
 }));
 
-test("remote: unknown app and app errors are reported by the relay", withFakeSsh(async (runtime) => {
-	const server = await serve(join(runtime, "bifrost", "apps", "is.olibuijr.notes.desktop.sock"), appHandler);
+test("remote: unknown app and app errors are reported by the relay", withFakeSsh(async (appdata) => {
+	const server = await serve(sockIn(appdata, "is.olibuijr.notes.desktop"), appHandler);
 	try {
 		await assert.rejects(appCall("is.olibuijr.gone", "app.info", {}, { host: "midget" }), /no control socket on this host/);
 		await assert.rejects(appCall("is.olibuijr.notes.desktop", "nope.nothing", {}, { host: "midget" }), (e: unknown) => {

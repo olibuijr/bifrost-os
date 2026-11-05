@@ -12,7 +12,7 @@
 //! `begin_accessing` drop unpinned tags, lowest preservation priority first and the least recently used first among
 //! equals.
 //!
-//! Mirrors `NSBundleResourceRequest` (`beginAccessingResources`, `conditionallyBeginAccessingResources`,
+//! Mirrors the reference on-demand resource request (`beginAccessingResources`, `conditionallyBeginAccessingResources`,
 //! `endAccessingResources`, `loadingPriority`, `progress`) and the preservation priority of a tag.
 //!
 //! Gaps: fetches run on the calling thread in the order the tags are listed (the loading priority is recorded for a

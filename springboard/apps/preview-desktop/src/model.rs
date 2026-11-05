@@ -478,10 +478,12 @@ impl History {
         Some(next)
     }
 
+    #[cfg(test)]
     pub fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }
 
+    #[cfg(test)]
     pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
     }

@@ -4,7 +4,7 @@
  "macos_since": "10.3",
  "status": "partial",
  "bifrost": "bifrost_app::view (springboard/sdk/src/view/animation.rs, controls.rs), bifrost_ui::anim (springboard/ui/src/anim.rs), render::motion (springboard/render/src/motion.rs); compositor springboard/src/gpu/layer.rs (not app-facing)",
- "summary": "Typed-property animation exists for views (frame, opacity, background) with transactions, completions, actions, springs and retargeting. A retained layer tree (layer model, delegates, constraint layout) backs layer-backed views, and app-facing views exist for shape, gradient, text, replicator, emitter, tiled and scroll layers. Key-path animations, 3D transforms, corner radius and shadows exist as models or view properties. The compositor underneath is not exposed to apps, and no layer class is a public CALayer counterpart yet.",
+ "summary": "Typed-property animation exists for views (frame, opacity, background) with transactions, completions, actions, springs (damping ratio or mass, stiffness and damping), media timing (delay, speed, repeat, autoreverse) and retargeting; key-path animations (basic, keyframe, spring, group) run through Window::add_animation. A retained layer tree backs layer-backed views, and app-facing views exist for shape, gradient, text, replicator, emitter (with sub-cells), tiled and scroll layers, plus TransitionView for content transitions and frame links for per-frame callbacks. The compositor underneath is not exposed to apps, and no layer class is a public CALayer counterpart yet.",
  "rea_evidence": "ev_7b05d4f65e159dad2ad9b422203d8d3c31411358dcb1aa5c37bd4b5f1825c75f",
  "features": [
   {
@@ -17,16 +17,16 @@
   {
    "feature": "Implicit animation via transactions (CATransaction, CAMediaTiming, timing functions)",
    "apple": "CATransaction, CAMediaTiming, CAMediaTimingFunction",
-   "bifrost": "springboard/sdk/src/view/animation.rs:232 (Window::animate, Timing), springboard/ui/src/anim.rs; wired: springboard/src/shell/window_fx.rs and springboard/render/src/motion.rs (window effects use the motion curves; dock bounce keeps one hop after the window maps)",
+   "bifrost": "springboard/sdk/src/view/animation.rs:232 (Window::animate, Timing), springboard/ui/src/anim.rs; wired: springboard/src/shell/window_fx.rs and springboard/render/src/motion.rs (window effects use the motion curves; dock bounce keeps one hop after the window maps); media timing: springboard/sdk/src/view/animation.rs (Timing::delay, speed, repeat_count, autoreverses over bifrost_ui::keypath_anim::Media)",
    "status": "partial",
-   "note": "Timing::DEFAULT is 0.25 s ease-in-out (default_timing_is_a_quarter_second_ease); any change to frame, opacity or background inside animate() is diffed and interpolated (headless_swatch_is_drawn_where_the_animation_has_moved_it in springboard/sdk/src/view/animation.rs); no beginTime, repeatCount, autoreverses or speed Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Timing::DEFAULT is 0.25 s ease-in-out (default_timing_is_a_quarter_second_ease); any change to frame, opacity or background inside animate() is diffed and interpolated (headless_swatch_is_drawn_where_the_animation_has_moved_it). 2026-10-24: Window::animate takes CAMediaTiming options through Timing: delay (beginTime; the old value shows until it starts), speed, repeat_count (infinite until the property is set again) and autoreverses, tested in animation.rs (a_delay_holds_the_old_value_then_plays, autoreverse_and_repeat_play_back_and_forth_then_rest_on_the_new_value, speed_scales_the_clock_and_an_endless_repeat_runs_until_replaced). timeOffset, repeatDuration and fill modes are on key animations (Window::add_animation). Remaining: verify on Midget."
   },
   {
    "feature": "Basic property animation (CABasicAnimation, CAPropertyAnimation)",
    "apple": "CAAnimation, CAPropertyAnimation, CABasicAnimation",
-   "bifrost": "springboard/sdk/src/view/animation.rs (Prop: X, Y, Width, Height, Opacity, Background), springboard/ui/src/anim.rs (Animation { from, to, start, duration, curve }), springboard/ui/src/keypath_anim.rs (basic animations: from, to, by, over named properties of an Animatable); wired: springboard/src/shell/window_fx.rs",
+   "bifrost": "springboard/sdk/src/view/animation.rs (Window::animate over Prop), springboard/sdk/src/view/keyanim.rs (Window::add_animation, presentation_value, model_value, set_value_animated), springboard/ui/src/keypath_anim.rs (basic from/to/by, keyframes, groups, additive and cumulative), springboard/ui/src/anim.rs; wired: springboard/src/shell/window_fx.rs",
    "status": "partial",
-   "note": "SDK animation is still typed view properties only; keypath_anim.rs models from, to and by over named properties but the SDK does not drive it yet. No additive animations. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+   "note": "Refreshed 2026-10-24: the SDK drives key-path animations through Window::add_animation (sdk view/keyanim.rs): basic from/to/by, keyframe, spring and group KeyAnimations with media timing, additive and cumulative modes, over the view keys frame, position, bounds, opacity and backgroundColor (and sub-paths), with presentation versus model values and delegates; tests in keyanim.rs. Remaining: the animatable keys are those of views only (no transform, cornerRadius or shadow keys on a view yet), one property must not be animated by both paths, verify on Midget."
   },
   {
    "feature": "Keyframe and group animations (CAKeyframeAnimation, CAAnimationGroup, CAValueFunction)",
@@ -38,23 +38,23 @@
   {
    "feature": "Spring animation (CASpringAnimation)",
    "apple": "CASpringAnimation",
-   "bifrost": "springboard/sdk/src/view/animation.rs (Timing::spring, Timing::spring_with_velocity), springboard/ui/src/anim.rs (Animation::velocity, Curve::Spring), springboard/render/src/motion.rs (Curve::Spring), springboard/ui/src/keypath_anim.rs (mass, stiffness, damping, initial velocity)",
+   "bifrost": "springboard/sdk/src/view/animation.rs (Timing::spring, spring_with_velocity, spring_physical, spring_perceptual, settling_duration), springboard/ui/src/anim.rs (Curve::Spring), springboard/ui/src/keypath_anim.rs (SpringSpec: mass, stiffness, damping, initial velocity, settling duration), springboard/render/src/motion.rs",
    "status": "partial",
-   "note": "Damping ratio, response and initial velocity reach apps through Timing::spring_with_velocity, and a retarget carries the interrupted spring's velocity (sdk animation.rs velocity_of); a headless test in animation.rs checks that a fling starts ahead of a spring from rest. Mass is not exposed to apps; it exists only in keypath_anim.rs. Refreshed 2026-10-17: initial velocity is covered by Timing::spring_with_velocity (sdk view/animation.rs); spring mass is still not exposed."
+   "note": "2026-10-24: mass reaches apps: Timing::spring_physical(mass, stiffness, damping, initial_velocity) with the CASpringAnimation defaults (SPRING_MASS 1, SPRING_STIFFNESS 100, SPRING_DAMPING 10) maps exactly to the damping-ratio spring (zeta = c / (2 sqrt(k m)), response 2 pi sqrt(m / k)); Timing::spring_perceptual(duration, bounce) and Timing::settling_duration() exist; key animations take SpringSpec with mass directly. Tests: a_physical_spring_matches_its_damping_ratio_and_response, a_heavier_spring_lags_behind_a_light_one, perceptual_springs_map_bounce_to_damping (sdk view/animation.rs). A retarget carries velocity. Remaining: verify on Midget."
   },
   {
    "feature": "Transaction completion and actions (CATransaction completion, actions, disableActions)",
    "apple": "CATransaction (setCompletionBlock, setDisableActions, setValue for action names)",
-   "bifrost": "springboard/sdk/src/view/animation.rs:74 (Transaction: completion, action), :243 (Window::disable_actions), :366 (take_animation_actions), springboard/ui/src/anim_transaction.rs (nestable transaction stack)",
+   "bifrost": "springboard/sdk/src/view/animation.rs:74 (Transaction: completion, action), :243 (Window::disable_actions), :366 (take_animation_actions), springboard/ui/src/anim_transaction.rs (nestable transaction stack); springboard/sdk/src/view/keyanim.rs (Window::begin_transaction, commit_transaction, set_transaction_completion, set_transaction_value)",
    "status": "partial",
-   "note": "completion receives finished (false when interrupted); actions are queued and sent down the responder chain only when finished. The model in anim_transaction.rs nests transactions; the SDK path does not yet nest by key path."
+   "note": "completion receives finished (false when interrupted); actions are queued and sent down the responder chain only when finished. Refreshed 2026-10-24: transactions nest in the SDK (Window::begin_transaction/commit_transaction over anim_transaction::TransactionStack, with duration, timing function, disable actions, completion block and named values; Window::animate opens the same scopes); tests in sdk view/keyanim.rs. Remaining: verify on Midget."
   },
   {
    "feature": "Frame clock (CACurrentMediaTime, CADisplayLink)",
    "apple": "CACurrentMediaTime(), CADisplayLink",
-   "bifrost": "springboard/sdk/src/view/animation.rs:376 (Window::next_wake, Window::tick), springboard/ui/src/frame_clock.rs (media_time, FrameLink, FrameLinks), springboard/sdk/src/display_link.rs (TimeStamp, DisplayLink)",
+   "bifrost": "springboard/ui/src/frame_clock.rs (media_time, FrameLink, FrameTick, FrameLinks), springboard/sdk/src/view/animation.rs (Window::add_frame_link, remove_frame_link, frame_link_mut, set_display_refresh, next_wake, tick), springboard/sdk/src/display_link.rs, springboard/ui/src/frame_rate.rs",
    "status": "partial",
-   "note": "the window ticks at 1/60 s while anything animates. The frame_clock model gives per-frame links with a FrameTick and wake intervals, and sdk display_link.rs has a refresh-period display link with missed-refresh accounting; neither is yet the app-facing CADisplayLink object. Verify on Midget. Refreshed 2026-10-17: covered by bifrost-app sdk/src/display_link.rs (DisplayLink::new with a refresh rate, refresh-period ticks) and bifrost-ui frame_rate.rs (FrameRateRange with minimum, maximum and preferred); tests display_link::tests, frame_rate::tests."
+   "note": "Refreshed 2026-10-24: apps attach display-link callbacks with Window::add_frame_link(FrameLink::new(|tick| ..)); a FrameLink has paused, preferred_frame_rate_range and invalidate, and each FrameTick gives timestamp, target_timestamp and duration (CADisplayLink); the window wakes at the fastest link's interval resolved against set_display_refresh. frame_clock::media_time is CACurrentMediaTime. Remaining: the window clock is driven by the app loop, not by the display's vsync; verify on Midget."
   },
   {
    "feature": "Preferred frame rate (CAFrameRateRange, ProMotion)",
@@ -66,16 +66,16 @@
   {
    "feature": "Transitions (CATransition)",
    "apple": "CATransition, CATransitionType, CATransitionSubtype",
-   "bifrost": "springboard/ui/src/transition.rs (Transition: fade, move in, push, reveal; shared model), springboard/src/shell/settings.rs (slide), springboard/src/files/nav.rs (placement), springboard/src/shell/mod.rs:3837 (zoom_alpha, Reduce Motion fade), springboard/ui/tests/parity_sdk-tests-18.rs",
+   "bifrost": "springboard/sdk/src/view/transition_view.rs (TransitionView: transition_to, transition_to_then, set_content), springboard/ui/src/transition.rs (Transition: fade, move in, push, reveal; shared model), springboard/src/shell/settings.rs, springboard/src/files/nav.rs, springboard/ui/tests/parity_sdk-tests-18.rs",
    "status": "partial",
-   "note": "Headless tests in parity_sdk-tests-18 cover the placement of fade, move in, push and reveal, reversed pops, progress and eases. The shell's Settings and Files stacks both use the shared model, and so does the Reduce Motion fade. Gap: no app-facing CATransition-style API in the SDK. Reduce Motion cross-fade exists (springboard/sdk/src/view/animation.rs:15)."
+   "note": "2026-10-24: app-facing CATransition: TransitionView swaps its content view with the shared model (fade, move in, push, reveal from four sides, eases, range, reversed, parallax shade); the new content is the model at once, the old one is drawn aside until the run ends, completion(finished) hears false when cut short, Reduce Motion plays Transition::reduced(). Headless tests in transition_view.rs draw a push midpoint and a reveal. Remaining: the private cube, flip, ripple and page-curl types are not built; the new content takes no pointer events during the run; verify on Midget."
   },
   {
    "feature": "Text layer (CATextLayer)",
    "apple": "CATextLayer, CATextLayerAlignmentMode, CATextLayerTruncationMode",
-   "bifrost": "springboard/sdk/src/view/layer_views.rs (TextLayerView), springboard/sdk/src/view/controls.rs:73 (Label), docs/bifrost-ui.md 'Attributed strings and rich text'",
+   "bifrost": "springboard/sdk/src/view/layer_views.rs (TextLayerView), springboard/sdk/src/layer_kinds/text.rs (TextContent: wrapped, TextAlign, Truncation, attributed source, layout_lines, truncate)",
    "status": "partial",
-   "note": "TextLayerView renders text content as a layer-kind view. No alignment or truncation mode exposed as CATextLayer properties; Label is the usual text view."
+   "note": "Refreshed 2026-10-24: TextContent has the CATextLayer properties: string or attributed string, font size and weight, foreground colour, wrapped, alignment mode (TextAlign) and truncation mode (Truncation) with a pure line breaker (layout_lines, truncate) and tests in layer_kinds/text.rs. Remaining: the font is the UI font (no per-layer font face), not checked on Midget."
   },
   {
    "feature": "Shape layer (CAShapeLayer, Bezier paths)",
@@ -96,7 +96,7 @@
    "apple": "CALayer cornerRadius, cornerCurve, shadowOpacity, mask, CALayerCornerCurve",
    "bifrost": "springboard/ui/src/layer_style.rs (CornerMask, corner radius, shadow footprint, content mask), springboard/sdk/src/view/style_props.rs (set_corner_radius, border, shadow, mask)",
    "status": "partial",
-   "note": "Corner radius capping, corner masks, the shadow footprint and repaint area and the content mask are tested headless in ui/tests/parity_sdk-tests-02.rs. The per-view setters in style_props.rs (set_corner_radius, set_masked_corners, set_border, set_shadow, set_mask) have no test yet; the shell's own rounded rects and shadows are still drawn by shell code, and nothing is verified on Midget."
+   "note": "Corner radius capping, corner masks, the shadow footprint and repaint area and the content mask are tested headless in ui/tests/parity_sdk-tests-02.rs; the per-view setters in style_props.rs store on the backing layer and select the styled path (setters_store_on_the_backing_layer). Remaining: the shell's own rounded rects and shadows are still drawn by shell code, no animatable cornerRadius/shadow keys, nothing verified on Midget."
   },
   {
    "feature": "Transforms (CATransform3D, CATransformLayer, transform matrices)",
@@ -108,16 +108,16 @@
   {
    "feature": "Scroll and tiled layers (CAScrollLayer, CATiledLayer)",
    "apple": "CAScrollLayer, CAScrollLayerScrollMode, CATiledLayer",
-   "bifrost": "springboard/sdk/src/view/layer_views.rs (ScrollLayerView, TiledView), springboard/sdk/src/view/scroll.rs:32 (clip view bounds origin)",
+   "bifrost": "springboard/sdk/src/view/layer_views.rs (ScrollLayerView, TiledView), springboard/sdk/src/layer_kinds/tiled.rs (TileGrid, TileSource, TileDrawing, TiledContent), springboard/sdk/src/view/scroll.rs",
    "status": "partial",
-   "note": "ScrollLayerView is two-axis per ScrollMode and TiledView takes a TileSource and grid. Tile content is produced synchronously by the source; there is no asynchronous tile-provider callback for apps."
+   "note": "ScrollLayerView is two-axis per ScrollMode. Refreshed 2026-10-24: TiledView draws tiles at several levels of detail with a tile cache and an optional worker thread that calls the TileSource off the UI thread (TileDrawing; the view ticks while tiles are pending), which is the asynchronous CATiledLayer drawing. Remaining: verify on Midget."
   },
   {
    "feature": "Replicator and particle layers (CAReplicatorLayer, CAEmitterLayer, CAEmitterCell)",
    "apple": "CAReplicatorLayer, CAEmitterLayer, CAEmitterCell",
-   "bifrost": "springboard/render/src/replicator.rs, springboard/render/src/emitter.rs, springboard/ui/src/emitter.rs, springboard/sdk/src/layer_kinds/replicator.rs, springboard/sdk/src/layer_kinds/emitter.rs, springboard/sdk/src/view/layer_views.rs (ReplicatorView, EmitterView)",
+   "bifrost": "springboard/render/src/replicator.rs, springboard/render/src/emitter.rs, springboard/ui/src/emitter.rs, springboard/sdk/src/layer_kinds/replicator.rs, springboard/sdk/src/layer_kinds/emitter.rs, springboard/sdk/src/view/layer_views.rs (ReplicatorView, EmitterView) (EmitterCell::begin_time, duration, emitter_cells)",
    "status": "partial",
-   "note": "ReplicatorView and EmitterView are app-facing layer-kind views. The emitter model is seeded and deterministic. No CAEmitterCell-level tuning beyond the model; verify on Midget."
+   "note": "ReplicatorView and EmitterView are app-facing layer-kind views; the emitter is seeded and deterministic. EmitterCell has rate, lifetime, velocity, emission direction and their ranges, acceleration, scale, spin and colour with ranges and speeds, shapes and render orders. 2026-10-24: begin_time, duration and sub-cells (emitter_cells: every particle emits its sub-cells at its position on its own clock) with tests in sdk layer_kinds/emitter.rs. Remaining: one level of sub-cells, sub-particles do not inherit the parent's velocity, no 3D (emissionLatitude, zAcceleration); verify on Midget."
   },
   {
    "feature": "Metal and OpenGL layers (CAMetalLayer, CAMetalDrawable, CAMetalDisplayLink, CARenderer)",
@@ -157,11 +157,10 @@
  ],
  "gaps": [
   "No CALayer class hierarchy for apps: sdk layers.rs exposes LayerTree and LayerBatch, but layers are otherwise reached through ViewBase::layer and the layer-kind views.",
-  "No keyframe, group or additive animations driven by the SDK window (keypath_anim.rs and keyframe models exist but are not the SDK's animate path).",
-  "No key-path animations through Window::animate (typed view properties only).",
-  "Gradient, text, replicator and emitter layers render through layer-kind views; per-property parity is not yet checked on Midget.",
+  "Key-path animations reach only the view keys (frame, position, bounds, opacity, backgroundColor); transform, cornerRadius and shadow are not animatable keys on views yet.",
+  "Gradient, text, replicator, emitter and transition views are not yet checked on Midget.",
   "No app-facing Metal layer or drawable (CAMetalLayer, CAMetalDrawable); the compositor is system-only.",
-  "Spring mass is not exposed through Timing::spring (initial velocity is, through Timing::spring_with_velocity).",
+  "Only the four public transition types; emitter sub-cells are one level deep.",
   "Layer filters beyond background blur are not modelled (per-shader inventory pending)."
  ]
 }

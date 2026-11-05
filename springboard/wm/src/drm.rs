@@ -289,6 +289,8 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
                 }
             }
             InputEvent::DeviceRemoved { device } => {
+                // its held keys are released on the seat keyboard (input.rs, `device_key`)
+                state.keyboard_device_removed(&smithay::backend::input::Device::id(&device));
                 if device.has_capability(smithay::reexports::input::DeviceCapability::Touch) {
                     state.touch_device_removed();
                 }
@@ -677,6 +679,9 @@ impl Drm {
         self.step_white_point(state);
         // Reduce Transparency and Increase Contrast from the shell's file: a change repaints every material
         if state.display.poll(std::time::Instant::now()) {
+            // ...and the Light/Dark scheme: every window's sidebar and title-bar plates follow a switch at once
+            let o = state.display.now;
+            crate::display_options::apply_scheme(&mut state.material_dark, &o);
             state.dirty = true;
         }
         if !should_render(self.paused, self.pending) {
@@ -730,12 +735,13 @@ impl Drm {
     }
 
     /// A window capture (`SessionHooks::capture_window`): one window alone at `spec.size`, RGBA over a transparent
-    /// ground. The Vulkan scanout has no GLES renderer to draw it with, so the request fails there (`unsupported`).
+    /// ground. The Vulkan scanout draws it with the render server from the window's current buffers
+    /// (`render_server::window_shot`); it fails (`unsupported`) only for a window with no dma-buf to sample.
     fn capture_window(&mut self, state: &WmState, spec: &WindowCaptureSpec) -> Option<Vec<u8>> {
-        if self.vulkan.is_some() {
-            return None;
-        }
         let window = state.window_any(spec.id)?;
+        if let Some(v) = self.vulkan.as_mut() {
+            return v.capture_window(state, &window, spec.size);
+        }
         match crate::capture::capture_window(&mut self.renderer, &self.glass, state, &window, spec.size) {
             Ok(px) => Some(px),
             Err(e) => {

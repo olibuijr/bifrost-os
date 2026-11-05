@@ -19,11 +19,14 @@ pub mod quicksearch;
 pub mod peek;
 pub mod axtext;
 pub mod axrotor;
+pub mod axaction;
 pub mod guided;
 pub mod touch;
 pub mod pointer;
+pub use bifrost_ui::pan::TouchSource;
 pub use bifrost_ui::touch::{Raw as RawTouch, Sample as TouchSample, Touch as TouchPoint, TouchEvent, TouchPhase, TouchTracker, TouchType};
 pub use bifrost_ui::ax::{AxCustomRotor, AxMeta, AxText, Priority as AnnouncePriority};
+pub use bifrost_ui::ax_action::AxActionSet;
 pub use guided::GuidedRestriction;
 pub mod workspace;
 pub use workspace::{WorkspaceEventKind, WorkspaceOp, WorkspaceStatus};
@@ -47,6 +50,22 @@ pub enum TouchKind {
     Move = 1,
     Up = 2,
     Cancel = 3,
+}
+
+/// The wire byte of a touch's source (after `t_ms`, before the modifiers).
+fn source_byte(source: TouchSource) -> u8 {
+    match source {
+        TouchSource::Pointer => 0,
+        TouchSource::Finger => 1,
+    }
+}
+
+fn source_from_byte(b: u8) -> Result<TouchSource, DecodeError> {
+    match b {
+        0 => Ok(TouchSource::Pointer),
+        1 => Ok(TouchSource::Finger),
+        _ => Err(DecodeError::BadValue),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -119,26 +138,26 @@ pub const CHORD_SHIFT: u32 = 2;
 pub const CHORD_ALT: u32 = 4;
 pub const CHORD_META: u32 = 8;
 
-/// The modifier keys held when a pointer press or touch happened (`NSEvent.modifierFlags`). The shell sets them from its
+/// The modifier keys held when a pointer press or touch happened (the reference event modifier flags). The shell sets them from its
 /// live keyboard state on every `ToApp::Touch` and `ToApp::WindowTouch`, so a click can be a Shift-click (extend a
-/// selection) or a Cmd-click (toggle one item). The bits are the reference's `NSEventModifierFlags` raw values; a bit
+/// selection) or a Cmd-click (toggle one item). The bits are the reference platform's modifier-flag raw values; a bit
 /// this crate does not name is dropped on decode.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ModifierFlags(u32);
 
 impl ModifierFlags {
     pub const EMPTY: ModifierFlags = ModifierFlags(0);
-    /// `NSEventModifierFlagCapsLock`: Caps Lock is on.
+    /// Caps Lock is on.
     pub const CAPS_LOCK: ModifierFlags = ModifierFlags(1 << 16);
-    /// `NSEventModifierFlagShift`
+    /// Shift.
     pub const SHIFT: ModifierFlags = ModifierFlags(1 << 17);
-    /// `NSEventModifierFlagControl`
+    /// Control.
     pub const CONTROL: ModifierFlags = ModifierFlags(1 << 18);
-    /// `NSEventModifierFlagOption` (Alt)
+    /// Option (Alt).
     pub const OPTION: ModifierFlags = ModifierFlags(1 << 19);
-    /// `NSEventModifierFlagCommand` (Meta, Super)
+    /// Command (Meta, Super).
     pub const COMMAND: ModifierFlags = ModifierFlags(1 << 20);
-    /// `NSEventModifierFlagDeviceIndependentFlagsMask` restricted to the flags above.
+    /// The device-independent flags mask, restricted to the flags above.
     pub const ALL: ModifierFlags = ModifierFlags(0x1f << 16);
 
     /// The wire value.
@@ -513,6 +532,51 @@ pub struct TextState {
     pub marked: Option<(u32, u32)>,
 }
 
+impl TextState {
+    /// The state of a field holding `text`, with the caret at byte `cursor` and the selection's other end at byte
+    /// `anchor`: a window of at most `MAX_SURROUNDING` bytes around the caret (cut at character boundaries), its
+    /// offsets moved into the window. An anchor outside the window is clamped to its edge; an offset that splits a
+    /// character or is past the end is moved back to the character it is in.
+    pub fn around(text: &str, cursor: usize, anchor: usize) -> TextState {
+        let floor = |mut b: usize| {
+            b = b.min(text.len());
+            while !text.is_char_boundary(b) {
+                b -= 1;
+            }
+            b
+        };
+        let (cursor, anchor) = (floor(cursor), floor(anchor));
+        let mut start = cursor.saturating_sub(MAX_SURROUNDING / 2);
+        while !text.is_char_boundary(start) {
+            start += 1;
+        }
+        let end = floor((start + MAX_SURROUNDING).min(text.len()));
+        let rel = |b: usize| (b.clamp(start, end) - start) as u32;
+        TextState { text: text[start..end].to_string(), cursor: rel(cursor), anchor: rel(anchor), marked: None }
+    }
+
+    /// The selected text: the bytes between `anchor` and `cursor`. Empty when nothing is selected, or when an offset
+    /// is out of range or splits a character.
+    pub fn selected_text(&self) -> &str {
+        let (a, b) = (self.anchor.min(self.cursor) as usize, self.anchor.max(self.cursor) as usize);
+        self.text.get(a..b).unwrap_or("")
+    }
+
+    /// The word the caret is in or touches (letters and digits, with apostrophes and hyphens inside the word), as
+    /// Look Up takes it when nothing is selected. Empty when the caret touches no word, or `cursor` is out of range
+    /// or splits a character.
+    pub fn word_at_cursor(&self) -> &str {
+        let c = self.cursor as usize;
+        if !self.text.is_char_boundary(c) {
+            return "";
+        }
+        let inner = |ch: char| ch.is_alphanumeric() || matches!(ch, '\'' | '\u{2019}' | '-' | '_');
+        let start = self.text[..c].char_indices().rev().take_while(|&(_, ch)| inner(ch)).last().map_or(c, |(i, _)| i);
+        let end = self.text[c..].char_indices().find(|&(_, ch)| !inner(ch)).map_or(self.text.len(), |(i, _)| c + i);
+        self.text[start..end].trim_matches(|ch: char| !ch.is_alphanumeric())
+    }
+}
+
 pub const MAX_SURROUNDING: usize = 4000;
 
 pub const MAX_DOC_FILTERS: usize = 16;
@@ -546,6 +610,14 @@ impl WindowLevel {
 pub mod window_flags {
     /// The app wants `ToApp::WindowTitleDoubleClick` instead of the shell's zoom when the title bar is double-clicked.
     pub const TITLE_DOUBLE_CLICK: u32 = 1;
+    /// A window opened without a position is cascaded from the app's other windows, as the reference toolkit's
+    /// cascade call places a new document window: the first one beside (or over the trailing side of) the
+    /// main window, each later one a title bar's height down and right of the one opened before it.
+    pub const CASCADE: u32 = 2;
+    /// The window's content runs under the title bar (the reference full-size-content window style), as the app's main window
+    /// does with `window = "full-size"`: the shell draws only the traffic lights over it and no title row, because the
+    /// app draws its own unified title and toolbar row (a second document window of an editor).
+    pub const FULL_SIZE: u32 = 4;
 }
 
 /// Shell -> app.
@@ -553,7 +625,7 @@ pub mod window_flags {
 pub enum ToApp {
     Configure(Configure),
     /// A pointer press, drag or release (or a finger), with the modifier keys held at the time (`ModifierFlags`).
-    Touch { kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32, mods: ModifierFlags },
+    Touch { kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32, source: TouchSource, mods: ModifierFlags },
     /// Every touch of one frame, with phases, previous locations, tap counts and optional force and radius (see the
     /// `touch` module). The shell sends it ahead of the matching `Touch`. Tag 0x1f0.
     Touches(TouchEvent),
@@ -572,7 +644,7 @@ pub enum ToApp {
     /// Several windows: the shell resized window `id` to `w` x `h` points.
     WindowConfigure { id: u32, w: f32, h: f32 },
     /// Several windows: a touch on window `id`, with the same fields as `Touch` (`touch` is the touch id).
-    WindowTouch { id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32, mods: ModifierFlags },
+    WindowTouch { id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32, source: TouchSource, mods: ModifierFlags },
     /// Several windows: buffer `buf` of window `id`'s set `generation` is free again (as `Release` for the main window).
     WindowRelease { id: u32, buf: u32, generation: u32 },
     /// Several windows: the person dragged window `window` to (x, y) points relative to the visible desktop area (the
@@ -586,6 +658,28 @@ pub enum ToApp {
     WindowFocus { window: u32, focused: bool },
     /// Several windows: input for the key window `window` (see `WindowInput`). Window 0 never arrives here. Tag 0x250.
     WindowInput { window: u32, input: WindowInput },
+    /// `applicationShouldHandleReopen:hasVisibleWindows:`: the person activated the app (Dock, the app switcher,
+    /// Search, an open) while its main window was closed, and the shell has put the main window back. A document app
+    /// that closed its last document shows a new one. An app built before this message ignores it. Tag 0x254.
+    Reopen,
+    /// The person pressed the close control of the main window (the red light, Cmd+W) and the app announced
+    /// `ToShell::CloseRequests { on: true }`: the shell does not quit it. The app closes what the window shows (a document
+    /// app raises its save sheet for an edited document, `DocumentController::close`) and orders the window out itself
+    /// (`close_main_window`), or keeps it. An app that did not opt in never gets it; its close control acts as before.
+    /// `windowShouldClose:`. Tag 0x255.
+    CloseRequest,
+    /// The person pressed the close control (the red light) of one of the app's extra windows `id` (not the main one) and
+    /// the app announced `ToShell::CloseRequests { on: true }`: the shell leaves the window up, as Cmd+W in it does. The app
+    /// closes the document the window shows (a save sheet for an edited one) and closes the window itself
+    /// (`Ctx::close_window`), or keeps it. Without the opt-in the shell closes the window at once (`WindowClosed`).
+    /// Tag 0x257.
+    WindowCloseRequest { id: u32 },
+    /// The person quits the app (Cmd+Q, the application menu's or the Dock's Quit) and the app announced
+    /// `ToShell::CloseRequests { on: true }`: the shell does not send `Quit` but asks first
+    /// (`applicationShouldTerminate`). The app quits at once, or raises its questions (a save sheet for every edited
+    /// document) and quits itself when they are answered, or stays. Logout, shutdown and Force Quit still use `Quit` and
+    /// are never vetoed. Tag 0x259.
+    QuitRequest,
     Resume,
     Suspend,
     Quit,
@@ -689,6 +783,10 @@ pub enum ToApp {
     ServiceReply { request: u32, ok: bool, body: String },
     /// An event a system service pushes to the app (JSON `body`). Tag 0x1d3.
     ServiceEvent { service: String, event: String, body: String },
+    /// The shell asks for the selected text of the app's focused view (the reference services requestor
+    /// write-selection call), for Look Up and the Services menu. Answered with `ToShell::SelectionReply`
+    /// carrying the same `request`. Tag 0x1d4.
+    SelectionRequest { request: u32 },
     /// A dragging session moves over the app's window (`NativeDraggingDestination`); `x`, `y` are window-local points.
     /// `items` are sent with `Entered` and `Perform`. For `Perform` the files of the items arrive first as `DocBatch`
     /// and `DocGranted` with `request == session`. Answer `Entered` and `Updated` with `ToShell::DragReply`.
@@ -858,6 +956,8 @@ pub enum AxAction {
     Increment,
     /// `accessibilityPerformDecrement`: one step down.
     Decrement,
+    /// Runs the element's custom action with this name (`accessibilityCustomActions`, `ToShell::AxActions`).
+    Custom(String),
 }
 
 /// App -> shell.
@@ -873,7 +973,9 @@ pub enum ToShell {
     /// `position` (optional, points relative to the visible desktop area) asks where the window goes; the shell clamps it to
     /// the screen. `flags` is a `window_flags` set. Tag 0x240.
     WindowOpen { id: u32, title: String, w: f32, h: f32, position: Option<(f32, f32)>, flags: u32 },
-    /// Several windows: close window `id`. The shell drops its frames.
+    /// Several windows: close window `id`. The shell drops its frames. Id 0 orders the main window out
+    /// (ordering the window out, a document app's last document closed): the desk drops it and the app keeps running with no
+    /// window until it is activated again (`ToApp::Reopen`) or asks for it back with `WindowOpen` id 0.
     WindowClose { id: u32 },
     /// Several windows: the window's title.
     WindowTitle { id: u32, title: String },
@@ -913,14 +1015,14 @@ pub enum ToShell {
     ContextMenu {x:f32,y:f32,items:Vec<ContextItem>},
     /// The app's dock badge (`NativeDockTile.badgeLabel`): a short label such as an unread count; empty clears it.
     SetBadge { label: String },
-    /// Enter (`on`) or leave full screen for the app's window (`NSWindow.toggleFullScreen`). Answered by `ToApp::FullScreen`.
+    /// Enter (`on`) or leave full screen for the app's window (the reference window's full-screen toggle). Answered by `ToApp::FullScreen`.
     SetFullScreen { on: bool },
-    /// The content size, in points, the app wants for its main window (`NSWindow.setContentSize`). The shell keeps the
+    /// The content size, in points, the app wants for its main window (the reference window's set-content-size call). The shell keeps the
     /// window's top-left corner, holds the size to the window's limits and the work area, and animates the change as it
     /// animates a zoom; the app hears the new size as an ordinary configure. A zoomed or full-screen window keeps its frame
     /// and takes the size as the one it goes back to. Tag 0x252.
     SetContentSize { w: f32, h: f32 },
-    /// The main window's content size limits in points (`NSWindow.contentMinSize`, `contentMaxSize`); `None` falls back
+    /// The main window's content size limits in points (the reference window's content minimum and maximum sizes); `None` falls back
     /// to the manifest's `min_size` / `max_size`. They hold for as long as the app runs. Tag 0x253.
     SetContentLimits { min: Option<(f32, f32)>, max: Option<(f32, f32)> },
     /// Sent only by the keyboard system app.
@@ -977,11 +1079,15 @@ pub enum ToShell {
     /// `ProcessInfo.enableSuddenTermination` / `disableSuddenTermination`: whether the shell may SIGKILL the app
     /// at once on quit, logout or shutdown, with no Quit round trip. Sent only when the state flips. 0x160.
     SuddenTermination { enabled: bool },
+    /// The app wants `ToApp::CloseRequest` when the main window's close control is used, instead of the shell closing the
+    /// window (and quitting a direct app) at once: a document app with unsaved changes asks "Save changes?" first. Sent
+    /// once, at start, by an app that overrides `App::handles_close_request`. Tag 0x256.
+    CloseRequests { on: bool },
     /// `ProcessInfo.beginActivity` / `endActivity`: the union of the `ActivityOptions` bits of the app's live
     /// activities (0 = none). While `USER_INITIATED` or `LATENCY_CRITICAL` is set the shell does not suspend the app
     /// when it leaves the foreground. Sent only when the union changes. 0x161.
     Activity { options: u32 },
-    /// `NSWindow.level` for the app's window: `Floating` keeps it above the normal windows (the Calculator's
+    /// The reference window level for the app's window: `Floating` keeps it above the normal windows (the Calculator's
     /// Always on Top, Stickies' Float on Top). Sent when it changes; the shell keeps it while the app lives. Tag 0x165.
     WindowLevel(WindowLevel),
     /// The level of one of the app's extra windows (`WindowOpen`'s id). Id 0 is the main window and is refused by the
@@ -990,6 +1096,10 @@ pub enum ToShell {
     /// Several windows: move window `window` to (x, y) points relative to the visible desktop area. The shell clamps it
     /// to the screen. Tag 0x246.
     WindowMove { window: u32, x: f32, y: f32 },
+    /// Several windows: bring window `window` (0 is the main window) to the front and give it key focus
+    /// (the reference window's make-key-and-order-front call), as the Window menu does. A document app opening a document that is already open
+    /// raises its window. An unknown window is ignored. Tag 0x258.
+    WindowRaise { window: u32 },
     /// Several windows: collapse window `window` to its title bar (`collapsed`) or expand it back. Tag 0x247.
     WindowCollapse { window: u32, collapsed: bool },
     /// `setNotificationCategories`: replaces the app's categories. Needs the `notifications` permission.
@@ -1016,6 +1126,9 @@ pub enum ToShell {
     Announce { text: String, priority: AnnouncePriority },
     /// Custom rotors the screen reader steps through beside the standard ones (`bifrost_ui::ax_rotor`). Tag 0x213.
     AxRotors(Vec<AxCustomRotor>),
+    /// The named custom actions of the app's elements (`accessibilityCustomActions`, `bifrost_ui::ax_action`), sent when they
+    /// change; an empty list clears them. Tag 0x215.
+    AxActions(Vec<AxActionSet>),
     /// The accessibility notifications an app posted for its elements (`bifrost_ui::ax::post`), in posting order; the
     /// shell turns each into an AT-SPI signal on the element's object. Tag 0x214.
     AxNotify(Vec<(u64, bifrost_ui::ax::AxNotification)>),
@@ -1054,6 +1167,9 @@ pub enum ToShell {
     /// Calls `method` on the shell's named system service with JSON `body` (`springboard/src/shell/services/`);
     /// answered with `ToApp::ServiceReply` carrying the same `request`. Tag 0x1d2.
     ServiceCall { request: u32, service: String, method: String, body: String },
+    /// The answer to `ToApp::SelectionRequest` `request`: the selected text of the focused view, empty when nothing is
+    /// selected. At most `MAX_SURROUNDING` characters. Tag 0x1d4.
+    SelectionReply { request: u32, text: String },
     /// `beginDraggingSession`: the shell tracks the pointer until it is released. `session` should have bit 31 set.
     DragBegin { session: u32, allowed: u8, items: Vec<DragItem>, preview: DragPreview },
     /// `registerForDraggedTypes`: the UTTypes the window accepts (conformance counts); empty accepts none.
@@ -1156,7 +1272,7 @@ fn encode_app_menu(m: &AppMenu, budget: usize) -> (Vec<u8>, usize) {
         u32_(&mut b, i.id);
         str_(&mut b, &title);
         str_(&mut b, &key);
-        b.push(i.enabled as u8 | (i.checked as u8) << 1 | (i.separator as u8) << 2 | (i.submenu as u8) << 3 | (i.prints as u8) << 4);
+        b.push(i.enabled as u8 | (i.checked as u8) << 1 | (i.separator as u8) << 2 | (i.submenu as u8) << 3 | (i.prints as u8) << 4 | (i.no_print as u8) << 5);
         b.push(i.depth.min(MAX_APP_MENU_DEPTH));
         n += 1;
     }
@@ -1226,17 +1342,26 @@ pub struct AppMenuItem {
     /// The shell then shows this item in place of its own File > Print… (the window snapshot) instead of next to it,
     /// and Cmd+P chooses it. See `AppMenuItem::print`. Bit 4 of the item flags on the wire.
     pub prints: bool,
+    /// The app cannot print: the shell leaves its File > Print… (and Cmd+P) out. A marker item with no row of its own
+    /// (`AppMenuItem::no_print`), declared in any menu. Bit 5 of the item flags on the wire.
+    pub no_print: bool,
 }
 
 impl AppMenuItem {
     pub fn new(id: u32, title: &str) -> Self {
-        AppMenuItem { id, title: title.into(), key: String::new(), enabled: true, checked: false, separator: false, submenu: false, depth: 0, prints: false }
+        AppMenuItem { id, title: title.into(), key: String::new(), enabled: true, checked: false, separator: false, submenu: false, depth: 0, prints: false, no_print: false }
     }
     /// The app's own File > Print… (`printDocument:`): titled "Print…" with Cmd+P, it replaces the shell's Print… row
     /// (which prints a snapshot of the window) while the app is in front. Put it in the app's "File" menu; it is shown
     /// where the shell's row was, at the end of File, whichever menu it is declared in.
     pub fn print(id: u32) -> Self {
         AppMenuItem { prints: true, ..AppMenuItem::new(id, "Print\u{2026}").key("cmd+p") }
+    }
+    /// Declares that the app has nothing to print (an archiver, a disk tool): the shell then drops its own File > Print…
+    /// row, which would print a snapshot of the window, and its Cmd+P. The item is a marker: it shows no row. An app that
+    /// declares its own `print` item keeps that one.
+    pub fn no_print() -> Self {
+        AppMenuItem { no_print: true, separator: true, enabled: false, ..AppMenuItem::new(0, "") }
     }
     pub fn separator() -> Self {
         AppMenuItem { separator: true, enabled: false, ..AppMenuItem::new(0, "") }
@@ -1305,6 +1430,18 @@ mod tag {
     pub const WINDOW_FOCUS: u32 = 0x24f;
     /// Shell -> app: input for the key window (`ToApp::WindowInput`).
     pub const WINDOW_INPUT: u32 = 0x250;
+    /// Shell -> app: the app was activated with its main window closed (`ToApp::Reopen`).
+    pub const REOPEN: u32 = 0x254;
+    /// Shell -> app: the main window's close control was used (`ToApp::CloseRequest`).
+    pub const CLOSE_REQUEST: u32 = 0x255;
+    /// App -> shell: the app answers the main window's close control itself (`ToShell::CloseRequests`).
+    pub const CLOSE_REQUESTS: u32 = 0x256;
+    /// Shell -> app: the close control of an extra window was used (`ToApp::WindowCloseRequest`).
+    pub const WINDOW_CLOSE_REQUEST: u32 = 0x257;
+    /// App -> shell: bring one of the app's windows to the front (`ToShell::WindowRaise`).
+    pub const WINDOW_RAISE: u32 = 0x258;
+    /// Shell -> app: the person quits the app and it may veto (`ToApp::QuitRequest`).
+    pub const QUIT_REQUEST: u32 = 0x259;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -1719,14 +1856,15 @@ impl ToApp {
             ToApp::ContextAction(id)=>{u32_(&mut b,tag::CONTEXT_ACTION);u32_(&mut b,*id);},
             ToApp::MenuAction(id)=>{u32_(&mut b,tag::MENU_ACTION);u32_(&mut b,*id);},
             ToApp::QuickAction{kind,user_info}=>{u32_(&mut b,tag::QUICK_ACTION);str_(&mut b,kind);u32_(&mut b,user_info.len() as u32);for (k,v) in user_info {str_(&mut b,k);str_(&mut b,v);}},
-            ToApp::Touch { kind, id, x, y, t_ms, mods } => {
+            ToApp::Touch { kind, id, x, y, t_ms, source, mods } => {
                 u32_(&mut b, tag::TOUCH);
                 b.push(*kind as u8);
                 u32_(&mut b, *id);
                 f32_(&mut b, *x);
                 f32_(&mut b, *y);
                 u32_(&mut b, *t_ms);
-                // the modifiers ride at the end: a decoder built before them stops at `t_ms`
+                b.push(source_byte(*source));
+                // the modifiers ride at the end: a decoder built before them stops after the source
                 u32_(&mut b, mods.bits());
             }
             ToApp::Key(k) => {
@@ -1771,7 +1909,7 @@ impl ToApp {
                 f32_(&mut b, *w);
                 f32_(&mut b, *h);
             }
-            ToApp::WindowTouch { id, touch, kind, x, y, t_ms, mods } => {
+            ToApp::WindowTouch { id, touch, kind, x, y, t_ms, source, mods } => {
                 u32_(&mut b, tag::WINDOW_TOUCH);
                 u32_(&mut b, *id);
                 u32_(&mut b, *touch);
@@ -1784,6 +1922,7 @@ impl ToApp {
                 f32_(&mut b, *x);
                 f32_(&mut b, *y);
                 u32_(&mut b, *t_ms);
+                b.push(source_byte(*source));
                 u32_(&mut b, mods.bits());
             }
             ToApp::WindowRelease { id, buf, generation } => {
@@ -1802,6 +1941,13 @@ impl ToApp {
                 u32_(&mut b, *window);
                 window_input_encode(&mut b, input);
             }
+            ToApp::Reopen => u32_(&mut b, tag::REOPEN),
+            ToApp::CloseRequest => u32_(&mut b, tag::CLOSE_REQUEST),
+            ToApp::QuitRequest => u32_(&mut b, tag::QUIT_REQUEST),
+            ToApp::WindowCloseRequest { id } => {
+                u32_(&mut b, tag::WINDOW_CLOSE_REQUEST);
+                u32_(&mut b, *id);
+            }
             ToApp::Resume => u32_(&mut b, tag::RESUME),
             ToApp::Suspend => u32_(&mut b, tag::SUSPEND),
             ToApp::AxSet { id, action } => {
@@ -1812,6 +1958,7 @@ impl ToApp {
                     AxAction::Increment => b.push(3),
                     AxAction::Decrement => b.push(4),
                     AxAction::SetValue(v) => {b.push(1);str_(&mut b, &short(v));}
+                    AxAction::Custom(name) => {b.push(5);str_(&mut b, axtext::cut(name, bifrost_ui::ax_action::MAX_ACTION_NAME));}
                 }
             }
             ToApp::SetMarkedText { text, sel_start, sel_len } => {
@@ -1908,7 +2055,7 @@ impl ToApp {
             m @ ToApp::Touches(_) => touch::encode_app(m, &mut b),
             m @ ToApp::Pointer(_) => pointer::encode_app(m, &mut b),
             m @ (ToApp::WorkspaceReply { .. } | ToApp::WorkspaceEvent { .. }) => workspace::encode_app(m, &mut b),
-            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::NotificationAuthorized { .. } | ToApp::NotificationWillPresent { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
+            m @ (ToApp::NotificationAction { .. } | ToApp::NotificationStatus { .. } | ToApp::NotificationList { .. } | ToApp::NotificationSettings { .. } | ToApp::NotificationAuthorized { .. } | ToApp::NotificationWillPresent { .. } | ToApp::ShareDone { .. } | ToApp::DistNotify { .. } | ToApp::ServiceReply { .. } | ToApp::ServiceEvent { .. } | ToApp::SelectionRequest { .. } | ToApp::DragDest { .. } | ToApp::DragEnded { .. }) => rich::encode_app(m, &mut b),
         }
         b
     }
@@ -1935,7 +2082,8 @@ impl ToApp {
                     _ => return Err(DecodeError::BadValue),
                 };
                 let (id, x, y, t_ms) = (r.u32()?, r.f32()?, r.f32()?, r.u32()?);
-                ToApp::Touch { kind, id, x, y, t_ms, mods: r.modifiers()? }
+                let source = source_from_byte(r.u8()?)?;
+                ToApp::Touch { kind, id, x, y, t_ms, source, mods: r.modifiers()? }
             }
             tag::KEY => match r.u8()? {
                 0 => ToApp::Key(KeyInput::Text(r.str()?)),
@@ -1976,7 +2124,8 @@ impl ToApp {
                     return Err(DecodeError::BadValue);
                 }
                 let t_ms = r.u32()?;
-                ToApp::WindowTouch { id, touch, kind, x, y, t_ms, mods: r.modifiers()? }
+                let source = source_from_byte(r.u8()?)?;
+                ToApp::WindowTouch { id, touch, kind, x, y, t_ms, source, mods: r.modifiers()? }
             }
             tag::WINDOW_RELEASE => ToApp::WindowRelease { id: r.u32()?, buf: r.u32()?, generation: r.u32()? },
             tag::WINDOW_FOCUS => {
@@ -1992,6 +2141,10 @@ impl ToApp {
                 let window = r.u32()?;
                 ToApp::WindowInput { window, input: window_input_decode(&mut r)? }
             }
+            tag::REOPEN => ToApp::Reopen,
+            tag::CLOSE_REQUEST => ToApp::CloseRequest,
+            tag::QUIT_REQUEST => ToApp::QuitRequest,
+            tag::WINDOW_CLOSE_REQUEST => ToApp::WindowCloseRequest { id: r.u32()? },
             tag::RESUME => ToApp::Resume,
             tag::SUSPEND => ToApp::Suspend,
             tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
@@ -2007,6 +2160,7 @@ impl ToApp {
                     2 => AxAction::Focus,
                     3 => AxAction::Increment,
                     4 => AxAction::Decrement,
+                    5 => AxAction::Custom(axtext::get(&mut r, bifrost_ui::ax_action::MAX_ACTION_NAME)?),
                     _ => return Err(DecodeError::BadValue),
                 };
                 ToApp::AxSet { id, action }
@@ -2130,6 +2284,10 @@ impl ToShell {
                 f32_(&mut b, *x);
                 f32_(&mut b, *y);
             }
+            ToShell::WindowRaise { window } => {
+                u32_(&mut b, tag::WINDOW_RAISE);
+                u32_(&mut b, *window);
+            }
             ToShell::WindowCollapse { window, collapsed } => {
                 u32_(&mut b, tag::WINDOW_COLLAPSE);
                 u32_(&mut b, *window);
@@ -2244,9 +2402,10 @@ impl ToShell {
             m @ (ToShell::Preview { .. } | ToShell::PreviewClose) => peek::encode_shell(m, &mut b),
             m @ (ToShell::AxText(_) | ToShell::AxMeta(_) | ToShell::Announce { .. } | ToShell::AxNotify(_)) => axtext::encode_shell(m, &mut b),
             m @ ToShell::AxRotors(_) => axrotor::encode_shell(m, &mut b),
+            m @ ToShell::AxActions(_) => axaction::encode_shell(m, &mut b),
             m @ ToShell::GuidedAccessRequest { .. } => guided::encode_shell(m, &mut b),
             m @ ToShell::PointerInterest { .. } => pointer::encode_shell(m, &mut b),
-            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifyPresentDelegate { .. } | ToShell::NotifyPresentReply { .. } | ToShell::NotifySchedule { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
+            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifyPresentDelegate { .. } | ToShell::NotifyPresentReply { .. } | ToShell::NotifySchedule { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::SelectionReply { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
                 u32_(&mut b, tag::CONTROLS_TREE);
                 let n = list.len().min(MAX_NODE_EXT);
@@ -2290,6 +2449,10 @@ impl ToShell {
             ToShell::SuddenTermination { enabled } => {
                 u32_(&mut b, tag::SUDDEN_TERMINATION);
                 b.push(*enabled as u8);
+            }
+            ToShell::CloseRequests { on } => {
+                u32_(&mut b, tag::CLOSE_REQUESTS);
+                b.push(*on as u8);
             }
             ToShell::Activity { options } => {
                 u32_(&mut b, tag::ACTIVITY);
@@ -2514,6 +2677,7 @@ impl ToShell {
                 }
                 ToShell::WindowMove { window, x, y }
             }
+            tag::WINDOW_RAISE => ToShell::WindowRaise { window: r.u32()? },
             tag::WINDOW_COLLAPSE => {
                 let window = r.u32()?;
                 let collapsed = match r.u8()? {
@@ -2657,10 +2821,10 @@ impl ToShell {
                         let key = r.str()?;
                         let flags = r.u8()?;
                         let depth = r.u8()?;
-                        if title.len() > 512 || key.len() > 128 || depth > MAX_APP_MENU_DEPTH || flags > 31 {
+                        if title.len() > 512 || key.len() > 128 || depth > MAX_APP_MENU_DEPTH || flags > 63 {
                             return Err(DecodeError::BadValue);
                         }
-                        items.push(AppMenuItem { id, title, key, enabled: flags & 1 != 0, checked: flags & 2 != 0, separator: flags & 4 != 0, submenu: flags & 8 != 0, depth, prints: flags & 16 != 0 });
+                        items.push(AppMenuItem { id, title, key, enabled: flags & 1 != 0, checked: flags & 2 != 0, separator: flags & 4 != 0, submenu: flags & 8 != 0, depth, prints: flags & 16 != 0, no_print: flags & 32 != 0 });
                     }
                     menus.push(AppMenu { title, items });
                 }
@@ -2719,6 +2883,7 @@ impl ToShell {
                 flags: r.u32()?,
             }),
             tag::SUDDEN_TERMINATION => ToShell::SuddenTermination { enabled: r.u8()? != 0 },
+            tag::CLOSE_REQUESTS => ToShell::CloseRequests { on: r.u8()? != 0 },
             tag::ACTIVITY => ToShell::Activity { options: r.u32()? },
             tag::WINDOW_LEVEL => ToShell::WindowLevel(WindowLevel::from_wire(r.u8()?).ok_or(DecodeError::BadValue)?),
             tag::WINDOW_LEVEL_OF => {
@@ -2799,6 +2964,7 @@ impl ToShell {
             t @ 0x230..=0x23f => workspace::decode_shell(t, &mut r)?,
             t @ 0x1e0..=0x1ef => peek::decode_shell(t, &mut r)?,
             t @ 0x213 => axrotor::decode_shell(t, &mut r)?,
+            t @ 0x215 => axaction::decode_shell(t, &mut r)?,
             t @ 0x170 => guided::decode_shell(t, &mut r)?,
             t @ 0x1f1 => pointer::decode_shell(t, &mut r)?,
             t @ 0x210..=0x21f => axtext::decode_shell(t, &mut r)?,
@@ -2808,1025 +2974,24 @@ impl ToShell {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn tag_of(p: &[u8]) -> u32 {
-        u32::from_le_bytes(p[..4].try_into().unwrap())
-    }
-
-    /// Each rich message owns one tag and decodes back to itself; the 0x1d0 block is shared by both directions, so a
-    /// tag must decode as the variant that encodes to it (ToShell 0x1d0/0x1d2, ToApp 0x1d1..0x1d3).
-    #[test]
-    fn distributed_and_service_messages_round_trip_on_their_tags() {
-        let post = ToShell::DistPost { name: "n".into(), user_info: vec![("k".into(), "v".into())] };
-        assert_eq!(tag_of(&post.encode()), 0x1d0);
-        assert_eq!(ToShell::decode(&post.encode()), Ok(post));
-
-        let call = ToShell::ServiceCall { request: 7, service: "dock".into(), method: "badge".into(), body: "null".into() };
-        assert_eq!(tag_of(&call.encode()), 0x1d2);
-        assert_eq!(ToShell::decode(&call.encode()), Ok(call));
-
-        let dist = ToApp::DistNotify { name: "n".into(), user_info: vec![] };
-        assert_eq!(tag_of(&dist.encode()), 0x1d1);
-        assert_eq!(ToApp::decode(&dist.encode()), Ok(dist));
-
-        let reply = ToApp::ServiceReply { request: 7, ok: false, body: "no such method".into() };
-        assert_eq!(tag_of(&reply.encode()), 0x1d2);
-        assert_eq!(ToApp::decode(&reply.encode()), Ok(reply));
-
-        let event = ToApp::ServiceEvent { service: "now-playing".into(), event: "command".into(), body: "{}".into() };
-        assert_eq!(tag_of(&event.encode()), 0x1d3);
-        assert_eq!(ToApp::decode(&event.encode()), Ok(event));
-    }
-
-    #[test]
-    fn keychain_messages_round_trip() {
-        let add = |v| KeychainOp::Add { service: "svc".into(), account: "me".into(), value: v };
-        for m in [
-            ToShell::Keychain { request: 1, op: add(vec![1, 2, 3]) },
-            ToShell::Keychain { request: 2, op: KeychainOp::Get { service: "s".into(), account: "a".into() } },
-            ToShell::Keychain { request: 3, op: KeychainOp::Update { service: "s".into(), account: "a".into(), value: vec![] } },
-            ToShell::Keychain { request: 4, op: KeychainOp::Delete { service: "s".into(), account: "a".into() } },
-        ] {
-            assert_eq!(ToShell::decode(&m.encode()).unwrap(), m);
-        }
-        let r = ToApp::KeychainReply { request: 9, status: KeychainStatus::Duplicate, value: vec![7; 5] };
-        assert_eq!(ToApp::decode(&r.encode()).unwrap(), r);
-        let big = ToShell::Keychain { request: 1, op: add(vec![0; MAX_KEYCHAIN_VALUE + 100]) };
-        let Ok(ToShell::Keychain { op: KeychainOp::Add { value, .. }, .. }) = ToShell::decode(&big.encode()) else { panic!("decodes") };
-        assert_eq!(value.len(), MAX_KEYCHAIN_VALUE + 1, "cut to one over the limit, which the store refuses");
-    }
-
-    #[test]
-    fn document_messages_round_trip_and_are_bounded() {
-        let g: GrantId = [7; 16];
-        for m in [
-            ToShell::DocOpen { request: 1, mode: DocMode::Write, title: "Open".into(), filters: vec!["public.text".into(), "md".into()] },
-            ToShell::DocOpenEx { request: 5, mode: DocMode::Read, title: "Choose".into(), filters: vec!["public.image".into()], options: docopt::MULTIPLE | docopt::DIRECTORIES | docopt::CREATE_DIRS },
-            ToShell::DocSave { request: 2, suggested_name: "notes.md".into(), filters: vec![] },
-            ToShell::DocCommit { request: 2 },
-            ToShell::DocAbort { request: 3 },
-            ToShell::DocReopen { request: 4, grant: g },
-            ToShell::DocRelease { grant: g },
-            ToShell::DocSaveGrant { request: 5, grant: g },
-            ToShell::DocGrantPath { request: 6, path: "/home/a/Notes/b.txt".into() },
-        ] {
-            assert_eq!(ToShell::decode(&m.encode()), Ok(m));
-        }
-        for m in [
-            ToApp::DocGranted { request: 1, grant: g, mode: DocMode::Read, name: "a.txt".into(), size: 1 << 40 },
-            ToApp::DocError { request: 9, code: DocErrorCode::Stale },
-            ToApp::DocBatch { request: 5, count: 3 },
-        ] {
-            assert_eq!(ToApp::decode(&m.encode()), Ok(m));
-        }
-        // the encoder drops empty and oversized filters and keeps at most MAX_DOC_FILTERS; long titles are cut
-        let many: Vec<String> = (0..40).map(|i| format!("ext{i}")).chain(["".into(), "x".repeat(65)]).collect();
-        let ToShell::DocOpen { filters, title, .. } =
-            ToShell::decode(&ToShell::DocOpen { request: 0, mode: DocMode::Read, title: "t".repeat(1000), filters: many }.encode()).unwrap()
-        else {
-            panic!()
-        };
-        assert_eq!((filters.len(), title.chars().count()), (MAX_DOC_FILTERS, MAX_DOC_TEXT));
-        // a hand-built packet that breaks the bounds is refused
-        let mut bad = Vec::new();
-        u32_(&mut bad, tag::DOC_OPEN);
-        u32_(&mut bad, 0);
-        bad.push(0);
-        str_(&mut bad, "t");
-        u32_(&mut bad, 17);
-        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
-        let mut bad_mode = ToShell::DocOpen { request: 0, mode: DocMode::Read, title: String::new(), filters: vec![] }.encode();
-        bad_mode[8] = 2;
-        assert_eq!(ToShell::decode(&bad_mode), Err(DecodeError::BadValue));
-        let mut too_many = ToApp::DocBatch { request: 1, count: 1 }.encode();
-        too_many[8..12].copy_from_slice(&(MAX_DOC_BATCH + 1).to_le_bytes());
-        assert_eq!(ToApp::decode(&too_many), Err(DecodeError::BadValue));
-        let mut bad_code = ToApp::DocError { request: 0, code: DocErrorCode::Denied }.encode();
-        bad_code[8] = 6;
-        assert_eq!(ToApp::decode(&bad_code), Err(DecodeError::BadValue));
-        assert_eq!(ToShell::decode(&ToShell::DocRelease { grant: g }.encode()[..10]), Err(DecodeError::Truncated));
-    }
-
-    #[test]
-    fn chords_round_trip_as_codes_and_plain_codes_are_not_chords() {
-        let k = KeyInput::chord(49, CHORD_META | CHORD_SHIFT);
-        assert_eq!(k.as_chord(), Some((49, CHORD_META | CHORD_SHIFT)));
-        assert_eq!(KeyInput::Code(49).as_chord(), None, "a plain key is not a chord");
-        assert_eq!(KeyInput::Text("n".into()).as_chord(), None);
-        // a chord is an ordinary Code on the wire, so an SDK 1 app decodes it without error
-        let m = ToApp::Key(k.clone()).encode();
-        assert_eq!(ToApp::decode(&m).unwrap(), ToApp::Key(k));
-    }
-
-    #[test]
-    fn controls_are_bounded_and_invalid_commands_rejected() {
-        let nodes=(0..200).map(|id|Node{id,role:Role::Button,label:"x".repeat(200),value:"y".repeat(200),bounds:UiRect{x:0.,y:0.,w:44.,h:44.},enabled:true}).collect();
-        let packet=ToShell::Controls(nodes).encode();assert!(packet.len()<=MAX_PACKET);
-        let ToShell::Controls(decoded)=ToShell::decode(&packet).unwrap() else{panic!("wrong message")};assert!(!decoded.is_empty());assert!(decoded.len()<200);
-        let mut packet=ToApp::Command(Command::Cut).encode();packet[4..8].copy_from_slice(&99u32.to_le_bytes());assert_eq!(ToApp::decode(&packet),Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn semantic_control_roles_round_trip_with_stable_wire_values() {
-        let roles = [Role::Button, Role::TextField, Role::List, Role::Row, Role::Toggle,
-            Role::Checkbox, Role::Slider, Role::SegmentedControl, Role::StaticText,
-            Role::MenuItem, Role::Window, Role::ProgressIndicator];
-        for (i, role) in roles.into_iter().enumerate() {
-            assert_eq!(role as u32, i as u32, "append-only role wire value");
-            let node = Node { id: i as u64, role, label: format!("role-{i}"), value: String::new(),
-                bounds: UiRect { x: 0., y: 0., w: 40., h: 28. }, enabled: true };
-            assert_eq!(ToShell::decode(&ToShell::Controls(vec![node.clone()]).encode()),
-                Ok(ToShell::Controls(vec![node])));
-        }
-        let node = Node { id: 0, role: Role::Button, label: String::new(), value: String::new(),
-            bounds: UiRect { x: 0., y: 0., w: 1., h: 1. }, enabled: true };
-        let mut invalid = ToShell::Controls(vec![node]).encode();
-        invalid[16..20].copy_from_slice(&99u32.to_le_bytes());
-        assert_eq!(ToShell::decode(&invalid), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn to_app_round_trips() {
-        let cfg = Configure { w: 1200, h: 1920, scale: 1.5625, safe_top: 24.0, safe_bottom: 20.0, dark: true, text_scale: 1.1, reduce_motion: false };
-        let all = vec![
-            ToApp::Configure(cfg),
-            ToApp::Touch { kind: TouchKind::Down, id: 3, x: 10.5, y: -2.0, t_ms: 123456, mods: ModifierFlags::EMPTY },
-            ToApp::Touch { kind: TouchKind::Down, id: 3, x: 1.0, y: 2.0, t_ms: 7, mods: ModifierFlags::SHIFT | ModifierFlags::COMMAND },
-            ToApp::Touch { kind: TouchKind::Cancel, id: 0, x: 0.0, y: 0.0, t_ms: 0, mods: ModifierFlags::EMPTY },
-            ToApp::Key(KeyInput::Text("héllo ✓".into())),
-            ToApp::Key(KeyInput::Code(66)),
-            ToApp::Release { buf: 1, generation: 5 },
-            ToApp::Command(Command::Paste),
-            ToApp::KeyboardConfig(KeyboardConfig::default()),
-            ToApp::KeyboardConfig(KeyboardConfig { layout: KeyboardLayout::Floating, return_key: ReturnKey::Send, flags: kbflags::PREDICTIVE | kbflags::SHOWN, languages: 3, language: 1 }),
-            ToApp::Activate(u64::MAX),
-            ToApp::Resume,
-            ToApp::Suspend,
-            ToApp::Quit,
-            ToApp::Open { url: "https://x.is/?a=1".into() },
-            ToApp::Clipboard { text: String::new() },
-            ToApp::Appearance { flags: appearance::INCREASE_CONTRAST | appearance::SHOW_BORDERS | 0x8000_0000 },
-            ToApp::InputSource { japanese: true },
-            ToApp::InputSource { japanese: false },
-            ToApp::AccentHold { letter: 'é' },
-        ];
-        for m in all {
-            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
-        }
-    }
-
-    #[test]
-    fn to_shell_round_trips() {
-        let all = vec![
-            ToShell::Hello { sdk_version: SDK_VERSION, app_id: "is.olibuijr.calculator".into() },
-            ToShell::Buffers { w: 1200, h: 1920, generation: 2 },
-            ToShell::Frame { buf: 1, damage: vec![[0, 0, 1200, 1920], [5, 6, 7, 8]] },
-            ToShell::Frame { buf: 0, damage: vec![] },
-            ToShell::WantsKeyboard { on: true },
-            ToShell::KeyboardOut(KeyboardOut::Text("é😀".into())),
-            ToShell::KeyboardOut(KeyboardOut::Backspace),
-            ToShell::KeyboardOut(KeyboardOut::Enter),
-            ToShell::KeyboardOut(KeyboardOut::Hide),
-            ToShell::KeyboardOut(KeyboardOut::Named("Escape".into())),
-            ToShell::KeyboardOut(KeyboardOut::Height(824)),
-            ToShell::KeyboardOut(KeyboardOut::Click(2)),
-            ToShell::KeyboardOut(KeyboardOut::Language(1)),
-            ToShell::Commands(Commands(15)),
-            ToShell::UndoTitles { undo: "Undo Typing".into(), redo: String::new() },
-            ToShell::Controls(vec![Node{id:u64::MAX,role:Role::TextField,label:"Search".into(),value:"café".into(),bounds:UiRect{x:1.,y:2.,w:100.,h:44.},enabled:true}]),
-            ToShell::RemoteSharing{on:true},
-            ToShell::RemoteSharing{on:false},
-            ToShell::Haptic,
-            ToShell::SetBadge { label: "12".into() },
-            ToShell::SetBadge { label: String::new() },
-            ToShell::SetFullScreen { on: true },
-            ToShell::SetFullScreen { on: false },
-            ToShell::SetContentSize { w: 230.0, h: 510.0 },
-            ToShell::SetContentLimits { min: Some((230.0, 400.0)), max: None },
-            ToShell::SetContentLimits { min: None, max: Some((1200.0, 900.0)) },
-            ToShell::SetContentLimits { min: None, max: None },
-            ToShell::Materials(vec![Material { kind: MaterialKind::Sidebar, rect: UiRect { x: 0., y: 0., w: 220., h: 600. }, radius: 17., state: MaterialState::FollowsWindowActiveState, blending: BlendingMode::BehindWindow, emphasized: false, corners: None },
-                Material { kind: MaterialKind::Titlebar, rect: UiRect { x: 220., y: 0., w: 580., h: 52. }, radius: 0., state: MaterialState::Active, blending: BlendingMode::WithinWindow, emphasized: true, corners: Some(Corners { tl: 1., tr: 2., br: 3., bl: 4. }) }]),
-            ToShell::Materials(MaterialKind::ALL.iter().map(|&kind| Material { kind, rect: UiRect { x: 1., y: 2., w: 3., h: 4. }, radius: 5., state: MaterialState::Inactive, blending: BlendingMode::BehindWindow, emphasized: false, corners: None }).collect()),
-            ToShell::Materials(vec![]),
-            ToShell::OpenUrl { url: "https://bifrost.olibuijr.com".into() },
-            ToShell::PlaySystemSound { name: "Bell".into() },
-            ToShell::Notify { title: "T".into(), body: "B ü".into() },
-            ToShell::Log { text: "hi".into() },
-            ToShell::SetClipboard { text: "1,5".into() },
-        ];
-        for m in all {
-            assert_eq!(ToShell::decode(&m.encode()), Ok(m.clone()), "{m:?}");
-        }
-    }
-
-    #[test]
-    fn exact_layout() {
-        assert_eq!(ToApp::Release { buf: 1, generation: 2 }.encode(), [4, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0]);
-        assert_eq!(ToShell::Haptic.encode(), [5, 1, 0, 0]);
-        assert_eq!(ToApp::Key(KeyInput::Code(7)).encode(), [3, 0, 0, 0, 1, 7, 0, 0, 0]);
-    }
-
-    #[test]
-    fn rejects_bad_input() {
-        assert_eq!(ToApp::decode(&[]), Err(DecodeError::Truncated));
-        assert_eq!(ToApp::decode(&[99, 0, 0, 0]), Err(DecodeError::UnknownTag(99)));
-        assert_eq!(ToApp::decode(&[4, 0, 0, 0, 1]), Err(DecodeError::Truncated));
-        assert_eq!(ToApp::decode(&[8, 0, 0, 0, 2, 0, 0, 0, 0xff, 0xfe]), Err(DecodeError::BadUtf8));
-        assert_eq!(ToShell::decode(&[0x03, 1, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff]), Err(DecodeError::BadValue));
-        // keyboard enums reject unknown values and a truncated Text
-        assert_eq!(ToApp::decode(&[15, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0]), Err(DecodeError::BadValue));
-        assert_eq!(ToApp::decode(&[15, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0]), Err(DecodeError::BadValue));
-        assert_eq!(ToShell::decode(&[0x0f, 1, 0, 0, 99]), Err(DecodeError::BadValue));
-        assert_eq!(ToShell::decode(&[0x0f, 1, 0, 0, 0, 5, 0, 0, 0]), Err(DecodeError::Truncated));
-        assert_eq!(ToApp::decode(&[2, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn long_text_is_clamped_on_a_char_boundary() {
-        let m = ToShell::Log { text: "é".repeat(MAX_PACKET) };
-        let b = m.encode();
-        assert!(b.len() <= MAX_PACKET);
-        assert!(matches!(ToShell::decode(&b), Ok(ToShell::Log { .. })));
-    }
-}
+mod tests;
 
 #[cfg(test)]
-mod sys_tests {
-    use super::sys::*;
-    use super::*;
+mod sys_tests;
 
-    #[test]
-    fn packets_and_fds_cross_a_socketpair() {
-        let (a, b) = socketpair_pair().unwrap();
-        let shm = shm_create("test", 4096).unwrap();
-        let mut m1 = Map::new(&shm, 4096).unwrap();
-        m1.pixels_mut()[3] = 0xdead_beef;
-        a.send(&ToShell::Buffers { w: 32, h: 32, generation: 1 }.encode(), &[shm.0]).unwrap();
-        a.send(&ToShell::Haptic.encode(), &[]).unwrap();
-        let Recv::Packet(p, fds) = b.recv(true).unwrap() else { panic!() };
-        assert_eq!(ToShell::decode(&p), Ok(ToShell::Buffers { w: 32, h: 32, generation: 1 }));
-        assert_eq!(fds.len(), 1);
-        let m2 = Map::new(&fds[0], 4096).unwrap();
-        assert_eq!(m2.pixels()[3], 0xdead_beef, "the same memory");
-        let Recv::Packet(p, fds) = b.recv(false).unwrap() else { panic!() };
-        assert_eq!(ToShell::decode(&p), Ok(ToShell::Haptic));
-        assert!(fds.is_empty());
-        assert!(matches!(b.recv(false).unwrap(), Recv::Empty));
-        drop(a);
-        assert!(matches!(b.recv(false).unwrap(), Recv::Closed));
-    }
-}
-
-#[cfg(test)] mod desktop_context_tests {
- use super::*;
- #[test] fn context_roundtrip_and_limits(){let packet=ToShell::ContextMenu{x:12.,y:34.,items:vec![ContextItem{id:7,label:"Open".into(),enabled:true}]};assert_eq!(ToShell::decode(&packet.encode()),Ok(packet));for message in [ToApp::Context{x:12.,y:34.},ToApp::ContextAction(7)]{assert_eq!(ToApp::decode(&message.encode()),Ok(message));}let bad=ToShell::ContextMenu{x:f32::NAN,y:0.,items:vec![]};assert_eq!(ToShell::decode(&bad.encode()),Err(DecodeError::BadValue));let large=ToShell::ContextMenu{x:0.,y:0.,items:(0..100).map(|id|ContextItem{id,label:"x".repeat(10000),enabled:true}).collect()};let bytes=large.encode();assert!(bytes.len()<MAX_PACKET);let ToShell::ContextMenu{items,..}=ToShell::decode(&bytes).unwrap()else{panic!()};assert_eq!(items.len(),32);}
-    #[test]
-    fn context_items_carry_separators_and_key_equivalents_inside_the_wire_fields() {
-        let plain = ContextItem::new(7, "Open");
-        assert_eq!(plain, ContextItem { id: 7, label: "Open".into(), enabled: true });
-        assert_eq!((plain.title(), plain.key_combo(), plain.is_separator()), ("Open", None, false));
-        let keyed = ContextItem::new(9, "Get Info").key("cmd+i").enabled(false);
-        assert_eq!((keyed.title(), keyed.key_combo(), keyed.enabled), ("Get Info", Some("cmd+i"), false));
-        assert_eq!(ContextItem::new(9, "Get Info").key("cmd+i").key("cmd+j").label, "Get Info\tcmd+j", "a second key replaces the first");
-        let line = ContextItem::separator();
-        assert!(line.is_separator() && !line.enabled);
-        assert!(!ContextItem::new(0, "Remove").is_separator(), "id 0 with a title is a row");
-        // an app built before keys and separators sends plain titles: they stay rows without a key
-        assert_eq!((ContextItem { id: 3, label: "Remove".into(), enabled: true }).key_combo(), None);
-        let packet = ToShell::ContextMenu { x: 1., y: 2., items: vec![keyed.clone(), line.clone(), plain.clone()] };
-        let ToShell::ContextMenu { items, .. } = ToShell::decode(&packet.encode()).unwrap() else { panic!() };
-        assert_eq!(items, vec![keyed, line, plain], "separators and keys survive the wire");
-    }
-    #[test]
-    fn app_menus_roundtrip_and_limits() {
-        let menus = vec![AppMenu { title: "Note".into(), items: vec![
-            AppMenuItem::new(1, "New Note").key("cmd+n"),
-            AppMenuItem::separator(),
-            AppMenuItem::new(2, "Pin").checked(true).enabled(false),
-            AppMenuItem::submenu("Sort By"),
-            AppMenuItem::new(3, "Name").depth(1),
-        ] }];
-        let packet = ToShell::AppMenus(menus);
-        assert_eq!(ToShell::decode(&packet.encode()), Ok(packet));
-        let ds = ToShell::DocumentState { title: "Untitled 2".into(), edited: true, represented: "a.txt".into() };
-        assert_eq!(ToShell::decode(&ds.encode()), Ok(ds));
-        let pb = ToShell::PasteboardSet { items: vec![("public.html".into(), b"<b>x</b>".to_vec())] };
-        assert_eq!(ToShell::decode(&pb.encode()), Ok(pb));
-        let pa = ToApp::Pasteboard { change_count: 3, items: vec![("public.png".into(), vec![1, 2, 3])] };
-        assert_eq!(ToApp::decode(&pa.encode()), Ok(pa));
-        assert_eq!(ToApp::decode(&ToApp::MenuAction(9).encode()), Ok(ToApp::MenuAction(9)));
-        assert_eq!(ToShell::decode(&ToShell::AppMenus(vec![]).encode()), Ok(ToShell::AppMenus(vec![])));
-        let many = ToShell::AppMenus((0..20).map(|_| AppMenu { title: "x".into(), items: (0..200).map(|i| AppMenuItem::new(i, &"t".repeat(1000))).collect() }).collect());
-        let bytes = many.encode();
-        assert!(bytes.len() < MAX_PACKET);
-        let ToShell::AppMenus(m) = ToShell::decode(&bytes).unwrap() else { panic!() };
-        assert!(!m.is_empty() && m.len() <= MAX_APP_MENUS);
-        assert!(m[0].items.len() < 200, "the packet size cuts the first menu");
-        assert_eq!(m[0].items[0].title.chars().count(), MAX_APP_MENU_TITLE);
-    }
-
-    fn level(n: usize, depth: u8) -> Vec<AppMenuItem> {
-        (0..n).map(|i| AppMenuItem::new(i as u32 + 1, "x").depth(depth)).collect()
-    }
-
-    /// Each submenu has a budget of its own: a Font submenu with every family does not push out the items after it.
-    #[test]
-    fn menu_items_are_counted_per_level() {
-        let mut items = vec![AppMenuItem::submenu("Font")];
-        items.extend(level(200, 1));
-        items.push(AppMenuItem::submenu("Text"));
-        items.extend(level(10, 1));
-        items.extend(level(40, 0));
-        let menu = AppMenu { title: "Format".into(), items };
-        assert_eq!(menu.dropped_items(), 0, "{} items in all, but no level is over the cap", menu.items.len());
-        let (kept, _) = menu.kept_items();
-        assert_eq!(kept.len(), menu.items.len());
-        // one level over the cap: only that level loses items, the next submenu and the top level keep theirs
-        let mut items = vec![AppMenuItem::submenu("Font")];
-        items.extend(level(MAX_APP_MENU_ITEMS + 5, 1));
-        items.push(AppMenuItem::submenu("Text"));
-        items.extend(level(3, 1));
-        let menu = AppMenu { title: "Format".into(), items };
-        let (kept, dropped) = menu.kept_items();
-        assert_eq!(dropped, 5);
-        assert_eq!(kept.iter().filter(|i| i.title == "Text").count(), 1, "the Text submenu is kept");
-        assert_eq!(kept.iter().rev().take_while(|i| i.depth == 1).count(), 3, "with all its items");
-    }
-
-    /// A submenu header past its level's cap goes with its children; items at the parent level after it are counted again.
-    #[test]
-    fn a_dropped_submenu_takes_its_children_along() {
-        let mut items = level(MAX_APP_MENU_ITEMS, 0);
-        items.push(AppMenuItem::submenu("Too Many"));
-        items.extend(level(4, 1));
-        let menu = AppMenu { title: "Long".into(), items };
-        let (kept, dropped) = menu.kept_items();
-        assert_eq!((kept.len(), dropped), (MAX_APP_MENU_ITEMS, 5));
-        assert!(kept.iter().all(|i| i.depth == 0));
-    }
-
-    /// Menus that do not fit one packet go in `AppMenusMore` packets after the first, whole; what is cut is reported.
-    #[test]
-    fn long_menus_are_split_over_packets_and_nothing_is_cut_silently() {
-        let family = |i: usize| AppMenuItem::new(i as u32 + 1, &format!("Family Name Number {i:03}")).depth(1);
-        let big = |title: &str| {
-            let mut items = vec![AppMenuItem::submenu("Font")];
-            items.extend((0..250).map(family));
-            AppMenu { title: title.into(), items }
-        };
-        let menus = vec![AppMenu { title: "File".into(), items: level(10, 0) }, big("Format"), big("Preferences"), AppMenu { title: "Window".into(), items: level(3, 0) }];
-        let out = app_menu_packets(&menus);
-        assert!(out.packets.len() >= 2, "too much for one packet");
-        assert!(out.dropped.is_empty(), "everything fits in some packet: {:?}", out.dropped);
-        let mut got = Vec::new();
-        for (k, p) in out.packets.iter().enumerate() {
-            assert!(p.len() <= MAX_PACKET);
-            match ToShell::decode(p).unwrap() {
-                ToShell::AppMenus(m) if k == 0 => got.extend(m),
-                ToShell::AppMenusMore(m) if k > 0 => got.extend(m),
-                other => panic!("packet {k} is {other:?}"),
-            }
-        }
-        assert_eq!(got, menus, "the menus arrive whole and in order");
-        // one menu bigger than a packet is cut, and the cut is reported
-        let huge = AppMenu { title: "Huge".into(), items: (0..MAX_APP_MENU_ITEMS).map(|i| AppMenuItem::new(i as u32, &"t".repeat(MAX_APP_MENU_TITLE))).collect() };
-        let out = app_menu_packets(&[huge]);
-        assert_eq!(out.packets.len(), 1);
-        assert!(matches!(out.dropped.as_slice(), [(t, n)] if t == "Huge" && *n > 0), "{:?}", out.dropped);
-        // a ninth menu is reported with all its items
-        let nine: Vec<AppMenu> = (0..MAX_APP_MENUS + 1).map(|i| AppMenu { title: format!("M{i}"), items: level(2, 0) }).collect();
-        assert_eq!(app_menu_packets(&nine).dropped, vec![(format!("M{MAX_APP_MENUS}"), 2)]);
-        // no menus: one packet that clears them
-        let out = app_menu_packets(&[]);
-        assert_eq!(out.packets.len(), 1);
-        assert_eq!(ToShell::decode(&out.packets[0]), Ok(ToShell::AppMenus(vec![])));
-    }
-    #[test]
-    fn the_apps_own_print_item_keeps_its_flag_over_the_wire() {
-        let print = AppMenuItem::print(7);
-        assert_eq!((print.title.as_str(), print.key.as_str(), print.prints), ("Print\u{2026}", "cmd+p", true));
-        assert!(!AppMenuItem::new(8, "Print Address Labels\u{2026}").prints, "only the declared item is the app's Print");
-        let packet = ToShell::AppMenus(vec![AppMenu { title: "File".into(), items: vec![print.clone().enabled(false), AppMenuItem::new(8, "Export")] }]);
-        let bytes = packet.encode();
-        assert_eq!(ToShell::decode(&bytes), Ok(packet));
-        // a flag byte past the five known bits is refused
-        let flags_at = 4 + 4 + (4 + 4) + 4 + 4 + (4 + "Print\u{2026}".len()) + (4 + 5);
-        assert_eq!(bytes[flags_at], 16, "disabled, with the print bit");
-        let mut bad = bytes.clone();
-        bad[flags_at] = 32;
-        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
-    }
-}
+#[cfg(test)] mod desktop_context_tests;
 
 #[cfg(test)]
-mod ax_tree_tests {
-    use super::*;
-
-    #[test]
-    fn text_input_messages_round_trip() {
-        let to_app = [
-            ToApp::SetMarkedText { text: "にほん".into(), sel_start: 3, sel_len: 3 },
-            ToApp::SetMarkedText { text: String::new(), sel_start: 0, sel_len: 0 },
-            ToApp::UnmarkText { commit: true },
-            ToApp::UnmarkText { commit: false },
-            ToApp::DeleteSurrounding { before: 2, after: 1 },
-            ToApp::AccessoryAction(9),
-        ];
-        for m in to_app {
-            assert_eq!(ToApp::decode(&m.encode()), Ok(m));
-        }
-        let to_shell = [
-            ToShell::TextState(TextState { text: "héllo wörld".into(), cursor: 3, anchor: 7, marked: Some((1, 3)) }),
-            ToShell::TextState(TextState::default()),
-            ToShell::CaretRect { x: 1.0, y: 2.0, w: 0.0, h: 18.0 },
-            ToShell::InputTraits(InputTraits { return_key: ReturnKeyType::Continue, content: TextContentKind::Email, flags: tiflags::AUTOCORRECT | tiflags::SECURE }),
-            ToShell::InputAccessory(vec![AccessoryItem { id: 1, label: "Done".into(), enabled: true }, AccessoryItem { id: 2, label: "Next".into(), enabled: false }]),
-            ToShell::InputAccessory(vec![]),
-            ToShell::SuddenTermination { enabled: true },
-            ToShell::SuddenTermination { enabled: false },
-            ToShell::Activity { options: 0x3 },
-            ToShell::Activity { options: 0 },
-            ToShell::WindowLevel(WindowLevel::Floating),
-            ToShell::WindowLevel(WindowLevel::Normal),
-            ToShell::WindowLevelOf { id: 2, level: WindowLevel::Floating },
-            ToShell::WindowLevelOf { id: 2, level: WindowLevel::Normal },
-        ];
-        for m in to_shell {
-            assert_eq!(ToShell::decode(&m.encode()), Ok(m));
-        }
-    }
-
-    #[test]
-    fn a_window_level_of_one_window_is_id_then_one_byte() {
-        let m = ToShell::WindowLevelOf { id: 3, level: WindowLevel::Floating }.encode();
-        assert_eq!(&m[..4], &0x24cu32.to_le_bytes());
-        assert_eq!(&m[4..8], &3u32.to_le_bytes());
-        assert_eq!(*m.last().unwrap(), 1);
-        let mut bad = m.clone();
-        *bad.last_mut().unwrap() = 9;
-        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn window_level_is_one_byte_and_rejects_an_unknown_level() {
-        let m = ToShell::WindowLevel(WindowLevel::Floating).encode();
-        assert_eq!(m.len(), 4 + 1, "the tag, then the level byte");
-        assert_eq!(*m.last().unwrap(), 1);
-        let mut bad = m.clone();
-        let n = bad.len();
-        bad[n - 1] = 7;
-        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn keyboard_preedit_round_trips_and_rejects_a_bad_selection() {
-        for o in [KeyboardOut::Preedit { text: "にほん".into(), sel_start: 3, sel_len: 3 }, KeyboardOut::Unmark { commit: true }] {
-            let m = ToShell::KeyboardOut(o);
-            assert_eq!(ToShell::decode(&m.encode()), Ok(m));
-        }
-        let mut p = ToShell::KeyboardOut(KeyboardOut::Preedit { text: "é".into(), sel_start: 0, sel_len: 2 }).encode();
-        let n = p.len();
-        p[n - 4] = 1;
-        assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn text_input_messages_reject_bad_values() {
-        // a selection that ends past the text
-        let mut p = ToApp::SetMarkedText { text: "ab".into(), sel_start: 0, sel_len: 2 }.encode();
-        let n = p.len();
-        p[n - 4] = 9;
-        assert_eq!(ToApp::decode(&p), Err(DecodeError::BadValue));
-        // a selection that cuts a character in half
-        let mut p = ToApp::SetMarkedText { text: "é".into(), sel_start: 0, sel_len: 2 }.encode();
-        let n = p.len();
-        p[n - 4] = 1;
-        assert_eq!(ToApp::decode(&p), Err(DecodeError::BadValue));
-        let mut p = ToShell::InputTraits(InputTraits::default()).encode();
-        p[4] = 99;
-        assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
-        assert_eq!(ToShell::decode(&ToShell::CaretRect { x: f32::NAN, y: 0., w: 1., h: 1. }.encode()), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn text_state_window_is_cut_around_the_caret() {
-        let text = "é".repeat(MAX_SURROUNDING); // twice the limit in bytes
-        let cursor = MAX_SURROUNDING as u32; // a character boundary in the middle
-        let m = ToShell::TextState(TextState { text, cursor, anchor: cursor, marked: None });
-        let Ok(ToShell::TextState(t)) = ToShell::decode(&m.encode()) else { panic!("decode") };
-        assert!(t.text.len() <= MAX_SURROUNDING);
-        assert!(t.cursor as usize <= t.text.len());
-        assert_eq!(t.cursor, t.anchor);
-    }
-
-    #[test]
-    fn return_key_types_map_to_the_keyboard_labels() {
-        for v in 0..=11u8 {
-            let t = ReturnKeyType::from_wire(v).unwrap();
-            assert_eq!(t as u8, v);
-            let _ = t.basic();
-        }
-        assert_eq!(ReturnKeyType::from_wire(12), None);
-        assert_eq!(ReturnKeyType::Yahoo.basic(), ReturnKey::Search);
-        assert_eq!(ReturnKeyType::Continue.basic(), ReturnKey::Next);
-    }
-
-    #[test]
-    fn controls_tree_round_trips() {
-        let list = vec![
-            NodeExt { id: 1, parent: None, focused: false, checked: None },
-            NodeExt { id: u64::MAX, parent: Some(1 << 40), focused: true, checked: Some(true) },
-            NodeExt { id: 7, parent: Some(0), focused: false, checked: Some(false) },
-        ];
-        assert_eq!(ToShell::decode(&ToShell::ControlsTree(list.clone()).encode()), Ok(ToShell::ControlsTree(list)));
-    }
-
-    #[test]
-    fn controls_tree_rejects_unknown_flags_and_oversize() {
-        let mut p = ToShell::ControlsTree(vec![NodeExt { id: 1, parent: None, focused: false, checked: None }]).encode();
-        *p.last_mut().unwrap() = 0x80;
-        assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
-        let big = ToShell::ControlsTree(vec![NodeExt { id: 1, parent: None, focused: false, checked: None }; 300]).encode();
-        let Ok(ToShell::ControlsTree(l)) = ToShell::decode(&big) else { panic!("decode") };
-        assert_eq!(l.len(), MAX_NODE_EXT);
-    }
-
-    #[test]
-    fn ax_set_round_trips() {
-        for action in [AxAction::Press, AxAction::Focus, AxAction::Increment, AxAction::Decrement, AxAction::SetValue("héllo".into())] {
-            let m = ToApp::AxSet { id: 0x1_0000_0002, action };
-            assert_eq!(ToApp::decode(&m.encode()), Ok(m));
-        }
-        let mut bad = ToApp::AxSet { id: 1, action: AxAction::Press }.encode();
-        *bad.last_mut().unwrap() = 9;
-        assert_eq!(ToApp::decode(&bad), Err(DecodeError::BadValue));
-    }
-}
+mod ax_tree_tests;
 
 #[cfg(test)]
-mod material_tests {
-    use super::sys::*;
-    use super::*;
-
-    #[test]
-    fn every_material_kind_sits_at_its_wire_value() {
-        for (i, k) in MaterialKind::ALL.iter().enumerate() {
-            assert_eq!(*k as usize, i);
-        }
-    }
-
-    #[test]
-    fn an_older_apps_material_byte_decodes_with_the_default_state() {
-        let m = Material { kind: MaterialKind::Titlebar, rect: UiRect { x: 0., y: 0., w: 10., h: 10. }, radius: 0., state: MaterialState::FollowsWindowActiveState, blending: BlendingMode::BehindWindow, emphasized: false, corners: None };
-        let bytes = ToShell::Materials(vec![m]).encode();
-        // the kind byte of a state-less sender is the bare kind
-        assert!(bytes.windows(1).any(|b| b[0] == 1));
-        assert_eq!(ToShell::decode(&bytes), Ok(ToShell::Materials(vec![m])));
-    }
-
-    #[test]
-    fn the_extended_material_round_trips_through_the_request() {
-        let mut m = Material::new(MaterialKind::HudWindow, UiRect { x: 1., y: 2., w: 30., h: 40. }, 6.);
-        m.blending = BlendingMode::WithinWindow;
-        m.emphasized = true;
-        m.corners = Some(Corners { tl: 1., tr: 2., br: 3., bl: 4. });
-        assert_eq!(ToShell::decode(&ToShell::Materials(vec![m]).encode()), Ok(ToShell::Materials(vec![m])));
-        let back = Material::from_request(&m.request());
-        assert_eq!((back.kind, back.blending, back.emphasized, back.corners), (m.kind, m.blending, true, m.corners));
-        // unknown flag bits and negative corners are refused
-        let mut bad = ToShell::Materials(vec![Material::new(MaterialKind::Menu, UiRect { x: 0., y: 0., w: 1., h: 1. }, 0.)]).encode();
-        *bad.last_mut().unwrap() = 8;
-        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn legacy_kinds_are_the_two_an_older_shell_decodes() {
-        for k in MaterialKind::ALL {
-            assert!(matches!(k.legacy(), MaterialKind::Sidebar | MaterialKind::Titlebar));
-        }
-        assert_eq!(MaterialKind::Sidebar.legacy(), MaterialKind::Sidebar);
-    }
-
-    #[test]
-    fn an_unknown_kind_or_state_is_refused() {
-        let m = Material { kind: MaterialKind::Selection, rect: UiRect { x: 0., y: 0., w: 1., h: 1. }, radius: 0., state: MaterialState::Inactive, blending: BlendingMode::BehindWindow, emphasized: false, corners: None };
-        let good = ToShell::Materials(vec![m]).encode();
-        let at = good.iter().position(|&b| b == (13 | 2 << 6)).unwrap();
-        for bad_byte in [14u8, 3 << 6] {
-            let mut bad = good.clone();
-            bad[at] = bad_byte;
-            assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
-        }
-    }
-
-    #[test]
-    fn pasteboard_encode_never_panics_or_shortens() {
-        // a multibyte char straddling byte 128 of the type (IPC-2)
-        let m = ToApp::Pasteboard { change_count: 1, items: vec![("é".repeat(100), vec![])] };
-        let Ok(ToApp::Pasteboard { items, .. }) = ToApp::decode(&m.encode()) else { panic!("decode") };
-        assert!(items[0].0.len() <= 128 && !items[0].0.is_empty());
-        // a payload that does not fit is left out whole, never cut (IPC-5)
-        let big = ToShell::PasteboardSet { items: vec![("public.png".into(), vec![7; 50_000]), ("public.utf8-plain-text".into(), b"hi".to_vec())] };
-        let bytes = big.encode();
-        assert!(bytes.len() < MAX_PACKET);
-        let Ok(ToShell::PasteboardSet { items }) = ToShell::decode(&bytes) else { panic!("decode") };
-        assert_eq!(items, vec![("public.utf8-plain-text".to_string(), b"hi".to_vec())]);
-        // a type over 128 bytes is refused on decode
-        let mut p = Vec::new();
-        u32_(&mut p, tag::PASTEBOARD_SET);
-        u32_(&mut p, 1);
-        str_(&mut p, &"t".repeat(129));
-        u32_(&mut p, 0);
-        assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn pasteboard_blob_messages_round_trip_and_refuse_bad_layouts() {
-        let types = vec![("public.png".to_string(), 100_000u32), ("public.utf8-plain-text".to_string(), 2)];
-        let a = ToApp::PasteboardBlob { change_count: 9, types: types.clone() };
-        assert_eq!(ToApp::decode(&a.encode()), Ok(a));
-        let s = ToShell::PasteboardBlob { types: types.clone() };
-        assert_eq!(ToShell::decode(&s.encode()), Ok(s));
-        let c = ToApp::PasteboardChanged { change_count: 4 };
-        assert_eq!(ToApp::decode(&c.encode()), Ok(c));
-        assert_eq!(ToShell::decode(&ToShell::PasteboardRead.encode()), Ok(ToShell::PasteboardRead));
-        // a layout over the blob limits, with a control character, or with too many items is refused
-        for bad in [
-            vec![("t".to_string(), (pbblob::MAX_ITEM + 1) as u32)],
-            vec![("t\0".to_string(), 1)],
-            vec![("t".to_string(), 1); pbblob::MAX_ITEMS + 1],
-        ] {
-            let mut p = Vec::new();
-            u32_(&mut p, tag::PASTEBOARD_BLOB);
-            u32_(&mut p, bad.len() as u32);
-            for (t, n) in &bad {
-                str_(&mut p, t);
-                u32_(&mut p, *n);
-            }
-            assert_eq!(ToShell::decode(&p), Err(DecodeError::BadValue));
-        }
-    }
-
-    #[test]
-    fn a_pasteboard_type_with_a_control_character_is_left_out() {
-        let m = ToShell::PasteboardSet { items: vec![("\0/x".into(), b"a".to_vec()), ("public.utf8-plain-text".into(), b"ok".to_vec())] };
-        // the sender leaves it out ...
-        assert_eq!(ToShell::decode(&m.encode()), Ok(ToShell::PasteboardSet { items: vec![("public.utf8-plain-text".into(), b"ok".to_vec())] }));
-        // ... and so does the receiver, whatever a hostile sender put on the wire
-        let mut p = Vec::new();
-        u32_(&mut p, tag::PASTEBOARD_SET);
-        u32_(&mut p, 2);
-        str_(&mut p, "a\u{7}/b");
-        u32_(&mut p, 1);
-        p.push(1);
-        str_(&mut p, "public.png");
-        u32_(&mut p, 1);
-        p.push(2);
-        assert_eq!(ToShell::decode(&p), Ok(ToShell::PasteboardSet { items: vec![("public.png".into(), vec![2])] }));
-    }
-
-    #[test]
-    fn oversized_service_reply_is_refused_not_cut() {
-        let m = ToApp::ServiceReply { request: 3, ok: true, body: "x".repeat(20_000) };
-        let bytes = m.encode();
-        assert!(bytes.len() <= MAX_PACKET);
-        assert_eq!(ToApp::decode(&bytes), Ok(ToApp::ServiceReply { request: 3, ok: false, body: "body too large".into() }));
-        let fits = ToApp::ServiceReply { request: 3, ok: true, body: "y".repeat(15_000) };
-        assert_eq!(ToApp::decode(&fits.encode()), Ok(fits));
-    }
-
-    #[test]
-    fn short_memfd_is_measurable_and_shrink_seal_holds() {
-        let fd = shm_create("seal-test", 4096).unwrap();
-        assert_eq!(shm_len(&fd).unwrap(), 4096);
-        seal_shrink(&fd).unwrap();
-        assert!(shm_resize(&fd, 0).is_err(), "a sealed memfd cannot shrink");
-        assert!(shm_resize(&fd, 8192).is_ok());
-    }
-
-    #[test]
-    fn try_send_does_not_block_and_oversized_packets_are_errors() {
-        let (a, b) = socketpair_pair().unwrap();
-        set_nonblocking(a.fd()).unwrap();
-        let pkt = vec![0u8; 16 * 1024];
-        let mut sent = 0;
-        let err = loop {
-            match a.try_send(&pkt, &[]) {
-                Ok(()) => sent += 1,
-                Err(e) => break e,
-            }
-            assert!(sent < 100_000, "a never-read socket must fill up");
-        };
-        assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
-        drop(b);
-        let (c, d) = socketpair_pair().unwrap();
-        c.send(&vec![1u8; 20 * 1024], &[]).unwrap();
-        assert!(d.recv(true).is_err(), "a 20 KiB packet is a protocol error, not a cut Packet");
-    }
-}
+mod material_tests;
 
 #[cfg(test)]
-mod frame_damage_tests {
-    use super::*;
-
-    #[test]
-    fn a_frame_with_more_damage_than_a_packet_holds_is_clamped_and_still_decodes() {
-        let rects: Vec<Rect> = (0..5000u32).map(|i| [i, i, 1, 1]).collect();
-        let bytes = ToShell::Frame { buf: 1, damage: rects.clone() }.encode();
-        assert!(bytes.len() <= MAX_PACKET, "the encoder never builds a packet the decoder refuses");
-        let ToShell::Frame { buf, damage } = ToShell::decode(&bytes).unwrap() else { panic!("not a frame") };
-        assert_eq!(buf, 1);
-        assert_eq!(damage.len(), (MAX_PACKET - 16) / 16, "the clamp keeps the first rectangles");
-        assert_eq!(damage[..], rects[..damage.len()]);
-    }
-
-    #[test]
-    fn a_frame_claiming_more_rectangles_than_a_packet_can_hold_is_refused() {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&tag::FRAME.to_le_bytes());
-        bytes.extend_from_slice(&0u32.to_le_bytes());
-        bytes.extend_from_slice(&((MAX_PACKET / 16 + 1) as u32).to_le_bytes());
-        bytes.resize(bytes.len() + (MAX_PACKET / 16 + 1) * 16, 0);
-        assert_eq!(ToShell::decode(&bytes), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn an_empty_frame_is_a_small_packet() {
-        let bytes = ToShell::Frame { buf: 0, damage: Vec::new() }.encode();
-        assert_eq!(bytes.len(), 12, "tag, buffer and a zero count");
-        assert_eq!(ToShell::decode(&bytes), Ok(ToShell::Frame { buf: 0, damage: Vec::new() }));
-    }
-}
+mod frame_damage_tests;
 
 #[cfg(test)]
-mod quick_action_tests {
-    use super::*;
-
-    #[test]
-    fn a_chosen_quick_action_round_trips_with_its_user_info() {
-        let message = ToApp::QuickAction { kind: "compose".into(), user_info: vec![("account".into(), "work".into())] };
-        assert_eq!(ToApp::decode(&message.encode()), Ok(message));
-        let bare = ToApp::QuickAction { kind: "search".into(), user_info: Vec::new() };
-        assert_eq!(ToApp::decode(&bare.encode()), Ok(bare));
-    }
-
-    #[test]
-    fn a_quick_action_with_too_much_user_info_is_refused() {
-        let many: Vec<(String, String)> = (0..=MAX_QUICK_INFO).map(|n| (format!("k{n}"), "v".into())).collect();
-        let bytes = ToApp::QuickAction { kind: "x".into(), user_info: many }.encode();
-        assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn window_messages_round_trip_through_the_codec() {
-        let shell = [
-            ToShell::WindowOpen { id: 3, title: "Ada Lovelace".into(), w: 480.0, h: 560.0, position: None, flags: 0 },
-            ToShell::WindowClose { id: 3 },
-            ToShell::WindowTitle { id: 3, title: "Grace".into() },
-            ToShell::WindowResize { id: 3, w: 320.0, h: 240.0 },
-            ToShell::WindowBuffers { id: 3, w: 4, h: 3, generation: 2 },
-            ToShell::WindowFrame { id: 3, buf: 1, damage: vec![[0, 0, 4, 3]] },
-            ToShell::WindowFrame { id: 3, buf: 0, damage: vec![] },
-        ];
-        for m in shell {
-            assert_eq!(ToShell::decode(&m.encode()), Ok(m.clone()), "{m:?}");
-        }
-        let app = [
-            ToApp::WindowClosed { id: 3 },
-            ToApp::FullScreen { on: true },
-            ToApp::WindowConfigure { id: 3, w: 320.0, h: 240.0 },
-            ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Move, x: 10.5, y: -2.0, t_ms: 99, mods: ModifierFlags::OPTION },
-            ToApp::WindowRelease { id: 3, buf: 1, generation: 5 },
-        ];
-        for m in app {
-            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
-        }
-    }
-
-    #[test]
-    fn key_window_messages_round_trip_through_the_codec() {
-        let app = [
-            ToApp::WindowFocus { window: 3, focused: true },
-            ToApp::WindowFocus { window: 0, focused: false },
-            ToApp::WindowInput { window: 3, input: WindowInput::Key(KeyInput::Text("é😀".into())) },
-            ToApp::WindowInput { window: 3, input: WindowInput::Key(KeyInput::Code(30)) },
-            ToApp::WindowInput { window: 3, input: WindowInput::Command(Command::SelectAll) },
-            ToApp::WindowInput { window: 3, input: WindowInput::MenuAction(7) },
-            ToApp::WindowInput { window: 3, input: WindowInput::SetMarkedText { text: "にほん".into(), sel_start: 3, sel_len: 3 } },
-            ToApp::WindowInput { window: 3, input: WindowInput::UnmarkText { commit: true } },
-            ToApp::WindowInput { window: 3, input: WindowInput::DeleteSurrounding { before: 2, after: 0 } },
-            ToApp::WindowInput { window: 3, input: WindowInput::AccentHold { letter: 'a' } },
-            ToApp::WindowInput {
-                window: 3,
-                input: WindowInput::Pointer(bifrost_ui::pointer_event::PointerEvent::Wheel {
-                    x: 12.5,
-                    y: 40.0,
-                    dx: 0.0,
-                    dy: -19.2,
-                    precise: false,
-                    phase: bifrost_ui::wheel::Phase::None,
-                    momentum: bifrost_ui::wheel::Phase::None,
-                }),
-            },
-            ToApp::WindowInput { window: 3, input: WindowInput::Pointer(bifrost_ui::pointer_event::PointerEvent::Hover { x: 1.0, y: 2.0 }) },
-            ToApp::WindowInput { window: 3, input: WindowInput::Pointer(bifrost_ui::pointer_event::PointerEvent::HoverExit) },
-        ];
-        for m in app {
-            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
-        }
-    }
-
-    #[test]
-    fn window_input_has_the_documented_layout() {
-        // tag 0x250, window 3, kind 0 (key), key kind 1 (code), code 30
-        let bytes = ToApp::WindowInput { window: 3, input: WindowInput::Key(KeyInput::Code(30)) }.encode();
-        assert_eq!(&bytes[..4], &0x250u32.to_le_bytes());
-        assert_eq!(&bytes[4..8], &3u32.to_le_bytes());
-        assert_eq!(&bytes[8..10], &[0, 1]);
-        assert_eq!(&bytes[10..14], &30u32.to_le_bytes());
-        // tag 0x24f, window 3, focused
-        let focus = ToApp::WindowFocus { window: 3, focused: true }.encode();
-        assert_eq!(&focus[..4], &0x24fu32.to_le_bytes());
-        assert_eq!(&focus[4..9], &[3, 0, 0, 0, 1]);
-    }
-
-    #[test]
-    fn window_input_for_the_main_window_uses_the_legacy_messages() {
-        assert_eq!(WindowInput::Key(KeyInput::Code(9)).to_app(0), ToApp::Key(KeyInput::Code(9)));
-        assert_eq!(WindowInput::Command(Command::Copy).to_app(0), ToApp::Command(Command::Copy));
-        assert_eq!(WindowInput::MenuAction(4).to_app(0), ToApp::MenuAction(4));
-        assert_eq!(WindowInput::UnmarkText { commit: false }.to_app(0), ToApp::UnmarkText { commit: false });
-        assert_eq!(WindowInput::MenuAction(4).to_app(2), ToApp::WindowInput { window: 2, input: WindowInput::MenuAction(4) });
-        let hover = bifrost_ui::pointer_event::PointerEvent::Hover { x: 3.0, y: 4.0 };
-        assert_eq!(WindowInput::Pointer(hover).to_app(0), ToApp::Pointer(hover));
-        assert_eq!(WindowInput::Pointer(hover).to_app(5), ToApp::WindowInput { window: 5, input: WindowInput::Pointer(hover) });
-    }
-
-    #[test]
-    fn an_accent_hold_goes_to_the_key_window_and_a_bad_code_point_is_refused() {
-        assert_eq!(WindowInput::AccentHold { letter: 'e' }.to_app(0), ToApp::AccentHold { letter: 'e' });
-        assert_eq!(WindowInput::AccentHold { letter: 'e' }.to_app(2), ToApp::WindowInput { window: 2, input: WindowInput::AccentHold { letter: 'e' } });
-        let mut bytes = ToApp::WindowInput { window: 2, input: WindowInput::AccentHold { letter: 'e' } }.encode();
-        // kind 7 at byte 8, the code point at 9..13
-        assert_eq!(bytes[8], 7);
-        assert_eq!(&bytes[9..13], &('e' as u32).to_le_bytes());
-        bytes[9..13].copy_from_slice(&0xD800u32.to_le_bytes());
-        assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue), "a surrogate is not a letter");
-    }
-
-    #[test]
-    fn a_window_pointer_event_has_the_pointer_layout_after_kind_six() {
-        use bifrost_ui::pointer_event::PointerEvent;
-        let ev = PointerEvent::Hover { x: 1.5, y: 2.5 };
-        let bytes = ToApp::WindowInput { window: 4, input: WindowInput::Pointer(ev) }.encode();
-        assert_eq!(&bytes[..4], &0x250u32.to_le_bytes());
-        assert_eq!(&bytes[4..8], &4u32.to_le_bytes());
-        // kind 6, then the `ToApp::Pointer` bytes without their tag: kind 1 (hover) and the two floats
-        let main = ToApp::Pointer(ev).encode();
-        assert_eq!(bytes[8], 6);
-        assert_eq!(&bytes[9..], &main[4..]);
-        // a NaN location is refused here as it is for the main window
-        let mut bad = bytes.clone();
-        bad[10..14].copy_from_slice(&f32::NAN.to_le_bytes());
-        assert_eq!(ToApp::decode(&bad), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn a_bad_window_focus_or_window_input_is_refused() {
-        let mut focus = ToApp::WindowFocus { window: 1, focused: true }.encode();
-        focus[8] = 2;
-        assert_eq!(ToApp::decode(&focus), Err(DecodeError::BadValue));
-        // unknown input kind
-        let mut kind = ToApp::WindowInput { window: 1, input: WindowInput::MenuAction(1) }.encode();
-        kind[8] = 9;
-        assert_eq!(ToApp::decode(&kind), Err(DecodeError::BadValue));
-        // unknown key kind inside a key
-        let mut key = ToApp::WindowInput { window: 1, input: WindowInput::Key(KeyInput::Code(1)) }.encode();
-        key[9] = 7;
-        assert_eq!(ToApp::decode(&key), Err(DecodeError::BadValue));
-        // a command number the table does not know
-        let mut cmd = ToApp::WindowInput { window: 1, input: WindowInput::Command(Command::Copy) }.encode();
-        cmd[9..13].copy_from_slice(&99u32.to_le_bytes());
-        assert_eq!(ToApp::decode(&cmd), Err(DecodeError::BadValue));
-        // a marked-text selection that ends inside a character
-        let mut marked = ToApp::WindowInput { window: 1, input: WindowInput::SetMarkedText { text: "é".into(), sel_start: 0, sel_len: 2 } }.encode();
-        // kind 3 at byte 8, the text length at 9..13, "é" at 13..15, then sel_start and sel_len
-        marked[15..19].copy_from_slice(&0u32.to_le_bytes());
-        marked[19..23].copy_from_slice(&1u32.to_le_bytes());
-        assert_eq!(ToApp::decode(&marked), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn window_open_has_the_documented_layout() {
-        let bytes = ToShell::WindowOpen { id: 2, title: "ab".into(), w: 1.0, h: 2.0, position: None, flags: 0 }.encode();
-        // tag 0x240, id 2, title length 2 and "ab", then the two floats
-        assert_eq!(&bytes[..4], &0x240u32.to_le_bytes());
-        assert_eq!(&bytes[4..8], &2u32.to_le_bytes());
-        assert_eq!(&bytes[8..12], &2u32.to_le_bytes());
-        assert_eq!(&bytes[12..14], b"ab");
-    }
-
-    #[test]
-    fn window_placement_and_collapse_round_trip() {
-        let shell = [
-            ToShell::WindowOpen { id: 4, title: "Note".into(), w: 200.0, h: 150.0, position: Some((12.5, 40.0)), flags: window_flags::TITLE_DOUBLE_CLICK },
-            ToShell::WindowOpen { id: 5, title: "Plain".into(), w: 1.0, h: 1.0, position: None, flags: 0 },
-            ToShell::WindowMove { window: 4, x: -3.0, y: 88.0 },
-            ToShell::WindowCollapse { window: 4, collapsed: true },
-            ToShell::WindowCollapse { window: 4, collapsed: false },
-        ];
-        for m in shell {
-            assert_eq!(ToShell::decode(&m.encode()), Ok(m.clone()), "{m:?}");
-        }
-        let app = [ToApp::WindowMoved { window: 4, x: 10.0, y: 20.0 }, ToApp::WindowTitleDoubleClick { window: 4 }];
-        for m in app {
-            assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");
-        }
-    }
-
-    #[test]
-    fn window_placement_refuses_a_bad_flag_or_a_non_finite_position() {
-        let mut bad = ToShell::WindowCollapse { window: 4, collapsed: true }.encode();
-        let n = bad.len();
-        bad[n - 1] = 2;
-        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
-        let nan = ToShell::WindowMove { window: 4, x: f32::NAN, y: 0.0 }.encode();
-        assert_eq!(ToShell::decode(&nan), Err(DecodeError::BadValue));
-        let open = ToShell::WindowOpen { id: 4, title: "a".into(), w: 1.0, h: 1.0, position: Some((f32::INFINITY, 0.0)), flags: 0 }.encode();
-        assert_eq!(ToShell::decode(&open), Err(DecodeError::BadValue));
-    }
-
-    #[test]
-    fn an_overlong_or_non_finite_window_message_is_refused() {
-        let long = ToShell::WindowTitle { id: 1, title: "x".repeat(MAX_WINDOW_TITLE + 1) };
-        // the encoder cuts the title, so the decoder never sees an overlong one from this crate
-        let ToShell::WindowTitle { title, .. } = ToShell::decode(&long.encode()).unwrap() else { panic!() };
-        assert_eq!(title.len(), MAX_WINDOW_TITLE);
-        let mut bad = ToShell::WindowResize { id: 1, w: 1.0, h: 1.0 }.encode();
-        bad[8..12].copy_from_slice(&f32::NAN.to_le_bytes());
-        assert!(ToShell::decode(&bad).is_err());
-        let mut bad_touch = ToApp::WindowTouch { id: 1, touch: 0, kind: TouchKind::Down, x: 0.0, y: 0.0, t_ms: 0, mods: ModifierFlags::EMPTY }.encode();
-        bad_touch[12] = 9;
-        assert!(ToApp::decode(&bad_touch).is_err());
-    }
-
-    #[test]
-    fn a_content_size_must_be_finite_positive_and_bounded() {
-        let size = ToShell::SetContentSize { w: 230.0, h: 510.0 };
-        assert_eq!(u32::from_le_bytes(size.encode()[..4].try_into().unwrap()), 0x252);
-        assert_eq!(ToShell::decode(&size.encode()), Ok(size));
-        for bad in [f32::NAN, f32::INFINITY, -1.0, 0.0, MAX_CONTENT_PT + 1.0] {
-            assert!(ToShell::decode(&ToShell::SetContentSize { w: bad, h: 100.0 }.encode()).is_err(), "width {bad}");
-            assert!(ToShell::decode(&ToShell::SetContentLimits { min: Some((100.0, bad)), max: None }.encode()).is_err(), "min height {bad}");
-        }
-        let limits = ToShell::SetContentLimits { min: Some((230.0, 400.0)), max: Some((800.0, 900.0)) };
-        assert_eq!(u32::from_le_bytes(limits.encode()[..4].try_into().unwrap()), 0x253);
-        assert_eq!(ToShell::decode(&limits.encode()), Ok(limits));
-    }
-}
+mod quick_action_tests;
 
 #[cfg(test)]
-mod modifier_flag_tests {
-    use super::*;
-
-    #[test]
-    fn modifier_flags_use_the_reference_raw_values() {
-        assert_eq!(ModifierFlags::CAPS_LOCK.bits(), 1 << 16);
-        assert_eq!(ModifierFlags::SHIFT.bits(), 1 << 17);
-        assert_eq!(ModifierFlags::CONTROL.bits(), 1 << 18);
-        assert_eq!(ModifierFlags::OPTION.bits(), 1 << 19);
-        assert_eq!(ModifierFlags::COMMAND.bits(), 1 << 20);
-        assert_eq!(ModifierFlags::from_bits_truncate(u32::MAX), ModifierFlags::ALL, "unknown bits are dropped");
-        let both = ModifierFlags::SHIFT | ModifierFlags::COMMAND;
-        assert!(both.shift() && both.command() && !both.option() && !both.control() && !both.caps_lock());
-        assert!(ModifierFlags::default().is_empty());
-    }
-
-    #[test]
-    fn chord_bits_and_held_keys_map_to_the_same_flags() {
-        assert_eq!(ModifierFlags::from_chord(CHORD_SHIFT | CHORD_META), ModifierFlags::SHIFT | ModifierFlags::COMMAND);
-        assert_eq!(ModifierFlags::from_chord(CHORD_CTRL | CHORD_ALT), ModifierFlags::CONTROL | ModifierFlags::OPTION);
-        assert_eq!(ModifierFlags::from_held(true, false, false, true, false), ModifierFlags::SHIFT | ModifierFlags::COMMAND);
-        assert_eq!(ModifierFlags::from_held(false, false, false, false, true), ModifierFlags::CAPS_LOCK);
-    }
-
-    #[test]
-    fn a_touch_carries_its_modifiers_and_one_without_them_decodes_as_none_held() {
-        let m = ToApp::Touch { kind: TouchKind::Down, id: 0, x: 4.0, y: 5.0, t_ms: 9, mods: ModifierFlags::SHIFT };
-        assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()));
-        // a sender built before the flags stops after `t_ms`
-        let mut old = m.encode();
-        old.truncate(old.len() - 4);
-        let Ok(ToApp::Touch { mods, t_ms, .. }) = ToApp::decode(&old) else { panic!() };
-        assert_eq!((mods, t_ms), (ModifierFlags::EMPTY, 9));
-        let w = ToApp::WindowTouch { id: 2, touch: 1, kind: TouchKind::Up, x: 1.0, y: 1.0, t_ms: 3, mods: ModifierFlags::COMMAND };
-        assert_eq!(ToApp::decode(&w.encode()), Ok(w.clone()));
-        let mut old = w.encode();
-        old.truncate(old.len() - 4);
-        let Ok(ToApp::WindowTouch { mods, .. }) = ToApp::decode(&old) else { panic!() };
-        assert!(mods.is_empty());
-    }
-}
+mod modifier_flag_tests;

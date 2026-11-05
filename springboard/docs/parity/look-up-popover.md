@@ -32,8 +32,9 @@ Look Up open it; Escape closes it.
   - Shell wiring: `springboard/src/shell/mod.rs` (the `look_up` field, the event hook before `modal_event`, the draw and
     damage lines, the two quiet-frame checks), `springboard/src/shell/hwkeys.rs` (`Shortcut::Back` closes the popover
     first).
-- Done: Services > Look Up and Ctrl+Cmd+D (`run_service` -> `Route::LookUp` -> `open_look_up`) open the popover centred
-  under the menu bar. The definition is the first installed dictionary's answer. Tapping Search closes it and opens
+- Done: Ctrl+Cmd+D (`look_up_selection` -> `SelectionUse::LookUpPopover` -> `open_look_up`, in
+  `springboard/src/shell/services_route.rs`) opens the popover centred under the menu bar. Services > Look Up in
+  Dictionary does not open the popover: like the reference, it opens the Dictionary app on the term (see below). The definition is the first installed dictionary's answer. Tapping Search closes it and opens
   Quick Search with the term; tapping Open in Dictionary closes it and runs the Dictionary app's `look-up` intent. A
   tap outside, or Escape, closes it. Unit tests cover the rows, the cut, tap mapping, the screen clamp, wrapping and
   quick search titles.
@@ -42,9 +43,10 @@ Look Up open it; Escape closes it.
 
 ### Services > Look Up in Dictionary (anchor)
 
-- BifrOSt path: `Route::LookUp` in `springboard/ui/src/services_menu.rs` (replaces the old Dictionary intent route for
-  Look Up). The Dictionary intent (`look-up`, `word`) is still run by the popover's Open in Dictionary row through
-  `Shell::run_intent` (`springboard/src/shell/services_route.rs`).
+- BifrOSt path: the Services item routes to `Route::Intent { app: DICTIONARY_APP, intent: "look-up", param: "word" }`
+  in `springboard/ui/src/services_menu.rs`, which `Shell::run_intent` (`springboard/src/shell/services_route.rs`)
+  runs on the Dictionary app. The services model has no Look Up route of its own any more; the popover is reached only
+  through the chord (`SelectionUse::LookUpPopover`). Its Open in Dictionary row runs the same intent.
 - Gap: the popover opens at the top centre, not at the selection. The shell does not read the focused app's selection
   rectangle (the Services notes in `services-lookup.md` have the same gap), so "near the selection" is not met yet.
 
@@ -69,8 +71,10 @@ Look Up open it; Escape closes it.
 
 - Deleted: `springboard/apps/dictionary-desktop/src/dict.rs` (moved to `ui/src/stardict.rs`), and the app's own
   `SYSTEM_DICTIONARIES`, `WORD_LIST`, `dictionary_dirs` and `load_library` (now shared).
-- Changed: `services_menu::Route::Intent` for Look Up is replaced by `Route::LookUp`. The Services test
-  `look_up_sends_the_first_line_as_the_word` is now `look_up_takes_the_first_line_as_the_term`.
+- Changed: this slice first replaced `services_menu::Route::Intent` for Look Up with a `Route::LookUp`; a later fix
+  (E2E11) removed `Route::LookUp` again, so Look Up routes to the Dictionary intent and the chord alone opens the
+  popover. The Services test `look_up_sends_the_first_line_as_the_word` is now
+  `look_up_takes_the_first_line_as_the_term`.
 - App bump: `bifrost-dictionary` 0.1.0 -> 0.1.1 (`Cargo.toml`, `manifest.toml`); it gained the `bifrost-ui` dependency.
   `Cargo.lock` needs the new edge (the lead's build updates it).
 

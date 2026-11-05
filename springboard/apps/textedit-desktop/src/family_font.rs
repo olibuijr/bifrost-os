@@ -1,7 +1,7 @@
 //! The page draws and measures each run in its own family (`Style::font`), so a choice in the Fonts panel, the Font
 //! submenu or the format bar shows on the page. A family is drawn with its font file (`text::family_file`): an installed
 //! family's own, or the stand-in for Times and Courier. A family with no file, a file that cannot be read or parsed,
-//! and text the family has no glyphs for fall back to the system font, as `NSFont` substitutes a font for missing
+//! and text the family has no glyphs for fall back to the system font, as the reference font system substitutes a font for missing
 //! glyphs. Each family's file is read once per run of the app and kept for it (bounded by the families used).
 
 use bifrost_app::kit::ui::Ui;

@@ -4,6 +4,60 @@
 
 # Changelog
 
+## 0.15.1
+
+- Upstream wordcraft v0.15.1.
+  ## What's Changed
+  * Read Aloud: look citations up by binary search, not a scan per character by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/5335
+  * Language packs 2: 75 packs and the merged craft-proof (compounding, en-AU); #5208 review follow-ups by @benandez in https://github.com/storytold/wordcraft/pull/5224
+  * Pictures: refuse a TIFF whose first image names its compression twice by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/5337
+  * Fonts: cut names read from a font's name table to 128 characters by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/5333
+
+## 0.15.0
+
+- Upstream wordcraft v0.15.0.
+  ## What's Changed
+  * Use the body boundary for header margin anchors by @finwarman in https://github.com/storytold/wordcraft/pull/2485
+  * Keep repeated spaces in LaTeX export by @Silvertree2010 in https://github.com/storytold/wordcraft/pull/5051
+  * Paragraph side borders lie outside the text (#5036) by @VoiceLessQ in https://github.com/storytold/wordcraft/pull/5088
+  * Lists: a level above counts its first number at the first deeper item by @pakiat in https://github.com/storytold/wordcraft/pull/5108
+
+## 0.14.0
+
+- Upstream wordcraft v0.14.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/wordcraft/pull/5037
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/wordcraft/pull/5035
+  * #3676: page parameters saturate instead of wrapping to page one by @socrabs151 in https://github.com/storytold/wordcraft/pull/4289
+  * View › Macros opens a dialog to run, delete and record macros (#4327) by @x-labb in https://github.com/storytold/wordcraft/pull/4426
+
+## 0.13.2
+
+- Upstream wordcraft v0.13.2.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/4741
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/4760
+  * Labels: continue selected recipients across sheets (#4880) by @OPUZZLES in https://github.com/storytold/wordcraft/pull/4894
+  * packaging: Flatpak finds and prints to CUPS printers by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/4909
+
+## 0.12.0
+
+- Upstream wordcraft v0.12.0.
+  ## What's Changed
+  * Parse \genfrac in LaTeX import so binomials survive export by @Silvertree2010 in https://github.com/storytold/wordcraft/pull/4242
+  * Linux desktop entry: stop declaring text/plain by @marcoarnulfo in https://github.com/storytold/wordcraft/pull/4206
+  * Lists: draw Arabic letter numbering (arabicAlpha, arabicAbjad) by @7mz410 in https://github.com/storytold/wordcraft/pull/4218
+  * Cap list label length when expanding level template text by @Silvertree2010 in https://github.com/storytold/wordcraft/pull/4003
+
+## 0.11.0
+
+- Upstream wordcraft v0.11.0.
+  ## What's Changed
+  * Restrict Editing: the file commands, the user name and the post-check by @matstrange in https://github.com/storytold/wordcraft/pull/3285
+  * The inspector's removals are tracked, and a version snapshot belongs to its document by @matstrange in https://github.com/storytold/wordcraft/pull/3286
+  * test: mark the portal test's blocking sleep as intentional (SonarCloud rust:S7488) by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/3989
+  * Engine: no dead-code warnings on wasm by @MichaelMuClaude in https://github.com/storytold/wordcraft/pull/3542
+
 ## 0.10.0
 
 - Upstream wordcraft v0.10.0.

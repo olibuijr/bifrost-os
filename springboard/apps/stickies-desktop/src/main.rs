@@ -130,6 +130,8 @@ const SHEET_DELETE: u32 = 2;
 
 /// The text of the note the first launch opens.
 const WELCOME_TEXT: &str = "Make a note of it!\n\nSticky Notes keeps small notes on your desktop: reminders, lists, or text you use often.\n\n\u{2022} To add another note, choose File, New Sticky Note.\n\n\u{2022} To collapse a note, double-click its title bar.\n\nYour notes are here again when you open Sticky Notes.";
+/// The size of the welcome note in points: tall enough for all of its text, so the first note is never clipped.
+const WELCOME_SIZE_PT: (f32, f32) = (260.0, 320.0);
 /// Stacking offset of each new note, so new notes do not land on each other.
 const CASCADE_PT: f32 = 24.0;
 const CASCADE_STEPS: usize = 8;
@@ -532,12 +534,14 @@ impl StickiesApp {
     }
 
     fn key(&mut self, ctx: &Ctx, key: &KeyInput) -> bool {
-        if let Some(confirm) = &self.confirm {
-            // Escape answers Cancel; the sheet takes every other key so nothing reaches the notes under it
-            if let (KeyInput::Code(1 | 27), Some(id)) = (key, confirm.sheet.cancel_button()) {
-                return self.answer(id);
-            }
-            return false;
+        if let Some(confirm) = &mut self.confirm {
+            // the sheet's keys (`Sheet::handle_key`): Escape and Cmd+. answer Cancel, Cmd+D Delete, Tab moves the focus
+            // ring and Space presses the focused button; it takes every other key so nothing reaches the notes under it
+            return match bifrost_app::document::sheet_key(&mut confirm.sheet, key) {
+                bifrost_app::document::AlertKey::Answer(id) => self.answer(id),
+                bifrost_app::document::AlertKey::Focus => true,
+                bifrost_app::document::AlertKey::Ignored => false,
+            };
         }
         if self.colour_entry.is_some() {
             return self.colour_key(key);
@@ -1462,7 +1466,10 @@ impl App for StickiesApp {
             let mut board = store::load(&ctx.data_dir);
             if first && board.notes.is_empty() {
                 let (x, y) = Self::cascade_position(&board);
-                board.add_text(WELCOME_TEXT, x, y, Self::now());
+                let id = board.add_text(WELCOME_TEXT, x, y, Self::now());
+                if let Some(note) = board.find_mut(id) {
+                    note.resize(WELCOME_SIZE_PT.0, WELCOME_SIZE_PT.1);
+                }
                 self.dirty = true;
             }
             self.board = Some(board);
@@ -1766,6 +1773,38 @@ mod tests {
         assert_eq!(app.board.as_ref().unwrap().notes.len(), 2);
         assert!(app.redo());
         assert_eq!(app.board.as_ref().unwrap().notes.len(), 1);
+    }
+
+    #[test]
+    fn the_confirmation_takes_cmd_d_cmd_period_and_the_tab_focus_ring() {
+        use bifrost_app::proto::CHORD_FLAG;
+        // Cmd+D is the chord on evdev key 32 with Meta, Cmd+. the one on key 52
+        let cmd_d = KeyInput::Code(CHORD_FLAG | 32 | (CHORD_META << 8));
+        let cmd_period = KeyInput::Code(CHORD_FLAG | 52 | (CHORD_META << 8));
+        let (tab, space) = (KeyInput::Code(9), KeyInput::Text(" ".into()));
+        let ctx = ctx_in(&std::env::temp_dir());
+        let mut app = app_with(&["keep", "drop"]);
+        let drop = app.board.as_ref().unwrap().notes[1].id;
+        app.confirm = Some(Confirm::delete(drop, "drop"));
+        assert!(!app.key(&ctx, &KeyInput::Text("x".into())), "every other key is used up");
+        assert!(app.key(&ctx, &cmd_period));
+        assert!(app.confirm.is_none() && app.board.as_ref().unwrap().notes.len() == 2, "Cmd+. cancels");
+        app.confirm = Some(Confirm::delete(drop, "drop"));
+        assert!(app.key(&ctx, &cmd_d));
+        assert!(app.confirm.is_none() && app.board.as_ref().unwrap().notes.len() == 1, "Cmd+D deletes");
+        // Tab: Delete (the button drawn first), then Cancel; Space presses the focused one
+        let kept = app.board.as_ref().unwrap().notes[0].id;
+        app.confirm = Some(Confirm::delete(kept, "keep"));
+        assert!(!app.key(&ctx, &space), "Space with no focus presses nothing");
+        assert!(app.key(&ctx, &tab));
+        assert_eq!(app.confirm.as_ref().unwrap().sheet.focus, Some(SHEET_DELETE));
+        assert!(app.key(&ctx, &tab));
+        assert_eq!(app.confirm.as_ref().unwrap().sheet.focus, Some(SHEET_CANCEL));
+        assert!(app.key(&ctx, &space));
+        assert!(app.confirm.is_none() && app.board.as_ref().unwrap().notes.len() == 1, "Space on Cancel keeps the note");
+        app.confirm = Some(Confirm::delete(kept, "keep"));
+        assert!(app.key(&ctx, &tab) && app.key(&ctx, &space));
+        assert!(app.board.as_ref().unwrap().notes.is_empty(), "Space on Delete deletes");
     }
 
     #[test]

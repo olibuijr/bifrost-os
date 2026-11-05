@@ -53,7 +53,7 @@ in `/usr/local/bin`. In a session in this repo the tools appear as `mcp__bifrost
 | Compositor (`bifrost-wm`) | one persistent Wayland connection: `wlr-screencopy` (screen, regions), `ext-image-copy-capture` + `ext-foreign-toplevel-image-capture-source` (one window, even covered), `wlr-foreign-toplevel` (window list, activate, close, minimize, maximize, fullscreen), `wlr-virtual-pointer` (exact compositor pixels), `zwp-virtual-keyboard` (text, with a keymap generated per call, so any Unicode is typed whatever the layout) | `observe`, `screenshot`, `click`, `pointer`, `scroll`, `type`, `window` |
 | Kernel | one persistent uinput keyboard, created on first use (400 ms once) | `key`: the shell's evdev shortcuts and every client see it like a real keyboard |
 | Shell | control socket `/run/bifrost/shell-control.sock` (Unix socket, `src/bare/control.rs`; served to root and the installed account only, see [bifrost-pc-workflow.md](bifrost-pc-workflow.md); `bifrost-mcp` runs as root; `SPRINGBOARD_CONTROL_SOCKET` overrides the path) | `observe` (state), `ui` (accessibility map, `ax list/press`), `open`, `wait`, `shell` |
-| Apps | each app's JSON-RPC control socket (`$XDG_RUNTIME_DIR/bifrost/apps/<id>.sock`, older apps `appdata/<id>/control.sock`; `sys::app_sockets` lists both), connected as the account's uid (SO_PEERCRED) | `app` (methods, `intent.*`, app state) |
+| Apps | each app's JSON-RPC control socket (`appdata/<id>/control.sock`, `bifrost_core::app_control_socket`; `sys::app_sockets` lists them), connected as the account's uid (SO_PEERCRED) | `app` (methods, `intent.*`, app state) |
 | System | `/proc`, files, `bash`, `journalctl` | `system`, `file`, `exec` |
 
 The connection reconnects by itself after a shell or compositor restart.

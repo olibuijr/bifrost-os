@@ -52,8 +52,9 @@ only, no VM.
 
 - **Refresh rate** (`maximumFramesPerSecond`, refresh interval): not reported. The Wayland output mode is kept inside
   `bare/wayland.rs` and does not reach the shell. Needs the backend to pass the mode to `Shell`.
-- Several displays: the shell drives one panel, so `list` has one entry and `main` is always it. `Screens::update`
-  and `set_main` in the model are ready for more.
+- Several displays: `list` reports every output of `shell::displays::Arrangement` (main = the Dock's display, others have
+  their whole frame as visible frame); a one-display desktop has one entry. The backend does not report a second output
+  yet (`Shell::set_outputs` is not called), see `docs/dock-reference.md` "Several displays".
 - `deepest`, `supportedWindowDepths`, colour space and gamut (`depth`, `colorSpace`, `canRepresent`): not reported.
 - Localized display name: the name is the fixed string `Display`.
 - Safe-area insets, auxiliary top areas, EDR values, `displayLink`, `displayUpdateGranularity` and

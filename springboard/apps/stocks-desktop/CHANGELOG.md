@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.6
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 0.2.5
+
+- The price chart colour follows the change since the previous close, matching the header and list.
+
+## 0.2.4
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 0.2.3
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
+## 0.2.2
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 0.2.1
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.2.0 — 2026-10-23
 
 - Quotes from Yahoo Finance's public chart endpoint (Stooq is gone), sent without cookies or identifiers, with the source named.

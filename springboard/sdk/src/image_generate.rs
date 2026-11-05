@@ -5,8 +5,11 @@
 //! (`CIPalettize`), and the CIE L*a*b* conversion (`CIConvertRGBtoLab`, `CIConvertLabtoRGB`). The pixel
 //! work lives in the render crate (`generators`, `qr_generate`, `colorcube`, `colormap`, `colorlab`),
 //! which the shell can use too. Apps put the returned `Image` on screen with the kit's surface.
-//! Limits: QR codes stop at version 10 (271 bytes at level L); there is no barcode generator; the
-//! colour conversions assume sRGB and ignore ICC profiles and rendering intents.
+//! One-dimensional barcodes (`CICode128BarcodeGenerator`, `CIEAN13BarcodeGenerator`,
+//! `CICode39BarcodeGenerator`, `CICodabarBarcodeGenerator`, `CIInterleaved2of5BarcodeGenerator`) come
+//! from `bifrost_render::barcode_generate`.
+//! Limits: QR codes stop at version 10 (271 bytes at level L); there are no PDF417 or Aztec generators;
+//! the colour conversions assume sRGB and ignore ICC profiles and rendering intents.
 use bifrost_render::colorfx::{self, Rgb};
 use bifrost_render::gfx::Image;
 
@@ -14,6 +17,7 @@ pub use bifrost_render::colorcube::ColorCube;
 pub use bifrost_render::colorlab::Lab;
 pub use bifrost_render::colormap::{ColorMap, Palette};
 pub use bifrost_render::gradient::Ramp;
+pub use bifrost_render::barcode_generate::{Symbology, HEIGHT_DEFAULT as BARCODE_HEIGHT_DEFAULT, QUIET_SPACE_DEFAULT};
 pub use bifrost_render::qr_generate::{Correction, QrCode};
 
 /// A checkerboard of `square` pixel cells with colour `a` in the top-left cell. Colours are packed like
@@ -50,6 +54,23 @@ pub fn qr_code(text: &str, level: Correction, scale: usize) -> Option<Image> {
 /// `dark` must be clearly darker than `light`.
 pub fn qr_code_styled(text: &str, level: Correction, scale: usize, quiet: usize, dark: u32, light: u32, rounded: bool) -> Option<Image> {
     QrCode::encode(text, level)?.to_image(scale, quiet, dark, light, rounded)
+}
+
+/// A one-dimensional barcode of `message` as black bars on white, one pixel per module, with
+/// `quiet_space` white modules on the left and right and bars `height` pixels tall. Like the reference
+/// generators, the quiet space is clamped to 0 to 100 and the height to 1 to 500, both rounded (the
+/// reference defaults are `QUIET_SPACE_DEFAULT` and `BARCODE_HEIGHT_DEFAULT`). `None` when the message
+/// cannot be encoded in `symbology`.
+pub fn barcode(symbology: Symbology, message: &[u8], quiet_space: f64, height: f64) -> Option<Image> {
+    barcode_styled(symbology, message, quiet_space, height, 0xff00_0000, 0xffff_ffff)
+}
+
+/// A barcode with its own colours, packed like `Image` pixels. `dark` must be clearly darker than
+/// `light` for a scanner to read it.
+pub fn barcode_styled(symbology: Symbology, message: &[u8], quiet_space: f64, height: f64, dark: u32, light: u32) -> Option<Image> {
+    use bifrost_render::barcode_generate as bc;
+    let modules = bc::modules(symbology, message)?;
+    bc::to_image(&modules, bc::quiet_space(quiet_space), bc::bar_height(height), dark, light)
 }
 
 /// The module matrix of a QR code for text: for callers that draw the modules themselves.
@@ -134,6 +155,19 @@ mod tests {
         assert!(qr_code("x", Correction::M, 0).is_none());
         let rounded = qr_code_styled("x", Correction::L, 6, 0, BLACK, WHITE, true).unwrap();
         assert_eq!(rounded.w, 21 * 6);
+    }
+
+    #[test]
+    fn barcodes_have_the_quiet_space_and_clamped_height() {
+        let img = barcode(Symbology::Code128, b"BifrOSt", 10.0, 32.0).unwrap();
+        assert_eq!(img.h, 32);
+        assert_eq!(img.px[0], WHITE);
+        assert_eq!(img.px[10], BLACK, "the first bar follows the quiet space");
+        let tall = barcode(Symbology::Ean13, b"400638133393", 0.0, 9000.0).unwrap();
+        assert_eq!((tall.w, tall.h), (95, 500));
+        assert!(barcode(Symbology::Interleaved2of5, b"12a", 7.0, 32.0).is_none());
+        assert!(barcode(Symbology::Code39, b"HELLO", 7.0, 32.0).is_some());
+        assert!(barcode(Symbology::Codabar, b"A40156B", 7.0, 32.0).is_some());
     }
 
     #[test]

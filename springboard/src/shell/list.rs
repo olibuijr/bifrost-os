@@ -6,7 +6,7 @@
 use super::battery::Graph;
 use super::icons::{self, Icon, BLUE, RED};
 use super::pages::{Action, PageId};
-use super::ui::{home_zone, Ui, Weight, AVATAR_BG, AVATAR_FG, CARD_BG, DETAIL_BG, LABEL, LABEL_2, ROW_PRESSED, SECONDARY, SEPARATOR_C, WHITE, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_TITLE3_PT, MATERIAL_MENU, MENU_HIGHLIGHT, MENU_RADIUS_PT};
+use super::ui::{home_zone, Ui, Weight, AVATAR_BG, AVATAR_FG, CARD_BG, DETAIL_BG, LABEL, LABEL_2, ROW_PRESSED, SECONDARY, SEPARATOR_C, WHITE, MAC_BODY_PT, MAC_HEADLINE_PT, MAC_TITLE3_PT, MATERIAL_MENU, menu_highlight, MENU_RADIUS_PT};
 use super::controls::{self, draw_slider, draw_switch, switch_progress, KNOB_PT, SWITCH_H_PT, SWITCH_MS, SWITCH_W_PT};
 use crate::deildu::scroll::Scroller;
 use crate::gfx::{pack, Image, Surface};
@@ -127,6 +127,9 @@ const SWATCH_ROW_PT: f32 = 66.0;
 /// the top of the pictures and dots below the row's top edge, and of the name below them
 const CHOICE_TOP_PT: f32 = 12.0;
 const CAPTION_GAP_PT: f32 = 4.0;
+/// the least room kept between a row's label and its pictures or dots, and how far they may shrink to keep it
+const CHOICE_LABEL_GAP_PT: f32 = 12.0;
+const CHOICE_MIN_SCALE: f32 = 0.5;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Tint {
@@ -439,13 +442,35 @@ fn label_lines(ui: &Ui, text: &str, width: f32, wrap: bool) -> Vec<String> {
     let limit = if wrap { LABEL_LINES } else { 1 };
     if lines.len() > limit {
         // the rest of the text joins the last line, which `fit` then ends with an ellipsis
-        let tail = lines.split_off(limit - 1).join(" ");
+        let tail = text_after_lines(text, &lines[..limit - 1]);
+        lines.truncate(limit - 1);
         lines.push(tail);
     }
     if lines.is_empty() {
         lines.push(String::new());
     }
     lines.iter().map(|l| ui.fit(l, MAC_BODY_PT, width)).collect()
+}
+
+/// The text that follows the wrapped `lines` of `text`, taken from the text itself (white space collapsed as the wrap
+/// collapses it). The wrap breaks after hyphens, between ideographs and inside overlong words as well as at spaces, so its
+/// lines cannot be rejoined with spaces: each line is found in the text from where the previous one ended.
+fn text_after_lines(text: &str, lines: &[String]) -> String {
+    let norm = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut at = 0;
+    for line in lines {
+        match norm.get(at..).and_then(|rest| rest.find(line.as_str())) {
+            Some(off) => at += off + line.len(),
+            // not a piece of the text (cannot happen with `Ui::wrap`): skip as many bytes, on a character boundary
+            None => {
+                at = (at + line.len()).min(norm.len());
+                while !norm.is_char_boundary(at) {
+                    at += 1;
+                }
+            }
+        }
+    }
+    norm[at..].trim_start().to_string()
 }
 
 /// The width in px a row's trailing control takes from its label: the chevron, switch, check, detail button or network
@@ -496,6 +521,8 @@ pub struct ListPage {
     gen: u64,
     /// the pop-up menu open on a row, if any
     open: Option<OpenPopup>,
+    /// the row that has the keyboard focus (Tab in a Settings pane): it shows the focus ring
+    focus: Option<(usize, usize)>,
 }
 
 /// Where a page sits: the phone's full-width column or an bifrost split-view pane.
@@ -660,6 +687,9 @@ pub struct NavBar {
     pill: bool,
     /// there is a page to go forward to: the pill's forward half is enabled
     forward: bool,
+    /// a first page with an earlier pane behind it (Settings' split layout after a pane opened from Search): the pill's
+    /// back half is enabled though the page has no back target of its own
+    earlier: bool,
 }
 
 impl NavBar {
@@ -672,6 +702,7 @@ impl NavBar {
             status_pt: STATUS_PT,
             pill: false,
             forward: false,
+            earlier: false,
         }
     }
 
@@ -680,9 +711,14 @@ impl NavBar {
         self.forward = on;
     }
 
+    /// Enables the pill's back half on a page without a back target of its own (an earlier pane is behind it).
+    pub fn set_earlier(&mut self, on: bool) {
+        self.earlier = on;
+    }
+
     /// Whether the pill's back half is enabled (there is a page to go back to).
     pub fn has_back(&self) -> bool {
-        self.back.is_some()
+        self.back.is_some() || (self.pill && self.earlier)
     }
 
     /// Whether the pill's forward half is enabled.
@@ -721,7 +757,7 @@ impl NavBar {
         if self.pill {
             // the left half of the pill
             use bifrost_ui::prefs_layout::m;
-            return self.back.is_some() && x >= ui.pt(m::TOOLBAR_X) && x < ui.pt(m::TOOLBAR_X + m::TOOLBAR_PILL_W / 2.0) && y >= ui.pt(m::TOOLBAR_Y) && y < ui.pt(m::TOOLBAR_Y + m::TOOLBAR_PILL_H);
+            return self.has_back() && x >= ui.pt(m::TOOLBAR_X) && x < ui.pt(m::TOOLBAR_X + m::TOOLBAR_PILL_W / 2.0) && y >= ui.pt(m::TOOLBAR_Y) && y < ui.pt(m::TOOLBAR_Y + m::TOOLBAR_PILL_H);
         }
         self.back.is_some() && y < self.bottom(ui) && x < ui.pt(150.0)
     }
@@ -755,8 +791,8 @@ impl NavBar {
             let (cy, a, th) = (py + ph / 2.0, ui.pt(5.5), ui.pt(1.8));
             let col = |on: bool| if on { LABEL.now() } else { LABEL_2.now() };
             let bx = px + pw * 0.27;
-            icons::line(s, (bx + a * 0.5, cy - a), (bx - a * 0.5, cy), th, col(self.back.is_some()));
-            icons::line(s, (bx - a * 0.5, cy), (bx + a * 0.5, cy + a), th, col(self.back.is_some()));
+            icons::line(s, (bx + a * 0.5, cy - a), (bx - a * 0.5, cy), th, col(self.has_back()));
+            icons::line(s, (bx - a * 0.5, cy), (bx + a * 0.5, cy + a), th, col(self.has_back()));
             // each half is enabled only while there is history that way (a page Back left, for forward)
             let fx = px + pw * 0.73;
             icons::line(s, (fx - a * 0.5, cy - a), (fx + a * 0.5, cy), th, col(self.forward));
@@ -858,18 +894,26 @@ impl ListPage {
                     Tint::Red => RED,
                     Tint::Dim => SECONDARY,
                 };
-                // the value keeps its natural width (up to half the row); the label gets the rest
-                let value_img = (!item.value.is_empty() && !pane.sidebar).then(|| ui.text(&ui.fit(&item.value, MAC_BODY_PT, value_w), MAC_BODY_PT, Weight::Regular, SECONDARY));
+                let badge_w = if item.badge > 0 { super::notify::list::badge_image(ui, item.badge).w as f32 } else { 0.0 };
+                let accessory = if pane.sidebar { 0.0 } else { accessory_room(ui, item, chevron.w as f32, check.w as f32, badge_w) };
+                let (icon_pt, _, gap_pt) = row_icon(pane.sidebar);
+                let leading = if has_leading(item) { ui.pt(icon_pt + gap_pt) } else { 0.0 } + if item.leading_check { ui.pt(LEADING_CHECK_PT) } else { 0.0 };
+                // the value keeps its natural width, up to half the row, or more when the label is short enough to leave the room
+                // (a long processor name beside "Processor"); the label gets the rest
+                let value_cap = if item.value.is_empty() || pane.sidebar {
+                    value_w
+                } else {
+                    let label_natural = ui.text(&item.label, MAC_BODY_PT, Weight::Regular, WHITE).w as f32;
+                    value_w.max(cw - ui.pt(2.0 * TEXT_INSET_PT) - leading - accessory - label_natural - ui.pt(16.0))
+                };
+                let value_img = (!item.value.is_empty() && !pane.sidebar).then(|| ui.text(&ui.fit(&item.value, MAC_BODY_PT, value_cap), MAC_BODY_PT, Weight::Regular, SECONDARY));
                 let popup_img = item.popup.as_ref().filter(|_| !pane.sidebar).map(|p| {
                     let chosen = p.choices.get(p.selected).map_or("", String::as_str);
                     ui.text(&ui.fit(chosen, MAC_BODY_PT, value_w), MAC_BODY_PT, Weight::Regular, WHITE)
                 });
                 let value_room = value_img.as_ref().map_or(0.0, |v| v.w as f32 + ui.pt(8.0)) + popup_img.as_ref().map_or(0.0, |p| p.w as f32 + ui.pt(POPUP_CHEV_PT + POPUP_GAP_PT));
-                let badge_w = if item.badge > 0 { super::notify::list::badge_image(ui, item.badge).w as f32 } else { 0.0 };
-                let accessory = if pane.sidebar { 0.0 } else { accessory_room(ui, item, chevron.w as f32, check.w as f32, badge_w) };
-                let (icon_pt, _, gap_pt) = row_icon(pane.sidebar);
                 // the label stops before the value and the trailing control and wraps instead of running under them
-                let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - if has_leading(item) { ui.pt(icon_pt + gap_pt) } else { 0.0 } - if item.leading_check { ui.pt(LEADING_CHECK_PT) } else { 0.0 } - value_room - accessory;
+                let label_w = cw - ui.pt(2.0 * TEXT_INSET_PT) - leading - value_room - accessory;
                 // the app's icon at the icon token; a built-in app has none and leaves the slot blank
                 let icon_img = item.app_icon.as_ref().filter(|_| has_leading(item)).and_then(|id| { let px = ui.pt(icon_pt).round() as usize; super::apphost::icon_image(id, px).or_else(|| super::apps::builtin_icon(id, px)) });
                 images.push(RowImages {
@@ -911,6 +955,7 @@ impl ListPage {
             flipped,
             scroll,
             open: None,
+            focus: None,
             search_y,
             margin: m,
             nav_pt: pane.nav_pt,
@@ -952,6 +997,14 @@ impl ListPage {
         }
     }
 
+    /// Enables the back half of the toolbar pill for an earlier pane (see `NavBar::set_earlier`).
+    pub fn set_earlier(&mut self, on: bool) {
+        if self.nav.earlier != on {
+            self.nav.set_earlier(on);
+            self.gen = next_gen();
+        }
+    }
+
     /// The page's navigation bar (its back and forward state).
     pub fn nav(&self) -> &NavBar {
         &self.nav
@@ -962,6 +1015,41 @@ impl ListPage {
         if let Some(sb) = &mut self.sidebar {
             sb.selected = page;
         }
+    }
+
+    /// The page each row that opens one leads to, top to bottom: the rows the arrow keys step over in the sidebar.
+    pub fn push_pages(&self) -> Vec<PageId> {
+        self.spec.groups.iter().flat_map(|g| g.items.iter()).filter_map(|it| if let Action::Push(id) = it.action { Some(id) } else { None }).collect()
+    }
+
+    /// The selected sidebar row's plate (x, y, w, h) on screen at the current scroll offset (None without a sidebar
+    /// selection on the page).
+    pub fn selected_plate(&self, ui: &Ui) -> Option<(f32, f32, f32, f32)> {
+        let sb = self.sidebar.as_ref()?;
+        let r = self.rows.iter().find(|r| self.item(r.g, r.i).action == Action::Push(sb.selected))?;
+        let m = self.margin;
+        let top = r.y - self.draw_offset() + ui.pt((sidebar_pt(SIDEBAR_ROW_PT) - sidebar_pt(SIDEBAR_SEL_H_PT)) / 2.0);
+        Some((m, top, self.w as f32 - 2.0 * m, ui.pt(sidebar_pt(SIDEBAR_SEL_H_PT))))
+    }
+
+    /// Scrolls the sidebar just far enough that the selected row is in view (below the search field, above the bottom).
+    pub fn reveal_selected(&mut self, ui: &Ui) {
+        let Some((_, y, _, h)) = self.selected_plate(ui) else { return };
+        let (top, bottom) = (ui.pt(bifrost_ui::prefs_layout::m::SEARCH_Y + bifrost_ui::prefs_layout::m::SEARCH_H + 4.0), self.h as f32);
+        let off = self.scroll.offset();
+        if y < top {
+            self.scroll.jump_to((off - (top - y)).max(0.0));
+        } else if y + h > bottom {
+            self.scroll.jump_to(off + (y + h - bottom));
+        }
+    }
+
+    /// The keyboard focus ring round the selected sidebar row, drawn on `s` (a surface with the sidebar at its left).
+    pub fn draw_selected_ring(&self, s: &mut Surface, ui: &Ui) {
+        let Some((x, y, w, h)) = self.selected_plate(ui) else { return };
+        // the ring's geometry is the kit's (`sheet::focus_ring_rect`): drawn outside the control, radius grown by its width
+        let g = ui.pt(bifrost_ui::sheet::FOCUS_RING_PT);
+        s.stroke_rrect(x - g, y - g, w + 2.0 * g, h + 2.0 * g, ui.pt(bifrost_ui::prefs_layout::m::SELECTION_RADIUS) + g, ui.pt(2.0), bifrost_render::appearance::accent_now());
     }
 
     /// The search capsule's rect on screen, when it is on the page.
@@ -1079,6 +1167,71 @@ impl ListPage {
         (x + w / 2.0, y + h / 2.0)
     }
 
+    /// The rows the keyboard can focus, top to bottom: those that do something when pressed (switches, pop-up buttons, links,
+    /// checkmarks, buttons), sliders, and segmented, picture and dot rows.
+    pub fn focusable(&self) -> Vec<(usize, usize)> {
+        self.rows
+            .iter()
+            .filter(|r| {
+                let it = self.item(r.g, r.i);
+                it.tint != Tint::Dim && (it.tappable() || matches!(it.body, Body::Slider { .. }) || it.segments.is_some())
+            })
+            .map(|r| (r.g, r.i))
+            .collect()
+    }
+
+    /// Gives row (g, i) the keyboard focus ring, or takes it away (None).
+    pub fn set_focus(&mut self, focus: Option<(usize, usize)>) {
+        if self.focus != focus {
+            self.focus = focus;
+            self.gen = next_gen();
+        }
+    }
+
+    /// The row with the focus ring.
+    pub fn focus(&self) -> Option<(usize, usize)> {
+        self.focus
+    }
+
+    /// Scrolls just far enough that row (g, i) is in view, below the bar and above the bottom edge.
+    pub fn reveal_row(&mut self, ui: &Ui, g: usize, i: usize) {
+        let (_, y, _, h) = self.row_rect(ui, g, i);
+        let (top, bottom) = (self.nav_bottom(ui) + ui.pt(8.0), self.h as f32 - ui.pt(8.0));
+        let off = self.scroll.offset();
+        if y < top {
+            self.scroll.jump_to((off - (top - y)).max(0.0));
+        } else if y + h > bottom {
+            self.scroll.jump_to(off + (y + h - bottom));
+        }
+        self.gen = next_gen();
+    }
+
+    /// A slider row's value, 0 to 1.
+    pub fn slider_value(&self, g: usize, i: usize) -> Option<f32> {
+        match self.item(g, i).body {
+            Body::Slider { value, .. } => Some(value),
+            _ => None,
+        }
+    }
+
+    /// A segmented, picture or dot row's chosen segment and how many there are.
+    pub fn choice_state(&self, g: usize, i: usize) -> Option<(usize, usize)> {
+        self.item(g, i).segments.as_ref().map(|seg| (seg.selected, seg.choices.len()))
+    }
+
+    /// Moves the highlight of the open pop-up menu (`dir` 1 down, -1 up).
+    pub fn popup_step(&mut self, dir: i32) {
+        if let Some(p) = &mut self.open {
+            p.menu.step(dir);
+            self.gen = next_gen();
+        }
+    }
+
+    /// The highlighted choice of the open pop-up menu.
+    pub fn popup_choice(&self) -> Option<usize> {
+        self.open.as_ref().and_then(|p| p.menu.activate()).map(|k| k as usize)
+    }
+
     /// The (group, item) of the first row whose label is `label`.
     pub fn find(&self, label: &str) -> Option<(usize, usize)> {
         self.rows.iter().find(|r| self.item(r.g, r.i).label == label).map(|r| (r.g, r.i))
@@ -1164,7 +1317,7 @@ impl ListPage {
         }
         if let (Body::Tiles | Body::Swatches(_), Some(seg)) = (&item.body, &item.segments) {
             // a picture or a dot chooses; the rest of the row (its label) does nothing
-            let (x0, pitch, w) = self.choice_strip(ui, item, seg.choices.len());
+            let (x0, pitch, w) = self.choice_strip(ui, item, seg.choices.len(), self.label_px(r.g, r.i));
             let k = ((x - x0) / pitch).floor();
             if x >= x0 && k >= 0.0 && (k as usize) < seg.choices.len() && x - x0 - k * pitch <= w {
                 return Some(Hit::Segment(r.g, r.i, k as usize));
@@ -1185,6 +1338,11 @@ impl ListPage {
 
     pub fn scroll_moved(&mut self, y: f32, t: f64) {
         self.scroll.moved(y, t);
+    }
+
+    /// The scroll wheel moved the content `dy` px (negative shows what is below); true when the offset changed.
+    pub fn wheel(&mut self, dy: f32) -> bool {
+        self.scroll.wheel(dy)
     }
 
     /// Ends the touch; true when it was a tap rather than a drag.
@@ -1209,8 +1367,10 @@ impl ListPage {
 
     /// Whether a frame at `t` is the previous one shifted by the scroll offset `off` px alone:
     /// no switch mid-flip, and (large-title pages) the title and search capsule scrolled away.
+    /// An Always scroll knob moves against the content, so a shifted frame would carry it along.
     pub fn scroll_only(&self, ui: &Ui, t: f64, off: i32) -> bool {
-        !self.flipped.iter().any(|&f| t - f < SWITCH_MS) && (!self.spec.large || off as f32 >= ui.pt(LARGE_TITLE_PT) + 1.0)
+        !bifrost_render::ui::scroll_bars_always()
+            && !self.flipped.iter().any(|&f| t - f < SWITCH_MS) && (!self.spec.large || off as f32 >= ui.pt(LARGE_TITLE_PT) + 1.0)
     }
 
     pub fn offset(&self) -> f32 {
@@ -1300,6 +1460,8 @@ impl ListPage {
         if let Some(sb) = &self.sidebar {
             self.draw_card(s, ui, sb, dy);
         }
+        self.draw_scroller(s, ui);
+        self.draw_focus_ring(s, ui);
         self.draw_popup(s, ui, pressed);
         if let (Some(title), None) = (&self.title_large, &self.sidebar) {
             // fades out as it slides under the bar, while the inline title fades in
@@ -1314,6 +1476,45 @@ impl ListPage {
             blur_strip(s, self.nav_bottom(ui) as usize, ui.pt(10.0) as usize);
         }
         self.nav.draw(s, ui, self.w, alpha, if self.spec.large || self.header.as_ref().is_some_and(|h| !h.compact) { alpha } else { 1.0 });
+    }
+
+    /// The keyboard focus ring round the focused row: the kit's geometry (`sheet::focus_ring_rect`), outside the row.
+    fn draw_focus_ring(&self, s: &mut Surface, ui: &Ui) {
+        let Some((g, i)) = self.focus.filter(|&(g, i)| self.rows.iter().any(|r| r.g == g && r.i == i)) else { return };
+        let (x, y, w, h) = self.row_rect(ui, g, i);
+        if y + h < self.nav_bottom(ui) || y > self.h as f32 {
+            return;
+        }
+        let g = ui.pt(bifrost_ui::sheet::FOCUS_RING_PT);
+        s.stroke_rrect(x - g, y - g, w + 2.0 * g, h + 2.0 * g, ui.pt(RADIUS_PT) + g, ui.pt(2.0), bifrost_render::appearance::accent_now());
+    }
+
+    /// Settings > Appearance > Show scroll bars: Always keeps the overlay knob drawn at the trailing edge while the list
+    /// rests (a list that fits has none).
+    fn draw_scroller(&self, s: &mut Surface, ui: &Ui) {
+        if !bifrost_render::ui::scroll_bars_always() {
+            return;
+        }
+        let Some((x, y, w, len)) = self.scroller_rect(ui) else { return };
+        s.fill_rrect(x, y, w, len, w / 2.0, LABEL_2.now());
+    }
+
+    /// The Always scroll knob (x, y, w, h px). Its track runs below the navigation bar the large title scrolls under and
+    /// above the bottom inset the content keeps (`home_zone`), each with the knob's own inset, so it never sits under
+    /// the bar; its length is the visible share of the content along that track.
+    fn scroller_rect(&self, ui: &Ui) -> Option<(f32, f32, f32, f32)> {
+        use crate::deildu::scroll::{indicator, INDICATOR_INSET_PT, INDICATOR_MIN_PT, INDICATOR_W_PT};
+        let inset = ui.pt(INDICATOR_INSET_PT);
+        let (top, bottom) = (self.nav_bottom(ui) + inset, self.h as f32 - home_zone(ui) - inset);
+        let (view, track) = (self.h as f32, bottom - top);
+        if view <= 0.0 || track <= 0.0 {
+            return None;
+        }
+        // scaled to the track, so the knob is the visible share of the content and travels the rest of the track
+        let k = track / view;
+        let (y, len) = indicator(track, self.scroll.max() * k, self.scroll.offset() * k, ui.pt(INDICATOR_MIN_PT))?;
+        let w = ui.pt(INDICATOR_W_PT);
+        Some((self.w as f32 - inset - w, top + y, w, len))
     }
 
     /// The open pop-up menu: a translucent rounded card, a checkmark on the chosen item and the highlighted item filled.
@@ -1331,7 +1532,7 @@ impl ListPage {
             let mid = ty + ui.pt(h) / 2.0;
             let picked = pressed == Some(Hit::Choice(k));
             if picked {
-                s.fill_rrect(x + ui.pt(4.0), ty, w - ui.pt(8.0), ui.pt(h), ui.pt(5.0), MENU_HIGHLIGHT);
+                s.fill_rrect(x + ui.pt(4.0), ty, w - ui.pt(8.0), ui.pt(h), ui.pt(5.0), menu_highlight());
             }
             if item.checked {
                 s.blit_colored(&self.check, (x + ui.pt(8.0)) as i32, (mid - self.check.h as f32 / 2.0) as i32, bifrost_render::appearance::accent_now(), 255);
@@ -1412,7 +1613,7 @@ impl ListPage {
                     ly += label.h as f32;
                 }
                 if let Some(seg) = &item.segments {
-                    self.draw_choices(s, ui, item, seg, &self.images[k].captions, ry);
+                    self.draw_choices(s, ui, item, seg, &self.images[k].captions, ry, self.label_px(g, i));
                 }
             }
             Body::Row => {
@@ -1526,21 +1727,31 @@ impl ListPage {
     }
 
     /// Where a row's pictures or dots sit: (left x of the first, pitch from one to the next, width of one) in page px. They
-    /// end at the row's right inset.
-    fn choice_strip(&self, ui: &Ui, item: &Item, n: usize) -> (f32, f32, f32) {
+    /// end at the row's right inset. In a pane too narrow to fit them beside the label (`label_w` px wide) they shrink,
+    /// down to half size, so the label stays whole.
+    fn choice_strip(&self, ui: &Ui, item: &Item, n: usize, label_w: f32) -> (f32, f32, f32) {
         let (w, gap) = match item.body {
             Body::Tiles => (ui.pt(TILE_W_PT), ui.pt(TILE_GAP_PT)),
             _ => (ui.pt(DOT_PT), ui.pt(DOT_GAP_PT)),
         };
         let right = self.w as f32 - self.margin - ui.pt(TEXT_INSET_PT);
         let n = n.max(1) as f32;
+        let full = n * w + (n - 1.0) * gap;
+        let room = right - (self.margin + ui.pt(TEXT_INSET_PT) + label_w + ui.pt(CHOICE_LABEL_GAP_PT));
+        let scale = if full > room { (room / full).clamp(CHOICE_MIN_SCALE, 1.0) } else { 1.0 };
+        let (w, gap) = (w * scale, gap * scale);
         (right - n * w - (n - 1.0) * gap, w + gap, w)
     }
 
+    /// The widest line of a row's label, in px.
+    fn label_px(&self, g: usize, i: usize) -> f32 {
+        self.images[self.row_index(g, i)].label.iter().map(|l| l.w as f32).fold(0.0, f32::max)
+    }
+
     /// Draws a row's pictures (`Body::Tiles`) or dots (`Body::Swatches`) with their names, the chosen one marked.
-    fn draw_choices(&self, s: &mut Surface, ui: &Ui, item: &Item, seg: &Popup, captions: &[Image], ry: f32) {
+    fn draw_choices(&self, s: &mut Surface, ui: &Ui, item: &Item, seg: &Popup, captions: &[Image], ry: f32, label_w: f32) {
         use bifrost_render::ui::{CARD_BG as CARD, SIDEBAR_BG as DESK, SYSTEM_GREEN, SYSTEM_RED, SYSTEM_YELLOW};
-        let (x0, pitch, w) = self.choice_strip(ui, item, seg.choices.len());
+        let (x0, pitch, w) = self.choice_strip(ui, item, seg.choices.len(), label_w);
         let top = ry + ui.pt(CHOICE_TOP_PT);
         let accent = bifrost_render::appearance::accent_now();
         let caption = |s: &mut Surface, img: &Image, cx: f32, y: f32, on: bool| {
@@ -1548,7 +1759,7 @@ impl ListPage {
         };
         match &item.body {
             Body::Tiles => {
-                let h = ui.pt(TILE_H_PT);
+                let h = w * TILE_H_PT / TILE_W_PT;
                 let rad = ui.pt(6.0);
                 for k in 0..seg.choices.len() {
                     let x = x0 + k as f32 * pitch;
@@ -1805,6 +2016,24 @@ mod tests {
         assert_eq!(root.hit(&ui, ui.pt(40.0), ui.pt(42.0)), None, "no back on the root");
         let (gx, gy) = root.row_centre(&ui, 1, 0);
         assert_eq!(root.hit(&ui, gx, gy - ui.pt(ROW_PT)), None, "the header is not a row");
+    }
+
+    /// The Always scroll knob stays inside its track: below the navigation bar and above the bottom inset, at the top
+    /// and at the end of the content alike.
+    #[test]
+    fn the_always_scroll_knob_is_inset_below_the_bar_and_above_the_bottom() {
+        use crate::deildu::scroll::INDICATOR_INSET_PT;
+        let ui = ui();
+        let mut page = ListPage::new(&ui, spec(true, 40), 1200, 1920, None);
+        let (top, bottom) = (page.nav_bottom(&ui) + ui.pt(INDICATOR_INSET_PT), 1920.0 - home_zone(&ui) - ui.pt(INDICATOR_INSET_PT));
+        let (_, y, _, len) = page.scroller_rect(&ui).expect("a long page has a knob");
+        assert!((y - top).abs() < 0.5, "at rest the knob starts below the bar: {y} vs {top}");
+        assert!(len < bottom - top);
+        page.jump_to(page.scroll.max());
+        let (_, y, _, len) = page.scroller_rect(&ui).expect("knob");
+        assert!((y + len - bottom).abs() < 0.5, "at the end it stops above the bottom inset: {} vs {bottom}", y + len);
+        let short = ListPage::new(&ui, spec(true, 2), 1200, 1920, None);
+        assert!(short.scroller_rect(&ui).is_none(), "a list that fits has no knob");
     }
 
     #[test]
@@ -2126,7 +2355,7 @@ mod tests {
         let page = ListPage::new(&ui, spec, 1200, 1920, None);
         for (i, n) in [(0usize, 3usize), (1, 3)] {
             let item = page.item(0, i);
-            let (x0, pitch, w) = page.choice_strip(&ui, item, n);
+            let (x0, pitch, w) = page.choice_strip(&ui, item, n, page.label_px(0, i));
             let (_, ry, _, _) = page.row_rect(&ui, 0, i);
             let y = ry + ui.pt(CHOICE_TOP_PT) + w.min(ui.pt(TILE_H_PT)) / 2.0;
             for k in 0..n {
@@ -2138,5 +2367,44 @@ mod tests {
         assert_eq!(page.item(0, 0).height_pt(), TILES_ROW_PT);
         let mut px = vec![0u32; 1200 * 1920];
         page.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut px, y0: 0 }, &ui, None, 1e9);
+    }
+
+    /// In a pane too narrow for the pictures beside the label, they shrink rather than cover the label.
+    #[test]
+    fn pictures_and_dots_keep_clear_of_the_row_label() {
+        let ui = crate::shell::tests::ui();
+        use crate::shell::pages::Pick;
+        let names = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let spec = Spec {
+            id: PageId::Appearance,
+            title: "Appearance".into(),
+            large: false,
+            groups: vec![Group::new(vec![
+                Item::tiles("Appearance", names(&["Light", "Dark", "Auto"]), 0, Action::Pick(Pick::Appearance(0))),
+                Item::swatches("Colour", vec![1; 9], names(&["Multicolour"; 9]), 0, Action::Pick(Pick::Accent(0))),
+            ])],
+        };
+        for w in [ui.pt(330.0) as i32, ui.pt(400.0) as i32, 1200] {
+            let page = ListPage::new(&ui, spec.clone(), w, 1920, None);
+            for (i, n) in [(0usize, 3usize), (1, 9)] {
+                let (x0, _, tile) = page.choice_strip(&ui, page.item(0, i), n, page.label_px(0, i));
+                let (lx, _) = leading_x(&ui, page.margin, page.item(0, i), false);
+                let full = ui.pt(if i == 0 { TILE_W_PT } else { DOT_PT });
+                assert!(x0 >= lx + page.label_px(0, i) || tile <= full * (CHOICE_MIN_SCALE + 0.001), "row {i} at {w}px: the label stays whole or the pictures are at their smallest");
+            }
+        }
+    }
+
+    #[test]
+    fn the_ellipsis_tail_comes_from_the_text_not_from_lines_joined_with_spaces() {
+        let lines = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        // words: the separating space is dropped, not doubled
+        assert_eq!(text_after_lines("one two  three four", &lines(&["one two"])), "three four");
+        // a break after a hyphen and inside a long word puts no space into the tail
+        assert_eq!(text_after_lines("well-known name", &lines(&["well-"])), "known name");
+        assert_eq!(text_after_lines("abcdefghij", &lines(&["abcd", "efg"])), "hij");
+        // CJK breaks between characters
+        assert_eq!(text_after_lines("日本語の設定画面", &lines(&["日本", "語の"])), "設定画面");
+        assert_eq!(text_after_lines("short", &lines(&["short"])), "");
     }
 }

@@ -216,26 +216,44 @@ impl Draft {
     /// Checks the addresses and that there is at least one recipient, then renders the message with CRLF line
     /// endings. `message_id` and `unix` come from the caller so rendering stays deterministic.
     pub fn render(&self, message_id: &str, unix: i64) -> Result<String, String> {
-        if !valid_address(&self.from) {
-            return Err("the sender address is not valid".into());
-        }
-        if self.to.is_empty() {
-            return Err("add at least one recipient".into());
-        }
-        for addr in self.to.iter().chain(&self.cc).chain(&self.bcc).chain(&self.reply_to) {
-            if !valid_address(addr) {
-                return Err(format!("{addr} is not a valid address"));
+        self.render_with(message_id, unix, true)
+    }
+
+    /// Renders the message for Drafts: as [`Draft::render`], but a message that has no recipient yet, or a recipient that
+    /// is not an address yet, is saved all the same (a draft is unfinished by nature); only Send checks them.
+    pub fn render_draft(&self, message_id: &str, unix: i64) -> Result<String, String> {
+        self.render_with(message_id, unix, false)
+    }
+
+    /// `sending` is a message that goes out (Send): its sender and addresses are checked and it needs a recipient. A draft
+    /// is unfinished by nature and keeps whatever was typed, so its addresses are not checked: a bad one is the compose
+    /// window's business at Send, never an error of saving (it would end up in the main window's footer).
+    fn render_with(&self, message_id: &str, unix: i64, sending: bool) -> Result<String, String> {
+        if sending {
+            if !valid_address(&self.from) {
+                return Err("the sender address is not valid".into());
+            }
+            if self.to.is_empty() {
+                return Err("add at least one recipient".into());
+            }
+            for addr in self.to.iter().chain(&self.cc).chain(&self.bcc).chain(&self.reply_to) {
+                if !valid_address(addr) {
+                    return Err(format!("{addr} is not a valid address"));
+                }
             }
         }
+        let list = |addresses: &[String]| header_text(&addresses.join(", "));
         let mut out = String::new();
         out.push_str(&format!("Date: {}\r\n", rfc2822_date(unix)));
-        out.push_str(&format!("From: {}\r\n", self.from));
-        out.push_str(&format!("To: {}\r\n", self.to.join(", ")));
+        out.push_str(&format!("From: {}\r\n", header_text(&self.from)));
+        if !self.to.is_empty() {
+            out.push_str(&format!("To: {}\r\n", list(&self.to)));
+        }
         if !self.cc.is_empty() {
-            out.push_str(&format!("Cc: {}\r\n", self.cc.join(", ")));
+            out.push_str(&format!("Cc: {}\r\n", list(&self.cc)));
         }
         if !self.reply_to.is_empty() {
-            out.push_str(&format!("Reply-To: {}\r\n", self.reply_to.join(", ")));
+            out.push_str(&format!("Reply-To: {}\r\n", list(&self.reply_to)));
         }
         out.push_str(&format!("Subject: {}\r\n", encode_subject(&header_text(&self.subject))));
         out.push_str(self.priority.headers());
@@ -708,6 +726,27 @@ mod tests {
         assert!(text.contains("In-Reply-To: <abc@mail.example>\r\n"));
         assert!(text.contains("References: <root@mail.example> <mid@x> <abc@mail.example>\r\n"));
         assert!(text.ends_with("\r\n\r\nJá\r\n.dot line\r\n"));
+    }
+
+    #[test]
+    fn a_draft_without_a_recipient_is_saved_but_not_sent() {
+        let draft = Draft { from: "me@example.com".into(), body: "Just a body".into(), ..Draft::default() };
+        assert!(draft.render("<x@y>", 0).is_err(), "Send needs a recipient");
+        let saved = draft.render_draft("<x@y>", 0).expect("Drafts keep a message that has no recipient yet");
+        assert!(!saved.contains("To:"), "{saved}");
+        assert!(saved.contains("Just a body"));
+    }
+
+    #[test]
+    fn a_draft_with_a_half_typed_recipient_is_saved_as_typed() {
+        let draft = Draft { from: "me@example.com".into(), to: vec!["lead body".into()], body: "Text".into(), ..Draft::default() };
+        assert!(draft.render("<x@y>", 0).unwrap_err().contains("lead body is not a valid address"), "Send still refuses it");
+        let saved = draft.render_draft("<x@y>", 0).expect("saving a draft never complains about its addresses");
+        assert!(saved.contains("To: lead body\r\n"), "{saved}");
+        // no sender yet (no account) saves too, and a value cannot start a header of its own
+        let draft = Draft { to: vec!["a@b.c\r\nBcc: x@y.z".into()], ..Draft::default() };
+        let saved = draft.render_draft("<x@y>", 0).unwrap();
+        assert!(!saved.contains("\r\nBcc:"), "{saved}");
     }
 
     #[test]

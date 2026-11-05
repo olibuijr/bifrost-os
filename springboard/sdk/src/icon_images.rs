@@ -1,5 +1,5 @@
-//! Bitmap icon sets for files and content types, and custom folder icons (`NSWorkspace.icon(forFile:)` and
-//! `NSWorkspace.setIcon(_:forFile:)` as images). [`crate::workspace::icon_for_content_type`] names a glyph; this module
+//! Bitmap icon sets for files and content types, and custom folder icons (the reference workspace's file-icon lookup and
+//! its set-icon call, as images). [`crate::workspace::icon_for_content_type`] names a glyph; this module
 //! lets an app supply the picture itself: an [`ImageObject`] with one or more bitmap representations per content type.
 //!
 //! A lookup walks the type tree: a file of a type with no icon of its own uses the nearest registered ancestor, the

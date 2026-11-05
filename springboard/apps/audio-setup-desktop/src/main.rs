@@ -14,14 +14,25 @@ use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, Ctx, Input, KeyInput, TouchKind};
 use window::{AudioSetup, Target, REFRESH_S};
 
+/// The window size in points, from the configured size in pixels and the display scale.
+fn size_pt(w_px: u32, h_px: u32, scale: f32) -> (f32, f32) {
+    let scale = scale.max(f32::EPSILON);
+    (w_px as f32 / scale, h_px as f32 / scale)
+}
+
 impl App for AudioSetup {
+    /// A single-window utility: the red light quits it (`applicationShouldTerminateAfterLastWindowClosed:`).
+    fn terminates_after_last_window_closed(&self) -> bool {
+        true
+    }
     fn id(&self) -> &str {
         "is.olibuijr.audiosetup.desktop"
     }
 
     fn configure(&mut self, ctx: &Ctx) {
         ctx.enable_sudden_termination(); // keeps no unsaved state: an open draft is simply dropped
-        self.size = (ctx.cfg.w as f32, ctx.cfg.h as f32);
+        // `cfg` is in pixels, the layout in points: a scaled window would otherwise lay out wider than it is
+        self.size = size_pt(ctx.cfg.w, ctx.cfg.h, ctx.ui.pt(1.0));
         if self.last_refresh.is_infinite() {
             let t = self.now;
             self.refresh(t);

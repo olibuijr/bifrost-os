@@ -1,4 +1,4 @@
-//! The document Text Editor opens, saves and keeps: a `Text` plus whether it is rich text. Reading follows the bytes
+//! The document TextEdit opens, saves and keeps: a `Text` plus whether it is rich text. Reading follows the bytes
 //! (an RTF header, an HTML prologue, or else plain text) and writing follows the type the file is saved as, so a plain
 //! text file is saved as plain text, an RTF file as RTF and an HTML file as HTML.
 
@@ -18,7 +18,7 @@ pub fn set_markup_as_code(on: bool) {
     MARKUP_AS_CODE.store(on, Ordering::Relaxed);
 }
 
-/// The file types Text Editor reads and writes (uniform type identifiers).
+/// The file types TextEdit reads and writes (uniform type identifiers).
 pub const RTF_TYPE: &str = "public.rtf";
 pub const PLAIN_TYPE: &str = "public.plain-text";
 pub const HTML_TYPE: &str = "public.html";
@@ -58,6 +58,31 @@ impl TextDocument {
             self.text.make_plain();
         }
         self.rich = rich;
+    }
+
+    /// Edit > Undo. Undoing Make Plain Text brings back the rich text and the rich text mode with it (format bar,
+    /// ruler, formatting commands), not only the styles.
+    pub fn undo(&mut self) -> bool {
+        let makes_rich = self.text.undo_makes_rich();
+        if !self.text.undo() {
+            return false;
+        }
+        if makes_rich {
+            self.rich = true;
+        }
+        true
+    }
+
+    /// Edit > Redo. Redoing Make Plain Text makes the document plain text again.
+    pub fn redo(&mut self) -> bool {
+        let makes_plain = self.text.redo_makes_plain();
+        if !self.text.redo() {
+            return false;
+        }
+        if makes_plain {
+            self.rich = false;
+        }
+        true
     }
 
     /// Reads a file. The bytes decide: a package, an RTF header or an HTML prologue means rich text, anything else is
@@ -110,6 +135,10 @@ impl TextDocument {
             text.load(rtf::plain_cells(&decoded));
             false
         };
+        if !rich {
+            // a plain document has one font, the plain text font Make Plain Text switches to
+            text.use_plain_font();
+        }
         Ok(TextDocument { text, rich, read_only: false, encoding, properties, code })
     }
 
@@ -173,7 +202,7 @@ impl Document for TextDocument {
             webarchive::TYPE => Ok(webarchive::write(&without_pictures(self.text.cells()), self.text.tab_width(), &self.properties)),
             PLAIN_TYPE => self.write_plain(),
             "public.utf8-plain-text" => Ok(rtf::write_plain(self.text.cells())),
-            other => Err(DocumentError::new(&format!("Text Editor cannot write {other}"))),
+            other => Err(DocumentError::new(&format!("TextEdit cannot write {other}"))),
         }
     }
 
@@ -191,14 +220,14 @@ impl Document for TextDocument {
 
     fn read_package(files: &[(String, Vec<u8>)], uttype: &str) -> Result<Self, DocumentError> {
         if uttype != RTFD_TYPE {
-            return Err(DocumentError::new(&format!("Text Editor cannot read {uttype} packages")));
+            return Err(DocumentError::new(&format!("TextEdit cannot read {uttype} packages")));
         }
         Self::read_package_files(files)
     }
 
     fn package_files(&self, uttype: &str) -> Result<Vec<(String, Vec<u8>)>, DocumentError> {
         if uttype != RTFD_TYPE {
-            return Err(DocumentError::new(&format!("Text Editor cannot write {uttype} packages")));
+            return Err(DocumentError::new(&format!("TextEdit cannot write {uttype} packages")));
         }
         Ok(self.files_of_package())
     }
@@ -215,6 +244,7 @@ mod tests {
         assert_eq!(plain.text.text(), "hello\nworld");
         let out = plain.write(PLAIN_TYPE).unwrap();
         assert_eq!(out, b"hello\nworld".to_vec());
+        assert!(plain.text.cells().iter().all(|c| c.style.font == crate::text::PLAIN_FONT), "a plain file opens in the plain text font");
 
         let rich = TextDocument::read(b"{\\rtf1\\ansi \\b bold\\b0  text}", RTF_TYPE).unwrap();
         assert!(rich.rich);
@@ -267,6 +297,23 @@ mod tests {
         assert!(!doc.text.cells()[0].style.bold);
         doc.set_rich(true);
         assert!(doc.rich);
+    }
+
+    #[test]
+    fn undoing_make_plain_text_restores_rich_text_mode_and_redo_makes_it_plain_again() {
+        let mut doc = TextDocument::read(b"{\\rtf1 \\b x}", RTF_TYPE).unwrap();
+        doc.set_rich(false);
+        assert!(!doc.rich);
+        assert!(doc.undo());
+        assert!(doc.rich, "Undo brings the document back to rich text, not only its styles");
+        assert!(doc.text.cells()[0].style.bold);
+        assert!(doc.redo());
+        assert!(!doc.rich, "Redo makes it plain text again");
+        assert!(!doc.text.cells()[0].style.bold);
+        // an ordinary edit's undo leaves the mode alone
+        doc.text.insert("y", crate::text::Kind::Typing);
+        assert!(doc.undo());
+        assert!(!doc.rich);
     }
 
     #[test]

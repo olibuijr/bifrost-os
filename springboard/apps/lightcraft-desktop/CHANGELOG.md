@@ -4,6 +4,51 @@
 
 # Changelog
 
+## 0.18.0
+
+- Upstream lightcraft v0.18.0.
+  ## What's Changed
+  * Integration batch 46 (6 community PRs) by @echelon in https://github.com/storytold/lightcraft/pull/3584
+  * Fix Histogram::percentile returning black when the target truncates to 0 by @Silvertree2010 in https://github.com/storytold/lightcraft/pull/3515
+  * GPU equivalence tests run on a software adapter when asked (lavapipe, WARP), for local runs on every platform by @THEtheChad in https://github.com/storytold/lightcraft/pull/3370
+  * Reject shutter fractions with a non-positive numerator or denominator by @Silvertree2010 in https://github.com/storytold/lightcraft/pull/3442
+
+## 0.17.0
+
+- Upstream lightcraft v0.17.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/lightcraft/pull/3437
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/lightcraft/pull/3436
+  * Integration r3: 178 reviewed PRs by @aiongg in https://github.com/storytold/lightcraft/pull/3430
+  * Issue #3405: Auto Import waits for an import that starts during its listing by @finaler1x in https://github.com/storytold/lightcraft/pull/3409
+
+## 0.16.0
+
+- Upstream lightcraft v0.16.0.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/3269
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/3275
+  * deps: bump tar, zip, roxmltree, rustls-webpki and symphonia to latest by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/3358
+  * CI: workflows only call craft-common-actions at @main (AGENTS.md; windows-arm64 unpinned) by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/3356
+
+## 0.15.0
+
+- Upstream lightcraft v0.15.0.
+  ## What's Changed
+  * Migrate LightCraft to egui 0.37 with current main preserved by @skylartaylor in https://github.com/storytold/lightcraft/pull/2913
+  * feat(update): add startup update prompt modal and self-update by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/2933
+  * security: bound heic-rs 0.1.4 work around hostile HEIF containers by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/2770
+  * security/raw: bound hostile-memory paths in the raw decoders by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/2780
+
+## 0.14.0
+
+- Upstream lightcraft v0.14.0.
+  ## What's Changed
+  * fix: document the deliberate buffer leak during thread teardown (SonarCloud) by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/2700
+  * packaging: bash tests, named positional parameters and stderr errors (SonarCloud S7688/S7679/S7682/S7677) by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/2655
+  * Packaging: pin the signing client and appimagetool, and check their hashes by @aiongg in https://github.com/storytold/lightcraft/pull/2413
+  * CI: one test binary per crate, line tables only, one WASM check by @aiongg in https://github.com/storytold/lightcraft/pull/2710
+
 ## 0.13.0
 
 - Upstream lightcraft v0.13.0.

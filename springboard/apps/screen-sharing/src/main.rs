@@ -14,7 +14,7 @@ use bifrost_app::widgets;
 use bifrost_app::{App, Ctx, Input, KeyInput, TouchKind};
 use bifrost_rfb::keysym;
 use connection::{lock, Connection, Status};
-use springboard::shell::ui::{Weight, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_TITLE2_PT, TINT, WHITE};
+use springboard::shell::ui::{Weight, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_TITLE2_PT, WHITE, accent_now};
 use std::sync::atomic::Ordering;
 use view::{Area, View};
 
@@ -66,8 +66,13 @@ fn hit(px: f32, py: f32, x: f32, y: f32, w: f32, h: f32) -> bool {
     px >= x && px < x + w && py >= y && py < y + h
 }
 
+/// An option chip's fill: the user's accent while on, the field colour while off.
+fn chip_fill(on: bool) -> u32 {
+    if on { accent_now() } else { FIELD_BG.now() }
+}
+
 fn chip(s: &mut Surface, u: &Ui, x: f32, w: f32, label: &str, on: bool, enabled: bool) {
-    let fill = if on { TINT } else { FIELD_BG.now() };
+    let fill = chip_fill(on);
     let color = if on {
         WHITE
     } else if enabled {
@@ -378,7 +383,7 @@ impl App for ScreenSharing {
         let (text, color) = if self.address.is_empty() { ("Address, such as 192.168.1.20", LABEL_2.now()) } else { (self.address.as_str(), LABEL.now()) };
         let connected = self.conn.is_some();
         // the box that has the keyboard gets a blue outline while not connected
-        let outline = |on: bool| if on && !connected { TINT } else { FIELD_BG.now() };
+        let outline = |on: bool| if on && !connected { accent_now() } else { FIELD_BG.now() };
         s.fill_rrect(u.pt(x - 2.), u.pt(FIELD_Y - 2.), u.pt(FIELD_W + 4.), u.pt(ROW_H + 4.), u.pt(11.), outline(!self.focus_password));
         s.fill_rrect(u.pt(x), u.pt(FIELD_Y), u.pt(FIELD_W), u.pt(ROW_H), u.pt(9.), FIELD_BG.now());
         s.blit(&u.text(text, MAC_TITLE2_PT, Weight::Regular, color), u.pt(x + 12.) as i32, u.pt(FIELD_Y + 6.) as i32, 255, 255);
@@ -387,7 +392,7 @@ impl App for ScreenSharing {
         s.fill_rrect(u.pt(x + PASS_X), u.pt(FIELD_Y), u.pt(PASS_W), u.pt(ROW_H), u.pt(9.), FIELD_BG.now());
         s.blit(&u.text(&dots, MAC_TITLE2_PT, Weight::Regular, dot_color), u.pt(x + PASS_X + 12.) as i32, u.pt(FIELD_Y + 6.) as i32, 255, 255);
         let bx = x + BUTTON_X;
-        s.fill_rrect(u.pt(bx), u.pt(FIELD_Y), u.pt(BUTTON_W), u.pt(ROW_H), u.pt(9.), if connected { FIELD_BG.now() } else { TINT });
+        s.fill_rrect(u.pt(bx), u.pt(FIELD_Y), u.pt(BUTTON_W), u.pt(ROW_H), u.pt(9.), if connected { FIELD_BG.now() } else { accent_now() });
         let (label, label_color) = if connected { ("Disconnect", LABEL.now()) } else { ("Connect", WHITE) };
         s.blit(&u.text(label, MAC_TITLE2_PT, Weight::Regular, label_color), u.pt(bx + 18.) as i32, u.pt(FIELD_Y + 6.) as i32, 255, 255);
         chip(s, u, x, 140., "Scale to Fit", self.fit, true);
@@ -423,4 +428,26 @@ fn main() {
         drawn: 0,
         cache: None,
     });
+}
+
+#[cfg(test)]
+mod accent_tests {
+    use super::*;
+    use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn an_on_chip_is_filled_with_the_chosen_accent_not_system_blue() {
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let green = accent_now();
+        let (on, off) = (chip_fill(true), chip_fill(false));
+        set_accent(keep);
+        assert_eq!(on, green);
+        assert_ne!(on, springboard::shell::ui::TINT);
+        assert_eq!(off, FIELD_BG.now());
+    }
 }

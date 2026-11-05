@@ -33,9 +33,10 @@ pub(crate) fn merge_tree(mut app: Vec<crate::proto::NodeExt>, links: &[bifrost_u
 /// What the shell sends the app besides configuration.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Input {
-    /// A press, drag or release (`t` in ms), with the modifier keys held at the time (`NSEvent.modifierFlags`): a Shift-click
-    /// extends a selection and a Cmd-click toggles one item. Plain touches and synthesized presses carry none.
-    Touch { kind: TouchKind, id: u32, x: f32, y: f32, t: f64, mods: crate::proto::ModifierFlags },
+    /// A press, drag or release (`t` in ms), with the modifier keys held at the time (the reference event modifier flags): a Shift-click
+    /// extends a selection and a Cmd-click toggles one item. Plain touches and synthesized presses carry none. `source` says
+    /// whether a pointer or a finger made it: on a desktop only a finger drag pans content (`pans_on_drag`).
+    Touch { kind: TouchKind, id: u32, x: f32, y: f32, t: f64, source: crate::proto::TouchSource, mods: crate::proto::ModifierFlags },
     Key(KeyInput),
     Open(String),
     Command(crate::Command),
@@ -44,6 +45,16 @@ pub enum Input {
     ContextAction(u32),
     /// The user chose a Home Screen quick action (`quick_actions`): its type and user info.
     QuickAction(crate::quick_actions::QuickActionPick),
+}
+
+impl Input {
+    /// Records what produced this touch (`bifrost_ui::pan::set_source`), so the kit's scroll views and `Scroller` know at the
+    /// press whether a drag pans. The SDK calls it just before it hands a touch to the app; a no-op for other input.
+    pub fn note_source(&self) {
+        if let Input::Touch { source, .. } = self {
+            bifrost_ui::pan::set_source(*source);
+        }
+    }
 }
 
 /// A file the user chose in an open or save panel (`NativeOpenPanel` / `NativeSavePanel`). The app gets the open file, never
@@ -191,6 +202,38 @@ pub struct Ctx {
 }
 
 thread_local! {
+    /// The focused field's state as last reported (`Ctx::text_state`): the answer to a `SelectionRequest` when the app
+    /// does not give its own (`App::selected_text`).
+    static LAST_TEXT_STATE: RefCell<crate::proto::TextState> = RefCell::new(Default::default());
+}
+
+thread_local! {
+    /// Set by `Ctx::terminate`: the run loop ends the app as for `ToApp::Quit` at the end of the turn.
+    static TERMINATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The answer to `ToApp::SelectionRequest`: the app's own selection when it gives one, else the selected text of the
+/// focused field it last reported.
+pub(crate) fn selection_reply<A: App>(app: &mut A, ctx: &Ctx) -> String {
+    app.selected_text(ctx).unwrap_or_else(|| LAST_TEXT_STATE.with(|t| t.borrow().selected_text().to_string()))
+}
+
+/// Answers `ToApp::SelectionRequest` `request`: where the selection is first (`App::selection_rect`, sent as the caret
+/// rectangle, so Look Up opens under it), then its text (`selection_reply`).
+pub(crate) fn answer_selection_request<A: App>(app: &mut A, ctx: &Ctx, request: u32) {
+    if let Some((x, y, w, h)) = app.selection_rect(ctx) {
+        ctx.caret_rect(x, y, w, h);
+    }
+    let text = selection_reply(app, ctx);
+    ctx.send_to_shell(ToShell::SelectionReply { request, text });
+}
+
+/// A caret rectangle the wire takes: finite, with no negative size. `None` when a value is not finite.
+fn clean_caret_rect((x, y, w, h): (f32, f32, f32, f32)) -> Option<(f32, f32, f32, f32)> {
+    [x, y, w, h].iter().all(|v| v.is_finite()).then_some((x, y, w.max(0.0), h.max(0.0)))
+}
+
+thread_local! {
     static SUDDEN: RefCell<crate::process_info::SuddenTermination> = RefCell::new(Default::default());
     static ACTIVITIES: RefCell<crate::process_info::ActivityTracker> = RefCell::new(Default::default());
 }
@@ -296,12 +339,16 @@ impl Ctx {
     }
     /// Report the focused field's surrounding text, selection and marked range (`NativeTextInput`), for predictive text.
     pub fn text_state(&self, state: crate::proto::TextState) {
+        LAST_TEXT_STATE.with(|t| *t.borrow_mut() = state.clone());
         self.send(ToShell::TextState(state));
     }
-    /// Report the caret rectangle in window points (`firstRectForCharacterRange:`) so the candidate window or the
-    /// keyboard can position itself.
+    /// Report the caret rectangle in window points (`firstRectForCharacterRange:`) so the candidate window, the
+    /// keyboard and Look Up's popover can position themselves. A rectangle that is not finite is dropped (the shell
+    /// would refuse the message); a negative size counts as zero.
     pub fn caret_rect(&self, x: f32, y: f32, w: f32, h: f32) {
-        self.send(ToShell::CaretRect { x, y, w, h });
+        if let Some((x, y, w, h)) = clean_caret_rect((x, y, w, h)) {
+            self.send(ToShell::CaretRect { x, y, w, h });
+        }
     }
     /// Report the focused field's `NativeTextInputTraits` (return key type, content kind, flags `tiflags::*`).
     pub fn input_traits(&self, traits: crate::proto::InputTraits) {
@@ -362,7 +409,13 @@ impl Ctx {
     /// Opens a window of the app's own (`AppWindows::open`) and asks the shell to show it. The id is the app's; the shell
     /// draws the window under it.
     pub fn open_window(&self, spec: crate::app_windows::WindowSpec) -> Result<crate::app_windows::WindowId, crate::app_windows::WindowError> {
-        let flags = if spec.title_double_click { crate::proto::window_flags::TITLE_DOUBLE_CLICK } else { 0 };
+        let mut flags = if spec.title_double_click { crate::proto::window_flags::TITLE_DOUBLE_CLICK } else { 0 };
+        if spec.cascade {
+            flags |= crate::proto::window_flags::CASCADE;
+        }
+        if spec.full_size {
+            flags |= crate::proto::window_flags::FULL_SIZE;
+        }
         let position = spec.position;
         let id = self.windows.borrow_mut().open(spec.clone())?;
         self.send(ToShell::WindowOpen { id: id.0, title: spec.title, w: spec.width, h: spec.height, position, flags });
@@ -376,12 +429,59 @@ impl Ctx {
         Ok(closed)
     }
 
+    /// `reply(toApplicationShouldTerminate:)`: ends the app now, saving its state as `ToApp::Quit` does. An app that
+    /// vetoed `App::quit_requested` calls it once the person has answered every question.
+    pub fn terminate(&self) {
+        TERMINATE.with(|t| t.set(true));
+    }
+
+    /// Whether `terminate` was called since the last time, cleared by asking. The run loop asks once a turn; a test asks to
+    /// see that the app agreed to quit.
+    pub fn take_terminate(&self) -> bool {
+        TERMINATE.with(|t| t.replace(false))
+    }
+
+    /// Orders the main window out (the reference window's order-out call): a document app whose last document closed has no window, as on
+    /// the reference, and keeps running. The shell drops the main window from the desk and sends `ToApp::Reopen` (the
+    /// app's `reopen`) when the person activates the app again; `show_main_window` brings it back sooner. Nothing is
+    /// sent when it is already out.
+    pub fn close_main_window(&self) {
+        if !self.windows.borrow().main_shown() {
+            return;
+        }
+        self.windows.borrow_mut().set_main_shown(false);
+        self.send(ToShell::WindowClose { id: 0 });
+    }
+
+    /// Puts an ordered-out main window back on the desk (a document made while the app had no window: File > New, a
+    /// file handed over). Nothing is sent while it is shown.
+    pub fn show_main_window(&self) {
+        if self.windows.borrow().main_shown() {
+            return;
+        }
+        self.windows.borrow_mut().set_main_shown(true);
+        self.send(ToShell::WindowOpen { id: 0, title: String::new(), w: 0.0, h: 0.0, position: None, flags: 0 });
+    }
+
     /// Moves one of the app's windows to (x, y) points relative to the visible desktop area. The shell clamps it to the
-    /// screen; the shell reports the position it settles on as `ToApp::WindowMoved` when the person drags it.
+    /// screen; the shell reports the position it settles on as `ToApp::WindowMoved` when the person drags it, and where
+    /// it put a window opened without a position. The main window moves too (a document app that moves a document into
+    /// its main window puts the main window where that document's window was); the shell keeps no position for it in
+    /// the registry. A position that is not a number is refused.
     pub fn move_window(&self, id: crate::app_windows::WindowId, x: f32, y: f32) -> Result<(), crate::app_windows::WindowError> {
-        self.windows.borrow_mut().set_position(id, x, y)?;
+        if !id.is_main() {
+            self.windows.borrow_mut().set_position(id, x, y)?;
+        } else if !(x.is_finite() && y.is_finite()) {
+            return Err(crate::app_windows::WindowError::Unknown(id));
+        }
         self.send(ToShell::WindowMove { window: id.0, x, y });
         Ok(())
+    }
+
+    /// Brings one of the app's windows (the main window too) to the front with key focus, as choosing it in the Window menu
+    /// does (`makeKeyAndOrderFront`). A window that is not open is ignored by the shell.
+    pub fn raise_window(&self, id: crate::app_windows::WindowId) {
+        self.send(ToShell::WindowRaise { window: id.0 });
     }
 
     /// Collapses one of the app's windows to its title bar, or expands it back (the shell keeps the height it had).
@@ -510,6 +610,14 @@ struct Slot {
     stale_all: bool,
 }
 
+/// Whether the app tells the shell (`ToShell::CloseRequests`) that it answers the close control of its main window: an app
+/// that decides itself (`handles_close_request`), and every app that does not quit with its last window
+/// (`terminates_after_last_window_closed`), whose default answer orders the window out and keeps it running. Only an app
+/// that terminates and does not decide is closed by the shell, which quits it.
+pub(crate) fn announces_close_requests(handles_close_request: bool, terminates_after_last_window_closed: bool) -> bool {
+    handles_close_request || !terminates_after_last_window_closed
+}
+
 /// Whether the SDK can bind a layer context on its Wayland connection (`wl::connection`). The direct path needs the
 /// connection to dispatch the `bifrost_layer_*` objects, which it does not yet (todo_left in
 /// `docs/graphics/g2-sdk-direct-runtime.md`). Until it does, the direct path is never entered.
@@ -566,6 +674,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             return;
         }
     };
+    // characters the system font lacks (Chinese, Japanese and Korean text, other scripts, symbols) draw from the
+    // shell's font library and the script fonts the packages install, as in the shell; loaded on first need
+    bifrost_render::fontfallback::install_with_system_lazy(&bifrost_render::fontprefs::library(shell_dir), &bifrost_render::fontfallback::system_lang());
     let mut symbols = Some(bifrost_render::symbols::Symbols::load(shell_dir));
     let mut ctx: Option<Ctx> = None;
     let mut pending_activity: Vec<crate::quicksearch::UserActivity> = Vec::new();
@@ -591,19 +702,22 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut open = true;
     let mut commands_seen = None;
     let mut pointer_interest_sent = 0u32;
+    let mut close_requests_sent = false;
     let mut undo_titles_seen: (String, String) = Default::default();
     let mut menus_seen: Vec<crate::proto::AppMenu> = Vec::new();
     let mut controls_seen = Vec::new();
     let mut tree_seen: Vec<crate::proto::NodeExt> = Vec::new();
     let mut ax_text_seen: Vec<bifrost_ui::ax::AxText> = Vec::new();
     let mut ax_meta_seen: Vec<bifrost_ui::ax::AxMeta> = Vec::new();
+    let mut ax_actions_seen: Vec<bifrost_ui::ax_action::AxActionSet> = Vec::new();
+    let mut drawn_actions: Vec<bifrost_ui::ax_action::AxActionSet> = Vec::new();
     // what the kit's draw helpers recorded in the last frame: the element map of an app that declares no controls itself
     let mut drawn_nodes: Vec<bifrost_ui::Node> = Vec::new();
     let mut drawn_links: Vec<bifrost_ui::ax::AxLink> = Vec::new();
     // the behind-window materials the shell last got (`ToShell::Materials`)
     let mut materials_seen: Vec<crate::proto::Material> = Vec::new();
     let mut materials: Vec<crate::proto::Material> = Vec::new();
-    let mut control = control_endpoint(&app.id(), &data_dir);
+    let mut control = control_endpoint(&data_dir);
     let docs = std::rc::Rc::new(RefCell::new(DocState::default()));
     let windows = std::rc::Rc::new(RefCell::new(crate::app_windows::AppWindows::default()));
     let key_window_id: std::rc::Rc<std::cell::Cell<u32>> = Default::default();
@@ -615,8 +729,12 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         let have_ctx = ctx.is_some();
         // wait: forever when idle, 0 when a frame is due, else until the app's next wake
         let free = slots.as_ref().is_some_and(|s| s.iter().any(|b| !b.held));
-        let timeout = if !have_ctx || !active {
+        // a suspended app that asked to (`App::ticks_in_background`) still wakes for its descriptor and its timer
+        let background = have_ctx && !active && app.ticks_in_background();
+        let timeout = if !have_ctx {
             None
+        } else if !active {
+            if background { app.next_wake(t).map(|w| (w - t).clamp(0.0, i32::MAX as f64).ceil() as i32) } else { None }
         } else if need_frame && free {
             Some(0)
         } else if need_frame {
@@ -635,7 +753,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             _ => timeout,
         };
         // the app's own descriptor (`App::wake_fd`, a web view engine for example) wakes the loop for `tick`
-        let app_fd = if active { app.wake_fd() } else { None };
+        let app_fd = if active || background { app.wake_fd() } else { None };
         let (chan_ready, ready) = chan.wait_many(&[control.as_ref().map_or(-1, |c| c.fd()), app_fd.unwrap_or(-1), crate::dispatch::main_fd()], timeout);
         let control_ready = ready[0];
         // main-queue work (`DispatchQueue::main().async_`) runs here, before anything draws
@@ -647,14 +765,21 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         if control_ready || control.as_ref().is_some_and(|c| c.has_pending()) {
             if let Some(c) = control.as_mut() {
                 let ctx_ref = ctx.as_ref();
-                c.service(&mut |method, params| serve_rpc(&mut app, ctx_ref, method, params, &data_dir));
+                // an intent or app method served here may change what the window shows (a look-up opens the word),
+                // and nothing else asks for that frame: schedule one, as an input event that changed the app does
+                let mut changed = false;
+                c.service(&mut |method, params| {
+                    changed |= rpc_may_change_ui(method);
+                    serve_rpc(&mut app, ctx_ref, method, params, &data_dir)
+                });
+                need_frame |= changed;
             }
         }
         if !chan_ready && !have_ctx {
             continue;
         }
         // drain; consecutive moves of one touch are held back and only the last is delivered
-        let mut held_move: Option<(u32, f32, f32, u32, crate::proto::ModifierFlags)> = None;
+        let mut held_move: Option<(u32, f32, f32, u32, crate::proto::TouchSource, crate::proto::ModifierFlags)> = None;
         loop {
             let (pkt, mut fds) = match chan.recv(false) {
                 Ok(Recv::Packet(p, f)) => (p, f),
@@ -670,8 +795,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             // turn only when the app says it changed (it asked for a frame); every other packet may change what is published
             let motion = matches!(msg, ToApp::Touch { kind: TouchKind::Move, .. } | ToApp::Touches(_));
             busy |= !motion;
-            if let ToApp::Touch { kind: TouchKind::Move, id, x, y, t_ms, mods } = msg {
-                if let Some(h) = held_move.replace((id, x, y, t_ms, mods)) {
+            if let ToApp::Touch { kind: TouchKind::Move, id, x, y, t_ms, source, mods } = msg {
+                if let Some(h) = held_move.replace((id, x, y, t_ms, source, mods)) {
                     if h.0 != id {
                         let changed = deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now);
                         need_frame |= changed;
@@ -686,6 +811,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 if let Some(c) = &ctx {
                     localize(&mut ev, now);
                     if let Some(ev) = touch_router.frame(app.wants_touch_events(), ev) {
+                        if let Some(first) = ev.touches.first() {
+                            bifrost_ui::pan::set_source(bifrost_ui::pan::TouchSource::of_touch_type(first.kind));
+                        }
                         let changed = app.touches(c, &ev);
                         need_frame |= changed;
                         busy |= changed;
@@ -741,6 +869,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         first_frame = true;
                     }
                     need_frame = true;
+                    // a background window is still on screen on the desktop: the shell configures it to the frame it
+                    // gives it (a restored session), and it draws at that size now, even while suspended, instead of
+                    // showing its old size (black past it) until it comes to the front (0.10.39)
+                    repaint_suspended |= !active;
                 }
                 ToApp::Context{x,y}=>{if let Some(ctx)=&ctx {need_frame|=app.event(ctx,Input::Context{x,y});}},
                 ToApp::MenuAction(id)=>{if let Some(ctx)=&ctx {need_frame|=app.menu_action(ctx,id);}},
@@ -750,9 +882,9 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= app.event(c, Input::QuickAction(crate::quick_actions::QuickActionPick { kind, user_info }));
                     }
                 }
-                ToApp::Touch { kind, id, x, y, t_ms, mods } => {
+                ToApp::Touch { kind, id, x, y, t_ms, source, mods } => {
                     if let Some(c) = &ctx {
-                        need_frame |= deliver_touch(&mut app, c, &mut touch_router, kind, id, x, y, event_time(now, t_ms), mods);
+                        need_frame |= deliver_touch(&mut app, c, &mut touch_router, kind, id, x, y, event_time(now, t_ms), source, mods);
                     }
                 }
                 ToApp::Touches(_) => {}
@@ -781,6 +913,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= app.event(c, Input::Key(k));
                     }
                 }
+                // a named custom action goes to `ax_custom_action` with the spelling the app listed, and only when it listed it
+                ToApp::AxSet { id, action: crate::proto::AxAction::Custom(name) } => {if let Some(c)=&ctx {if let Some(own)=ax_actions_seen.iter().find(|s| s.id==id).and_then(|s| s.canonical(&name)).map(str::to_string) {need_frame |= app.ax_custom_action(c,id,&own);}}}
                 ToApp::AxSet { id, action } => {if let Some(c)=&ctx {need_frame |= app.ax_set(c,id,action);}}
                 ToApp::Activate(id) => {if let Some(c)=&ctx {need_frame |= app.event(c,Input::Activate(id));}}
                 ToApp::Command(command) => {if let Some(c)=&ctx {need_frame |= app.event(c,Input::Command(command));}}
@@ -811,6 +945,25 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 ToApp::WindowRelease { id, buf, generation: g } => {
                     release_window_buffer(&mut window_pixels, id, buf, g);
                 }
+                // activated with the main window closed: the shell has put it back on the desk
+                ToApp::Reopen => {
+                    windows.borrow_mut().set_main_shown(true);
+                    if let Some(c) = &ctx {
+                        need_frame |= app.reopen(c);
+                    }
+                }
+                // the main window's close control, for an app that announced `CloseRequests`: it decides (a save sheet)
+                ToApp::CloseRequest => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.close_requested(c);
+                    }
+                }
+                // the close control of one of its extra windows: the app decides for that window as for the main one
+                ToApp::WindowCloseRequest { id } => {
+                    if let Some(c) = &ctx {
+                        need_frame |= app.window_close_requested(c, crate::app_windows::WindowId(id));
+                    }
+                }
                 ToApp::Resume => {
                     active = true;
                     if let Some(c) = &ctx {
@@ -830,6 +983,15 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         }
                         app.suspend(c);
                         flush_restorable(&app, c, true);
+                    }
+                }
+                // the person's Quit of an app that announced `CloseRequests`: it quits now or asks first (`Ctx::terminate`)
+                ToApp::QuitRequest => {
+                    if let Some(c) = &ctx {
+                        if app.quit_requested(c) {
+                            c.terminate();
+                        }
+                        need_frame = true;
                     }
                 }
                 ToApp::Quit => {
@@ -967,6 +1129,11 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         crate::service::keep(request, result);
                     }
                 }
+                ToApp::SelectionRequest { request } => {
+                    if let Some(c) = &ctx {
+                        answer_selection_request(&mut app, c, request);
+                    }
+                }
                 ToApp::ServiceEvent { service, event, body } => {
                     let body = bifrost_core::json::parse(&body).unwrap_or(bifrost_core::json::Json::Null);
                     if let Some(c) = &ctx {
@@ -1041,13 +1208,29 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             pointer_interest_sent = interest;
             let _ = chan.send(&ToShell::PointerInterest { mask: interest }.encode(), &[]);
         }
+        // an app that answers the main window's close control itself says so once; the shell asks it instead of quitting it
+        if !close_requests_sent && announces_close_requests(app.handles_close_request(), app.terminates_after_last_window_closed()) {
+            close_requests_sent = true;
+            let _ = chan.send(&ToShell::CloseRequests { on: true }.encode(), &[]);
+        }
         for activity in pending_activity.drain(..) {
             need_frame |= app.continue_activity(c, activity);
         }
         let t = now_ms();
-        if active && app.tick(c, t) {
+        if (active || app.ticks_in_background()) && app.tick(c, t) {
             need_frame = true;
             busy = true;
+            // the background window is still on screen on the desktop: show what changed
+            repaint_suspended |= !active;
+        }
+        // `Ctx::terminate`: the app has answered its quit questions; it ends as for `ToApp::Quit`
+        if c.take_terminate() {
+            if active {
+                app.suspend(c);
+            }
+            flush_restorable(&app, c, true);
+            open = false;
+            continue;
         }
         flush_restorable(&app, c, false);
         let frame_due = (active || repaint_suspended) && need_frame;
@@ -1078,6 +1261,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     if sent {
                         busy = true;
                         drawn_links = bifrost_ui::ax::take_links();
+                        drawn_actions = bifrost_ui::ax_action::take();
                         drawn_nodes = bifrost_ui::ax::take_frame();
                         first_frame = false;
                         repaint_suspended = false;
@@ -1100,6 +1284,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
         if ax_text!=ax_text_seen {let _=chan.send(&ToShell::AxText(ax_text.clone()).encode(),&[]);ax_text_seen=ax_text;}
         let ax_meta=app.ax_meta(c);
         if ax_meta!=ax_meta_seen {let _=chan.send(&ToShell::AxMeta(ax_meta.clone()).encode(),&[]);ax_meta_seen=ax_meta;}
+        let ax_actions=bifrost_ui::ax_action::merge(app.ax_custom_actions(c),&drawn_actions);
+        if ax_actions!=ax_actions_seen {let _=chan.send(&ToShell::AxActions(ax_actions.clone()).encode(),&[]);ax_actions_seen=ax_actions;}
         // the notifications posted since the last frame (`ax::post`) reach the shell, which turns them into AT-SPI signals
         let notes=bifrost_ui::ax::take_notifications();
         for chunk in notes.chunks(crate::proto::axtext::MAX_NOTES) {let _=chan.send(&ToShell::AxNotify(chunk.to_vec()).encode(),&[]);}
@@ -1323,16 +1509,20 @@ fn draw_windows<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, pixels: &mut std
 }
 
 /// Delivers the last of a run of moves of one touch (`t_ms` is the shell's stamp of that last sample).
-fn deliver_move<A: App>(app: &mut A, ctx: Option<&Ctx>, router: &mut TouchRouter, m: (u32, f32, f32, u32, crate::proto::ModifierFlags), now: f64) -> bool {
+fn deliver_move<A: App>(app: &mut A, ctx: Option<&Ctx>, router: &mut TouchRouter, m: (u32, f32, f32, u32, crate::proto::TouchSource, crate::proto::ModifierFlags), now: f64) -> bool {
     let Some(c) = ctx else { return false };
-    deliver_touch(app, c, router, TouchKind::Move, m.0, m.1, m.2, event_time(now, m.3), m.4)
+    deliver_touch(app, c, router, TouchKind::Move, m.0, m.1, m.2, event_time(now, m.3), m.4, m.5)
 }
 
 /// Delivers a plain touch: as `Input::Touch`, or as a touch event for an app that takes them (`App::wants_touch_events`).
 #[allow(clippy::too_many_arguments)]
-fn deliver_touch<A: App>(app: &mut A, c: &Ctx, router: &mut TouchRouter, kind: TouchKind, id: u32, x: f32, y: f32, t: f64, mods: crate::proto::ModifierFlags) -> bool {
+fn deliver_touch<A: App>(app: &mut A, c: &Ctx, router: &mut TouchRouter, kind: TouchKind, id: u32, x: f32, y: f32, t: f64, source: crate::proto::TouchSource, mods: crate::proto::ModifierFlags) -> bool {
     match router.plain(app.wants_touch_events(), kind, id, x, y, t) {
-        Plain::Deliver => app.event(c, Input::Touch { kind, id, x, y, t, mods }),
+        Plain::Deliver => {
+            let input = Input::Touch { kind, id, x, y, t, source, mods };
+            input.note_source();
+            app.event(c, input)
+        }
         Plain::Frame(ev) => app.touches(c, &ev),
         Plain::Skip => false,
     }
@@ -1554,12 +1744,12 @@ thread_local! {
     static STATS: std::cell::RefCell<Stats> = std::cell::RefCell::new(Stats::default());
 }
 
-/// Where the app's control socket lives: `BIFROST_CONTROL`, else `$XDG_RUNTIME_DIR/bifrost/apps/<id>.sock`,
-/// else `control.sock` in the app's data directory (no XDG runtime directory is assumed).
-fn control_endpoint(app_id: &str, data_dir: &std::path::Path) -> Option<crate::control::Control> {
+/// Where the app's control socket lives: `BIFROST_CONTROL`, else `control.sock` in the app's data directory, the path
+/// the shell dials (`bifrost_core::app_control_socket`). `$XDG_RUNTIME_DIR` is not used: inside the sandbox `/run` is
+/// private, so a socket there is invisible to the shell.
+fn control_endpoint(data_dir: &std::path::Path) -> Option<crate::control::Control> {
     let explicit = std::env::var_os("BIFROST_CONTROL").map(PathBuf::from);
-    let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from);
-    let path = crate::script_target::socket_path(app_id, explicit.as_deref(), runtime.as_deref(), data_dir);
+    let path = crate::script_target::socket_path(explicit.as_deref(), data_dir);
     match crate::control::Control::bind(&path) {
         Ok(c) => Some(c),
         Err(e) => {
@@ -1595,6 +1785,25 @@ fn serve_rpc<A: App>(
             Some(r) => r,
             None => app.rpc(ctx, data_dir, method, params),
         },
+    }
+}
+
+/// Whether a control-socket call may change what the app draws: everything but the runtime's read-only queries
+/// (`app.info`, `app.methods`, `intent.list`, `entity.query`), which the shell polls and which never touch app state.
+fn rpc_may_change_ui(method: &str) -> bool {
+    !matches!(method, "app.info" | "app.methods" | "intent.list" | "entity.query")
+}
+
+#[cfg(test)]
+mod control_frame_tests {
+    #[test]
+    fn a_served_intent_schedules_a_frame_but_the_read_only_queries_do_not() {
+        assert!(super::rpc_may_change_ui("intent.look-up"));
+        assert!(super::rpc_may_change_ui("service.look-up"));
+        assert!(super::rpc_may_change_ui("ae.settings.openPane"));
+        for read in ["app.info", "app.methods", "intent.list", "entity.query"] {
+            assert!(!super::rpc_may_change_ui(read), "{read}");
+        }
     }
 }
 
@@ -1763,6 +1972,69 @@ mod badge_tests {
         assert!(d.event(ToApp::DocBatch { request: 5, count: 3 }, None).is_none());
         assert!(matches!(d.event(ToApp::DocError { request: 5, code: DocErrorCode::Denied }, None), Some(DocumentEvent::Failed { .. })));
         assert!(d.batches.is_empty(), "an error drops the batch");
+    }
+}
+
+#[cfg(test)]
+mod close_policy_tests {
+    use super::announces_close_requests;
+    use crate::App;
+
+    #[derive(Default)]
+    struct Plain;
+    impl App for Plain {
+        fn id(&self) -> &str {
+            "is.test.plain"
+        }
+        fn draw(&mut self, _: &crate::Ctx, s: &mut crate::kit::Surface, _: f64) -> crate::kit::Damage {
+            crate::kit::Damage::new(s.w, s.h)
+        }
+    }
+
+    struct Utility;
+    impl App for Utility {
+        fn id(&self) -> &str {
+            "is.test.utility"
+        }
+        fn draw(&mut self, _: &crate::Ctx, s: &mut crate::kit::Surface, _: f64) -> crate::kit::Damage {
+            crate::kit::Damage::new(s.w, s.h)
+        }
+        fn terminates_after_last_window_closed(&self) -> bool {
+            true
+        }
+    }
+
+    /// The reference desktop keeps an app running after its last window closes: by default the app tells the shell it answers
+    /// the close control (so the shell asks it instead of quitting it) and the default answer orders the window out.
+    #[test]
+    fn an_app_keeps_running_with_no_window_unless_it_terminates_after_the_last_window() {
+        let plain = Plain;
+        assert!(!plain.terminates_after_last_window_closed(), "keep running is the default");
+        assert!(announces_close_requests(plain.handles_close_request(), plain.terminates_after_last_window_closed()));
+        let utility = Utility;
+        assert!(!announces_close_requests(utility.handles_close_request(), utility.terminates_after_last_window_closed()), "a single-window utility is closed (quit) by the shell");
+    }
+
+    /// An app that decides itself is asked either way; the flag only matters to an app that does not.
+    #[test]
+    fn an_app_that_handles_the_close_control_is_always_asked() {
+        assert!(announces_close_requests(true, true));
+        assert!(announces_close_requests(true, false));
+        assert!(announces_close_requests(false, false));
+        assert!(!announces_close_requests(false, true));
+    }
+
+    /// The default answer to the red light of a default app orders the main window out and sends nothing that quits it.
+    #[test]
+    fn the_default_answer_to_the_red_light_orders_the_window_out_and_does_not_quit() {
+        use bifrost_proto::ToShell;
+        let ctx = super::test_ctx();
+        let mut app = Plain;
+        assert!(app.close_requested(&ctx));
+        assert!(!ctx.windows().main_shown());
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowClose { id: 0 }]);
+        // a reopen puts it back and the default handler needs no frame
+        assert!(!app.reopen(&ctx));
     }
 }
 
@@ -2176,5 +2448,77 @@ mod publish_tests {
         assert_eq!(clipboard_changed(&mut rev, &mut seen), None, "same text as already known");
         crate::kit::clipboard::set_text("");
         assert_eq!(clipboard_changed(&mut rev, &mut seen).as_deref(), Some(""), "a cleared clipboard is reported as empty text");
+    }
+}
+
+#[cfg(test)]
+mod selection_request_tests {
+    use super::*;
+    use crate::proto::TextState;
+
+    /// An app with no text fields of its own, or one that draws its own text and says what is selected in it.
+    struct Editor {
+        own: Option<String>,
+        rect: Option<(f32, f32, f32, f32)>,
+    }
+
+    impl App for Editor {
+        fn id(&self) -> &str {
+            "is.test.editor"
+        }
+        fn draw(&mut self, _ctx: &Ctx, _s: &mut Surface, _t: f64) -> Damage {
+            Damage::new(1, 1)
+        }
+        fn selected_text(&mut self, _ctx: &Ctx) -> Option<String> {
+            self.own.clone()
+        }
+        fn selection_rect(&mut self, _ctx: &Ctx) -> Option<(f32, f32, f32, f32)> {
+            self.rect
+        }
+    }
+
+    fn test_ctx() -> Ctx {
+        use crate::kit::{Font, Ui};
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    /// E2E8 1: the shell's `SelectionRequest` is answered with the selection of the focused text field the app last
+    /// reported (what `ViewApp` and the text kit send), or with the app's own selection when it gives one.
+    #[test]
+    fn a_selection_request_is_answered_from_the_focused_field_or_the_apps_own_selection() {
+        let ctx = test_ctx();
+        ctx.text_state(TextState { text: "the second line".into(), cursor: 10, anchor: 4, marked: None });
+        let _ = ctx.take_sent();
+        assert_eq!(selection_reply(&mut Editor { own: None, rect: None }, &ctx), "second", "the field the SDK reported");
+        assert_eq!(selection_reply(&mut Editor { own: Some("own words".into()), rect: None }, &ctx), "own words", "the app's own selection wins");
+        assert_eq!(selection_reply(&mut Editor { own: Some(String::new()), rect: None }, &ctx), "", "the app says nothing is selected");
+        // the focus left text: nothing selected
+        ctx.text_state(TextState::default());
+        assert_eq!(selection_reply(&mut Editor { own: None, rect: None }, &ctx), "");
+    }
+
+    /// E2E10: an app that draws its own text says where its selection is before it answers, so the shell has the caret
+    /// rectangle when Look Up opens; an app that says nothing sends only the answer.
+    #[test]
+    fn a_selection_request_reports_the_selection_rect_before_the_answer() {
+        let ctx = test_ctx();
+        let mut app = Editor { own: Some("orange".into()), rect: Some((120.0, 40.5, 30.0, 17.0)) };
+        answer_selection_request(&mut app, &ctx, 7);
+        match ctx.take_sent().as_slice() {
+            [ToShell::CaretRect { x, y, w, h }, ToShell::SelectionReply { request: 7, text }] => {
+                assert_eq!((*x, *y, *w, *h), (120.0, 40.5, 30.0, 17.0));
+                assert_eq!(text, "orange");
+            }
+            other => panic!("the rectangle, then the answer: {other:?}"),
+        }
+        answer_selection_request(&mut Editor { own: Some("x".into()), rect: None }, &ctx, 8);
+        assert!(matches!(ctx.take_sent().as_slice(), [ToShell::SelectionReply { request: 8, .. }]));
+        // a rectangle the wire would refuse is not sent; a negative size is zero
+        answer_selection_request(&mut Editor { own: None, rect: Some((f32::NAN, 0.0, 1.0, 1.0)) }, &ctx, 9);
+        assert!(matches!(ctx.take_sent().as_slice(), [ToShell::SelectionReply { request: 9, .. }]));
+        ctx.caret_rect(1.0, 2.0, -3.0, 4.0);
+        assert!(matches!(ctx.take_sent().as_slice(), [ToShell::CaretRect { w, h, .. }] if *w == 0.0 && *h == 4.0));
     }
 }

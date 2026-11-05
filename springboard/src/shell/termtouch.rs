@@ -213,7 +213,7 @@ mod tests {
     }
 
     fn font() -> &'static [u8] {
-        Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUIMono.ttf")).unwrap().into_boxed_slice())
+        crate::test_support::sfui_mono()
     }
 
     fn terminal(cmd: &[&str]) -> Terminal {

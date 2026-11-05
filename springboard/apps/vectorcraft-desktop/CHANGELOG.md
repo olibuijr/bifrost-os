@@ -4,6 +4,60 @@
 
 # Changelog
 
+## 0.21.0
+
+- Upstream vectorcraft v0.21.0.
+  ## What's Changed
+  * Paste: in front or back of a compound path's member, other art goes beside the compound path by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/5120
+  * .ai import: version 7 palettes keep their swatches without names by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/5123
+  * Variables: Rename reports a missing variable or data set before a taken name by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/5135
+  * Variables: a graph variable's data set applies its CSV as graph.setData does by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/5136
+
+## 0.20.0
+
+- Upstream vectorcraft v0.20.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/vectorcraft/pull/4814
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/vectorcraft/pull/4807
+  * Shortcuts: in the web build a key-position shortcut uses the key of the same press by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/4867
+  * Fix #4864: a search pick of an Asset Export command opens the panel by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/4869
+
+## 0.19.0
+
+- Upstream vectorcraft v0.19.0.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/vectorcraft/pull/4482
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/vectorcraft/pull/4487
+  * Enforce Rust coding standards via Clippy by @dylanmtaylor in https://github.com/storytold/vectorcraft/pull/4299
+  * Remove the experimental Windows 7 build by @dylanmtaylor in https://github.com/storytold/vectorcraft/pull/4497
+
+## 0.18.0
+
+- Upstream vectorcraft v0.18.0.
+  ## What's Changed
+  * Reject exponent notation in the pica form of Unit::parse by @Silvertree2010 in https://github.com/storytold/vectorcraft/pull/4126
+  * Refuse signs, exponents and non-numeric text in Export for Screens sizes by @Silvertree2010 in https://github.com/storytold/vectorcraft/pull/4123
+  * Reject misplaced or excess '=' padding in base64_decode by @Silvertree2010 in https://github.com/storytold/vectorcraft/pull/4131
+  * Shortcuts: the Cmd+Escape test expects no binding on Windows by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/4096
+
+## 0.17.0
+
+- Upstream vectorcraft v0.17.0.
+  ## What's Changed
+  * Brushes: one output budget across tracks, tiles and copies (#3594) by @saad-mughal435 in https://github.com/storytold/vectorcraft/pull/3731
+  * Docs: the Shape Builder parity line paraphrases the combine page by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/3679
+  * G4: paragraph Auto Leading drives the Leading field, leading nudge and placeholder fill by @bflatastic in https://github.com/storytold/vectorcraft/pull/3733
+  * G4: hanging punctuation keeps its amounts under Glyph Scaling and burasagari by @bflatastic in https://github.com/storytold/vectorcraft/pull/3736
+
+## 0.16.0
+
+- Upstream vectorcraft v0.16.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * Honor Preferences › Performance › Real-time Drawing and Editing during tool drags by @nrq6993-a11y in https://github.com/storytold/vectorcraft/pull/2942
+  * Effects: stacked geometry effects keep to an anchor and line budget (#3578) by @odgrim in https://github.com/storytold/vectorcraft/pull/3695
+
 ## 0.15.0
 
 - Upstream vectorcraft v0.15.0.

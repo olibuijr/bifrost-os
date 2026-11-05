@@ -286,9 +286,11 @@ fn headless_an_app_decodes_what_it_encoded_as_premultiplied_pixels() {
 }
 
 #[test]
-fn headless_an_app_cannot_write_webp_and_refuses_a_pixel_buffer_of_the_wrong_length() {
-    assert!(!graphics_imageio::can_write(Format::Webp));
-    assert!(graphics_imageio::encode(Format::Webp, 1, 1, &[0, 0, 0, 255]).is_none());
+fn headless_an_app_writes_lossless_webp_and_refuses_a_pixel_buffer_of_the_wrong_length() {
+    assert!(graphics_imageio::can_write(Format::Webp));
+    let webp = graphics_imageio::encode(Format::Webp, 1, 1, &[0, 0, 0, 255]).expect("lossless webp");
+    assert_eq!(graphics_imageio::detect(&webp), Some(Format::Webp));
+    assert!(graphics_imageio::encode(Format::Webp, 2, 2, &[0; 4]).is_none());
     assert!(
         graphics_imageio::encode(Format::Png, 2, 2, &[0; 4]).is_none(),
         "2 by 2 needs 16 bytes"

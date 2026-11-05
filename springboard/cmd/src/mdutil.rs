@@ -1,15 +1,15 @@
 //! `mdutil`: shows and changes whether a volume is indexed for search, and erases its index. The index settings are kept
 //! per volume under the user's state folder (`bifrost/index/<volume>/`): an `enabled` file holding `on` or `off`
 //! (a volume is indexed until it says otherwise), and a `store` folder that holds the index data.
-//! The desktop's Search reads the same choice: `-i off` adds the volume to the Spotlight exclusions in the shell's
-//! settings (`spotlight_excluded`, Settings > Spotlight > Search Privacy, `shell::spotlight_scope`), so Search lists
+//! The desktop's Search reads the same choice: `-i off` adds the volume to the Search exclusions in the shell's
+//! settings (`spotlight_excluded`, Settings > Search > Search Privacy, `shell::search_scope`), so Search lists
 //! nothing under it, and `-i on` takes it off again; `-s` reports a volume as disabled when either place says so. The
 //! shell reads the exclusions when it starts or when Settings changes them, so a running shell picks the change up then.
 //! Gap: `-E` removes only the command line's own store; the quick-search index keeps one file per app, not per volume.
 //! Supported: `-s` (status), `-i on|off` and `-E` (erase), each with one or more volume paths.
 
 use springboard::shell::prefs::Prefs;
-use springboard::shell::spotlight_scope::Scope;
+use springboard::shell::search_scope::Scope;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -121,7 +121,7 @@ pub fn status_text_in(root: &Path, volume: &str, search_excluded: bool) -> Strin
     format!("{volume}:\nIndexing {state}.\n")
 }
 
-/// Whether the Spotlight exclusions in `prefs` cover the volume.
+/// Whether the Search exclusions in `prefs` cover the volume.
 pub fn search_excludes(prefs: &Prefs, volume: &str) -> bool {
     Scope::load(prefs).excludes(Path::new(volume))
 }
@@ -200,7 +200,7 @@ mod tests {
         assert!(search_excludes(&prefs, "/mnt/data/deep/file.txt"), "everything under the volume is hidden");
         assert!(!search_excludes(&prefs, "/mnt/other"));
         // the shell's own Search scope reads the same keys
-        assert!(Scope::load(&prefs).hides(springboard::shell::spotlight_scope::Category::Files, Some(Path::new("/mnt/data/a.txt"))));
+        assert!(Scope::load(&prefs).hides(springboard::shell::search_scope::Category::Files, Some(Path::new("/mnt/data/a.txt"))));
         apply_to_search(&mut prefs, "/mnt/data", false).unwrap();
         assert_eq!(Scope::load(&prefs).excluded().len(), 1, "no duplicate entry");
         apply_to_search(&mut prefs, "/mnt/data", true).unwrap();

@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.7.8
+
+- The scroll wheel zooms the map about the pointer; File lists Print once; New Collection has its own button.
+
+## 0.7.7
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 0.7.6
+
+- Automatic units follow the Settings region, so Iceland shows metric scales.
+
+## 0.7.5
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 0.7.4
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
+## 0.7.3
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 0.7.2
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
+## 0.7.1 — 2026-10-24
+
+- Zoom Out no longer shows empty squares around the old view for about two seconds: once the shown tiles are in, the
+  tiles of the next level out load ahead, so a zoom out finds them ready (the scaled tiles of the level left still stand
+  in for any not loaded yet).
+
 ## 0.7.0 — 2026-10-23
 
 - Return moves to the first search result; zooming out keeps scaled tiles instead of black; Recents has a context menu.

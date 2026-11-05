@@ -1,7 +1,8 @@
 //! Theme definitions: the named colours of [`crate::ui`] can be given in a theme file, read at startup.
 //!
 //! A theme file is TOML, in the subset a colour table needs: `#` comments, a `[colors]` table, and lines of the form
-//! `NAME = "#rrggbb"` or `NAME = "#rrggbbaa"` (the alpha defaults to 255). `NAME` is a constant name from
+//! `NAME = "#rrggbb"` or `NAME = "#rrggbbaa"` (the alpha defaults to 255; the channels are straight colour, as in
+//! any hex notation, and are premultiplied on read because the built-in values and the fills are). `NAME` is a constant name from
 //! [`builtin`], such as `TINT` or `SYSTEM_RED`. Unknown names, other tables, and values that are not a hex colour are
 //! ignored, so a theme written for a newer build still loads, and a missing or unreadable file gives the built-in
 //! colours. The parser is a small reader, not a general TOML parser: arrays, inline tables and multi-line strings are
@@ -254,7 +255,8 @@ fn hex_colour(text: &str) -> Option<u32> {
     let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
     match hex.len() {
         6 => Some(pack(byte(0)?, byte(2)?, byte(4)?, 255)),
-        8 => Some(pack(byte(0)?, byte(2)?, byte(4)?, byte(6)?)),
+        // straight alpha in the file; the fills (`Surface::fill_rrect`) and the built-in constants are premultiplied
+        8 => Some(crate::gfx::rgba(byte(0)?, byte(2)?, byte(4)?, byte(6)?)),
         _ => None,
     }
 }
@@ -262,6 +264,14 @@ fn hex_colour(text: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_translucent_hex_colour_is_premultiplied_like_the_built_in_find_highlight() {
+        // the dark find highlight is system yellow (#ffd60a) at alpha 180 (0xb4)
+        let t = Theme::parse("[colors]\nFIND_HIGHLIGHT.dark = \"#ffd60ab4\"\n");
+        assert_eq!(t.pair("FIND_HIGHLIGHT").map(|p| p.0), Some(ui::system::FIND_HIGHLIGHT.dark));
+        assert_eq!(hex_colour("#ffd60a"), Some(pack(255, 214, 10, 255)), "an opaque colour is unchanged");
+    }
 
     #[test]
     fn the_built_in_colours_are_the_ui_constants() {
@@ -275,7 +285,9 @@ mod tests {
     fn a_colour_table_overrides_the_named_colours() {
         let t = Theme::parse("[colors]\nTINT = \"#ff8800\"\nSYSTEM_RED = \"#11223344\"\n");
         assert_eq!(t.colour("TINT"), Some(pack(255, 136, 0, 255)));
-        assert_eq!(t.colour("SYSTEM_RED"), Some(pack(0x11, 0x22, 0x33, 0x44)));
+        // eight hex digits are straight alpha in the file and premultiplied in the table, like the built-in constants
+        assert_eq!(t.colour("SYSTEM_RED"), Some(crate::gfx::rgba(0x11, 0x22, 0x33, 0x44)));
+        assert_ne!(t.colour("SYSTEM_RED"), Some(ui::SYSTEM_RED), "the file's value replaces the built-in one");
         assert_eq!(t.colour("SYSTEM_GREEN"), Some(ui::SYSTEM_GREEN), "a colour the file leaves out keeps its value");
     }
 

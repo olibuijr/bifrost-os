@@ -27,6 +27,22 @@ and semantic Back/Forward/View/Search controls. Tab traverses enabled controls;
 Enter activates a focused button. Left/Right/Home/End/Delete edit search text.
 Cut/Copy/Paste/Select All are available through the desktop Edit menu.
 
+## Invisible text characters (system 0.10.22)
+
+The shared renderer omits Unicode default-ignorable characters from visible glyph
+placement and measurement, including zero-width spaces, formatting controls and
+soft hyphens. This prevents missing-glyph boxes in plain-text message viewers.
+Joiners remain in the shaping input where supported; font fallback does not split
+runs for invisible characters. GPU glyph placement and SDK outline drawing also
+skip them. The typesetter shows a soft hyphen only where a line ends at it.
+
+Regression coverage: `default_ignorable_characters_take_no_room_and_draw_no_box`,
+`placements_skip_default_ignorable_characters` and
+`a_soft_hyphen_is_invisible_unless_the_line_breaks_at_it`.
+The line-fitting step does not yet reserve a visible hyphen's width. This change
+does not establish complete script-shaping parity. Apps statically link these
+paths and need rebuilding to receive the fix; Mail 0.17.1 includes it.
+
 ## System services (named service channel)
 
 One generic channel lets an app use a shell feature without a new wire message. The app calls
@@ -45,7 +61,12 @@ protocol messages. About 35 are registered in `services::all()` (as of shell 0.7
 
 The `screens` service reports the displays: `list` answers with each screen's frame, visible frame, scale and main
 flag, and `changed` is pushed when the geometry changes. SDK client: `bifrost_app::screens` (`list`, `from_reply`,
-`changed`). Gaps (refresh rate, several displays) are in `docs/parity/wire-svc-screens.md`.
+`changed`). Since system 0.10.23, the visible frame reserves the Dock's selected edge
+(Bottom, Left or Right); an auto-hidden Dock reserves no space. Filled windows and
+this service use the same work area, independently of magnification and label padding.
+Since 0.10.24, Settings changes apply after window-local input handling returns,
+so filled-window reflow uses the full output dimensions.
+Several displays are modelled (the Dock and menu bar on the main display, the others whole; backend reporting pending). Gaps (refresh rate, backend multi-output) are in `docs/parity/wire-svc-screens.md`.
 
 ## Thumbnail generator (`QLThumbnailGenerator`, `bifrost_app::thumbnails`)
 
@@ -67,6 +88,7 @@ with `.now()`); `bifrost pc gallery [DIR]` (the `preview_sdk_gallery` test) rend
 |---|---|---|
 | `widgets::toolbar_band(s, ui, bounds)` + `widgets::toolbar(s, ui, bounds, &Toolbar, pressed)` | `NSToolbar` in a unified window | Glyph buttons (`ToolbarItem::icon(id, label, "symbol")`) in light glass capsules; `in_group(g)` joins buttons into one capsule (`NSToolbarItemGroup`); `selected(true)` marks a segment; `ToolbarItem::custom(id, label, width)` reserves a slot the app draws (title, search). `Toolbar::layout_with` keeps a group whole when it overflows behind `»`. Returns `ToolbarLayout` with `hit` and `rect_of`. **Breaking:** `toolbar` now takes a `Rect`, not `(&Layout, top)`; no app used the old form. |
 | `widgets::source_list` with `SidebarItem::row(..).with_symbol("house")` | Source-list `NSOutlineView` | Accent glyph per row, neutral selection plate with a bold label (Finder, Notes, Reminders references), 9 pt plate radius (`prefs_layout::m::SELECTION_RADIUS`). `SourceList::set_selected(None)` when the shown place is not in the list. |
+| `widgets::source_list_in(.., Some(rows))` | Source list in an `NSScrollView` with content insets | The material fills the whole column (under the traffic lights in a full-size window) while the rows are clipped to `rows`; one pass, one "Sidebar" accessibility element (Dictionary). |
 | `widgets::search_field` + `controls::search::{layout, hits_clear}` | `NSSearchField` | Capsule, magnifier, placeholder, clear button only with text, focus ring, white selected text on the selection. |
 | `widgets::path_bar` + `controls::pathbar::{layout, hit}` | `NSPathControl`, Finder's path bar | Middle labels shrink to their glyph first, then the first, then the last label is cut. |
 | `glyphs::glyph(s, ui, "name", rect, colour)`, `glyphs::NAMES` | `NSImage(systemSymbolName:)` | 28 line glyphs named after SF Symbols, drawn from lines and arcs; no symbol font is needed (the device has none). Unknown names draw nothing and return false. |
@@ -222,8 +244,20 @@ settings. `Gradient::draw_in_path`, `draw_in_rect` (linear, at an angle, same di
 and `stroke_with_shadow` cast a `ShadowStyle` (`ShadowStyle::effect`) under the shape. `ColorList::system(dark)` is the built-in
 System list of the 13 named system colours, `ColorLists::standard(dark)` starts a registry with it, `swatches()` and
 `apply_to_panel(key, panel)` feed a colour well and the colour panel, and `to_text` / `from_text` keep a list in a text file.
-Gaps: NSImage representations per codec, NSColorSpace pickers, an eyedropper, NSPrintOperation.runModal and NSPageLayout in the
+Gaps: NSColorSpace pickers, an eyedropper, NSPrintOperation.runModal and NSPageLayout in the
 shell are not built yet. Host tests only; not yet checked on Midget.
+
+2026-10-24, image objects draw themselves (`bifrost_app::image_object`): `ImageObject::draw(canvas, pixels, dst, scale,
+tint, alpha)` draws the decoded pixels of the chosen representation on any `Canvas` the way NSImage draws in a view. A
+template image (`isTemplate`) is a coverage mask filled with the context tint (the caller passes `LABEL.now()`, the
+accent or a selected-row colour, so it follows Light, Dark and the accent; opacity scales the mask); any other image
+draws as itself at the opacity and ignores the tint; cap insets keep the corners and stretch edges and centre (nine
+slices, insets read in the image's own pixels per point). Per-codec representations: `ImageRep::codec` records the codec a
+bitmap came from (PNG, JPEG, GIF, BMP, ICO, TIFF, WebP; the reference has per-codec rep classes, ours is one type with a
+codec field) and `frame_count` the frames of an animation (`NSBitmapImageRep.frameCount`, `is_animated`).
+`from_encoded` gives an icon file or a multi-page TIFF one representation per image, so `best_rep` chooses among an
+icon's sizes. Gaps: `from_encoded` keeps 72 dpi instead of reading the file's resolution; there is no HEIC codec; no kit
+widget takes an `ImageObject` yet (apps call `draw` from their own canvas code).
 
 ## Screen savers in the shell (`springboard/src/shell/screensaver.rs`)
 
@@ -314,8 +348,9 @@ Accessibility round, partial. What is built:
   `window` elements already (`walk::window`). The AT-SPI role map (`axmap::item_role`) is unchanged, so Orca still sees the
   pop-up row as a choice.
 - **Not built.** Help viewer, assistant panel and permission sheets are not walked for their content (only their windows).
-  Speak Selection (Option+Esc) and Speak Items Under the Pointer need a selection source and a pointer-hover option; neither
-  exists. Speech on the Midget is not verified.
+  Speak Selection (Option+Esc, `accessibility/spoken.rs`) and Speak Items Under the Pointer (`accessibility/hover_speech.rs`)
+  are built since; see "Accessibility custom actions, settings, spoken content and audio graphs". Speech on the Midget is
+  not verified.
 - **Display options.** Reduce Motion, Reduce Transparency and Increase Contrast are already read by the shell's motion
   (`anim_ms`, desk, switcher, jiggle), material (`vibrancy.rs`, `glass.rs`, Control Centre, menu bar, Spotlight) and colour
   (`ui.rs` separators and material borders, `appearance.rs` contrast) code. Nothing new was wired.
@@ -334,6 +369,59 @@ run with `perform_custom_action`, which posts `layoutChanged`) and `accessibilit
 `sdk::accessibility_display::options` and `options_changed`: `DisplayOptions` holds `increase_contrast`,
 `reduce_transparency`, `differentiate_without_color` (Button Shapes), `invert_colors` (always false), `reduce_motion` and
 `dim_flashing_lights`. The shell pushes `options_changed` once per change.
+
+### Accessibility custom actions, settings, spoken content and audio graphs
+
+Parity round 2026-10-24 (branch `parity/accessibility`), host tests only, not verified on Midget. Reference behaviour was
+measured clean-room from the macOS 27 (26A434) bridge metadata of the Accessibility framework
+(`Accessibility.arm64e.bridgesupport`, sha256 `cbdd7b816637b0b83edf78ef992738040854771a47a11490a1d6360efd394fcf`) and of
+HIServices (`HIServices.arm64e.bridgesupport`, sha256 `09862b46ebe5ecf1bf611243378cdd653f61183f965d548af5d0a550d13011ca`),
+extracted with `macos-ref/tools/aa_stream.py --match`; names, raw values and signatures only, nothing copied. REA cannot
+open XML metadata (`open_binary`: unsupported format), so the framework evidence stays
+`ev_2a505504e4634c45494730263b3e9dd7da9a8a53b707a6c6c2a02409b4820b58` plus the hashes above.
+
+- **Named custom actions** (`accessibilityCustomActions`). `bifrost_ui::ax_action`: `AxActionSet { id, names }`, `clean`
+  (blank and repeated names dropped case-insensitively, at most 64 elements, 8 actions each, 64-byte names), `record(id,
+  names)` for immediate-mode apps right after `ax::record`, `merge`. SDK: `App::ax_custom_actions` (declared sets) and
+  `App::ax_custom_action(ctx, id, name)` (runs one; the runtime calls it only for a listed name, with the app's own
+  spelling). Wire: `ToShell::AxActions` (tag `0x215`, `proto/src/axaction.rs`) and `AxAction::Custom(name)` (code 5 in
+  `ToApp::AxSet`). Shell: `AppHost::ax_actions`; the AT-SPI `Action` interface lists them after `press` (and `increment`,
+  `decrement` on a slider) and `DoAction(i)` past the standard ones sends `Custom`; an element with only custom actions gets
+  the interface; the ax map lists them so `ax actions` / `ax action` reach app elements (`axmap::add_app_actions`).
+  Decision: no selector crosses the wire (the reference's `AXCustomActions` entries pair a name with a target selector);
+  the app gets the name back. `kAXErrorActionUnsupported` maps to `false` from `DoAction`.
+- **One settings struct** (`sdk::accessibility_settings`). The reference answers each preference with a free function
+  (`AXAnimatedImagesEnabled`, `AXPrefersNonBlinkingTextInsertionIndicator`, `AXReduceHighlightingEffectsEnabled`,
+  `AXShowBordersEnabled`, `AXPrefersHorizontalTextLayout`, `AXPrefersActionSliderAlternative`, `AXAssistiveAccessEnabled`,
+  `AXApplicationAccessibilityEnabled`) and its own `...DidChangeNotification`. BifrOSt answers them all with one `settings`
+  call on the `accessibility_display` service and one `settings_changed` event: `Settings` holds the display options,
+  `show_borders` (the Button Shapes setting), `animated_images` (off while Reduce Motion is on: BifrOSt has no separate
+  switch), `bold_text`, `text_scale`, `display_zoom`, `live_captions`, `application_accessibility` (some technology reads or
+  drives apps) and `running` (`Technology`: screen reader, switch control, voice control, screen zoom, keyboard
+  navigation; the reference's `AXTechnology*` constants, neutral names). Not matched yet: a non-blinking caret, reduced
+  highlighting, horizontal text layout, the action-slider alternative and Assistive Access have no BifrOSt setting, so they
+  read false (`UNSUPPORTED`). `open_feature(SettingsFeature)` / `feature_supported` follow `AXOpenSettingsFeature` and
+  `AXOpenSettingsFeatureIsSupported`; `SettingsFeature` keeps the measured raw values (Personal Voice 1, call audio 2,
+  AssistiveTouch 3, AssistiveTouch devices 4, Dwell Control 5, caption styles 6). Only Dwell Control and AssistiveTouch have
+  a page; the others answer an error.
+- **Speak Items Under the Pointer.** Settings > Accessibility > Spoken Content (`a11y_speak_under_pointer`, off by
+  default). `accessibility/hover_speech.rs`: the innermost published node under the pointer in an app's main window
+  (`item_at`, found through `pointer_events::ext_content_at`, the hit test the hover events use; the reference's
+  `AXUIElementCopyElementAtPosition`) is spoken with the screen reader's words (`walk::speech`) after 600 ms, once per
+  visit (`HoverSpeech`). Decision: one fixed delay; the reference offers a delay slider. The shell's chrome and built-in
+  windows are not spoken yet (they publish no node frames).
+- **Audio graphs for apps.** `sdk::audio_graph::play(ctx, chart, series)` sends `ChartDescriptor::audio_graph` tones to the
+  `audio_graph` service (`services/audio_graph.rs`): at most 512 tones, 1 to 2000 ms, pitch 0 (rest) or 20 to 8000 Hz,
+  a minute in all, only from the app in front; one graph is queued and a newer one or `stop` replaces it. The binary
+  renders it (`shell::audio_graph::pcm`) and plays it on the sound-effects role (`AudioJob::Graph`,
+  `SoundPlayer::audio_graph`). The reference's `AXDataSeriesDescriptor`, `AXNumericDataAxisDescriptor` and `AXScaleType`
+  (linear 0, log10 1, ln 2) describe the same data; there the screen reader starts the graph, here the app does.
+- **Kit groups.** `widgets::menu` (a "Menu" list of `MenuItem` rows, "checked" value, separators skipped; before, a kit
+  menu published nothing), `segmented` (one button per segment, "selected"), `path_bar`, `player`, `candidate_list` and
+  `mini_month` (month buttons and days, "today"/"selected") open an ax group, so their parts nest like the sidebar's.
+- **Chrome presses.** The shell chrome on the AT-SPI bus can be pressed: `atspi::sync` returns chrome presses and
+  `Shell::ax_chrome_press` runs the menu row (`ax_menu_press`), opens the dock app or shows the search field
+  (`atspi::model::chrome_target`). The search field still has no live text.
 
 ### Accessibility bridge (AT-SPI2)
 
@@ -467,11 +555,33 @@ swatches, letterbox, blur bases, plus the legacy gaps below).
 | The accent reaching an app process | `ToApp::Appearance` flags, bits 8 to 11 (`appearance::ACCENT_SHIFT`, `ACCENT_MASK`; `Accent::to_wire`) | The shell sends the accent with the other appearance flags and the SDK runtime calls `appearance::set_accent`, so `CONTROL_ACCENT.now()`, `appearance::accent_now()` and `SELECTION` follow the user's accent in apps too (0 from an older shell keeps blue). Controls tinted by the accent use `accent_now()`: list checkmarks, switches, the default button of sheets and the save panel, focus rings. Text links keep `LINK`. Apps that draw their own switch use `CONTROL_ACCENT.now()` (Reminders does); other hand-drawn blue controls are not converted yet. |
 | selectedTextBackgroundColor (Highlight Colour), sidebar icon size, `NSScroller.preferredScrollerStyle` (Show Scroll Bars) | `ui::highlight_now()`, `ui::sidebar_icon_scale()`, `ui::scroll_bars_always()`; `ToApp::Appearance` bits 12 to 15, 16 to 17 and 18 to 19 (`appearance::HIGHLIGHT_*`, `SIDEBAR_ICON_*`, `SCROLL_BARS_*`, value plus one, 0 = not sent) | Highlight Colour paints text selections (kit text fields, `TextLayout`, TextEdit, the shell's fields and text areas); "Accent Colour" is the `SELECTION` plate. Sidebar Icon Size scales `SourceList` row heights (drawing and hit-testing), the kit's row glyphs and the shell's Settings sidebar (small 0.85, large 1.2). Show Scroll Bars "Always" keeps the kit scroll views' knobs drawn at rest; Apple's legacy scroller with a track is not drawn yet (knob only). The SDK runtime applies the three on every appearance push, so apps follow a change live. |
 | systemRed ... systemGray (13 colours incl. mint, cyan, indigo, brown) | `SYSTEM_RED` ... `SYSTEM_GRAY` | Apple's Light and Dark values |
-| windowFrameColor, findHighlightColor, shadowColor | `WINDOW_FRAME`, `FIND_HIGHLIGHT`, `SHADOW` | new (findHighlight is a design approximation, confirm on Midget) |
+| windowFrameColor, findHighlightColor, shadowColor | `WINDOW_FRAME`, `FIND_HIGHLIGHT`, `SHADOW` | new (findHighlight is a design approximation, confirm on Midget; premultiplied since 2026-10-24, it was straight alpha and drew too bright under `fill_rrect`) |
+| controlColor, controlTextColor, disabledControlTextColor | `CONTROL`, `CONTROL_TEXT`, `DISABLED_CONTROL_TEXT` | measured (2026-10-24, below) |
+| selectedControlColor, selectedControlTextColor, alternateSelectedControlTextColor | `SELECTED_CONTROL` (= `SELECTION`, follows the accent), `SELECTED_CONTROL_TEXT`, `ALTERNATE_SELECTED_CONTROL_TEXT` | measured, except selectedControlColor (accent-derived) |
+| selectedTextBackgroundColor, selectedTextColor, unemphasizedSelectedTextBackgroundColor, unemphasizedSelectedTextColor | `SELECTED_TEXT_BACKGROUND` (= `SELECTION`), `SELECTED_TEXT`, `UNEMPHASIZED_SELECTED_TEXT_BACKGROUND`, `UNEMPHASIZED_SELECTED_TEXT` | the unemphasized plate is measured (220 grey Light, 70 Dark) |
+| keyboardFocusIndicatorColor, textInsertionPointColor | `KEYBOARD_FOCUS_INDICATOR`, `TEXT_INSERTION_POINT` (= `CONTROL_ACCENT`) | the focus ring is the measured blue; the reference ring also takes the accent, ours does not yet |
+| headerTextColor, selectedMenuItemTextColor, highlightColor, windowFrameTextColor | `HEADER_TEXT`, `SELECTED_MENU_ITEM_TEXT`, `HIGHLIGHT`, `WINDOW_FRAME_TEXT` | measured |
+| quinaryLabelColor, systemFillColor ... quinarySystemFillColor | `QUINARY_LABEL`, `SYSTEM_FILL`, `SECONDARY_SYSTEM_FILL`, `TERTIARY_SYSTEM_FILL`, `QUATERNARY_SYSTEM_FILL`, `QUINARY_SYSTEM_FILL` | measured: black (Light) or white (Dark) at 10, 8, 5, 3 and 1 % |
+| alternatingContentBackgroundColors | `ALTERNATING_CONTENT_BACKGROUNDS` (`CONTROL_BACKGROUND`, `ALTERNATING_ROW`) | measured second row colour (244,245,245 Light; white at 5 % Dark) |
+| controlShadowColor, controlDarkShadowColor, controlHighlightColor, controlLightHighlightColor | `CONTROL_SHADOW`, `CONTROL_DARK_SHADOW`, `CONTROL_HIGHLIGHT`, `CONTROL_LIGHT_HIGHLIGHT` | measured |
+| Lookup by name (`NSColor(named:)` for the catalogue names, colour lists that refer to dynamic colours) | `system::NAMED`, `system::named("labelColor")` | every name above, exact match |
+
+Measured values (2026-10-24, clean-room): the named-colour tables of the reference's light and dark system appearance
+catalogues (macOS 27 26A434 `SystemAppearance.bundle`, `Aqua.car` sha256 `c8f2a0a7...4cb50c` and `DarkAqua.car`
+`a1584765...4a6772e9`, extracted with `bifrost pc ref extract` outside the repo) were read with a small BOM reader and
+the colours written here as numbers. A name the dark table leaves out keeps its light value, as the reference
+resolves it. New translucent values are stored premultiplied. REA evidence for the documented API:
+ev_6a696e64493877091a178708ee554577c759c04ad87cb1546ee692e8f8fd131d (systemFill).
 
 Gaps (Apple parity rule):
 - `windowBackgroundColor` and `controlBackgroundColor` share `DETAIL_BG` (Dark pure black, per the Golden Gate reference); Apple's Dark values differ slightly.
-- Other `NSColor` names are not provided.
+- The existing pairs were not re-valued. The measured tables differ from them: labels are black or white at 85 / 50 / 25 %
+  (ours are opaque greys), windowBackgroundColor is 236 grey Light and 50 Dark, linkColor is 0,104,218 Light and
+  65,156,255 Dark, and the 26A434 system colours moved (systemBlue 0,136,255 Light / 0,145,255 Dark; systemRed 255,56,60
+  / 255,66,69; systemOrange 255,141,40; systemMint 0,200,179; systemTeal 0,195,208; systemCyan 0,192,232; systemIndigo
+  97,85,245; systemPurple 203,48,224; systemBrown 172,127,94). Re-valuing them changes every screen, so it is left to a
+  lead decision with a Midget comparison.
+- `shadowColor` is opaque black in the reference; ours stays black at one third, which the shell's drop shadows were tuned to.
 - The old `u32` constants (`SYSTEM_RED` ...) remain for fixed-colour uses; migrating callers is ongoing.
 - Still dark-only (allowlisted in the guard): Browser chrome, Clock full-screen, the power alert, `apps/remote`.
   Fixed in 0.4.100 work: the built-in App Store (all backgrounds, text, separators, tab bar) and it now redraws during the Light/Dark fade.
@@ -482,12 +592,14 @@ On macOS an app follows Light/Dark without opting in. Third-party Linux apps fol
 - `org.freedesktop.portal.Settings`, namespace `org.freedesktop.appearance`: `color-scheme` (u: 0 no preference, 1 dark, 2 light)
   and `accent-color` ((ddd), 0..1). Apps (GTK 4/libadwaita, Qt 6.5+, Firefox, Chromium, Electron) read it and subscribe to
   `SettingChanged`. This is served by `bifrost-portal` (see "Native apps follow the appearance"), so the channel exists.
-- Env hints for toolkits that do not use the portal at launch: `GTK_THEME=Adwaita:dark` (or `:light`), `QT_QPA_PLATFORMTHEME`
-  and `QT_STYLE_OVERRIDE`, `COLOR_SCHEME_PREFERENCE`-style variables for some apps. These are read once at start.
-- Gaps: the launcher does not yet set these env hints per scheme, so GTK3 and older Qt apps stay on their default until
-  restarted with them; `contrast` ignores Increase Contrast; `xdg-desktop-portal` frontends (file chooser, screenshot)
-  are not implemented; a `gsettings`/dconf `color-scheme` mirror for GTK apps that ignore the portal is not written.
-  Not implemented in this change.
+- Toolkits that do not read the portal by default: Qt picks its generic theme for an unknown desktop
+  (`XDG_CURRENT_DESKTOP=BifrOSt`), which ignores `color-scheme`, so the launchers set `QT_QPA_PLATFORMTHEME=gnome`
+  (Qt's built-in GNOME theme follows the portal live). GTK 3 reads only `gtk-application-prefer-dark-theme` from
+  `~/.config/gtk-3.0/settings.ini` outside a sandbox: `bifrost-portal` keeps that key in step (other lines kept),
+  read when a GTK 3 app starts. No `GTK_THEME` is set (it cannot follow later switches).
+- Gaps: running GTK 3 apps switch only after a restart; `xdg-desktop-portal` frontends (file chooser, screenshot)
+  are not implemented; a `gsettings`/dconf `color-scheme` mirror is not written (plain GTK 4 apps without libadwaita
+  that read only GSettings stay on their default).
 
 ## System fonts (`NSFont.systemFont`, `monospacedSystemFont`; Settings > Fonts)
 
@@ -604,6 +716,13 @@ Contacts uses it (File > Print… prints the contact list; Print Address Labels�
 `the_apps_own_print_item_keeps_its_flag_over_the_wire`, shell `an_apps_own_print_replaces_the_shells_print_row`, Contacts
 `group_actions_lead_the_detail_bar_and_file_has_one_print`. Not matched yet: there is no app-side print panel hook
 (`printOperation(withSettings:)` handing the shell's print sheet the app's pages); the app runs its own `PrintOperation`.
+
+**An app that cannot print (`AppMenuItem::no_print`, 2026-10-26).** An app with nothing to print (Archive, Disk Utility)
+puts the marker `AppMenuItem::no_print()` in any of its menus (the `no_print` flag, bit 5 of the item flags on the wire; it
+shows no row and has no id). The shell then drops its own File > Print… and the separator before it
+(`desktop_bar::app_hides_print`), so Cmd+P is not offered either. An app that declares its own `print` item keeps that one.
+Apple's apps simply omit the item; ours had it added by the shell, so the opt-out is explicit. Tests: proto
+`the_apps_own_print_item_keeps_its_flag_over_the_wire`, shell `an_app_that_cannot_print_hides_the_shells_print_row`.
 
 ### App context menus (`Ctx::context_menu`, `NSMenu.popUpContextMenu`)
 
@@ -1055,7 +1174,9 @@ and the docbroker grants. The app implements `Document` (`read(bytes, uttype)`, 
 | `autosavesInPlace` | `tick(host, t)` after `autosave_delay` (5 s) from the first unsaved change, and `suspend`. Saved documents save in place through new `ToShell::DocSaveGrant` (tag 0x181, `Ctx::save_document_in_place`): the shell makes a temporary file next to the original, the app writes it, `commit_document` renames it over the file (crash-safe) and the grant keeps its id. A failing autosave is not retried until the next change |
 | autosave of Untitled / `restoreWindow` | untitled documents are written to `<data_dir>/autosave/untitled-N.autosave` (temp + rename); `restore` reopens them at launch as edited documents with their old number |
 | `canClose(withDelegate:)` | `close`: a clean document closes; an edited one raises `alert()`, a `nav::Alert` with Save (default), Cancel, Don't Save (macOS order via `button_order`); the app shows it and calls `answer_alert(choice)` with `alert::SAVE`, `CANCEL` or `DONT_SAVE`. Save then closes after the commit |
+| `NSAlert` key equivalents | the close sheet takes keys through `alert_key(&KeyInput)`: Return Save, Escape and Cmd+. Cancel, Cmd+D the destructive Don't Save or Delete button (`Sheet::dont_save_button`), Tab moves a focus ring over the buttons in drawn order (`Sheet::focus`; draw `alert_sheet()` to show it) and Space presses the focused one. Not matched yet: Cmd+Delete and Shift+Tab, because the shell delivers Backspace and Tab without their modifier (`Sheet::handle_key` supports both once it does). Mail's Save This Message question has Cmd+D and Tab and Space too |
 | File menu | `file_menu() -> AppMenu` (New, Open..., Open Recent with Clear Menu, Close, Save, Save As..., Duplicate, Rename..., Move To..., Revert To Saved, enabled for the active document) and `menu_action(host, id)`; ids in `document::item`, `is_menu_id` |
+| `application(_:open:)`, `openDocument(withContentsOf:display:)` | `handle` also takes an inbound document (request with `share::INBOUND` set: a file opened with the app from Files or the Dock's stack, a share, a drop on the Dock icon) that no request of the controller asked for, and opens it like a file chosen in Open (`Notice::Opened`, joins Open Recent). A file that is already open, under any grant (matched by device and inode), only becomes the active document and the new grant is released. Requests the app made itself (its own panels, drops into its window) stay the app's: route those before `handle` |
 | recent documents | the grants the panel already keeps (the panel's Recents place lists them); the controller keeps its own ordered list (10, newest first) in the app defaults key `document.recents` and releases grants that leave it. A recent whose file is gone or replaced is dropped |
 
 Wiring: `App::document` calls `controller.handle(ctx, ev)` (`None` = not the controller's request), `main_menu` returns
@@ -1263,17 +1384,27 @@ interface, served by our own `bifrost-portal` (no xdg-desktop-portal or GNOME st
 - The shell (`Shell::appearance_tick`) writes `$XDG_RUNTIME_DIR/bifrost-appearance` (runtime dir from
   `/run/bifrost/user/session.json`) atomically, only when the effective scheme (Auto resolved) or accent changes,
   and once at startup; chowned to the account when the shell runs as root. Format: `color-scheme=1|2`
-  (1 dark, 2 light) and `accent=R G B` (0..1). Code: `springboard/src/appearance_portal.rs`.
+  (1 dark, 2 light), `accent=R G B` (0..1, the accent for the effective scheme) and `contrast=0|1` (Increase
+  Contrast). With Auto, the shell plans a wake-up at the next 07:00 or 19:00 (`auto_flip_in_secs`), so the flip
+  reaches the file on time even when nothing else is awake. Code: `springboard/src/appearance_portal.rs`.
 - `bifrost-portal` (`springboard/src/bin/portal.rs`) owns `org.freedesktop.portal.Desktop` at
   `/org/freedesktop/portal/desktop`, Settings version 2: `ReadAll`, `Read` (deprecated, double variant),
   `ReadOne`, and `SettingChanged`. Namespace `org.freedesktop.appearance`: `color-scheme` (u), `accent-color`
-  ((ddd)), `contrast` (u, always 0). Other keys return `org.freedesktop.portal.Error.NotFound`. It polls the
-  file every 500 ms. D-Bus activated by `/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service`.
+  ((ddd)), `contrast` (u, 1 with Increase Contrast). Other keys return `org.freedesktop.portal.Error.NotFound`. It
+  watches the file with inotify (a 500 ms poll only without inotify) and emits `SettingChanged` for each key that
+  changed (`State::changes`). D-Bus activated by `/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service`.
+  There is no `xdg-desktop-portal` frontend, so no `portals.conf`: apps call `org.freedesktop.portal.Desktop` directly.
 - Session bus: `packaging/arch/wayland/session` starts `dbus-daemon --session` as the account at
   `$XDG_RUNTIME_DIR/bus` (exported as `DBUS_SESSION_BUS_ADDRESS`, so `session.json` and `bifrost-apps` carry it);
   the session script starts `bifrost-portal`. The native-app sandbox (`bare/app_policy.rs`) binds that socket and sets
   the variable. Launch-time env such as `GTK_THEME` cannot follow later switches, so the portal is the only live path.
-- Not yet matched: `contrast` does not follow Increase Contrast, and Auto switches reach apps up to 500 ms late.
+- Parity note (`NSApp.effectiveAppearance`): third-party apps get the effective appearance, the accent and
+  Increase Contrast through the freedesktop Settings portal, live; GTK 3 through its settings.ini at start, Qt
+  through its GNOME theme. Read it with
+  `dbus-send --session --print-reply --dest=org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop
+  org.freedesktop.portal.Settings.ReadOne string:org.freedesktop.appearance string:color-scheme`.
+- Not yet matched: apps that read only GSettings/dconf, and toolkits that read the scheme only at start (GTK 3,
+  `GTK_THEME` users), do not follow a switch while running.
 
 ## Window vibrancy (`NSVisualEffectView`: material, blendingMode, state)
 
@@ -1398,6 +1529,31 @@ Float on Top, the floating CPU window of Activity Monitor). Ours, end to end:
   `white_point_mode` event; `docs/gpu-first.md`, "Night Shift on the whole output"). Apple's Night Shift is a display
   property (CoreBrightness), not a per-window one, so the window server owns it: it tints every app's window, the
   pointer included, on the CRTC gamma ramp or a final GLES pass, and the shell stops tinting its own surfaces.
+  Version 7 adds `tile_toplevel(zwlr_foreign_toplevel_handle_v1, placement)`, privileged only: the shell places another
+  client's window (a native app's) by its foreign toplevel handle, so the Window menu's arrange commands and the
+  Ctrl+Cmd arrows (which the window server forwards as `tile left|right|fill|center` control lines) act on the
+  window the menu bar stands for, as in Golden Gate (E2E N2). The Window menu lists only the front app's windows.
+  Version 8 adds `set_stack_rank(surface, rank)`, privileged only: the shell destroys the toplevels of windows it hides
+  (the Apps grid, Overview, Hide) and the window server activates another client's window meanwhile, so when it brings
+  a set of its windows forward (the grid closing, a hidden app shown, Bring All to Front) it ranks them bottom first.
+  A mapped window goes over its band at once, one still to map goes there when it maps, under the shown windows with a
+  higher rank (`Wm::map_ranked`), and neither takes the focus: the whole set returns in the shell's order over the
+  other client's window, whatever order the toplevels map in (E2E5 1, 3). A window the shell ranks before its
+  toplevel exists keeps its request for a later `windows` call (up to 120 calls and 32 requests), and a rank change
+  updates the foreign-toplevel list order.
+  Version 9 adds `set_position(surface, x, y)`, privileged only: the shell moves one of its mapped toplevels where the
+  app asked its window to go (`WindowMove`, `Wm::move_to`: kept on screen as a drag keeps it, a tile or maximize is
+  left, the stack and the focus stay; a toplevel not mapped yet maps there as with `set_origin`). `set_origin` applies
+  on the next map only, so a document app that moved its main window to the frame of the document it took over was
+  drawn at the old place while the shell kept the new one (E2E11 3). The desk asks once per move (`Desk::moved`), so a
+  later drag is never pulled back. Layer surfaces are drawn and hit-tested in one order: by z rank, then the
+  order they mapped, the newest on top within a rank (`scene::layer_surfaces_bottom_first`). The privileged shell names
+  a surface's rank in its namespace (`bifrost-desktop-chrome.z<rank>`; other clients' suffixes are dropped and they get
+  the default 100); its policy is `chrome_z` in `src/bare/wayland.rs`: the system sheets and alerts (5) under the Dock
+  (10), as a modal panel is under the Dock in Golden Gate, the Dock under the Apps grid, Overview and the sweep (20),
+  those under the menus, popups and panels (100), those under the notification banner (200),
+  and the accessibility caption and focus ring (300, ids 41 and 42) over everything. A menu opened over the grid is
+  drawn over it (E2E5 4), and a menu or the grid opened later no longer covers the focus ring or comes under the Dock.
 - Window model: `springboard/wm/src/wm.rs` `Level` (`Normal`, `Floating`). The stack is sorted by level: a floating
   window is above every normal window, a raised or re-levelled window goes to the top of its own band, and raising a
   normal window does not pass a floating one. Hit testing uses the same order. The key window is the one last raised
@@ -1524,7 +1680,7 @@ Where Servo 0.7.0 limits this, and Apple behaviour that is not matched yet:
 - Page rendering: CSS `backdrop-filter` is not implemented in Servo 0.7.0 (its style system parses it only under the
   off-by-default `layout.unimplemented` preference and layout never emits it), so a translucent sticky header shows the
   page behind it unblurred; `filter` works. The gap and what closing it needs are in `apps/browser/docs/servo-review.md`
-  ("Remaining gaps"); the engine is not patched. `@supports (backdrop-filter: blur(1px))` is false, so a site can fall back.
+  ("Remaining gaps"); the engine is not patched (it is a workspace member of an unmodified Servo checkout; the fork of stylo, layout and paint it would need is described there). `@supports (backdrop-filter: blur(1px))` is false, so a site can fall back; bifrost.olibuijr.com does (`.nav` uses the solid page colour).
 - Fonts: the engine's fallback list is fixed in Servo, so CJK punctuation (U+3000 to U+303F and the other Common-script CJK
   blocks) relies on `packaging/arch/fontconfig/61-bifrost-cjk-fallback.conf`, which makes the installed Noto Sans CJK SC
   answer the list's last family name; the package scriptlet rebuilds the font cache for it (Browser README, "Web compatibility").
@@ -1670,7 +1826,7 @@ Code: `springboard/sdk/src/view/animation.rs`, curves and springs from `springbo
 - Reduce Motion (`appearance::reduce_motion`, override with `Window::set_reduce_motion`): frame changes are instant, opacity and background cross-fade over 0.12 s.
 - Units: `Window::tick`, `Timing` and `next_wake` are seconds; `ViewApp::next_wake` is milliseconds like `App`.
 
-Key-path animations (below) cover the animation objects; `Window::animate` keeps the typed frame/opacity/background diff, and a retargeted spring now carries its velocity. Gaps, decided: no `CALayer` tree, transforms, corner radius, shadow or masks (views have no layers); reading `frame` mid-flight returns the presentation value, use `target_frame` for the model value; hit testing uses the presentation frame and ignores opacity; overlays (`draw_overlay`) ignore opacity; no `CADisplayLink` (the window ticks per frame while `next_wake` is `Some`); the background cross-fades in premultiplied RGBA, not a perceptual space; colour is a plain `u32`, not a `Pair`, so a Light/Dark switch mid-animation does not re-resolve it.
+Key-path animations (below) cover the animation objects; `Window::animate` keeps the typed frame/opacity/background diff, and a retargeted spring now carries its velocity. Since then views gained a backing layer for corner radius, border, shadow, transform, mask and filters (`style_props.rs`), and frame links (`Window::add_frame_link`, `frame_clock::FrameLink`) are the display-link counterpart; the sentences on layers and `CADisplayLink` below are superseded. Gaps, decided: no `CALayer` tree, transforms, corner radius, shadow or masks (views have no layers); reading `frame` mid-flight returns the presentation value, use `target_frame` for the model value; hit testing uses the presentation frame and ignores opacity; overlays (`draw_overlay`) ignore opacity; no `CADisplayLink` (the window ticks per frame while `next_wake` is `Some`); the background cross-fades in premultiplied RGBA, not a perceptual space; colour is a plain `u32`, not a `Pair`, so a Light/Dark switch mid-animation does not re-resolve it.
 
 ### Key-path animations
 
@@ -1680,6 +1836,37 @@ Code: `springboard/ui/src/{keypath_anim,anim_value,anim_transaction}.rs` (engine
 - `Window::add_animation(view, anim, key)`, `remove_animation`, `animation_keys`, `presentation_value` and `model_value`. Animations never change the model; `AnimationDelegate` hears start and stop(finished).
 - Transactions nest: `begin_transaction`, `commit_transaction`, `flush_transactions`, `set_animation_duration`, `set_animation_timing_function`, `set_transaction_disable_actions`, `set_transaction_completion`, `set_transaction_value`. `Window::animate` and `disable_actions` open the same scopes, and `set_value_animated(view, key, value)` animates under them (a running spring on the key is retargeted with its velocity).
 - Gap: do not animate one property with both `animate` diffs and key animations.
+
+### Springs, media timing, transitions and emitter sub-cells (2026-10-24)
+
+Reference: names and constants read from the 26A434 QuartzCore BridgeSupport (`kCATransitionFade`, `MoveIn`, `Push`,
+`Reveal`, `FromRight/Left/Top/Bottom`, the fill modes and timing-function names; file sha256 `f490c322...ca96`), and
+the framework row's REA evidence `ev_7b05d4f65e159dad2ad9b422203d8d3c31411358dcb1aa5c37bd4b5f1825c75f`. The QuartzCore
+binary itself sits in the shared cache, which is not extracted on Linux, so behaviour beyond the documented API is not
+measured.
+
+- `Timing::spring_physical(mass, stiffness, damping, initial_velocity)` (`CASpringAnimation(mass:stiffness:damping:initialVelocity:)`,
+  defaults `SPRING_MASS` 1, `SPRING_STIFFNESS` 100, `SPRING_DAMPING` 10). Decision: it maps exactly onto the existing
+  damping-ratio spring (`zeta = c / (2 sqrt(k m))`, response `2 pi sqrt(m / k)`), so `Window::animate` keeps one spring
+  curve. `Timing::spring_perceptual(duration, bounce)` (`perceptualDuration`/`bounce`: damping ratio `1 - bounce`, or
+  `1 / (1 + bounce)` below zero). `Timing::settling_duration()` is what a spring track actually lasts.
+- `Timing` media timing for `Window::animate`: `.delay(secs)` (`beginTime`; the old value shows until it starts),
+  `.speed(x)`, `.repeat_count(n)` (`f32::INFINITY` until the property is set again) and `.autoreverses(true)`, played
+  through `keypath_anim::Media`. When the cycles end the view rests on the new (model) value, as the view animation
+  options do. Under Reduce Motion the single 0.12 s cross-fade replaces all of it. `timeOffset`, `repeatDuration` and
+  fill modes stay on `KeyAnimation` (`Window::add_animation`).
+- `TransitionView` (`CATransition` on a layer's content change): `transition_to(view, Transition::push(TransitionSubtype::FromRight))`,
+  `transition_to_then(.., |finished| ..)`, `set_content` (no effect), `is_transitioning`, `current_transition`. Same
+  model as the shell's Settings and Files stacks (`bifrost_ui::transition`: fade, move in, push, reveal, eases, `range`,
+  `reversed`, `parallax`). Decision: the new content is the model at once (lookups and layout reach it), and while
+  the effect runs (default 0.25 s) the transition view draws old and new content itself, clipped to its frame, and
+  the new content takes no pointer events. A second change cuts the first short (`finished` false). Reduce Motion
+  plays `Transition::reduced()`. Gap: only the four public types; the private cube, flip, ripple and page-curl types
+  are not built.
+- Emitter cells: `EmitterCell::begin_time`, `duration` (default for ever) and `emitter_cells` (`CAEmitterCell.emitterCells`):
+  every particle of a cell with sub-cells emits them at its own position on its own clock, under the emitter's birth
+  multiplier. Gap: one level of nesting (the sub-cells of a sub-cell do not emit); sub-particles do not inherit the
+  parent's velocity.
 
 ## Auto Layout (constraints)
 
@@ -1714,13 +1901,43 @@ Gaps (recorded per the Apple parity rule): no visual format language (`constrain
 debugging (`hasAmbiguousLayout`, `exerciseAmbiguityInLayout`, the constraint-breaking log and the debug view UI;
 conflicting required constraints are only listed in `Window::broken_constraints`), no `activate`/`isActive` toggling of
 single constraints after the fact (rebuild with `remove_constraints` then `constrain`), no `NSLayoutConstraint.constant`
-animation, no baseline anchors, no `systemSpacing(after:)`, no `NSStackView` gravity areas, `detachesHiddenViews` or
-custom spacing per view, no baseline alignment, no `NSLayoutGuide` owned by a view (guides are window-wide), no
+animation, no `systemSpacing(after:)`, no `NSStackView` gravity areas, `detachesHiddenViews` or
+custom spacing per view (baseline anchors and baseline alignment: see "SwiftUI views and layout" below), no `NSLayoutGuide` owned by a view (guides are window-wide), no
 per-view `translatesAutoresizingMaskIntoConstraints` (all frames are window coordinates), and no `updateConstraints` /
 `setNeedsLayout` pass: constraints are re-solved on every `Window::layout`, which is also where a resize arrives. The
 solver is re-created per layout (an edit-variable resize through `suggest` is available on `Solver` but the window does not
 keep a persistent solver yet). `Fill` shrinks stretchable children first and does not rank compression resistance among
 fixed children (use constraints for that). Not compiled or run when written; the lead verifies the tests.
+
+## SwiftUI views and layout (baselines, scroll position, button styles, groupings)
+
+Matrix framework "SwiftUI (Views, View layout)". Reference behaviour comes from the official documentation pages, read
+with REA (evidence ids below); no reference code or strings are copied. Not compiled or run when written; the lead
+verifies the tests.
+
+| Reference | BifrOSt |
+|---|---|
+| `VerticalAlignment.firstTextBaseline` / `.lastTextBaseline` (REA ev_b93a5d6115e46cd5d057bd6f1baba6f5bab80712a0302d4e2fd8db9ed91a5c91) | `View::baselines(ui) -> Option<(first, last)>` (points below the frame's top), reported by `Label`, `Button`, `Switch`, `Segmented`, `Checkbox`, `PopUpButton` and `TextField`; `Stack` folds its children's. `Align::FirstBaseline` / `Align::LastBaseline` on a horizontal `Stack` move the children so their baseline guides meet the lowest one; a child without text aligns its bottom edge, as the reference guide does. Render `Ui::centred_baseline(pt, h)` and `Ui::image_baseline(pt)` give the baseline from the font's line metrics (Dynamic Type included). Tests: `tests_controls.rs` (`first_baseline_alignment_*`, `last_baseline_alignment_*`), render `ui.rs` `the_centred_baseline_*` |
+| `firstBaselineAnchor` / `lastBaselineAnchor` | `anchors(id).first_baseline()` / `.last_baseline()` (`Anchor::FirstBaseline`, `LastBaseline`); the window passes `ViewInfo::baselines`, and the solver keeps each baseline's distance from the frame's vertical centre (exact for the single-line controls, whose text is centred). An item without text offers its bottom edge. Tests: `autolayout.rs` `baseline_anchors_*`, `a_view_without_text_*` |
+| `ScrollPosition` (`init(id:anchor:)`, `init(idType:)`, `edge`, `y`/`point`, `viewID`, `isPositionedByUser`, `scrollTo(id:anchor:)`, `scrollTo(edge:)`, `scrollTo(y:)`), `scrollPosition(_:anchor:)`, `scrollTargetLayout()` (REA ev_c3f2fc904288ef066a11d9985a43fb1422ee185f8672869a681b629037434f56) | `bifrost_ui::scroll_position::{ScrollPosition, ScrollTarget, Edge}`; SDK `ScrollView::set_scroll_targets`, `position()`, `set_position(p)`. An identity without anchor scrolls the minimal amount; with an anchor it meets that viewport place. User scrolling (wheel, drag, fling) sets `is_positioned_by_user`, clears edge and point and reports the top-most visible target (bottom-most with a `Trailing` anchor). On relayout an edge stays at its edge, a user-scrolled row keeps its distance from the viewport top, an app-chosen identity stays visible and a point is left alone. Tests: `ui/src/scroll_position.rs`, `sdk/src/view/scroll.rs` (`the_bound_position_*`, `user_scrolling_updates_*`, `a_relayout_keeps_*`) |
+| `ButtonStyle`, `ButtonStyleConfiguration` (`label`, `isPressed`, `role`), `ButtonRole`, `.bordered`, `.borderedProminent`, `.borderless`, `.plain`, `.link` (REA ev_ed0948f3d1cbfc813ba01d8632df27a86ec8079573d60b20e31314657d0c2be9) | `view::ButtonStyle` trait (`draw`, `size` from a `ButtonConfiguration`), `Button::styled` / `set_style` / `with_role` / `configuration`, built-ins `Bordered` (default, unchanged look), `BorderedProminent` (accent plate), `Borderless`, `Plain`, `LinkStyle` (`LINK`); `ButtonRole::Destructive` draws in `DESTRUCTIVE`. Tests: `tests_groupings.rs` |
+| `GroupBox` (REA ev_82d999d9ca35bf7c060d40b88c1ea62d8270a37a9072e3299303d6f8c0aefd65) | `view::GroupBox::new(content).titled(t)`: a `CARD_BG` card (`m::CARD_RADIUS`) with the content inset by `SPACE_M`, the title above in the group-header style |
+| `ControlGroup`, `ControlGroupStyle` `.automatic`, `.navigation`, `.palette` (REA ev_9abf836f62e12e7ecab6b3d336a9f72862b59ddd808a0024f73147708e31470e) | `view::ControlGroup::new(label, controls).styled(ControlGroupStyle::…)`: buttons take `Borderless`; joined styles share one capsule plate with hairline dividers and equal shares, palette packs them `SPACE_XS` apart; a narrow group shrinks all controls together |
+| `TabView`, `Tab(value:)`, selection binding (REA ev_dd0e19f2411dc509513a1656094075b4f70b1983a8ea321a107c53d698b1a8c4) | `view::TabView::new(action, [(id, label, content)])` over `bifrost_ui::tab_selection`: a centred tab row (`widgets::segmented`) on the top edge of a card, only the selected page visible; click or Left/Right selects and sends `action`; `select(id)` and `selected_id()` bind it to app state |
+
+Gaps (recorded per the Apple parity rule):
+- Baselines: multi-line text views report one line (the SDK has no wrapped text view yet); horizontal-axis baseline
+  alignment (`.firstTextBaseline` in a `VStack` aligns horizontally in the reference only via `HorizontalAlignment`, which
+  has no baseline guides) is not applicable. Custom alignment guides (`alignmentGuide(_:computeValue:)`) are not built.
+- Scroll position: vertical only (no x, no leading or trailing edges), targets are supplied by the app (`ScrollTarget`
+  rows) instead of being read from the view tree, and programmatic scrolls jump (no animated `withAnimation` scroll).
+- Styles: only buttons have a style protocol; `GroupBoxStyle`, `ControlGroupStyle` custom bodies, `ToggleStyle`,
+  `LabelStyle` and `PickerStyle` are not protocols yet. The glass button styles (`.glass`, `.glassProminent`) and
+  `.accessoryBar` are not built.
+- `ControlGroup` `.menu` and `.compactMenu` styles (a pull-down of the controls) are not built; a group has no
+  accessibility element of its own (`Role` has no group case).
+- `TabView`: the desktop tab row only; no sidebar-adaptable style, `TabSection`, tab customization, badges or page
+  style. The tab row reports as a segmented control (`Role` has no tab-group case).
 
 ## App Intents (`AppIntent`, `AppEntity`, `EntityQuery`, `AppShortcutsProvider`)
 
@@ -1756,7 +1973,7 @@ Adopting it in an app (three steps):
 
 The shell parses `[[intent]]` (`apphost::Manifest::intents`, `shell/intents.rs`). Spotlight's "Shortcuts" section lists
 intents with `shortcut = true` and no required parameter, matched on title and app name without launching the app.
-Choosing one opens the app, then calls `intent.<id>` on `$XDG_RUNTIME_DIR/bifrost/apps/<app id>.sock`, retrying for up to
+Choosing one opens the app, then calls `intent.<id>` on `appdata/<app id>/control.sock` (`bifrost_core::app_control_socket`), retrying for up to
 8 s while the app starts.
 
 Gaps (Apple behaviour not matched yet):
@@ -1777,6 +1994,16 @@ Gaps (Apple behaviour not matched yet):
 - The Shortcuts app (`shortcuts-desktop`) does not list or run intents yet; it could read `intent.list` of running apps and
   the manifests of installed ones and offer them as actions, passing results between steps as the `value` JSON.
 - Intents are served on the control socket, so the app must be running; the shell launches it first.
+- How the shell dials a control socket (`shell::intents`): it opens the app's data folder and then `control.sock` without
+  following a link (`O_PATH|O_NOFOLLOW`), requires a socket whose owner is the folder's, and connects to that inode
+  through `/proc/self/fd/<n>`, so an app cannot swap its socket for a link to another app's. A root shell dials a
+  root socket in a root folder as root, the account's socket as the account, and refuses everything else (also before
+  setup, when there is no account). For the account it switches only the calling thread's effective ids (raw
+  `setgroups`, `setresgid(-1, gid, -1)`, `setresuid(-1, uid, -1)`) and switches back right after the connect, aborting
+  the shell if that fails; `SO_PEERCRED` reports the effective ids, and with the real and saved uid still 0 the
+  account can neither signal nor trace the thread. A reply is at most 1 MiB and must arrive within 62 s of the
+  connect (the SDK's 60 s pending-call limit, `app_control_socket::MAX_PENDING_MS`, plus 2 s); a visual search
+  provider gets 5 s.
 - `Date` is validated as ISO 8601 text only; no natural-language dates or durations. Plural parameters (`[IntentFile]`,
   `Doubles`, `[Placemark]`) are not modelled; `Placemark`, `Measurement` and `File` take one object each.
 drag and drop, no multi-line text view, and the
@@ -1797,7 +2024,18 @@ method = "open_images"
 - `title` is the menu row; `send_types` are the types of the selection the service takes (any one matches);
   `return_types` is non-empty when the service answers with a text value; `method` names the control call
   `service.<method>` (`[a-z0-9_-]`).
-- The selection's types come from the pasteboard (`bifrost_ui::app_services::selection_types`): every file selection
+- The selection is the front window's, never the clipboard (E2E8; the reference's services act on the front app's
+  selection through `NSServicesMenuRequestor` `writeSelectionToPasteboard:`). Running a service or Look Up
+  (Ctrl+Cmd+D) sends the front app `ToApp::SelectionRequest { request }` (tag 0x1d4); the SDK answers
+  `ToShell::SelectionReply { request, text }` with `App::selected_text` when the app gives one (an app that draws its
+  own text, such as TextEdit), else the selection of the focused field it last reported (`Ctx::text_state`, sent by
+  `ViewApp` and the text kit). A blank answer, or none within `services_route::SELECTION_WAIT_MS` (250 ms; an app
+  built before the request never answers), falls back to that field's selection and then the word at its caret
+  (`TextState::word_at_cursor`). The Services submenu lists its rows from what the shell already holds
+  (`Shell::front_selection`: the built-in Terminal's selection, or the front app's reported field), so the menu never
+  waits on an app. A file selection reaches the file services only when an app reports one: the shell no longer reads
+  file URLs off the pasteboard.
+- The selection's types (`bifrost_ui::app_services::selection_types`): every file selection
   carries `public.file-url`, plus `public.image` and `public.pdf` when a file has that extension; text carries
   `public.utf8-plain-text`, plus `bifrost.file-path-text` (the shell's own type, not an Apple UTI) when the text is one
   absolute path to a file. The App menu lists the built-in services, then every installed app's matching service in
@@ -1811,8 +2049,12 @@ method = "open_images"
   Open Selected File (`service.open_selected_file`); the latter opens a named file as an untitled document, since the
   document controller only opens files through a panel grant.
 - Decisions and gaps:
-  - The shell reads the selection from the pasteboard, which apps fill on copy and selection. It does not ask the
-    frontmost app for its selection types over the control socket: that call would block the menu on the UI thread.
+  - The selection is asked of the front app over the app channel, never the control socket, and the shell never
+    blocks on it: the service runs when the answer arrives (`Shell::selection_reply`) or the wait runs out
+    (`selection_tick`). The reply carries text only (up to `MAX_SURROUNDING` characters); files are a gap.
+  - The Look Up popover is an overlay surface of its own above the app windows (`look_up_popover::CHROME_ID`, the
+    menus' rank) and drops from the caret the front app reported (`ToShell::CaretRect`), else from under the menu
+    bar. A click on an app window outside it does not close it yet (Escape does).
   - The frontmost app's own services are listed too (the reference model lists every provider).
   - The returned text is put on the pasteboard; the shell does not type it into the frontmost app.
   - A service whose app is not running gets the call after the app opens (retried for 8 seconds).
@@ -1887,7 +2129,7 @@ Host tests only (`sdk/tests/url_session.rs`, loopback servers); a row becomes `p
 | `URLSessionStreamTask` | `url_stream_task::URLSessionStreamTask`: `connect`, `write`, `write_line`, `read_data`, `read_line`, `close_write` |
 | `NetService`, `NetServiceBrowser` | `net_service`: publish/stop, TXT, browser with `did_find` / `did_remove`, over `dns_service` |
 
-Decided gaps: Digest, client-certificate and server-trust challenges; `AcceptPolicy.onlyFromMainDocumentDomain`; `wss://`
+`ConfiguredSession` answers a Digest challenge (MD5, qop auth or none) once from the stored or delegate credential, with nc=00000001 and a fresh client nonce. Decided gaps: Digest variants beyond that (MD5-sess, SHA-256, auth-int, nonce-count reuse), client-certificate and server-trust challenges; `AcceptPolicy.onlyFromMainDocumentDomain`; `wss://`
 and secure stream upgrade; upload tasks and OS-level background transfer; an mDNS responder (the browser is fed by a
 transport); no `Vary`, `Expires` or `Age` handling; `URLError` has the few codes used here. The shared session's
 `url::URLCache` stays memory only.
@@ -2472,7 +2714,7 @@ copies stay inside BifrOSt until multi-MIME sources land; file representations t
   socket `/run/cups/cups.sock` when it exists (what `cups.socket` activation provides), else `localhost:631`.
 - **Errors**: `PrintError::NoCups` (the scheduler cannot be reached, any I/O or HTTP failure), `NoPrinter` (no name and no default),
   `Failed(String)`. `print::available()` is a 200 ms connect to the local scheduler port.
-- **Printer capabilities** (NSPrinter): `Client::get_printer_attributes(name)` returns `printer_caps::PrinterCapabilities`: `papers` (PWG self-describing names with sizes, `PaperSize::ppd_name()` = PMPaperGetPPDPaperName), `default_paper`, `duplex`, `color_modes`, `status` (state, reasons, message; `statusForTable`), `page_size_for_paper(name)` (`pageSize(forPaper:)`). Printers omitting attributes fall back to Letter/A4, one-sided, auto colour. Not yet done: `deviceDescription`, `isKey(_:inTable:)`, `languageLevel`, the print panel using the lists.
+- **Printer capabilities** (NSPrinter): `Client::get_printer_attributes(name)` returns `printer_caps::PrinterCapabilities`: `papers` (PWG self-describing names with sizes, `PaperSize::ppd_name()` = PMPaperGetPPDPaperName), `default_paper`, `duplex`, `color_modes`, `status` (state, reasons, message; `statusForTable`), `page_size_for_paper(name)` (`pageSize(forPaper:)`). Printers omitting attributes fall back to Letter/A4, one-sided, auto colour. Since 2026-10-24 also `make_and_model` (`type`, from `printer-make-and-model`), `formats` (`document-format-supported`), `resolutions` and `default_resolution` (IPP resolution values, dots per centimetre converted to dpi; no default: the finest offered, else 300 dpi), `language_level()` (3 for a queue that takes `application/postscript`, else 0, as a non-PostScript printer reports) and `device_description()` (`deviceDescription`: is a printer, never a screen; resolution; default paper size in points; RGB or grey from the colour modes; 8 bits per sample). REA ev_718c7c2f272eff48acd3dad39768bd1d0c20bbe35ab21b643425783b55deedf1 and ev_54eacf1088c9c1e27dce9ec56f7386ff23618c8b28b9ed08b757acb7dca16b09 (the page names the printer key the only one guaranteed). Decision: the language level is derived from the formats because IPP has no PostScript-level attribute. Not yet done: `isKey(_:inTable:)` (deprecated tables), the print panel using the lists.
 - **Print sheet rows** (wave 15, 2026-10-19): the shell sheet (`springboard/src/shell/print_sheet.rs`) has Printer, Paper, Orientation, Scale, Copies, Pages, Sides (one-sided, two-sided, two-sided short edge) and Colour (colour, black and white). Sides and Colour fill `PrintInfo.sides` and `PrintInfo.color`, so the job carries `sides` and `print-color-mode`; black and white also greys the pages (`to_grey`) so Save as PDF is monochrome.
 - **Printers**: `bifrost_app::cups` (`Client::printers()`, with the default flagged). The old `print::printers()` (`lpstat`) is gone.
 
@@ -2561,7 +2803,7 @@ reads the system zone on every query, and `TimeZone::from_seconds_from_gmt(s)` i
 identifier `GMT+0100`). Queries take a `coding::Date` (seconds since 1970): `seconds_from_gmt`, `abbreviation`,
 `is_daylight_saving_time`, `next_daylight_saving_time_transition` (the first changing second within four years, None
 for a fixed offset). `TimeZone::known_time_zone_identifiers()` lists the database sorted. `localized_name(NameStyle, &Locale)`
-returns English names: short forms are the abbreviation in force, long forms come from a built-in table of common
+returns English names: short forms are the abbreviation in force (the `DateFormatter` letters `z`, `zz` and `zzz` instead follow the reference en_US data: UTC and North American abbreviations, otherwise the short GMT form such as `GMT+1`), long forms come from a built-in table of common
 abbreviations (GMT, BST, CET, EST, PST, JST, AEST, NZST, ...) and are None for anything else. The data is the shell's
 `springboard/src/bare/timezone.rs` (TZif v1/v2 files, POSIX footer rules, abbreviations); `SYSTEM_TIME_ZONE_DID_CHANGE`
 names the zone-change notification, which nothing publishes yet.
@@ -2591,6 +2833,25 @@ and need `/usr/share/zoneinfo`. Not yet checked on Midget.
   entry point over the five styles), `relative::named_days` ("yesterday", "today", "tomorrow") and `date_components`
   (`DateComponentsFormatter`: positional, abbreviated, short, full; English). German (`de`) now uses comma-decimal
   separators and the "12 %" / "1.234,50 EUR" shapes in `NumberFormatter`.
+- `formatters::person_name`: `PersonNameComponents` and `PersonNameFormatter` (Short, Medium, Long, Abbreviated; `string` and a
+  whitespace `components` parser with known prefixes and suffixes). Not matched: locale-dependent name order (family-first
+  scripts), phonetic representation and attributed output. Host tests only.
+- `file_url::FileUrl` (Core Foundation URL parity for file paths, pure std): `from_path`, `parse` / `as_string`
+  (percent-encoding, trailing slash for directories, `file://` and `file://localhost` only), `appending_path_component`,
+  `deleting_last_path_component` (the root stays the root), `last_path_component`, `path_components`, `path_extension`,
+  `appending_path_extension`, `deleting_path_extension` (dotfiles have no extension), `standardized` (lexical `.` and
+  `..`, no filesystem access) and `resolving_symlinks` (canonicalize, unchanged on error). Not matched: non-file schemes
+  and network URLs (`url.rs` covers requests), bookmark data, resource-value caching on the URL object and the
+  enumerator (`file_manager.rs` has resource values and enumeration). Host tests only.
+- `defaults::UserDefaults::with_store(store, app_id)` (preference domain search list): a read goes through the app's
+  own domain, then suites added with `add_suite` (`remove_suite` drops one), then the global domain, then the values
+  passed to `register`; `set` and `remove` change the app domain only and save at once. `persistent_domain(name)` returns
+  the stored values of one domain. `open` and `memory` keep the per-app file behaviour, and no caller uses `with_store`
+  yet. Host tests only.
+- `progress` (Foundation `Progress`): re-exports `ProgressTree` and `ProgressId` from `bifrost_ui::progress` (unit
+  counts, child shares, finish, cancel, pause and resume, `add_child`, `become_current`/`resign_current`) and adds
+  `localized_description(tree, id)`, the English "N% completed" rounded down and empty while indeterminate. Not
+  matched: publishing progress to other processes, the progress manager, reporter and subprogress types. Host tests only.
 
 Gaps: `Locale` has no `region`/`calendar`/`measurementSystem` accessors yet, `DateFormatter` still takes an explicit
 `tz_offset` and a Gregorian calendar, week-of-year and weekday-ordinal components and `DateInterval` are missing, CLDR
@@ -2749,6 +3010,28 @@ Code: `springboard/ui/src/table.rs`, `springboard/ui/src/panels.rs` (SDK: `bifro
 - **Sortable columns.** `SortDescriptor` (key, ascending), `Column` (`sort_key` = `sortDescriptorPrototype`), `TableColumns::click_header` (first click ascending, second descending; the key becomes primary, earlier keys stay secondary), `indicator(i)` for the header arrow, `sort_rows` (stable multi-key sort). Resize (`resize`, divider grab zone `RESIZE_GRAB`, min and max width), reorder (`reorder`, `drop_index`), and `save`/`restore` for `autosaveName`.
 - **Font panel.** `FontPanel`: family, style, size (1 to 288, list `FONT_SIZES`), `on_change` as the `NSFontManager` target action. Families come from the fonts the renderer has, supplied by the caller.
 - **Color panel.** `ColorPanel`: RGB, HSB wheel hit-test (`wheel_pick`), hex field (`parse_hex`), alpha, `on_change`. Named system colours are the `render::ui::SYSTEM_*` tokens.
+- **Colour panel pickers (2026-10-24).** `PanelMode` holds `NSColorPanel.Mode` with the reference raw values (none -1,
+  gray 0, RGB 1, CMYK 2, HSB 3, customPalette 4, colorList 5, wheel 6, crayon 7; REA
+  ev_6c3ad0e07099189a330191100d5b1564f636b6064b3a70563d484aca64e11954) and `PanelModes` the picker mask (`1 << raw`,
+  all modes `0xffff`). `set_mode` refuses a picker outside the mask and `set_mask` moves a hidden picker to the first one
+  left. `shows_alpha` (default off, as the reference; the alpha is still stored), `is_continuous` (default on) with
+  `track_rgb(c, done)` for drag steps, `attach_color_list` / `detach_color_list`, and `components(mode)` /
+  `set_component(mode, i, v, done)` for the slider pickers (grey by Rec. 601 weights, RGB 0..255, naive device CMYK,
+  HSB). Decision: CMYK and grey are device conversions without a profile; a profile-managed slider waits for the
+  ColorSync profiles to reach the panel.
+- **Colour well (2026-10-24).** `springboard/ui/src/color_well.rs`: `ColorWell` in the three `NSColorWell.Style`s
+  (default, minimal, expanded), `bordered`, `supports_alpha` (a well without alpha stays opaque and hides the panel's
+  opacity slider), `enabled`. `ColorWells` plays the shared-panel protocol: `activate(i, exclusive, panel)` (exclusive
+  deactivates the others; additive keeps several wells following the panel), `deactivate`, `panel_changed(panel)`
+  sends the panel colour to every active well, `take_color` is `takeColorFrom` and a drop (the panel follows an active
+  well). `click` follows the style: a default well toggles the panel, a minimal well and an expanded well's swatch open
+  the swatch popover, the expanded well's square trailing button shows the panel. `SwatchGrid` lays out and hit-tests
+  the popover; `bifrost_app::color_list::ColorList::swatch_grid` and `pick_into_well` fill it from a colour list.
+  `draw_well` draws the face (`system::CONTROL`), border (`SEPARATOR`), a light/dark split under a translucent colour,
+  the swatch, an accent ring when active, 6 pt corners. REA ev_707cf40ef10ba0a4f1899622a486b7b1d441668d39a5c31a9cdc6fbef9e5e470.
+  Gaps: no shell screen hosts a well or draws the panel's pickers yet, the popover is a layout model, the eyedropper
+  (`NSColorSampler`) needs a screen read from the shell, crayon and custom palette pickers have no content, and
+  `maximumLinearExposure` (HDR) is not modelled.
 - **Gaps.** No drawing yet: the shell does not render the two panels or a clickable header row, and Files was not adopted (it keeps its toolbar sort). Column hiding (header context menu), `NSColorPanel` crayons/sliders modes and eyedropper, font collections and typography effects are not matched. Sort descriptors compare through a caller closure (no key-path reflection). Contract tests are model-level (`Ctx::testing` not needed: nothing is sent to the shell yet).
 
 ## Quick Look (`QLPreviewPanel`, `QLPreviewItem`, `QLThumbnailGenerator`)
@@ -2771,7 +3054,7 @@ Code: `springboard/src/shell/preview_info.rs` (pure helpers), drawn by `springbo
 - **Animated pictures.** A GIF or animated PNG (up to 16 MB, 300 frames, 32 million pixels in all) opens as `Body::Animation`: `preview_info::load_animation` decodes the frames and `PictureAnim::tick` picks the frame from the clock (`frame_index`: delays of 10 ms or less show for 100 ms, the loop count is honoured, the last frame stays after the last pass). A still picture keeps waiting for the thumbnails service.
 - **Picture information.** Under a picture the caption shows one line read from the first 256 KB of the file (`picture_info_for`): size in pixels, format, file size, frame count for an animation, camera (the make is not repeated when the model already starts with it), capture date, and the exposure as `1/250 s  f/2.8  ISO 200  35 mm`. Parts the file does not have are left out. The location is deliberately not shown.
 - **Preview panel model follows the shell.** `bifrost_app::peek::PreviewPanel::apply_event` and `handle_service_event` apply the shell's `closed` and `index` events to the model (so Space after the user closed the panel opens it again instead of sending a close), and an optional `PreviewPanelDelegate` hears `panel_did_change_item` and `panel_did_close`. Apple's key-event and source-frame delegate callbacks are not matched: the shell handles the panel's keys itself and the card opens at its own place.
-- **Gaps.** No scrolling in a long listing (the card shows what fits), no WebP animation (the WebP codec decodes the first frame), no Markup button for apps, and no extension host for out-of-process HTML or PDF replies.
+- **Gaps.** No scrolling in a long listing (the card shows what fits), WebP animation not checked in the panel (the codec decodes every WebP frame since 2026-10-24), no Markup button for apps, and no extension host for out-of-process HTML or PDF replies.
 
 ## Image I/O (`CGImageSource`, `CGImageDestination`, `bifrost_render::cg::imageio`, SDK `image_source`, `image_metadata`, `image_animation`, `picture_writer`)
 
@@ -2781,7 +3064,56 @@ Decoders and encoders are in `springboard/render/src/cg/imageio` (one module per
 - **More metadata.** The EXIF and GPS tables name `LensMake`, `OffsetTimeOriginal`, GPS `Speed` and `SpeedRef`, `Track` and `TrackRef`, `ImgDirection` and `ImgDirectionRef`. `image_metadata::PictureInfo` adds `lens_make`, `exposure_bias`, `gps_time` (`GpsTime`: UTC time of day with the date stamp when present), `gps_speed_kmh` (converted from km/h, mph or knots) and `gps_direction_deg`.
 - **More metadata written.** `PictureWriter` writes `exposure` (shutter time, f-number, ISO, focal length), `exposure_bias`, `lens` (make and model), `gps_time`, `speed_kmh` and `direction`; bad values are ignored. They round-trip through JPEG, PNG and TIFF.
 - **Tiles from a picture.** `render::image_tiles::TiledPicture` decodes a picture once and serves tiles through the LRU `TileCache` (`region`, `tile`, `crop_tile`); a viewer holds at most `capacity` tiles in drawable form.
-- **Gaps.** The decoders still decode a whole picture before scaling (no DCT-scaled JPEG decode, so the tile cache bounds memory held for drawing, not the decode), no APNG region-only frames are kept (frames are composited to the full canvas), no HDR gain maps, XMP or IPTC, and the picture's own drag payload does not carry image data yet.
+- **Gaps (wave 15).** Closed or narrowed by the 2026-10-24 round below; what is still open is listed there.
+
+Parity round 2026-10-24 (branch `parity/image-io`). Behaviour reference: the option keys and functions of the macOS 27
+(26A434) ImageIO BridgeSupport (sha256 `837ce01d...`, read for names only), the developer documentation, and REA
+evidence `ev_1f78cc989db83cafeda1ab3033c6d43e407a9f6ef4ead529ffeb323eb64aa9ff`. No reference code or data is copied.
+
+- **WebP everywhere.** Lossy (VP8, with an `ALPH` plane) and animated WebP decode through the `image-webp` crate
+  (MIT or Apache-2.0, pure Rust): animation frames are composited onto the canvas with their delays and the `ANIM`
+  loop count, and `ImageSource::count`, `image_animation` and `delay_ms_at` see them. Still lossless files keep our
+  own VP8L decoder. `webp::encode` writes lossless WebP with EXIF, ICC and XMP, so `Format::can_write` is true for
+  every format and `ImageDestination`, `graphics_imageio::encode` and `PictureWriter` write WebP. The WebP properties
+  carry `LoopCount` and the canvas size (reference keys `kCGImagePropertyWebPLoopCount`, `CanvasPixelWidth/Height`).
+  Decision: the reference cannot be matched on lossy or animated WebP writing yet; WebP is written lossless and still.
+- **XMP and IPTC.** `Properties::xmp` (JPEG APP1, PNG `iTXt` `XML:com.adobe.xmp`, WebP `XMP `) and
+  `Properties::image_resources` (JPEG APP13) are read; `WriteOptions::xmp` / `image_resources` write them back.
+  `image_metadata::Descriptive` (title, caption, keywords, creators, copyright, rating) reads XMP first and IPTC second,
+  matching how the reference syncs `CGImageMetadata` with the IPTC dictionary, and `PictureWriter::title`, `caption`,
+  `keywords`, `creator`, `copyright` and `rating` write XMP plus IPTC in a JPEG. `core::imgmeta` gains `xmp_values`
+  (`rdf:Bag`/`Seq` items), `xmp_packet_with_lists` and `app13_payload`. Gap: no general `CGImageMetadata` tag tree
+  (paths, qualifiers, structures); TIFF files neither read nor write XMP or IPTC.
+- **Embedded thumbnails.** `ThumbnailOptions` follows `kCGImageSourceCreateThumbnailFromImageAlways` and `...IfAbsent`:
+  the EXIF IFD1 preview is used unless the full image is asked for, the full image is decoded when allowed and no
+  preview exists, and with both off only the preview is returned (`ImageSource::embedded_thumbnail`,
+  `exif::thumbnail_of_block`). `ImageDestination::embed_thumbnail` (`kCGImageDestinationEmbedThumbnail`) writes a
+  160-pixel JPEG preview into a JPEG (`exif::build_block_with_thumbnail`). SDK: `image_source::ImageSource::
+  embedded_thumbnail` and `fast_thumbnail` (uses the preview when it covers the box), `PictureWriter::embed_thumbnail`.
+- **Destination options.** `ImageDestination::max_pixel_size` (`kCGImageDestinationImageMaxPixelSize`),
+  `background_color` (`kCGImageDestinationBackgroundColor`; JPEG alpha is laid over it, white by default) and
+  `optimize_color_for_sharing` (`kCGImageDestinationOptimizeColorForSharing`: `icc_transform::rgba8_to_srgb` converts
+  profiled pixels to sRGB and no profile is written; a profile that cannot be converted is kept). SDK:
+  `PictureWriter::max_side`, `background`, `optimize_for_sharing`.
+- **Lossless metadata edits.** `cg::imageio::copy_image_source` (`CGImageDestinationCopyImageSource`) rewrites JPEG,
+  PNG and WebP metadata and copies the compressed pixels byte for byte: `MetadataSet` merged (`kCGImageDestination
+  MergeMetadata`) or replacing, `date_time` (TIFF DateTime and EXIF DateTimeOriginal/Digitized), `orientation`,
+  `exclude_gps` and `exclude_xmp` (`kCGImageMetadataShouldExcludeGPS/XMP`; GPS also leaves the XMP packet, and a packet
+  that cannot be cleaned is dropped). Decision: replacing keeps the orientation, which describes the stored pixels.
+  SDK: `image_metadata::edit` with `MetadataEdit`, and `without_location` for sharing a photo privately. Decision
+  (as the reference keeps them): an edit that changes no EXIF tag but the orientation and the dates patches those
+  values in the old block (when it already holds them), so maker notes and offset tags survive, and a new orientation also updates the XMP
+  `tiff:Orientation`; the descriptive fields of `MetadataEdit` are merged into the XMP packet (`rewrite::merge_xmp`),
+  keeping its other properties. Gap: TIFF is refused (its metadata shares directories with the image structure);
+  an edit that adds, replaces or removes EXIF, TIFF or GPS tags rebuilds the block and drops the maker notes; a
+  JPEG IPTC block is rewritten whole from the descriptive fields.
+- **Region decode.** `png::decode_region` and `cg::imageio::decode_region` read a still, non-interlaced PNG row by row
+  (one row plus the rectangle in memory, past `MAX_SIDE` up to `png::MAX_STREAMED_SIDE` wide), and
+  `image_tiles::StreamingPicture` serves tiles from the file bytes through the `TileCache`. Gap: other formats are
+  decoded whole for each tile; no DCT-scaled JPEG decode.
+- **Still open.** HEIC, TGA and RAW are not decoded; no HDR gain maps (`kCGImageDestinationEncode*`,
+  `kCGImageSourceDecodeToHDR/SDR`); drag payloads do not carry image data; APNG and WebP frames are composited to the
+  full canvas; nothing above is verified on the test PC yet.
 
 ## Speech recognition requests and tasks (`SFSpeechRecognizer`, `SFSpeechRecognitionRequest`, `SFSpeechRecognitionTask`)
 
@@ -2836,7 +3168,7 @@ and shows Safari-style Top Hits under the address field. Gaps against AppKit/Saf
 
 ## Golden Gate kit: sheets and small controls (round 58)
 
-- `bifrost_ui::sheet`: `Sheet::new` / `Sheet::alert`, `layout(parent, titlebar_h, progress)`, `hit`, `key` (Return = default button, Escape = cancel button, all keys consumed while shown), `segments` / `segment_hit` / `segment_key`, `stepper_*`, `focus_ring_rect`. Drawing: `widgets::sheet`, `segmented`, `stepper`, `focus_ring`, `popover` (arrow on the Popover material).
+- `bifrost_ui::sheet`: `Sheet::new` / `Sheet::alert`, `layout(parent, titlebar_h, progress)`, `hit`, `key` (Return = default button, Escape = cancel button, all keys consumed while shown), `segments` / `segment_hit` / `segment_key`, `stepper_*`, `focus_ring_rect`. Drawing: `widgets::sheet`, `segmented`, `stepper`, `focus_ring`, `popover` (arrow on the Popover material). An alert's title and message word-wrap (centred) and the panel is sized from the same measured wrap the drawing uses: `widgets::sheet` wraps with real glyph widths (`widgets::alert_lines`) and records the height (`sheet::record_alert_height`), which `Sheet::alert`, `layout` and `hit` then use, so the panel, the text and the button hit areas always agree (a character-count estimate, `wrapped_lines`, only covers the first frame). Alert text is never truncated, as `NativeAlert` wraps its message text.
 - A sheet slides from the title bar (`motion::Kind::SheetSlide`; progress is 1 at once under Reduce Motion), dims the parent (28% black) and swallows clicks on it (`Hit::Blocked`).
 - Metrics: segmented 24 pt, stepper 13 x 22 pt, pop-up button 22 pt, focus ring 3 pt, sheet radius 10 pt, alert width 260 pt.
 - Gaps: sheet buttons size by character count (no text measuring); the top corners of the panel are hidden by extending it upward inside the parent, not clipped.
@@ -3616,7 +3948,7 @@ restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-service
 Errors: `contacts::ContactsError` is the typed failure of a contacts call (`NotGranted`, `ReadOnly`, `Restricted`,
 `NothingPicked`, `AlreadyDecided`, or `Other` with the shell's message). `decode_error(&reply)` returns it for a failed
 reply, and `ContactsError::from(contact_access::Error)` maps the access model's errors. The variants are matched by
-name; Apple's `CNErrorCode` raw values are not mapped yet because they are not verified against the reference.
+name; since 2026-10-24 `ContactsError::code()` also gives the reference `CNErrorCode` raw value (see below).
 
 ### Contacts: vCard import and export, and containers (2026-10-19, wave 15)
 
@@ -3642,6 +3974,44 @@ and moving one is an `updated` event in the change log. Gaps: the groups are not
 and no account sync fills an `account` container yet, so only the local container is non-empty by default.
 
 System search finds a contact by name, phone, email and company (notes and address stay out of Search by design).
+
+### Contacts: the full record through save, labels, error codes and formatters (2026-10-24, parity/contacts)
+
+The gaps above about one value per field and fields that were read but dropped are closed on the SDK and shell side:
+
+- Record (`bifrost_ui::contact_fetch`). New keys `NamePrefix`, `Nickname`, `JobTitle`, `Department`, `Relations`
+  (labeled names), `SocialProfiles` and `InstantMessages` (`Value::Profiles` of `Profile { label, service, username, url,
+  user_identifier, identifier }`, the shape of `CNSocialProfile` and `CNInstantMessageAddress`). Decision: one `Profile` type
+  serves both; an instant message address leaves `url` and `user_identifier` empty.
+- Save (`CNSaveRequest` with multi-values). `contacts::save` now sends labeled values as `{label, value}`, the birthday and
+  dates as date components and profiles as objects, the same shapes `fetch` returns. The shell (`apply_save_with` in
+  `services/contacts.rs`) keeps the first phone and email in the contacts file, with their label row, and puts the rest, URLs,
+  relations, the birthday, dates and the new fields in the sidecar `contacts-extra.tsv` (`contactextras.rs`, new row kinds
+  `prefix`, `nickname`, `job_title`, `department`, `relation`, `social`, `im`; an older shell skips them). An update changes
+  only the fields it names, `null` clears one, a delete drops the contact's extras, and a value over 320 characters is refused
+  rather than cut. The address still takes one value.
+- vCard. `contactcard.rs` writes and reads the name prefix, nickname, job title, department, relations, social profiles and
+  instant message addresses, so they survive an export and import.
+- Labels (`CNLabeledValue`). `PREDEFINED_LABELS` adds fax, pager, school, home page, anniversary and manager, and
+  `RELATION_LABELS` the common relation labels; `localized_label` (`localizedString(forLabel:)`) shows a predefined name in
+  title case and a typed label as typed. The reference table has about 280 labels (REA
+  `ev_5db2f92a8b7c70ee5832fa07ff7230f52ad6d631e4d4f02c6ff6d0ac80b2a191`), most of them kinship variants; those stay typed text.
+  Gap: English only, no string table for other languages.
+- Errors (`CNErrorCode`). `contacts::error_code` holds the reference raw codes (read from the reference bridge metadata,
+  `Contacts.arm64e.bridgesupport`, sha256 `3fd20890940bd3f117b384a20b5df21c073c67fc786546db1f7edd4cbf1ef87d`) and
+  `ContactsError::code()` maps each variant: access failures 100, read-only grant 101, unknown record 200, bad identifier 205,
+  validation 300 and 302, change token expired 603, malformed vCard 700, file failures 2. New variants `RecordNotFound`,
+  `VCardMalformed`, `ChangeHistoryExpired`.
+- Formatters (`CNPostalAddressFormatter`, `CNContactFormatter`). `contact_address::Style::for_country` and
+  `lines_for_country` lay an address out by its ISO country code: postal code first (most of Europe), the postal code on its
+  own line (GB, IE), largest part first (CN, JP, KR, TW, HK), city first otherwise. The reference address string table carries
+  only field names (REA `ev_67f72dcfbaa4518b5ab71d1ca7eecf31cdffc410d9b377987f557f9262825649`), so the layouts follow the
+  public postal conventions. `contact_display::name_order_for_language` (family first for ja, zh, ko, hu, vi, mn),
+  `DisplayNameOrder` (raw values 0, 1, 2) and `full_name` (Han, kana and Hangul names join without a space), plus the
+  `SortOrder` raw values (0 to 3). The SDK re-exports them in `contacts::display`.
+
+Remaining gaps: the Contacts app still edits one phone, one email and one address; the address is one stored line (no
+structured parts in the store); labels are English only; every fetch reads the whole store file.
 
 ## InputMethodKit: composing input methods (`springboard/src/shell/input_methods`)
 
@@ -5072,6 +5442,7 @@ wiring.
 - `surface_use`: Use counts for a shared buffer.
 - `switch_scan`: Switch Control item scanning (`AccessibilityTechnology.switchControl`)
 - `symbol_effect`: Symbol effects for system symbol images (`SymbolEffect`, `DiscreteSymbolEffect`, `IndefiniteSymbolEffect`,
+- Symbol effects, one frame: `symbol_effect::frame(effect, options, t)` returns an `EffectFrame` (scale, opacity, y offset, rotation, variable colour progress, finished) for any `Effect`, including `BounceUp`, `BounceDown`, `VariableColor` and `Automatic` (resolves to `Bounce`). `EffectFrame::layer_opacity` gives a per-layer opacity through `symbol_layers`. Durations and amounts are BifrOSt design values; the reference tuning could not be measured because its framework sits in a dyld cache that is not unpacked yet. Content transition and draw-on/off are not modelled.
 - `symbol_layers`: Symbol layers
 - `tensor`: Tensor types for compute graphs
 - `text_classifier`: A text classifier that runs
@@ -5206,7 +5577,7 @@ Code: `springboard/sdk/src/graphics_context.rs` (`GraphicsContext`, `Path`, scan
 | `CGLayer` | `GraphicsContext::new_layer_context(w, h)` and `draw_layer_at(&layer, dx, dy)`; `draw_layer` for a group |
 | `CGColorSpace`, `CGColor`, `CGColorConversionInfo` | `graphics_color`: `ColorSpace` (device, sRGB, Display P3, Lab, indexed, ICC via `space_from_profile`), `Color` (`srgb`, `from_rgba8`, `converted`, `to_rgba8`), `ColorConversionInfo`, `RenderingIntent` |
 | `CGPDFDocument`, `CGPDFPage`, `CGPDFContext` (write side) | `graphics_pdf`: `Document::open`, `page_count`, `page_size`, `render`; `PdfWriter` with `add_page`, `fill_rect`, `stroke_line`, `draw_rgb_image`, `finish`. No text drawing or annotation editing yet |
-| `CGImageSourceCreateWithData`, `CGImageDestination`, `CGImageSourceCopyTypeIdentifiers` | `graphics_imageio`: `detect`, `pixel_size`, `decode`, `encode(format, w, h, rgba)`, `encode_jpeg`, `can_write`. WebP is read only |
+| `CGImageSourceCreateWithData`, `CGImageDestination`, `CGImageSourceCopyTypeIdentifiers` | `graphics_imageio`: `detect`, `pixel_size`, `decode`, `encode(format, w, h, rgba)`, `encode_jpeg`, `can_write`. Every format is written; WebP lossless and still |
 
 Decisions and gaps: a stroke measures its width and dash with the CTM at stroke time, using the uniform scale
 `sqrt(|det|)`, so a non-uniform CTM gives an average width. Gradients are not shadowed. Gradient colours interpolate in
@@ -5276,6 +5647,54 @@ The shell sends `WindowClosed {id}` (its own close control), `WindowConfigure {i
 t_ms}` and `WindowRelease {id, buf, generation}`; the wheel and hover over an extra window arrive as `WindowInput::Pointer` for
 that window (`App::window_pointer`, see "Pointer events"). Titles are cut to 512 bytes; non-finite or negative sizes are refused.
 
+Ordering the main window out and reopening (2026-10-25, E2E12 2; `NSWindow.orderOut`,
+`applicationShouldHandleReopen:hasVisibleWindows:`). Apple parity gap closed: an app could not run with no window, so
+TextEdit's last document closing left an empty, disabled main window. `Ctx::close_main_window()` sends `WindowClose {id: 0}`:
+the desk drops the main window with the close effect, leaves the app's other windows and keeps the app running; nothing
+reopens it on its own (the 0.10.34 "an app whose main window was closed opens it again" rule is `desk_open`, an
+activation). Activating the app (Dock, app switcher, Search, an open) puts the main window back and sends the new
+`ToApp::Reopen` (tag 0x254) to `App::reopen(ctx)` (default: nothing); `Ctx::show_main_window()` (`WindowOpen {id: 0}`)
+asks for it back without an activation, for a document made while no window was open. `AppWindows::main_shown()` says
+which; the main window stays in the registry. TextEdit opens a new Untitled on `reopen`: the reference shows its open panel
+there when the iCloud picker is on, but this editor starts with an Untitled on launch, so a reopen does the same. Gap: on the
+direct (window-server) route the app's toplevel is its own, so ordering out is ignored there until the SDK can unmap and
+remap it. Tests: proto `reopen_and_ordering_out_the_main_window_have_their_tags`, app_windows
+`the_main_window_is_ordered_out_and_back_once`, apphost `the_main_window_is_ordered_out_and_back_once_for_the_desk`, desk
+`a_main_window_the_app_ordered_out_stays_closed_until_the_app_is_activated`, textedit
+`closing_the_last_document_closes_the_main_window_and_a_reopen_shows_an_untitled`.
+
+Close requests (`windowShouldClose:`). Apple parity gap closed: the red light and Cmd+W of an SDK app's main window made the
+shell send `Quit` (direct route) or only drop the window, so a document app could not ask "Save changes?". An app that
+overrides `App::handles_close_request` (default `false`) announces `ToShell::CloseRequests {on: true}` (tag 0x256) once; the
+shell then sends `ToApp::CloseRequest` (tag 0x255, `App::close_requested(ctx)`) for the light, Cmd+W and the window server's
+close request instead (`Shell::desk_close_requested`), and leaves the window, the app and its process alone. The default
+`close_requested` orders the main window out. A document app calls `DocumentController::close` for the document the window
+shows: a clean one closes now, an edited one raises its save sheet and closes on Save or Don't Save (Cancel keeps it), and
+with the last document closed the app orders the window out (`close_main_window`) and keeps running, as the reference does.
+The red light of an extra window of an opted-in app sends `ToApp::WindowCloseRequest {id}` (tag 0x257, `App::window_close_requested`; the default closes that window and tells `window_closed`) instead of dropping the window, so it asks as Cmd+W in that window does (TextEdit: save sheet on that window). Quit (Dock, Cmd+Q, shutdown) is never vetoed, and an app that did not opt in closes as before. Script Editor and TextEdit opt
+in (TextEdit's other windows already asked through `window_closed`). Gap: on the direct route the window cannot be unmapped, so
+the order-out that answers a close request quits the app instead (`apphost::order_out_quits`), as the light did before;
+File > Close of the last document there still leaves the empty window. A Cancel on the sheet leaves no state to undo, but a
+hung app never answers, so Force Quit is the way out. Tests: proto `close_requests_have_their_tags`, app_windows
+`an_app_opts_in_to_close_requests_and_the_default_answer_orders_the_window_out`, apphost
+`an_app_opts_in_to_close_requests_with_the_message` and `only_the_answer_to_a_close_request_on_the_direct_route_quits_the_app`,
+shell `the_close_control_asks_an_app_that_opted_in_and_never_vetoes_quit`, script editor
+`the_close_control_closes_a_clean_script_and_asks_about_an_edited_one`, textedit
+`the_close_request_on_the_main_window_asks_about_an_edited_document`.
+
+Terminate after the last window (`applicationShouldTerminateAfterLastWindowClosed:`). Apple parity gap closed: the red light
+of an SDK app's main window quit the app unless it overrode `handles_close_request`. The reference keeps an app running with
+no window after its last window closes (Dock dot, menu bar kept, `Desk::windowless_front`), except single-window utilities.
+`App::terminates_after_last_window_closed` (default `false`) is that flag; the runtime announces `CloseRequests` for every
+app that decides itself or does not terminate (`runtime::announces_close_requests`), so the shell asks the app, whose default
+`close_requested` orders the main window out and keeps it running windowless. A Dock click or activation reopens it
+(`ToApp::Reopen`, `App::reopen`; the SDK marks the main window shown again, a document app opens a new document). Quit and
+shutdown are unchanged. Set to `true`: Calculator, System Information, Digital Color Meter, Chess, Grapher, Disk Utility,
+Wireless Diagnostics, Audio MIDI Setup, Bluetooth File Exchange, ColorSync Utility, Screenshot, Image Capture. The same gap as
+above holds on the direct route (the order-out quits). Tests: runtime `an_app_keeps_running_with_no_window_unless_it_terminates_after_the_last_window`,
+`an_app_that_handles_the_close_control_is_always_asked`, `the_default_answer_to_the_red_light_orders_the_window_out_and_does_not_quit`;
+shell `the_red_light_closes_the_window_and_the_app_keeps_running_unless_it_terminates_with_it`.
+
 Units (2026-10-23, E2E follow-up). `WindowTouch` and an extra window's pointer events are in the window's **points**, while
 the main window's `ToApp::Touch` is in surface pixels. An app that hit-tests an extra window in px, or hands its touches to code
 written for the main window, scales them first: `app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0))` returns the touch in px
@@ -5296,8 +5715,22 @@ opt-in; `clamp_to_screen` keeps a grab strip of the title bar on screen. A colla
 app keeps its size, and edge grabs are ignored. Tests: proto `window_placement_*`, `app_window_table`
 `placement_tests`, `desk` `a_window_collapses_*`, `app_windows` `a_window_moves_collapses_*`.
 
+Cascading (Apple parity, `NSWindow cascadeTopLeftFromPoint:` / `setFrameTopLeftPoint:`, decided 2026-10-24 for Mail's
+viewer windows, E2E F4). `WindowSpec::cascaded()` sets `window_flags::CASCADE` (2) on `WindowOpen`; a `position` from
+`WindowSpec::at` wins over it. The shell (`desk::cascade_origin`) places a cascaded window from the app's newest other
+extra window one title bar down and right, as each new document window cascades in AppKit. The first one cascades from
+the main window instead: beside its trailing edge when the work area has room, otherwise over its trailing side one
+title bar down, so the main window's leading columns (sidebar, list) stay in view. AppKit itself cascades the first
+window from the point the app passes (often the main window's top left, which would cover the list); we choose the
+trailing side because the app cannot pass a point here: the main window's shell position is not reported to the app.
+The placed window's toplevel asks the window server to map at that origin (`placed`), so it holds on Wayland too. Not
+matched yet: AppKit's wrap back to the top left when a cascade reaches the bottom of the screen (ours clamps to the
+work area). Tests: `desk` `a_cascaded_window_leaves_the_main_windows_leading_side_in_view`, `app_windows`
+`a_cascaded_window_sends_the_cascade_flag`, `apphost` `a_window_takes_a_position_*`, mail `viewer`
+`the_viewer_window_opens_at_the_viewer_size`.
+
 SDK (`Ctx`): `open_window`, `close_window`, `set_window_title`, `resize_window`, `move_window`, `set_window_collapsed` change the app's
-registry and send the message; `WindowSpec::at(x, y)` and `WindowSpec::with_title_double_click()` ask for placement and the opt-in.
+registry and send the message; `WindowSpec::at(x, y)`, `WindowSpec::cascaded()` and `WindowSpec::with_title_double_click()` ask for placement and the opt-in.
 The hooks `App::window_moved` and `App::window_title_double_click` default to no-ops;
 `windows()` reads it. The run loop routes `WindowClosed`, `WindowConfigure` and `WindowTouch` through
 `app_windows::deliver_window`: a closed window gets no touch, a closed window's close is applied once, and the app's
@@ -5918,19 +6351,52 @@ the shell asks the app for a new timeline when the reload date passes. Each entr
 - A reload may carry `link` (`bifrost-app://app/path`, SDK `reload_rich`'s last argument): a tap on the row opens the
   app at it.
 
-Each row carries a spoken label (`Row::label`: the title, the text as the value and an "Actions:" hint naming the
-buttons, built with `ui::widget_ax`), returned as `label` by the `widgets` call.
+- `detail` (SDK `Rich::with_detail`): a third line under the value in footnote type. The Medium and Large sizes show
+  it when the row has room; Small does not.
+- `families: {small | medium | large: {title?, text?, detail?}}` (SDK `Variant`, `Rich::with_variant`): what each size
+  shows instead of the entry's own parts, the counterpart of a reference widget view that reads `widgetFamily` and
+  lays out each size on its own (`Text::for_family`). A part left out keeps the entry's; an unknown size is refused.
+- `background` (SDK `Rich::with_background`, `ContainerTint`): a system colour name (orange, yellow, green, mint, teal,
+  cyan, blue, indigo, purple, pink, brown, gray) that fills the row's tile, the reference `containerBackground` given
+  a colour. The shell resolves it to the named `system::*` colour for the appearance in effect and writes white text
+  on it (`NC_WIDGET_DARK_INK` on yellow and mint). Decision: red is left out, because red is kept for destructive
+  actions and the calendar's today. `ui::widget_render::shows_container_background` drops the background in the
+  accented and vibrant modes as the reference does; the shell has no tinted widget look yet, so it always draws in
+  full colour (`RENDERING_MODE`).
 
-**Tests.** `ui` widget_kind, widget_action, widget_column and widget_date; the service's `widgets_timeline::tests`
-(registration, sizes, clocks, buttons, toggles, validation); the SDK's `widgets_timeline::tests` (the JSON the calls
+**WidgetCenter (2026-10-24).** An app asks for new timelines with `reload_timelines {kind}` or `reload_all_timelines {}`
+(SDK `reload_timelines`, `reload_all_timelines`; the reference `reloadTimelines(ofKind:)` and `reloadAllTimelines()`):
+each of its widgets of that kind that the person has in the column gets one `reload` event on the next tick, however
+often it asked in between, and the request does not use up the dated reload. A widget taken off in Edit Widgets is not
+asked, as the reference asks only configured widgets. `current_configurations {}` (SDK `current_configurations`,
+`WidgetInfo`, `parse_configurations`; the reference `getCurrentConfigurations`) lists the placed widgets with their kind,
+size and option values. There is no reload budget: the reference limits background reloads per day; BifrOSt coalesces
+requests per tick instead.
+
+**Opened from a widget.** A click on a widget row sends the app `Open` with the widget's link (if any) and then the
+service event `opened {kind, family}` (SDK `Event::Opened`), the counterpart of the widget kind and family keys the
+reference attaches to the activity that opens the app.
+
+Each row carries a spoken label (`Row::label`: the title, the text and detail as the value and an "Actions:" hint
+naming the buttons, built with `ui::widget_ax`), returned as `label` by the `widgets` call. The element map has one
+`os/widgets/<title>` element per row (role `widget`) with a child per button or toggle; `ax press` on a child runs it
+like a tap (`Shell::start_widget_action`). While the column is open the AT-SPI bridge exports a Widgets list beside the
+menu bar and dock: one static text per widget (name, value, and the spoken label as its help text) and its buttons and
+toggles (`atspi::model::add_widgets`).
+
+**Tests.** `ui` widget_kind, widget_action, widget_column, widget_date and widget_render; the service's
+`widgets_timeline::tests` (registration, sizes, clocks, buttons, toggles, validation, reload requests, current
+configurations, size variants, backgrounds, the opened event); `shell::axmap::tests` and `atspi::model::tests`
+(widget elements); the SDK's `widgets_timeline::tests` (the JSON the calls
 send).
 
 **Apple gaps, recorded.** Apple runs a widget in its own extension process and starts it on demand; BifrOSt apps answer
 reload events themselves, and a button needs the app to be running (a tap on a button of an app that is not running
 fails, and a toggle goes back). There is no declarative widget view: an entry is a title, a value, live date text and
-buttons, and the shell draws the row. Accented and vibrant rendering modes (`ui::widget_render`), location and network
-grants (`ui::widget_access`), the AT-SPI export of the spoken label, push-driven reloads (no APNs) and the home-screen
-grid for third-party kinds are not built. `ui::widget_column::layout` (Block, Controller, DisplayMode) is still not
+buttons, a detail line, per-size variants and a background colour, and the shell draws the row. A tinted widget look
+(the accented and vibrant modes of `ui::widget_render` drawn by the shell), location and network grants
+(`ui::widget_access`), push-driven reloads (no APNs) and the home-screen grid for third-party kinds are not built. The
+shell's own built-in tiles (home screen, Today) are still pixel images without accessibility elements. `ui::widget_column::layout` (Block, Controller, DisplayMode) is still not
 called by the shell. The earlier note that the Control Center panel does not draw app controls is out of date: the
 panel draws one tile per control the user added and has an Edit Controls list (`shell/control_center.rs`).
 
@@ -5988,11 +6454,32 @@ Corrections found while reading the code (the parity rows said otherwise): `Draw
 (`show_glyphs`, `show_glyphs_at_positions`, `show_text_at_point`), `ui::geometry::Vector` already exists, and
 `ui/src/print.rs` already paginates text (`text_pages`) and writes a `PrintOperation` to PDF.
 
-Gaps that remain: Boolean results are polygons, not curves; no `DrawContext` that writes PDF pages (the SDK writer has its
-own page calls); `Function` has no callback form; PDF selection has no per-glyph rectangles because the extractor keeps
+Gaps that remain: Boolean results are polygons, not curves; PDF selection has no per-glyph rectangles because the extractor keeps
 only a line's baseline and size; quartz filters do not rewrite a PDF read from elsewhere and the print sheet offers none;
 no lookup-table profile authoring; the PDF writer embeds no ICC profile; display and window services still need a live
 check on Midget.
+
+## Core Graphics: PDF page context, font faces, function callbacks, WebP writing (2026-10-24, `parity/core-graphics`)
+
+Host-tested only (unit tests next to the code, not yet run on Midget), so the rows stay `partial`. The API names were
+measured from the 26A434 reference: the CoreGraphics bridgesupport (sha256
+`3fdc9622cc0a9d1416a6122eea42491d1766430626999af9c8d877d594a1e4f5`; REA cannot open XML, so it was read as text) lists
+the `CGPDFContext*`, `kCGPDFContext*` box and information keys, `CGFont*` and `CGFunctionCreate`; the page-box drawing
+entry of the PDF service was located with REA (evidence `ev_d9feb589d45491d4c6bab88adb3c6711f1e8cf946b031de178d486253a0a69d1`).
+No reference code, strings or data were copied.
+
+| Apple | BifrOSt |
+|---|---|
+| `CGPDFContextCreate`, `BeginPage` (media, crop, bleed, trim, art boxes), `EndPage`, `Close` | `cg::pdf::context::PdfContext` (`new(media, PdfInfo)`, `begin_page(Option<PageBoxes>)`, `end_page`, `close`), re-exported as `bifrost_app::graphics_pdf::PdfContext`. US Letter is the default page, every page starts with a fresh state in PDF default user space (origin bottom left, y up), and drawing outside a page is ignored, as on the reference. Open saves and marked content are closed at the end of a page. |
+| Drawing into a PDF context | The `DrawContext` calls a PDF can hold: save and restore, the CTM, line width, caps, joins, miter limit, dash, flatness, grey, RGB and CMYK fill and stroke colours, alpha and blend modes (`/ExtGState`; the Porter-Duff and additive modes have no PDF blend mode and are written as Normal), paths with curves, `fill_path`, `eo_fill_path`, `stroke_path`, `draw_path`, rect and ellipse helpers, line segments, `clip`, `eo_clip`, `clip_to_rect`, `clip_to_path`, `draw_linear_gradient`, `draw_radial_gradient`, `draw_shading` and gradient or shading fill and stroke paints (vector `sh` shadings; the colour function is sampled into sRGB, and a shading function's alpha output is written as the fill alpha when it is constant and dropped when it varies, since a PDF shading has no alpha), and `draw_image` (RGB with an `/SMask` for alpha). A pattern paint is written as an image of the pattern clipped to the shape (about two pixels per point). |
+| Text in a PDF context | `set_font(StandardFace)` (the twelve standard Latin faces), `set_font_size`, `set_character_spacing`, `set_text_matrix`, `set_text_drawing_mode` (all eight modes, written as PDF `Tr` 0 to 7: fill, stroke, fill and stroke, invisible and their clip forms; a clip mode also writes the text with `Tr 7` outside the painting `q`/`Q` so the clip lasts until the next restore), `show_text`, `show_text_at_point`, `text_advance`. The text is real PDF text in WinAnsi, so it can be selected and searched. Not matched: embedding a TrueType or OpenType face, so other faces and scripts cannot be written yet. |
+| `CGPDFContextSetURLForRect`, `SetDestinationForRect`, `AddDestinationAtPoint`, `SetOutline`, `AddDocumentMetadata`, `kCGPDFContextTitle`, `Author`, `Subject`, `Keywords`, `Creator` | `set_url_for_rect`, `set_destination_for_rect`, `add_destination_at_point` (catalog `/Dests`), `set_outline(Vec<PdfOutlineItem>)` (nested), `add_document_metadata` (XML stream), `PdfInfo`. |
+| `CGPDFContextBeginTag`, `BeginMarkedContentSequence` | `begin_marked_content(tag)` and `end_marked_content` write `BMC`/`EMC`. Not matched: there is no structure tree, so tags carry no logical structure. |
+| Not built | Encryption and passwords (`kCGPDFContextOwnerPassword`, `UserPassword`, `AllowsPrinting`, `AllowsCopying`, `EncryptionKeyLength`, `AccessPermissions`), `kCGPDFContextCreateLinearizedPDF`, `kCGPDFContextCreatePDFA`, output intents, `SetIDTree`, `SetParentTree`, `SetPageTagStructureTree`, object references, and shadows (the PDF imaging model has none). |
+| `CGFont` (`CreateWithDataProvider`, `CreateWithFontName`, `Get*`, `Copy*`, `CreateCopyWithVariations`) | `cg::face::CgFont`: `from_data`, `from_name(&FontManager, name)`, `postscript_name`, `full_name`, `units_per_em`, `ascent`, `descent`, `leading`, `cap_height`, `x_height`, `italic_angle`, `font_bbox`, `number_of_glyphs`, `glyph_advances`, `glyph_bboxes` (font units), `glyph_with_name`, `glyph_name`, `table_tags`, `table`, `variation_axes`, `variations`, `with_variations` (values clamp to the axis, unknown tags are dropped). Not matched: `GetStemV` (no stem width in the TrueType tables we read), PostScript subsets and encodings (nothing prints PostScript). |
+| `CGContextSetFont`, `ShowGlyphsAtPositions` | `DrawContext::set_font(CgFont)` (saved with the state), `font`, `show_font_glyphs_at_positions`, `show_font_glyphs`, `show_font_text`; the face's variations (`with_variations`) are applied to the outlines and advances it draws (`show_text_var`, `show_glyphs_at_positions_var`, `show_glyphs_with_advances_var` take them directly), through the `gvar` table, so a CFF2 face draws its default instance. `set_text_drawing_mode` takes all eight modes; the bitmap context paints the fill modes only and does not stroke or clip to glyph outlines yet. |
+| `CGFunctionCreate` with an evaluate callback | `cg::paint::Function::callback(domain, outputs, range, evaluate)`: the closure is called per input (clamped to the domain), its output padded or cut to the declared count, non-finite values zeroed and each value clamped to its range. Two callback functions are equal only when they share the callback. |
+| `CGImageDestination` for WebP | Comes from `parity/image-io`, not from this branch (its own lossless encoder was dropped in the merge): `cg::imageio::webp::encode(w, h, rgba, exif, icc, xmp)` writes a lossless still WebP through the `image-webp` crate (MIT or Apache-2.0), opaque pictures without alpha, and an EXIF block, ICC profile or XMP packet in an extended (VP8X) file. `Format::can_write` is true for every format, so `ImageDestination`, `graphics_imageio::encode` and `PictureWriter` write WebP. Not matched: lossy WebP and animated WebP writing. |
 
 ## SDK modules added 2026-10-17 (parity waves 1 to 8)
 
@@ -6154,7 +6641,25 @@ the model is host-tested, but no shell or app drives it yet. Every row stays par
 - **Feedback (`bifrost_app::now_playing_feedback`)**: `feedback_body` publishes the like, dislike and bookmark toggles and an optional
   rating scale; `feedback_from_event` and `rate_from_event` decode the person's choice. The app applies the change to its own state
   before it republishes, so a refused command is not shown as done. The shell reads the `feedback` field of the publish body.
-- **Artwork**: `Artwork`, `Artwork::choose`, `aspect_fit` and `request_pixels` are modelled. Not wired: artwork does not reach the shell yet.
+- **Artwork**: `Artwork`, `Artwork::choose`, `aspect_fit` and `request_pixels` are modelled. The pixels cross the `now_playing`
+  service as `ArtworkImage` (`MPNowPlayingInfoPropertyArtwork`): straight RGBA8, at most `WIRE_SIDE_MAX` (128) px a side so a
+  publish stays under 90 KB of JSON (the service frame is 256 KB). `with_artwork` / `publish_with_artwork` add it to the publish
+  body (`{w, h, rgba: base64}`); `ArtworkImage::from_premultiplied` averages a larger decoded cover down and `waveform` draws a
+  stand-in tile. The shell crops it to a square and draws it on the Control Center media tile, the Now Playing detail, the menu
+  bar extra and the lock card with their existing corner radii, and falls back to the glyph when none was published or it cannot
+  be read (`services::now_playing::artwork_or_glyph`). Music sends the current song's cover (the Now Playing picture, else the
+  list thumbnail) and Voice Memos a waveform tile. Gaps against Apple: not checked on Midget yet.
+- **Encoded artwork and the sized provider**: `ArtworkImage::from_encoded(bytes)` (and `from_encoded_fit(bytes, side)`) decodes a PNG
+  or JPEG cover in the SDK with the render crate's image reader (no new dependency) and averages it down to `WIRE_SIDE_MAX`
+  (or `side`), keeping the aspect ratio and never enlarging. Other formats, bytes that do not decode and a picture over
+  `ENCODED_PIXELS_MAX` (25 million pixels, read from the header before any pixel is allocated) give `ArtworkError::Undecodable`, and
+  the session keeps its glyph. `ArtworkProvider` is the artwork-with-bounds-size request handler (`MPMediaItemArtwork`
+  `init(boundsSize:requestHandler:)`): the app registers a closure from the requested `ArtworkSize` to an `ArtworkSource`
+  (`Pixels` or `Encoded`), and `now_playing::publish_with_provider` asks it for the size the shell needs, `SHELL_COVER_POINTS`
+  (64 pt) times the display scale, at most `WIRE_SIDE_MAX` since the publish carries no more (`ArtworkProvider::request_side`). A
+  provider with nothing for that size publishes without a cover. Music decodes the encoded picture embedded in the album's tags
+  (`nowplay::embedded_cover`) and falls back to its cached thumbnail when the album has none or it will not decode. Animated
+  artwork exists only on the reference's tablet and phone platform: not applicable on the desktop, so it is not offered.
 - **Remote routing (`bifrost_app::remote_routing`)**: `action_for(command)` maps a shell command to a `RemoteAction` (skips map to none,
   since they use `SkipIntervalCommand`), `media_key(name)` maps hardware media keys, and `route(center, command)` passes the command to
   the app's `CommandCenter`. A switched-off or unhandled action is refused. No caller found.
@@ -6517,6 +7022,27 @@ arrow, so the arrow chords reach an app only through the shell's key path. Code 
 Gaps (not matched yet): the thumbnail is taken once, when the window is minimized, and is not refreshed while it stays minimized. Minimized windows of other Wayland clients (direct and Linux apps) have no slot of their own yet, only their app's tile: the shell does not learn that the window server minimized one. Every slot keeps the same square size, so a thumbnail is letterboxed inside it instead of the slot taking the
 window's width. Code only: not built or run, not verified on Midget.
 
+## Dock stacks: the Downloads stack (`shell/dock_stack.rs`, E2E7, 2026-10-25)
+
+The Dock has one stack, Downloads, just left of the Trash: a folder with the three newest files fanned behind its
+flap. A click opens it above (or beside) its icon as `Menu::Stack`, in the reference's Automatic view.
+
+| Ours | Apple | Notes |
+|---|---|---|
+| `dock_stack::layout`, `Style::Fan` | Stack, View content as Automatic: Fan | Up to `FAN_MAX` (10) items over a bottom Dock: a fan rising from the icon, newest lowest, bending right, each name in a capsule, Open in Files at the top. The fan has no panel: the GPU path clears its bounding box, and the popup's input region (`ChromeFrame::shape`, `stack_input_shape`) is its icons and capsules only, so a click in the clear room reaches what is below |
+| `Style::Grid` | Automatic: Grid | More items, a fan that does not fit, or a side Dock: a grid popover on the menu material, 3 to 6 columns, a "Downloads" title, Open in Files at its foot, beside a side Dock |
+| `stack_open_item`, `Shell::open_path_with` (`shell/docpanel.rs`) | A click opens the item in its default app | The malware gate first; a package goes to the install sheet; an installed app gets a read grant and the descriptor (as a dropped file), a built-in app opens the file itself (`open_in_builtin`: Photos shows a picture, also one outside its library; Files shows the folder); a folder or a file no app opens is shown in Files. Image > Edit With shares the helper (`open_path_in`, with a write grant) |
+| `stack_key`, `key_use`, `step`, `type_select` | Keyboard in an open stack | Esc closes; the arrows move a selection (the fan up and down, the grid by cell and row, Open in Files last); Return opens the selection; a letter selects the next item by its first letter. A modifier alone waits; every other key, and every chord, closes the stack and goes on (`hw_menu_key` answers None), so shortcuts and the app in front keep their keys |
+| `desktop_bar_event` (`Menu::Stack`) | A click outside an open stack | Closes the stack and acts as it would have (another Dock icon opens, a window is clicked); a press on the stack's own Dock icon only closes it |
+| `downloads_in` | | The open stack lists Downloads under the document broker's home, the one grants are made relative to, so a shell whose `$HOME` differs still opens the files instead of showing each one in Files |
+
+Gaps (not matched yet): the stack's context menu (Display as Folder or Stack, View content as Fan, Grid or List, Sort by
+Name, Date Added, Date Modified, Date Created or Kind) is missing, and the order is always Date Modified, newest first;
+only Downloads is a stack (no folder can be dragged to the Dock); items show a page with their kind badge, not the file's
+thumbnail; the grid shows the rows that fit and does not scroll (the rest stays in Files). Parity row: AppKit "Menus,
+Cursors, and the Dock" (`docs/parity-matrix/data/appkit-user-interface.json`), partial. Code only: not built or run, not
+verified on Midget.
+
 ## Mission Control as an overlay (E2E round 3, MC1)
 
 Mission Control (`shell/overview.rs`, "Overview" in code) is an overlay-layer chrome surface (id 9) above every window on the desktop, on the rectangle between the menu bar and the Dock, with exclusive keyboard focus while it is open; the surface list and the reasons are in `docs/gpu-first.md` ("Mission Control is an overlay surface").
@@ -6570,3 +7096,46 @@ Rows advanced to `partial`; none is `parity` until the lab verify run. Apple's b
 - **CoreSuggestionsUI: durable dismissals (`ui/src/found_in.rs`)**: `Dismissed::to_text` and `from_text` (bounded to 500, oldest
   first), `forget_app`, and `Pager::for_message` (extract, drop dismissed, page) for any message view. Not matched: the
   Messages app does not call it yet, and Search has no suggestion section.
+
+## Core Image, parity round 2026-10-24: composite operators, geometry, barcodes, lens distortions, white balance
+
+Written, not built or run; the rows in `docs/parity-matrix/data/core-image.json` stay `partial` until the lead runs the tests and
+checks them on Midget. Images are `gfx::Image` (premultiplied, red in the low byte). Behaviour reference: the reference OS 27 barcode
+plug-in, read with REA (evidence `ev_cd797970` procedure list, `ev_6bb789c8` Code 128 attributes, `ev_76cca25e` Code 128 output,
+`ev_c86e9cb3` EAN-13 output), plus the developer documentation for the other filters' names and defaults. No reference code, tables
+or strings are copied; the barcode tables come from the public symbology standards.
+
+| Apple | BifrOSt |
+|---|---|
+| `CISourceInCompositing`, `CISourceOutCompositing`, `CISourceAtopCompositing`, `CIMultiplyCompositing` | `image_filter::composite(source, background, Operator::...)`; model `render/src/composite_ops.rs` |
+| `CILinearBurnBlendMode`, `CILinearDodgeBlendMode`, `CILinearLightBlendMode`, `CIPinLightBlendMode`, `CIVividLightBlendMode`, `CIDivideBlendMode`, `CISubtractBlendMode` | `image_filter::blend_extra(fg, bg, ExtraBlend::...)`; the W3C general formula with the published `B(cb, cs)` of each mode |
+| `CIBlendWithMask`, `CIBlendWithRedMask`, `CIBlendWithBlueMask`, `CIBlendWithAlphaMask` | `image_filter::blend_with_mask(image, background, mask, MaskChannel::...)`; the grey mask reads green, as the reference documents |
+| `CIPerspectiveTransform`, `CIPerspectiveTransformWithExtent` | `image_render::perspective_transform(img, corners)` returns `Placed { image, x, y }` over the quad's bounding box; `perspective_transform_with_extent`; model `render/src/geometry_filters.rs` |
+| `CILanczosScaleTransform`, `CIBicubicScaleTransform` | `image_render::lanczos_scale_transform(img, scale, aspect_ratio)`, `bicubic_scale_transform(.., b, c)` (defaults b 0, c 0.75); the kernel widens when an axis shrinks; colour is clamped under alpha |
+| `CIStraightenFilter` | `image_render::straighten(img, angle)`: turn about the centre and zoom by `cos + max(w/h, h/w) * sin` so no corner shows through |
+| `CICode128BarcodeGenerator`, `CIEAN13BarcodeGenerator`, `CICode39BarcodeGenerator`, `CICodabarBarcodeGenerator`, `CIInterleaved2of5BarcodeGenerator` | `image_generate::barcode(Symbology::..., message, quiet_space, height)`, `barcode_styled`; model `render/src/barcode_generate.rs`. Measured: quiet space clamped 0..100 and rounded (7 when unset, attribute default 10), height clamped 1..500 and rounded (default 32), one pixel per module |
+| `CIHoleDistortion`, `CILightTunnel`, `CITorusLensDistortion` (with `inputWidth`), `CICircleSplashDistortion` | new SDK module `image_distort` (`hole`, `light_tunnel`, `torus_lens`, `circle_splash`, plus `twirl`, `vortex`, `pinch`, `bump`, `glass`, which apps could not reach before); model `render/src/lens_distortions.rs` |
+| `CITemperatureAndTint` (`inputNeutral`, `inputTargetNeutral`) | `image_effects::temperature_and_tint(img, neutral, target)`, `WhiteBalance`; model `render/src/white_balance.rs`: Planckian locus fit (Kim et al.), tint as a uv offset of tint/3000, Bradford adaptation in linear sRGB |
+| `CIFilter.filterNames(inCategory:)` | the catalogue lists 106 filters, with a new `CICategoryGeometryAdjustment` group |
+
+Decisions: barcode quiet space is on the left and right only; wide elements of Code 39, Codabar and Interleaved 2 of 5 are three
+modules; Code 128 uses set C for digit runs of four or more and takes ASCII only (no FNC4); a Codabar message without start and stop
+letters is framed with `A`. The torus lens ring is a half-circle profile magnifying by up to `1 + refraction` at its middle line;
+the hole reads the source at `sqrt(d^2 - r^2)`; the light tunnel streams the rim outwards turned by `rotation * (d - r) / r`. These
+profiles are this system's models of the documented shapes, not measured kernels (the reference filter kernels live in the shared
+system cache, which is not unpacked on Linux yet). `colorfx::temperature_tint` (the named chain's gain model) is kept for the Photos
+slider; apps that want the reference behaviour use `temperature_and_tint`.
+
+Remaining gaps: PDF417 and Aztec generators (the reference ships both; their encoders are large and left for a later round);
+everything is CPU only; the composite and blend formulas work on stored sRGB codes, not the reference's linear working space; no
+shell compositor operator is selectable.
+
+### Sun and moon events (`bifrost_app::sun_moon`)
+
+`SunEvents::new(lat, lon, y, m, d)` returns astronomical, nautical and civil dawn and dusk, sunrise, sunset, solar
+noon and solar midnight as `coding::Date` (the dawn, dusk, sunrise and sunset fields are `None` in polar day or night,
+or when the sun never reaches that depression). It uses the NOAA solar position algorithm with depression angles of 18,
+12, 6 and 0.833 degrees; the day is the mean solar day of the longitude. `weather_service::MoonPhase` (shared with the Weather service) has the eight WeatherKit cases and
+`symbol_name()`; `MoonEvents` gives the phase plus moonrise and moonset. The moon is a mean synodic-month model from a
+known new moon, so phase can be off by hours and rise and set by about an hour: an ephemeris would match Apple more
+closely and is not built. The model is offline and not yet wired into the Weather app.

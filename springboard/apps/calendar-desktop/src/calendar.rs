@@ -86,6 +86,9 @@ const CELL_LINE: f32 = 16.0;
 const CELL_HEAD: f32 = 28.0;
 /// How long the Undo bar stays after a delete.
 const UNDO_MS: f64 = 5000.0;
+/// How long Cmd+Z and Edit > Undo still bring a deleted event back: the bar is only a hint, not the Undo command, so a
+/// Cmd+Z that comes after it has faded (a slow typist, a remote session) restores the event all the same.
+const UNDO_KEEP_MS: f64 = 300_000.0;
 const MONTHS: [&str; 12] = [
     "January",
     "February",
@@ -284,14 +287,17 @@ pub struct Calendar {
     pointer: bool,
     /// Quick Event: the line typed in the sheet while it is open (`quickentry.rs`).
     quick_line: Option<bifrost_app::controls::TextField>,
-    /// The quick-event popover on a new event, while it is open (`eventpop.rs`), and the last click on an empty slot of
-    /// the grid with its time (a second click there in time is a double-click, which opens the popover).
+    /// The quick-event popover on a new event, while it is open (`eventpop.rs`), and the empty slot of the grid the last
+    /// single click was on (a double-click there opens the popover).
     event_pop: Option<eventpop::EventPop>,
     /// The menu of calendars a Calendar pop-up button opened (the popover's or the form's), while it is open (`calmenu.rs`).
     cal_menu: Option<calmenu::CalMenu>,
-    last_slot: Option<(Date, u16, f64)>,
+    last_slot: Option<(Date, u16)>,
     /// The month the sidebar's mini month was paged to; None follows the selected day (`minimonth.rs`).
     mini_shown: Option<Date>,
+    /// The month grid keeps its month when a day of a neighbouring month in its first or last week is picked: the day
+    /// selected by that pick and the month shown then. Valid only while that day stays selected (`month_date`).
+    month_anchor: Option<(Date, Date)>,
     /// A press in the Day or Week grid that becomes a drag if it is held, and the drag itself (`drag.rs`).
     press: Option<drag::Press>,
     drag: Option<drag::Drag>,
@@ -324,14 +330,18 @@ pub struct Calendar {
     subs: Vec<subscribe::Subscription>,
     /// Title, Location, Notes.
     fields: [TextField; 3],
-    /// Event editors shown in windows of their own (`window.rs`), the event a double-click asked to open, and the last
-    /// tap on an event with its time (a second tap in time is a double-click).
+    /// Event editors shown in windows of their own (`window.rs`), the event a double-click asked to open, and the event
+    /// the last single click selected (a double-click on it opens it).
     panes: Vec<window::Pane>,
     /// Editor windows whose event was deleted from the main window (Event > Delete Event, Backspace): the app closes them
     /// (`take_closed_windows`).
     closed_windows: Vec<u32>,
     open_request: Option<u64>,
-    last_tap: Option<(u64, f64)>,
+    last_tap: Option<u64>,
+    /// The click count of the press in progress, kept by the kit's counter with the system's double-click interval and
+    /// slop (`ClickCounter`), as the reference event's click count is: a double-click is two presses, not two releases, in time.
+    clicks: bifrost_app::controls::text::ClickCounter,
+    click_count: u8,
     /// Replies and invitations waiting for Mail (`rsvp.rs`); the app takes them with `take_outgoing`.
     outbox: Vec<rsvp::Outgoing>,
     /// A `maps:` link the editor asked to open (`places.rs`); the app opens it (`take_map_link`).
@@ -352,8 +362,10 @@ pub struct Calendar {
     /// The desktop's settings (`prefs.rs`): week numbers (the toggle is desktop-only, with `file_export`), the zoom of
     /// the hour grid, the first weekday and the defaults for a new event.
     prefs: prefs::Prefs,
-    /// The last deleted event and when its Undo bar lapses.
+    /// The last deleted event and when Cmd+Z stops bringing it back (`UNDO_KEEP_MS` after the delete).
     undo: Option<(CalendarEvent, f64)>,
+    /// When the Undo bar for `undo` fades (`UNDO_MS` after the delete); `None` once it has, with the event still undoable.
+    undo_bar: Option<f64>,
     storage_blocked: bool,
     text_style: (f32, bool),
     dirty: bool,
@@ -420,6 +432,7 @@ impl Calendar {
             file_export: false,
             prefs,
             undo: None,
+            undo_bar: None,
             storage_blocked,
             text_style: (ui.text_scale, ui.bold),
             editor: None,
@@ -433,6 +446,7 @@ impl Calendar {
             cal_menu: None,
             last_slot: None,
             mini_shown: None,
+            month_anchor: None,
             press: None,
             drag: None,
             search_box: bifrost_app::controls::TextField::new(),
@@ -456,6 +470,8 @@ impl Calendar {
             closed_windows: Vec::new(),
             open_request: None,
             last_tap: None,
+            clicks: bifrost_app::controls::text::ClickCounter::default(),
+            click_count: 1,
             outbox: Vec::new(),
             map_link: None,
             labels: TextCache::default(),
@@ -661,7 +677,16 @@ impl Calendar {
 
     /// The first day shown in the month grid (the first weekday on or before the 1st).
     fn grid_start(&self) -> Date {
-        self.week_of(Date { day: 1, ..self.selected })
+        self.week_of(Date { day: 1, ..self.month_date() })
+    }
+
+    /// A day of the month the month view shows: the selected day, or the same day number of the month it kept when a
+    /// leading or trailing day of a neighbouring month was picked (a click selects that day and does not turn the page).
+    pub(super) fn month_date(&self) -> Date {
+        match self.month_anchor {
+            Some((picked, month)) if picked == self.selected => Date { day: self.selected.day.min(month.month_len()), ..month },
+            _ => self.selected,
+        }
     }
 
     /// The events a day cell lists: up to as many lines as fit, the last one "n more" when some are left out.
@@ -699,7 +724,7 @@ impl Calendar {
             }
             return self.layer_at(ui, x + self.x0, y).map(Target::Layer);
         }
-        if self.editor.is_none() && self.undo.is_some() && within(x, y, self.undo_rect(ui)) {
+        if self.editor.is_none() && self.undo_bar_up() && within(x, y, self.undo_rect(ui)) {
             return Some(Target::UndoDelete);
         }
         if x < 0.0 || y < ui.pt(top_inset() + bifrost_app::layout::UNIFIED_BAR_PT) || y >= self.bottom(ui) {
@@ -755,6 +780,7 @@ impl Calendar {
         }
         let (left, cell, top, rh) = self.grid_geom(ui);
         if y >= top && x >= left {
+            let shown = self.month_date();
             let col = (((x - left) / cell) as i32).clamp(0, 6);
             let row = (((y - top) / rh) as i32).clamp(0, 5);
             let date = self.grid_start().shift_days(row * 7 + col);
@@ -764,7 +790,7 @@ impl Calendar {
                     return Some(Target::Row(e.id));
                 }
             }
-            if date.year == self.selected.year && date.month == self.selected.month {
+            if date.year == shown.year && date.month == shown.month {
                 return Some(Target::Day(date.day));
             }
             return Some(Target::Pick(date));
@@ -925,8 +951,19 @@ impl Calendar {
         (ui.pt(SPACE_XL), self.bottom(ui) - ui.pt(56.0), self.w as f32 - ui.pt(SPACE_HUGE), ui.pt(44.0))
     }
 
+    /// Offers Undo for an event just deleted or cut: the bar shows for `UNDO_MS`, Cmd+Z works for `UNDO_KEEP_MS`.
+    fn offer_undo(&mut self, event: CalendarEvent, t: f64) {
+        self.undo = Some((event, t + UNDO_KEEP_MS));
+        self.undo_bar = Some(t + UNDO_MS);
+    }
+
+    /// Whether the Undo bar is showing (and its button takes presses).
+    pub(super) fn undo_bar_up(&self) -> bool {
+        self.undo.is_some() && self.undo_bar.is_some()
+    }
+
     fn draw_undo(&mut self, s: &mut Surface, ui: &Ui) {
-        if self.undo.is_none() {
+        if !self.undo_bar_up() {
             return;
         }
         let (x, y, w, h) = self.undo_rect(ui);
@@ -936,13 +973,19 @@ impl Calendar {
         self.centre(s, ui, "Undo", MAC_BODY_PT, Weight::Semibold, accent(), x + w - ui.pt(SPACE_HUGE), y + h / 2.0);
     }
 
-    /// Puts the deleted event back (saved again) while its Undo bar is up.
+    /// Puts the deleted event back (saved again), from the Undo bar or Cmd+Z, for `UNDO_KEEP_MS` after the delete.
     fn undo_delete(&mut self, ui: &Ui, t: f64) {
-        let Some((event, until)) = self.undo.take() else { return };
+        let Some((mut event, keep)) = self.undo.take() else { return };
+        let bar = self.undo_bar.take();
         if self.events.len() >= store::MAX_EVENTS {
             self.error = Some("Calendar is full".into());
-            self.undo = Some((event, until));
+            self.undo = Some((event, keep));
+            self.undo_bar = bar;
             return;
+        }
+        // the id of the deleted event may have gone to a new one since (the store hands out the highest id plus one)
+        if self.events.iter().any(|e| e.id == event.id) {
+            event.id = store::next_id(&self.events);
         }
         let mut events = self.events.clone();
         events.push(event.clone());
@@ -962,7 +1005,7 @@ impl Calendar {
             Err(e) => {
                 eprintln!("springboard: calendar: {e}");
                 self.error = Some("Could not save. Your edit is still here.".into());
-                self.undo = Some((event, t + UNDO_MS));
+                self.offer_undo(event, t);
             }
         }
     }
@@ -1055,7 +1098,13 @@ impl Calendar {
                 self.selected = event.date;
                 self.error = None;
                 self.picked = (!delete).then_some(event.id);
-                self.undo = removed.map(|e| (e, t + UNDO_MS));
+                match removed {
+                    Some(e) => self.offer_undo(e, t),
+                    None => {
+                        self.undo = None;
+                        self.undo_bar = None;
+                    }
+                }
                 // an event the account organises, with invitees, goes to them again (`rsvp::invite_attendees`)
                 if !delete && existing {
                     self.invite_attendees(&original, &event);
@@ -1078,13 +1127,33 @@ impl Calendar {
     /// Desktop chords (Cmd or Ctrl; evdev keys): N new event, T today, 1 to 4 for Day, Week,
     /// Month and Year. Not while an event is open. False when unused here.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
-        use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META};
+        use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+        // Cmd+A with a field of the editor focused selects its text. The shell sends the chord rather than the Edit command
+        // when the app reports no field to select, and the app's `commands` describes the main window, not an editor window.
+        if self.editor.is_some() && key == 30 && mods & CHORD_META != 0 && mods & CHORD_ALT == 0 {
+            if let Some(i) = self.focused() {
+                self.fields[i].edit(ui, &Out::Named("SelectAll"), t);
+                self.dirty = true;
+                return true;
+            }
+        }
         if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() || self.sheet_open() || self.event_pop.is_some() {
             return false;
         }
         let target = match key {
             49 => {
                 self.open(ui, None);
+                self.dirty = true;
+                return true;
+            }
+            // Cmd+Z reaches the app as the key when the shell has not yet heard that Undo is on offer (the delete and
+            // the shortcut come within one frame), so the chord restores the deleted event as the Edit command does
+            44 if mods & CHORD_SHIFT == 0 => {
+                if self.undo.is_none() {
+                    eprintln!("springboard: calendar: Cmd+Z with nothing to undo");
+                    return false;
+                }
+                self.undo_delete(ui, t);
                 self.dirty = true;
                 return true;
             }
@@ -1139,6 +1208,12 @@ impl Calendar {
         if matches!(target, Target::Today | Target::Prev | Target::Next | Target::Pick(_) | Target::Day(_) | Target::MonthOf(_) | Target::GoConfirm) {
             self.mini_shown = None;
         }
+        // a pick below keeps the month and a step starts from it; every other move of the view leaves it behind
+        // (a Day click still needs the month the grid showed, so it is read before the anchor goes)
+        let shown = self.month_date();
+        if !matches!(target, Target::Pick(_) | Target::Prev | Target::Next) {
+            self.month_anchor = None;
+        }
         match target {
             Target::SearchField => self.focus_search(),
             Target::SearchClear => self.clear_search(ui),
@@ -1160,7 +1235,12 @@ impl Calendar {
                     self.scroll.jump_top();
                 }
             }
-            Target::Pick(d) => self.selected = d,
+            Target::Pick(d) => {
+                let month = self.month_date();
+                let outside = self.view == View::Month && (d.year, d.month) != (month.year, month.month);
+                self.month_anchor = outside.then_some((d, Date { day: 1, ..month }));
+                self.selected = d;
+            }
             Target::MonthOf(m) => {
                 self.selected.month = m;
                 self.selected.day = self.selected.day.min(self.selected.month_len());
@@ -1168,7 +1248,7 @@ impl Calendar {
                 self.scroll.jump_top();
             }
             Target::Day(day) => {
-                self.selected.day = day;
+                self.selected = Date { day, ..shown };
                 self.scroll.jump_top();
             }
             Target::Add => self.open(ui, None),
@@ -1469,6 +1549,9 @@ impl Calendar {
         }
         match ev {
             Event::Down(..) => {
+                // the counter works in points, so its slop is the same on every screen
+                let k = ui.pt(1.0).max(f32::EPSILON);
+                self.click_count = self.clicks.press(t, x / k, y / k);
                 self.pressed = self.hit(ui, x, y);
                 self.start = Some((x, y));
                 // the event form scrolls too: a press that moves on drags it, a press that stays is a tap
@@ -1519,7 +1602,7 @@ impl Calendar {
                         // an event is selected by a tap and opened in its own window by a double-click (`window.rs`)
                         if let Target::Row(id) = target {
                             if !overlay::is_overlay(id) && self.editor.is_none() {
-                                self.tap_event(id, t);
+                                self.tap_event(id, self.click_count);
                                 return;
                             }
                         }
@@ -1527,7 +1610,7 @@ impl Calendar {
                         let slot = if self.event_pop.is_none() && self.editor.is_none() { self.slot_of(ui, target, x, y) } else { None };
                         self.activate(ui, target, t);
                         if let Some((date, minute)) = slot {
-                            if self.slot_double(date, minute, t) {
+                            if self.slot_double(date, minute, self.click_count) {
                                 self.open_event_pop(date, minute);
                             }
                         }
@@ -1555,8 +1638,15 @@ impl Calendar {
     }
 
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
-        if self.undo.as_ref().is_some_and(|(_, until)| t >= *until) {
+        // the bar fades first; the event stays undoable (Cmd+Z, Edit > Undo) until `UNDO_KEEP_MS`
+        if self.undo_bar.is_some_and(|until| t >= until) {
+            self.undo_bar = None;
+            self.dirty = true;
+        }
+        if self.undo.as_ref().is_some_and(|(_, keep)| t >= *keep) {
             self.undo = None;
+            self.undo_extra = None;
+            self.undo_bar = None;
             self.dirty = true;
         }
         // Include the final animation frame, after tick clears its motion.
@@ -1582,8 +1672,8 @@ impl Calendar {
                 as f64
                 * 1000.0;
         let mut due = midnight;
-        if let Some((_, until)) = &self.undo {
-            due = due.min(*until);
+        if let Some((_, keep)) = &self.undo {
+            due = due.min(self.undo_bar.map_or(*keep, |until| until.min(*keep)));
         }
         if let Some(alert) = self.alert_wake() {
             due = due.min(alert);
@@ -1683,7 +1773,8 @@ impl Calendar {
             for col in 0..7 {
                 let date = start.shift_days(row * 7 + col);
                 let (x, y) = (left + cell * col as f32, top + rh * row as f32);
-                let in_month = date.month == self.selected.month && date.year == self.selected.year;
+                let shown = self.month_date();
+                let in_month = date.month == shown.month && date.year == shown.year;
                 if date == self.selected {
                     s.fill_rrect(x, y, cell, rh, 0.0, CARD_BG.now());
                 }

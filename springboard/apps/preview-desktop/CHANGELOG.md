@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.11.19
+
+- Export As asks where to save; sidebar thumbnails turn with their page; one Print and one Edit menu.
+
+## 0.11.18
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 0.11.17
+
+- No toolbar tool looks selected while no document is open.
+
+## 0.11.16
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 0.11.15
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
+## 0.11.14
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 0.11.13
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.11.12 — 2026-10-23
 
 - Opens images and PDFs from Files; PDFs with the standard non-embedded fonts render their text.

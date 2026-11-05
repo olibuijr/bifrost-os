@@ -118,6 +118,7 @@ pub mod print_scan_page;
 pub mod workspace;
 pub mod services;
 pub mod chrome_host;
+pub mod chrome_ids;
 pub mod sticky_keys;
 pub mod slow_keys;
 pub mod scripts_menu;
@@ -200,7 +201,7 @@ pub mod entity_index;
 // action intents (Wi-Fi, wallpaper); not wired to Search yet
 #[allow(dead_code)]
 pub mod settings_actions;
-pub mod spotlight_scope;
+pub mod search_scope;
 pub mod settings_search;
 pub mod screensaver;
 pub mod hot_corners;
@@ -224,6 +225,7 @@ pub mod splitview;
 pub mod stage_strip;
 mod desk;
 mod desk_occlusion;
+pub mod displays;
 pub mod window_fx;
 /// Picture in Picture placement and the automatic start gated by the Settings toggle.
 pub mod pip;
@@ -481,6 +483,10 @@ pub enum Effect {
     ForeignWindowAction(u32,bool),
     #[cfg(feature="desktop-wayland")]
     ForeignWindowMaximize(u32,bool),
+    /// place another client's window (a native app's, by its foreign toplevel id): the Window menu's arrange commands
+    /// and the Ctrl+Cmd arrows when that window is front
+    #[cfg(feature="desktop-wayland")]
+    ForeignWindowTile(u32,crate::bare::window_level_client::Placement),
     #[cfg(feature="desktop-wayland")]
     DesktopShortcut(u16),
 }
@@ -552,6 +558,30 @@ enum Drawn {
 
 /// Whether a release at `up` completes a press that went down on the same button of a sheet: `hit` maps a point to the
 /// button under it. A release with no press on a button answers nothing.
+/// Seconds from local time `local_unix` (Unix seconds plus the zone offset) to Auto's next flip, 07:00 or 19:00
+/// local; always at least 1, so a wake-up at the boundary itself plans the next one.
+fn auto_flip_in_secs(local_unix: i64) -> i64 {
+    const DAY: i64 = 86_400;
+    let now = local_unix.rem_euclid(DAY);
+    [7 * 3600, 19 * 3600, DAY + 7 * 3600].into_iter().find(|b| *b > now).unwrap_or(DAY + 7 * 3600) - now
+}
+
+#[cfg(test)]
+mod auto_flip_tests {
+    use super::auto_flip_in_secs;
+
+    #[test]
+    fn next_flip_is_seven_or_nineteen_local() {
+        assert_eq!(auto_flip_in_secs(6 * 3600 + 59 * 60), 60);
+        assert_eq!(auto_flip_in_secs(7 * 3600), 12 * 3600);
+        assert_eq!(auto_flip_in_secs(18 * 3600 + 3599), 1);
+        assert_eq!(auto_flip_in_secs(23 * 3600), 8 * 3600);
+        // a later day, and a time before the epoch, land on the same local clock
+        assert_eq!(auto_flip_in_secs(20_000 * 86_400 + 12 * 3600), 7 * 3600);
+        assert_eq!(auto_flip_in_secs(-3600), 8 * 3600);
+    }
+}
+
 fn press_lands<T: PartialEq>(press: Option<(f32, f32)>, up: (f32, f32), hit: impl Fn(f32, f32) -> Option<T>) -> bool {
     press.is_some_and(|(px, py)| matches!((hit(px, py), hit(up.0, up.1)), (Some(a), Some(b)) if a == b))
 }
@@ -637,6 +667,8 @@ pub struct Shell {
     /// the login window over the lock screen, the root helper behind it and the unlocked session's token
     login: Option<login::Login>,
     login_backend: Option<std::sync::Arc<dyn login::Backend>>,
+    /// a lock found no login service and said so in the journal (once per lock, see `login_open_window`)
+    login_missing_logged: bool,
     session_token: Option<String>,
     /// Screen Time: today's usage, the Time Limit cover, and per-second gates
     screentime: screentime::usage::Tracker,
@@ -696,6 +728,10 @@ pub struct Shell {
     /// the external app (slot) and its window (0 is the main window) whose content the pointer is over and that takes
     /// hover events (`pointer_events`)
     pointer_over: Option<(u8, u32)>,
+    /// the app element the pointer rests on, for Speak Items Under the Pointer (`accessibility::hover_speech`)
+    hover_speech: accessibility::hover_speech::HoverSpeech,
+    /// effects of shell chrome a screen reader pressed (`axmap::ax_chrome_press`), returned by the next `tick`
+    ax_chrome_fx: Vec<Effect>,
     /// the two touchscreen fingers of the app in front and the pinch and rotation recognizers they run (`pointer_events`)
     pinch_fingers: Vec<(i32, (f32, f32))>,
     pinch: bifrost_ui::trackpad_gesture::TwoFinger,
@@ -722,6 +758,9 @@ pub struct Shell {
     game: gamemode::Model,
     /// where the pointer was last, for the menu bar that a full-screen window hides (`desk::bar_hidden`)
     pointer_y: Option<f32>,
+    /// the pointer reached the menu bar over a full-screen window and has stayed in the bar or on the toolbar revealed
+    /// under it since (`desk::bar_hidden`'s `keep`): coming up from below onto that toolbar does not bring the bar back
+    bar_latched: bool,
     /// the game pid Game Mode raised, put back when it leaves the front
     game_pid: Option<u32>,
     /// persisted Settings (`settings.ini`), owned here so one writer exists
@@ -808,7 +847,7 @@ pub struct Shell {
     shot_layer: Option<capture_flow::Layer>,
     /// The system sheets and alerts as a surface of their own above the windows on the desktop (id 15)
     modal_layer: Option<capture_flow::Layer>,
-    /// The announcement caption (id 17) and the screen reader's focus ring (id 18) as surfaces of their own above the
+    /// The announcement caption (`CAPTION_CHROME_ID`) and the screen reader's focus ring (`FOCUS_RING_CHROME_ID`) as surfaces of their own above the
     /// windows and the menu bar on the desktop; drawn into the shell's own frame they were hidden behind both (W5-19)
     a11y_layers: [Option<capture_flow::Layer>; 2],
     /// A key answered a card alert: the key still held must not repeat into the app that comes back to the front
@@ -848,15 +887,25 @@ pub struct Shell {
     keyboard: Keyboard,
     /// desktop or touch tablet: decides whether the on-screen keyboard can appear (`FormFactor::allows_onscreen_keyboard`)
     form: bifrost_ui::form_factor::FormFactor,
+    /// the notifications (store ids) whose desktop banners stand for a ringing Clock alert: their Stop and Snooze
+    /// answer the alert (`notify_alarm`, `clock_banner_sync`, `desk_banner_act`; E2E N5)
+    clock_banners: Vec<u64>,
     /// a physical keyboard is attached; on a tablet it keeps the on-screen keyboard down
     hw_keyboard: bool,
     /// the user opened the on-screen keyboard on purpose (the Input menu): the one way a desktop gets it
     osk_pinned: bool,
     /// the touchscreen fingers that are down, so the pointer stream does not report them twice (`touch_frames`)
     touch_contacts: touch_frames::Contacts,
+    /// what produced the plain touch an external app is getting now (`touch_frames::plain_source`)
+    touch_source: bifrost_proto::TouchSource,
+    /// the pointer touches left of the drag emulated for a wheel notch, and when they stop counting (`note_pan_source`)
+    wheel_pan: (u8, f64),
     /// the modifier keys the hardware keyboard holds now (`HwKeys::modifier_flags`), set on every key event; each press
-    /// forwarded to an external app carries them (`ToApp::Touch::mods`, `NSEvent.modifierFlags`)
+    /// forwarded to an external app carries them (`ToApp::Touch::mods`, the reference event modifier flags)
     key_mods: bifrost_proto::ModifierFlags,
+    /// the held modifier keys are to be forgotten (the session was restored: the presses before it went elsewhere), taken by
+    /// the input loop with `take_key_reset`
+    key_reset: bool,
     /// the focused text field of a Wayland client (the window server's input method), and the requests the keyboard
     /// made for it since the last `take_input_method_out`
     im: textinput::ImField,
@@ -877,6 +926,9 @@ pub struct Shell {
     desk_overlay_was: bool,
     /// a system gesture (`tablet_gestures`) took the touch in progress: its moves and its lift are not the app's
     touch_taken: bool,
+    /// the touches left of the drag emulated for a wheel notch a shell surface took (Settings, Overview), and until when
+    /// they can arrive (`swallow_wheel_drag`)
+    wheel_drag: (u8, f64),
     /// the scale of the tablet desktop's pinch so far, for the step of each new one (`desk_pinch`)
     pinch_last: Option<f32>,
     /// touch on the terminal grid: scroll, tap, long-press selection, menu
@@ -917,6 +969,10 @@ pub struct Shell {
     share_svc: Option<crate::net::share::Service>,
     share_prompt: Option<share::prompt::Prompt>,
     look_up: Option<look_up_popover::Popover>,
+    /// the `SelectionRequest` Look Up or a service waits on from the front app (`services_route::with_selection`), and
+    /// the last request number sent
+    selection_ask: Option<services_route::SelectionAsk>,
+    selection_request: u32,
     /// the Look Up in Visual Search panel and the search it waits for (`visual_search_panel`)
     visual_search: Option<visual_search_panel::Session>,
     /// a photo being decoded for the panel, with the search to run on it (`visual_search_panel`)
@@ -998,6 +1054,10 @@ pub struct Shell {
     /// (`draw_desk_windows`) and leaves the shell's own surface, the bar and the Dock alone; any other cause is the
     /// ordinary frame, which draws the windows as well.
     ext_frame: bool,
+    /// Whether the shell runs as a client of the Wayland window server (the desktop session): it then publishes the
+    /// windows as toplevels, starts window effects and asks the window server to place them. Read from
+    /// `SPRINGBOARD_WAYLAND` once, at construction; tests set it directly.
+    pub(crate) wayland: bool,
     /// Overview, the Apps grid and the desktops (see `overview.rs`)
     overview: overview::Overview,
     desktop_menu:Option<desktop_bar::Menu>,
@@ -1190,6 +1250,7 @@ impl Shell {
             lock_pad: None,
             login: None,
             login_backend: login::Privd::from_env().map(|p| std::sync::Arc::new(p) as std::sync::Arc<dyn login::Backend>),
+            login_missing_logged: false,
             session_token: None,
             screentime: screentime::usage::Tracker::new(deildu::data_dir().parent().map(|p| p.join("screentime")).unwrap_or_default()),
             shield: None,
@@ -1223,6 +1284,8 @@ impl Shell {
             assistant,
             compose_ime: compose_window::ComposeWindow::default(),
             pointer_over: None,
+            hover_speech: Default::default(),
+            ax_chrome_fx: Vec::new(),
             pinch_fingers: Vec::new(),
             pinch: Default::default(),
             input_providers: {
@@ -1241,6 +1304,7 @@ impl Shell {
             fullscreen: false,
             game: Default::default(),
             pointer_y: None,
+            bar_latched: false,
             game_pid: None,
             prefs: Prefs::memory(),
             screen_zoom: Default::default(),
@@ -1319,10 +1383,14 @@ impl Shell {
             music_muted: false,
             keyboard,
             form: bifrost_ui::form_factor::FormFactor::current(),
+            clock_banners: Vec::new(),
             hw_keyboard: false,
             osk_pinned: false,
             touch_contacts: touch_frames::Contacts::default(),
+            touch_source: bifrost_proto::TouchSource::default(),
+            wheel_pan: (0, 0.0),
             key_mods: bifrost_proto::ModifierFlags::EMPTY,
+            key_reset: false,
             im: Default::default(),
             im_out: Vec::new(),
             haptics: false,
@@ -1332,6 +1400,7 @@ impl Shell {
             desk_hold: None,
             desk_overlay_was: false,
             touch_taken: false,
+            wheel_drag: (0, 0.0),
             pinch_last: None,
             term_touch: termtouch::TermTouch::default(),
             last_input: 0.0,
@@ -1356,6 +1425,8 @@ impl Shell {
             share_svc: None,
             share_prompt: None,
             look_up: None,
+            selection_ask: None,
+            selection_request: 0,
             visual_search: None,
             visual_search_load: None,
             share_rows: 0,
@@ -1398,6 +1469,7 @@ impl Shell {
             metrics_changed: false,
             bar_rects: Vec::new(),
             ext_frame: false,
+            wayland: std::env::var_os("SPRINGBOARD_WAYLAND").is_some(),
             overview:Default::default(),
             desktop_menu:None,desktop_menu_scroll:Default::default(),desktop_flyout:Default::default(),defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
             #[cfg(feature = "desktop-wayland")]
@@ -1485,7 +1557,7 @@ impl Shell {
     }
 
     /// Desktop motion that needs frames by itself: window effects and the dock's bounce, show/hide and slide.
-    /// Overlays that are only visible (Control Center, the keyboard, Spotlight...) redraw through `dirty` when they
+    /// Overlays that are only visible (Control Center, the keyboard, Search...) redraw through `dirty` when they
     /// change; counting them here redrew a static lock screen at the full frame rate.
     fn desk_moving(&self) -> bool {
         let t = self.desk_t;
@@ -2348,11 +2420,23 @@ impl Shell {
         due.add(self.clock.next_wake(t, self.screen_on));
         if let Some((_, _, t0, false)) = self.desk_hold { due.add(Some(t0 + DESK_HOLD_MS)); }
         if bifrost_render::appearance::fading() { due.add(Some(t)); }
+        // Auto flips at 07:00 and 19:00 even with nothing else awake, so the shell and the apps' portal follow on time
+        if bifrost_render::appearance::Mode::parse(self.prefs.get(settings::APPEARANCE_PREF).unwrap_or("dark")) == bifrost_render::appearance::Mode::Auto {
+            let (unix, offset) = self.wall_now(t);
+            due.add(Some(t + auto_flip_in_secs(unix + offset as i64) as f64 * 1000.0));
+        }
         if self.bell.pending() { due.add(Some(t)); }
+        // the Look Up popover fills its definition in when the dictionaries finish loading
+        if self.look_up_waiting() { due.add(Some(t + 50.0)); }
+        // a service waits on the front app's selection until its deadline, then takes the word at the caret
+        if let Some(at) = self.selection_deadline() { due.add(Some(at)); }
         if let Some(end) = self.bell.flash_end(t) { due.add(Some(end.min(t + 33.0))); }
         if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
         // a submenu opens when its hover delay is over, a row in the safe triangle takes over after its rest
         if self.desktop_menu.is_some() { due.add(self.desktop_flyout.due()); }
+        // the open Downloads stack takes its items' pictures as the workers finish them
+        #[cfg(feature = "desktop-wayland")]
+        if self.desktop_menu == Some(desktop_bar::Menu::Stack) && self.stack_thumbs_pending() { due.add(Some(t + 50.0)); }
         // a rest on a green button opens its menu when the dwell is over
         if self.desktop_menu.is_none() { if let Some((_,since))=self.desk.as_ref().and_then(|d|d.arrange_at) { if since.is_finite() { due.add(Some(since+desk::ARRANGE_DWELL_MS)); } } }
         if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
@@ -2390,6 +2474,10 @@ impl Shell {
             due.add(Some(t + accessibility::motion_cues::POLL_MS));
         }
         if self.markup_load.is_some() || self.visual_search_pending() {
+            due.add(Some(t + 50.0));
+        }
+        // a shortcut run from Search posts its result banner when its thread finishes (`shortcut_results_tick`)
+        if quicksearch::shortcut_runs_pending() {
             due.add(Some(t + 50.0));
         }
         if self.screen_on {
@@ -2606,8 +2694,9 @@ impl Shell {
         let desktop=if let Some(d)=&self.desk {let m=self.desktop_metrics.clone();format!("{desktop}dock_position={:?}\ndock_size={}\ndock_autohide={}\ndock_visible={}\ndock_pinned={}\nmenu={:?}\ncpu_usage={:.1}\nmemory_usage={:.1}\n",d.dock_preferences.position,d.dock_preferences.size,d.dock_preferences.autohide,self.dock_is_visible(),d.dock_preferences.pinned.join(","),self.desktop_menu,m.cpu,m.memory_percent())}else{desktop};
         let store = self.store.as_ref().map(store::AppStore::describe).unwrap_or_default();
         format!(
-            "screen={screen}\nscreen_on={}\nanimating={}\npage={}\ntoday={}\ncc={}\ncards={}\nvolume={:.3}\nhud={}\nquicksearch={}\n{}\n{}{}{deildu}{photos}{files}{calculator}{camera}{browser}{desktop}{store}",
+            "screen={screen}\nscreen_on={}\nkey_mods={}\nanimating={}\npage={}\ntoday={}\ncc={}\ncards={}\nvolume={:.3}\nhud={}\nquicksearch={}\n{}\n{}{}{deildu}{photos}{files}{calculator}{camera}{browser}{desktop}{store}",
             self.screen_on,
+            self.key_mods_describe(),
             self.anim.is_some() || self.turning() || self.pager.animating() || self.cc.animating() || self.switcher.animating(),
             self.pager.page(),
             self.pager.leading() || self.lock_pager.leading(),
@@ -3253,7 +3342,7 @@ impl Shell {
     /// Leaves the app: its frame zooms into its icon and becomes its switcher card.
     fn go_home(&mut self, t: f64) {
         if self.desk_active() {
-            return self.desk_show_desktop();
+            return self.desk_put_windows_aside();
         }
         if let Screen::App(app) = self.screen {
             let full = Rect { x: 0, y: 0, w: self.w, h: self.h };
@@ -3262,6 +3351,17 @@ impl Shell {
             self.transition = Some(frame);
             self.anim = Some((Anim::Close { from: full, rect: self.icon_rect(app) }, t));
             self.screen = Screen::Home;
+        }
+    }
+
+    /// A built-in app whose model is gone (the Terminal's last shell exited, Deildu, Photos or Files could not be made)
+    /// leaves the screen: on the desktop only its own window closes and every other window stays where it is (N8: the
+    /// Terminal's `exit` went through `go_home`, which put every window aside); the touch presentation goes home.
+    fn leave_dead_app(&mut self, app: AppId, t: f64) {
+        if self.desk_active() {
+            self.desk_close_app(app);
+        } else {
+            self.go_home(t);
         }
     }
 
@@ -3286,7 +3386,10 @@ impl Shell {
         vec![]
     }
 
-    /// menu > Lock Screen, also the control verb `lock`.
+    /// Every lock a person asks for: the System menu's and the menu-extra Lock Screen rows, Ctrl+Cmd+Q, the Lock
+    /// Screen hot corner, AssistiveTouch's Lock and the control verb `lock`. They must not call `sleep_screen` directly:
+    /// on a desktop that turned the display off and dropped every key (`hw_type` ignores input while `screen_on` is
+    /// false), so a lock after login could not be unlocked (E2E N0).
     /// On a desktop the display stays on and the login window is up at once (as the reference Mac); on a tablet the
     /// lock turns the screen off, as the power button of a phone does.
     pub fn lock_screen(&mut self) -> Vec<Effect> {
@@ -3300,6 +3403,8 @@ impl Shell {
     }
 
     fn sleep_screen(&mut self) -> Vec<Effect> {
+        // before the screen becomes the lock: whether the shell's windows come back over other clients' at the unlock
+        self.desk_note_lock();
         self.grace_from = None;
         self.power_menu = None;
         self.shield = None;
@@ -3310,7 +3415,25 @@ impl Shell {
         {
             self.utility = None;
             self.utility_dirty = true;
+            // the share menu's compose sheet is the shell's own: the lock cancels it (the sender hears an empty target)
+            self.compose_done(false);
         }
+        // the shell's other layers that hold the keyboard go with the lock too (E2E N0: with one up, `hw_type` returned
+        // before the lock screen's keys and the login window got none): the character viewer, the assistant panel, the
+        // preview panel, an open menu and the sheets' own surface. An app's open or save panel and its password sheets
+        // wait under the lock instead (their app still expects an answer); the lock screen takes the keys before them.
+        self.char_viewer = None;
+        self.assistant.hide();
+        self.quick_look_hide();
+        if self.desktop_menu != Some(desktop_bar::Menu::Document) {
+            self.desktop_menu = None;
+            #[cfg(feature = "desktop-wayland")]
+            {
+                self.desktop_menu_row = None;
+            }
+        }
+        self.modal_layer = None;
+        self.drawn = Drawn::Nothing;
         self.screen_on = false;
         self.screen = Screen::Lock;
         self.lock_pad = None;
@@ -3389,6 +3512,11 @@ impl Shell {
     }
 
     pub fn event(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        // the drag emulated for a wheel notch a shell surface took already is not a press (it would tap or set a slider)
+        if matches!(ev, Event::Down(..) | Event::Move(..) | Event::Up(..)) && self.swallows_wheel_drag(t) {
+            return vec![];
+        }
+        self.note_pan_source(ev, t);
         // the touch a system gesture took belongs to that gesture: its first finger's moves and lift do nothing here
         if self.touch_taken {
             match ev {
@@ -3409,6 +3537,10 @@ impl Shell {
         // a touch that is a key of the on-screen keyboard does not raise it again (a Hide lowers it)
         let on_keyboard = self.kb_touch;
         let fx = self.event_inner(ev, t);
+        // the wheel's mark is for the very next press only, whichever surface took that press
+        if matches!(ev, Event::Down(..)) {
+            self.desk_wheel_spent();
+        }
         // a tap that leaves a text field in focus on the tablet desktop raises the keyboard for it
         if matches!(ev, Event::Up(..)) && !on_keyboard && self.desk_active() && !self.keyboard.shown() && self.desk_text_focus() == Some(true) {
             self.set_keyboard(true, t);
@@ -3417,14 +3549,69 @@ impl Shell {
         fx
     }
 
+    /// A wheel notch happened at `t`: the drag emulated for it that a shell surface does not take is a scroll, so it pans
+    /// the built-in windows as a finger does (`note_pan_source`).
+    pub(super) fn note_wheel_pan(&mut self, t: f64) {
+        self.wheel_pan = (3, t + apphost::WHEEL_DRAG_MS);
+    }
+
+    /// Records for the kit's scrollers (`bifrost_ui::pan`) what produced the touch the built-in windows handle now, so a
+    /// mouse drag does not pan them on a desktop; a touchscreen finger, the drag emulated for a wheel notch and a tablet
+    /// still do. Shell surfaces read it at the press (`Scroller::down`).
+    fn note_pan_source(&mut self, ev: Event, t: f64) {
+        let kind = match ev {
+            Event::Down(..) => bifrost_proto::TouchKind::Down,
+            Event::Move(..) => bifrost_proto::TouchKind::Move,
+            Event::Up(..) => bifrost_proto::TouchKind::Up,
+            _ => return,
+        };
+        let wheel = self.wheel_pan.0 > 0 && t <= self.wheel_pan.1;
+        if wheel {
+            self.wheel_pan.0 -= 1;
+        } else {
+            self.wheel_pan = (0, 0.0);
+        }
+        let source = if wheel { bifrost_proto::TouchSource::Finger } else { touch_frames::plain_source(kind, &self.touch_contacts, self.touch_source) };
+        self.touch_source = source;
+        bifrost_ui::pan::set_source(source);
+    }
+
+    /// A shell surface took the wheel event at `t`: the Down, Move and Up the pointer emulates for it are dropped.
+    /// This is the one record of a notch a shell surface took: the desk's mark for it (`desk_wheel`) is spent here, since
+    /// the desk never sees the press it was for.
+    pub(super) fn swallow_wheel_drag(&mut self, t: f64) {
+        self.wheel_drag = (3, t + apphost::WHEEL_DRAG_MS);
+        self.wheel_pan = (0, 0.0);
+        self.desk_wheel_spent();
+    }
+
+    /// True for each touch of the drag emulated for a wheel notch a shell surface took already.
+    fn swallows_wheel_drag(&mut self, t: f64) -> bool {
+        if self.wheel_drag.0 == 0 || t > self.wheel_drag.1 {
+            self.wheel_drag = (0, 0.0);
+            return false;
+        }
+        self.wheel_drag.0 -= 1;
+        true
+    }
+
     /// Remembers how far down the pointer is, from a press, a drag or a plain move, for the menu bar that a full-screen
     /// window hides (`desk::bar_hidden`). The bar comes and goes as the pointer enters or leaves its band, so crossing the
     /// band repaints.
     pub(super) fn note_pointer_y(&mut self, y: f32) {
+        // the window server's pointer-leave hover comes at (-100, -100): it is no position, so it neither brings the bar
+        // back nor latches it (a later move into the revealed band would otherwise keep a bar the top edge never showed)
+        if y < 0.0 {
+            return;
+        }
         let band = self.desktop_bar_height() as f32;
-        let was_in_band = self.pointer_y.is_some_and(|p| p < band);
+        // over a full-screen window the bar, once back, stays while the pointer is on the toolbar revealed under it
+        let keep = self.desk_full_band().map_or(0.0, |(_, b)| b as f32);
+        let was_in_band = self.pointer_y.is_some_and(|p| p < band + if self.bar_latched { keep } else { 0.0 });
         self.pointer_y = Some(y);
-        if (y < band) != was_in_band {
+        let in_band = y < band || (was_in_band && y < band + keep);
+        self.bar_latched = in_band;
+        if in_band != was_in_band {
             self.dirty = true;
         }
     }
@@ -3487,7 +3674,7 @@ impl Shell {
         if let Some(fx) = self.modal_event(ev) {
             return fx;
         }
-        if self.clock.alert().is_some() {
+        if self.clock_takeover() {
             let ev = self.letterbox_event(ev);
             return self.clock.touch(&self.ui, ev, t);
         }
@@ -3713,7 +3900,11 @@ impl Shell {
             if host.swallows_touch(t) {
                 return;
             }
-            host.touch_window(id, 1, kind, x / k, y / k, t as u32, self.key_mods);
+            // a mouse press or a finger (`touch_frames::plain_source`); the drag emulated for a wheel notch the app did not
+            // take is a scroll and counts as a finger's, so it pans on a desktop too
+            let source = if host.pans_touch(t) { bifrost_proto::TouchSource::Finger } else { touch_frames::plain_source(kind, &self.touch_contacts, self.touch_source) };
+            self.touch_source = source;
+            host.touch_window(id, 1, kind, x / k, y / k, t as u32, source, self.key_mods);
         }
     }
 
@@ -3857,7 +4048,6 @@ impl Shell {
                 let changed = *st.options() != before || !fx.is_empty();
                 let changes = st.take_notify_changes();
                 let view = st.take_view_request();
-                let dock_changes = st.take_dock_changes();
                 let default_changes = st.take_defaults_changes();
                 let login_removed = st.take_login_removed();
                 let login_moved = st.take_login_moved();
@@ -3898,11 +4088,6 @@ impl Shell {
                 self.login_items_approve(login_approved);
                 self.fw_edits(firewall_edits, t);
                 self.login_items_move(login_moved);
-                if self.desk.is_some() {
-                    for change in dock_changes {
-                        let _ = self.dock_change(change, t);
-                    }
-                }
                 if changed || matches!(ev, Event::Up(..)) {
                     self.apply_options();
                 }
@@ -3937,12 +4122,16 @@ impl Shell {
         let (unix, offset) = self.wall_now(t);
         let hour = ((unix + offset as i64).rem_euclid(86_400) / 3600) as u32;
         bifrost_render::appearance::set_light(mode.is_light(hour), t);
+        // the window server draws every window's materials (sidebars, title bars) in the scheme this file names: a
+        // switch is written at once, so they turn with the apps' own pixels (E2E13 finding 3)
+        bifrost_render::appearance::sync_display_file(bifrost_render::appearance::DISPLAY_FILE);
         #[cfg(feature = "desktop-wayland")]
         {
             let light = bifrost_render::appearance::target_is_light();
             let (dark_c, light_c) = accent.colours();
-            // The effective scheme and accent for native apps' portal (bifrost-portal); written on change only.
-            crate::appearance_portal::publish(crate::appearance_portal::State::new(light, if light { light_c } else { dark_c }), || {
+            // The effective scheme, accent and Increase Contrast for native apps' portal (bifrost-portal); written on change only.
+            let contrast = bifrost_render::appearance::increase_contrast();
+            crate::appearance_portal::publish(crate::appearance_portal::State::new(light, if light { light_c } else { dark_c }, contrast), || {
                 if !crate::appearance_portal::is_root() { return None; }
                 crate::bare::app_policy::Account::installed().ok().map(|a| (a.uid, a.gid))
             });
@@ -3977,6 +4166,13 @@ impl Shell {
         let key = |m: &desktop_metrics::Snapshot| if menu { m.shown() } else { m.bar_key() };
         let before = key(&self.desktop_metrics);
         let bar_before = self.bar_layout();
+        // the menus list app groups with a process in them: wait for quit native apps first, or their zombies count
+        #[cfg(feature = "desktop-wayland")]
+        if menu {
+            if let Some(desk) = self.desk.as_mut() {
+                desk.reap_native_children();
+            }
+        }
         self.metrics_sampler.sample(&mut self.desktop_metrics, menu);
         if key(&self.desktop_metrics) != before {
             // redraw only when the shown text changed, and then only the bar if nothing else asks for a frame
@@ -4013,10 +4209,21 @@ impl Shell {
 
     pub fn tick(&mut self, t: f64) -> Vec<Effect> {
         self.st_mark(t);
+        // the app the shell is bringing to the front: ended after its bound, activated again once it is mapped
+        self.desk_intent_tick(t);
         #[cfg(feature = "desktop-wayland")]
         self.desktop_menu_autoscroll(t);
         #[cfg(feature = "desktop-wayland")]
         self.desktop_menu_flyout_tick(t);
+        // the dictionaries the Look Up popover waits for came in
+        self.look_up_tick();
+        // the front app did not say what it has selected in time (`services_route::with_selection`)
+        self.selection_tick(t);
+        // an item's picture in the open Downloads stack finished drawing: the stack redraws with it
+        #[cfg(feature = "desktop-wayland")]
+        if self.stack_thumbs_tick() {
+            self.dirty = true;
+        }
         // the keyboard follows text focus on the tablet desktop: raised when a field gains it (edge-triggered, so a
         // dismissal sticks while the field keeps it), lowered whenever the front window has no field
         let now = self.desk_text_focus();
@@ -4049,7 +4256,8 @@ impl Shell {
                 self.dirty = true;
             }
         }
-        let fx = self.tick_pumped(t);
+        let mut fx = self.tick_pumped(t);
+        fx.append(&mut self.ax_chrome_fx);
         self.st_mark(t);
         fx
     }
@@ -4159,6 +4367,7 @@ impl Shell {
         let reader_on = self.screen_reader_on();
         self.reader.note_mode(reader_on);
         self.switch_scan_tick(t);
+        self.hover_speech_tick(t);
         self.popup_cues.observe(self.desktop_menu.is_some() || self.power_menu.is_some());
         if self.chrome.rot_lock != self.rotation_locked() {
             self.chrome.rot_lock = self.rotation_locked();
@@ -4236,6 +4445,8 @@ impl Shell {
                         self.screen = Screen::Home;
                         self.leave_today();
                         self.wallpaper_owed();
+                        // the lock took the windows' toplevels down: they map again in the shell's order (E2E13 2)
+                        self.desk_restack_after_unlock();
                         // the lock screen's buffers are gone: hand their pages back to the system
                         #[cfg(target_env = "gnu")]
                         {
@@ -4251,12 +4462,12 @@ impl Shell {
             }
         }
         if self.screen == Screen::App(AppId::Terminal) && self.term.is_none() && self.anim.is_none() {
-            self.go_home(t);
+            self.leave_dead_app(AppId::Terminal, t);
         }
         if self.screen == Screen::App(AppId::Deildu) {
             match &mut self.deildu {
                 Some(d) => self.dirty |= d.tick(&self.ui, t),
-                None if self.anim.is_none() => self.go_home(t),
+                None if self.anim.is_none() => self.leave_dead_app(AppId::Deildu, t),
                 None => {}
             }
         }
@@ -4270,7 +4481,7 @@ impl Shell {
             }
             effects.extend(p.take_effects());
         } else if self.screen == Screen::App(AppId::Photos) && self.anim.is_none() {
-            self.go_home(t);
+            self.leave_dead_app(AppId::Photos, t);
         }
         if let Some(o) = &self.shot {
             if o.done(t) {
@@ -4292,7 +4503,7 @@ impl Shell {
         if self.screen == Screen::App(AppId::Files) {
             match &mut self.files {
                 Some(f) => self.dirty |= f.tick(&self.ui, t),
-                None if self.anim.is_none() => self.go_home(t),
+                None if self.anim.is_none() => self.leave_dead_app(AppId::Files, t),
                 None => {}
             }
         }
@@ -4390,6 +4601,7 @@ impl Shell {
             }
             self.notify_alarm();
         }
+        self.clock_banner_sync();
         effects.extend(self.notify_tick(t));
         effects.extend(self.low_battery_tick(t));
         self.thermal_tick(t);
@@ -4503,7 +4715,7 @@ impl Shell {
             return &self.damage;
         }
         #[cfg(feature = "desktop-wayland")]
-        if std::mem::take(&mut self.perf_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
+        if std::mem::take(&mut self.perf_only) && self.wayland
             && self.desk_active() && !self.is_locked() && self.anim.is_none() && !self.notify_damage_all()
             && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !panels_changed && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && self.desk_drawn && self.windows_ready(s, ext, t) {
@@ -4518,7 +4730,7 @@ impl Shell {
         }
         // a changed CPU or RAM reading repaints the menu bar's rows alone, under the conditions of the performance band above
         #[cfg(feature = "desktop-wayland")]
-        if std::mem::take(&mut self.bar_only) && std::env::var_os("SPRINGBOARD_WAYLAND").is_some()
+        if std::mem::take(&mut self.bar_only) && self.wayland
             && self.desk_active() && !self.is_locked() && self.anim.is_none() && !self.notify_damage_all()
             && self.desktop_menu.is_none() && !self.cc_active() && !self.center_active() && !self.overlay_visible() && !self.quick_look.is_visible() && !self.utility_up()
             && !self.overview_active()
@@ -4705,6 +4917,12 @@ impl Shell {
                 let veil = self.veil_animating(t);
                 self.draw_desk(s, t);
                 self.draw_overview(s, t);
+                // a menu-bar menu opened over Overview or the Apps grid is above them: drawn again over the overlay, so the
+                // menu's surface (cut from this frame) shows its rows, not the grid under it (Lead (a): an empty frosted box)
+                #[cfg(feature = "desktop-wayland")]
+                if self.overview.visible() && self.desktop_menu.is_some() {
+                    self.draw_desktop_popup(s);
+                }
                 // Control Center and Notification Center float over the live desktop, at the menus' layer
                 if self.center_active() {
                     self.draw_center(s, t);
@@ -4870,14 +5088,15 @@ impl Shell {
                 }
             }
         };
-        if self.clock.alert().is_none() {
+        if !self.clock_takeover() {
             self.draw_banner(s, t);
         }
         // Picture in Picture floats above the windows, inside the screen between the menu bar and the dock
         if self.pip.showing() {
             damage.all();
             let m = self.desk_metrics();
-            let usable = bifrost_ui::Rect { x: 0.0, y: m.menubar as f32, w: self.w as f32, h: (self.h - m.menubar - m.dock_bottom).max(0) as f32 };
+            let area = desk::Desk::area(&m);
+            let usable = bifrost_ui::Rect { x: area.x as f32, y: area.y as f32, w: area.w as f32, h: area.h as f32 };
             pip::draw_window(s, &self.ui, self.pip.rect(usable), self.pip.frame.as_ref());
         }
         self.draw_announce(s);
@@ -4888,10 +5107,18 @@ impl Shell {
             damage.all();
             self.dnd_draw(s);
         }
-        if self.clock.alert().is_some() {
+        if self.clock_takeover() {
             damage.all();
             self.draw_letterboxed(s, |sh, s| sh.clock.draw_alert(s, &sh.ui, t));
-            home_indicator(s, &self.ui, self.w, self.h, 255);
+            if self.form.is_tablet() {
+                home_indicator(s, &self.ui, self.w, self.h, 255);
+            }
+            // the alert painted the whole frame over what the screen drew: the frame no longer holds that screen, so the
+            // next one must not be a partial repaint of it (the desktop's regions, an app's damaged rectangles, the
+            // terminal's rows). After Stop only the button's strip was repainted and the desktop stayed black (E2E N6).
+            self.desk_regions = None;
+            self.desk_drawn = false;
+            self.drawn = Drawn::Nothing;
         }
         self.hud_drawn = self.hud.visible(t);
         if self.hud_drawn {
@@ -4955,7 +5182,7 @@ impl Shell {
             if self.overlays_on_desk() && !self.is_locked() {
                 let mut image = Image::new(self.w.max(1) as usize, self.h.max(1) as usize);
                 self.draw_modal_sheets(&mut Surface { w: image.w, h: image.h, stride: image.w, px: &mut image.px, y0: 0 }, t);
-                self.modal_layer = Some(capture_flow::Layer { x: 0, y: 0, image, input: None });
+                self.modal_layer = Some(capture_flow::Layer::new(0, 0, image, None));
             } else {
                 self.modal_layer = None;
                 self.draw_modal_sheets(s, t);
@@ -5140,7 +5367,7 @@ impl Shell {
     }
 
     fn assistive_visible(&self) -> bool {
-        self.screen_on && !self.is_locked() && self.clock.alert().is_none() && self.assistive_touch.enabled()
+        self.screen_on && !self.is_locked() && !self.clock_takeover() && self.assistive_touch.enabled()
     }
 
     /// The performance overlay's box under the status bar, in px.
@@ -5253,7 +5480,7 @@ impl Shell {
             Action::AppSwitcher => self.open_app_switcher(t),
             Action::ControlCenter => self.open_control_center(t),
             Action::NotificationCenter => self.open_notification_center(t),
-            Action::Lock => return self.sleep_screen(),
+            Action::Lock => return self.lock_screen(),
             Action::Screenshot => self.take_screenshot(t),
             Action::Rotate => {
                 self.dirty = true;
@@ -5615,7 +5842,7 @@ impl Shell {
 
     fn draw_app_status(&self, s: &mut Surface) {
         #[cfg(feature="desktop-wayland")]
-        if self.desk_active() && !self.is_locked() {self.draw_desktop_bar(s);return;}
+        if self.desk_active() && !self.is_locked() {self.draw_desk_reveal(s);self.draw_desktop_bar(s);return;}
         let ui = &self.ui;
         let mid = (ui.pt(scene::STATUS_PT) / 2.0) as i32;
         // time then date, as the bifrost status bar shows them in apps too
@@ -5873,6 +6100,18 @@ impl Shell {
         self.form
     }
 
+    /// A ringing Clock alert is a notification banner with Stop and Snooze on an unlocked desktop, as the reference's
+    /// Clock posts one there; a tablet, and the lock screen, keep the full-screen alert (E2E N5). The banner is filed
+    /// under the installed Clock app (`notify_alarm`): without it there is no banner, and the alert takes the screen.
+    pub(super) fn clock_as_banner(&self) -> bool {
+        self.form.is_desktop() && self.desk_active() && !self.is_locked() && apphost::slot_of(clock::MANIFEST_ID).is_some()
+    }
+
+    /// The Clock's full-screen alert is up: it takes the screen's touches and is drawn over everything.
+    pub(super) fn clock_takeover(&self) -> bool {
+        self.clock.alert().is_some() && !self.clock_as_banner()
+    }
+
     /// A physical keyboard attached or removed. Attaching hides a raised on-screen keyboard and keeps it down while
     /// the keyboard stays; removing it lets text fields raise it again (they do so on the next focus).
     pub fn set_hardware_keyboard(&mut self, attached: bool, t: f64) {
@@ -6074,6 +6313,9 @@ impl Shell {
     fn ensure_photos(&mut self) {
         // Image > Edit With lists the apps from the registry, which the menus read without building it
         self.ensure_defaults();
+        // a desktop window has the source list and toolbar; the tablet (and the full-screen presentation) keeps the
+        // push navigation
+        let desktop = self.desk_active() && self.form().is_desktop();
         match &mut self.photos {
             Some(p) => p.rescan(),
             None => {
@@ -6083,6 +6325,9 @@ impl Shell {
                     Err(e) => eprintln!("springboard: photos: {e}"),
                 }
             }
+        }
+        if let Some(p) = &mut self.photos {
+            p.set_desktop(&self.ui, desktop);
         }
     }
 

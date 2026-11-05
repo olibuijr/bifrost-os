@@ -28,7 +28,7 @@ pub const FILE_URL: &str = "public.file-url";
 pub const IMAGE: &str = "public.image";
 /// A PDF file, by extension.
 pub const PDF: &str = "public.pdf";
-/// Text that is one absolute path to a file. The shell's own type, not an Apple UTI, so a path copied as text can
+/// Text that is one absolute path to a file. The shell's own type, not a reference content-type identifier, so a path copied as text can
 /// reach a service that takes files.
 pub const FILE_PATH_TEXT: &str = "bifrost.file-path-text";
 

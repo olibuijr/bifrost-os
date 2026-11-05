@@ -187,7 +187,7 @@ fn every_field_name_round_trips_and_an_unknown_name_is_refused() {
     }
     assert_eq!(Key::Phones.name(), "phones");
     assert_eq!(Key::GivenName.name(), "given_name");
-    assert_eq!(Key::from_name("nickname"), None);
+    assert_eq!(Key::from_name("shoe_size"), None);
 }
 
 #[test]

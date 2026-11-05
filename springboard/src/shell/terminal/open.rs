@@ -1,9 +1,13 @@
 //! Open a `.command` file or an executable in Terminal. Each file runs in its own new tab, in its own folder, and the tab
 //! stays at a login shell when the program ends (as Terminal does for a `.command`). The path is an argument of the
 //! wrapper script, never spliced into it.
+#![cfg(any(test, feature = "desktop-wayland"))]
 use super::*;
+#[cfg(feature = "desktop-wayland")]
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(feature = "desktop-wayland")]
+use std::path::PathBuf;
 
 /// The argv that runs `path` in a new tab, or None when Terminal does not run that kind of file. A `.command` file runs
 /// with `sh` when it is not executable; any other file runs only when it is executable. A relative path is refused.
@@ -21,6 +25,7 @@ pub fn open_argv(path: &Path, executable: bool) -> Option<Vec<String>> {
 }
 
 /// Whether `path` is a regular file with an execute bit.
+#[cfg(feature = "desktop-wayland")]
 fn is_executable(path: &Path) -> bool {
     std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
@@ -28,6 +33,7 @@ fn is_executable(path: &Path) -> bool {
 impl Shell {
     /// Runs each document Terminal can run in a new tab. Returns how many tabs opened; a file it cannot run is
     /// named in the message line.
+    #[cfg(feature = "desktop-wayland")]
     pub(crate) fn terminal_open_documents(&mut self, paths: &[PathBuf]) -> usize {
         let mut opened = 0;
         for path in paths {

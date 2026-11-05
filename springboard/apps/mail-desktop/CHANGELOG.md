@@ -1,5 +1,97 @@
 # Changelog
 
+## 0.17.17
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 0.17.16
+
+- An HTML message that starts with a large inline image shows its text, not the image source.
+
+## 0.17.15
+
+- The Save This Message question takes Cmd+D for Don't Save, and Tab and Space reach every button.
+
+## 0.17.14
+
+- Saving a draft with a half-typed recipient no longer puts an address error in the message list.
+
+## 0.17.13
+
+- A message with no recipient can be saved as a draft, the compose window shows its title once, and the save question explains itself.
+
+## 0.17.12
+
+- The red close button on an edited message asks before discarding it, and a toolbar search field filters the list as you type (Cmd+F).
+
+## 0.17.11
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 0.17.10
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
+## 0.17.9
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 0.17.8
+
+- Message bodies, subjects and compose fields wrap with the kit's line breaking: Chinese, Japanese and Korean text
+  breaks between characters (never before closing punctuation such as 、。」） nor after opening punctuation such as
+  「（), and a word or link wider than the pane breaks at the edge. An all-CJK paragraph ran past the reading pane
+  and was clipped.
+
+## 0.17.7
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
+## 0.17.6 — 2026-10-25
+
+- Opening a message in its own window (double-click, File > Open Message, Open in New Window) marks it read, as the
+  reference does, also when it was marked unread while the reader showed it. The blue dot stayed before.
+- Every way of opening a message in a viewer window goes through the one path that marks it read, including Open in
+  New Window in a message's context menu; a test now covers the context-menu route as well as the double-click.
+
+## 0.17.5 — 2026-10-24
+
+- Add to Contacts saves the sender in the contacts service's new save format, where phones and emails are labeled
+  values (`{label, value}`), so the contact is saved by the system release that brings that format. Built with it.
+- Mail has its own File menu, as the reference Mail does: New Message, Open Message (Cmd+O, the open message in a
+  window of its own; was Message > New Viewer Window), Save As, Save Attachments, Export as PDF, Import Mailboxes and
+  Print, above the shell's Close Window and Minimize. Mail's Print takes the place of the shell's window snapshot.
+  File had only the shell's generic items. A second main viewer window is not offered yet (Mail has one main window).
+- Message > Mark as Unread reads "Mark as Read" while the open message is unread.
+- The main window is titled after the mailbox it shows ("Inbox"), so the Window menu lists it by that name instead of
+  "Mail" (needs the system release that names a hosted app's main window by its title).
+
+## 0.17.4 — 2026-10-24
+
+- Message > Mark as Unread on the open message shows its unread dot at once (white on the selected row), and the
+  message stays unread while it is open; it is read again only once another message is shown and it is opened again.
+  The dot was hidden on the selected row and showing the message again marked it read.
+
+## 0.17.3 — 2026-10-24
+
+- Switching mailboxes shows the mailbox's last listing at once, with the message it had selected, and the new listing
+  refreshes it in place: the list was emptied to "Loading..." for several seconds on every switch, even for an inbox
+  listed moments before. Only a mailbox never listed in this run shows Loading. Each account keeps its own rows.
+- Message viewer windows open cascaded beside the main window instead of over its message list.
+
+## 0.17.2 — 2026-10-24
+
+- Clicks in the main window land where they are aimed again after a compose window closes (sent, saved, discarded or
+  closed): the main window took back its own size only on some of those paths, so a sidebar click could select a
+  message of the list.
+- Why a message was not sent (an address that is not valid, no password, the server's answer) shows in its compose
+  window, over the buttons, instead of in the main window's footer; an edit clears it.
+- The compose form fills its window, and the message field grows with the window.
+
+## 0.17.1 — 2026-10-23
+
+- Rebuilt with the shared text-rendering fix so invisible formatting characters in message viewers no longer appear as missing-glyph boxes.
+
 ## 0.17.0 — 2026-10-23
 
 - The compose window takes clicks, typing, Esc and its menu items (keys and commands now reach the window they were sent to, and its fields hit-test at the window's own size).

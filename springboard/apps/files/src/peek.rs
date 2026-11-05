@@ -92,7 +92,7 @@ impl Files {
                 if e.is_dir {
                     widgets::folder_icon(s, ui, Rect { x: x + 20., y: body_y, w: 64., h: 64. }, folder_emblem(&self.home, &e.path));
                 } else {
-                    icons::entry(s, (ui.pt(x + 26.), ui.pt(body_y + 4.), ui.pt(52.), ui.pt(56.)), e.kind);
+                    applications::entry_icon(s, (ui.pt(x + 26.), ui.pt(body_y + 4.), ui.pt(52.), ui.pt(56.)), e);
                 }
                 text_y += 80.;
             }

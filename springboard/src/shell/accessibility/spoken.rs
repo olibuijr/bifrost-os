@@ -1,7 +1,7 @@
 //! Spoken Content: Speak Selection (Option+Escape) reads the selected text of the focused field aloud through the speech
 //! engine, with or without the screen reader on. The selection comes from the app's `ToShell::TextState`, the surrounding
-//! text and selection of the focused field, so only text fields can be spoken. Speak Items Under the Pointer is not built:
-//! the shell does not track pointer hover over text yet. The pure part (`selected_text`) is tested on the host; the `Shell`
+//! text and selection of the focused field, so only text fields can be spoken. Speak Items Under the Pointer lives in
+//! `hover_speech`. The pure part (`selected_text`) is tested on the host; the `Shell`
 //! method is the glue.
 
 use crate::shell::Shell;
@@ -10,11 +10,7 @@ use bifrost_proto::TextState;
 /// The selected text of a field: the bytes between the anchor and the caret, both UTF-8 offsets into `text`
 /// (`TextState`). Empty when nothing is selected, or when an offset is out of range or splits a character.
 pub fn selected_text(t: &TextState) -> String {
-    let (a, b) = (t.anchor.min(t.cursor) as usize, t.anchor.max(t.cursor) as usize);
-    if a == b {
-        return String::new();
-    }
-    t.text.get(a..b).unwrap_or("").to_string()
+    t.selected_text().to_string()
 }
 
 impl Shell {

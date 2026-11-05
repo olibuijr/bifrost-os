@@ -7,6 +7,7 @@ pub mod boost;
 pub mod control;
 pub mod cpuprofile;
 pub mod crashlog;
+pub mod focus_trace;
 pub mod gpu_comp;
 pub mod heartbeat;
 pub mod jank;

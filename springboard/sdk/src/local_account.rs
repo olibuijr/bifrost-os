@@ -1,5 +1,5 @@
 //! The installed local account for apps: the user name, numeric ids, home folder and shell of the person who runs the
-//! desktop. `NSUserName`, `NSHomeDirectory` and `getpwuid` parity for an app that needs to know whose account it runs as.
+//! desktop. The reference user-name and home-directory calls and `getpwuid`, same behaviour, for an app that needs to know whose account it runs as.
 //!
 //! The shell records the account name in `/var/lib/springboard/account` and the account itself lives in `/etc/passwd`.
 //! [`LocalAccount::parse`] reads one passwd line for that name and applies the same policy as the shell: the name must be
@@ -50,7 +50,7 @@ impl fmt::Display for LocalAccountError {
     }
 }
 
-/// The local account (`NSUserName`, `NSHomeDirectory`, the passwd fields an app reads).
+/// The local account (user name, home directory, the passwd fields an app reads).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalAccount {
     pub name: String,

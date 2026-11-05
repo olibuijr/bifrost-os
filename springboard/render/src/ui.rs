@@ -17,6 +17,9 @@ pub const CELL: u32 = pack(28, 28, 30, 255); // secondarySystemGroupedBackground
 pub const SIDEBAR_FILL: u32 = pack(20, 20, 22, 255);
 // ---- Scheme-following colours (dark, light). Light values are measured from the Settings reference; call `.now()`. ----
 use crate::appearance::Pair;
+/// The user's accent colour in the current scheme. Focus rings, selections, checked controls and progress fills use it;
+/// `TINT` and `LINK` stay the literal systemBlue (text links and bar buttons).
+pub use crate::appearance::accent_now;
 /// Menu bar and menu materials: the tint over the blurred backdrop (straight alpha, as `glass::tint` takes it).
 pub const BAR_TINT: Pair = Pair::new(pack(28, 28, 30, 220), pack(246, 246, 246, 205));
 pub const MENU_TINT: Pair = Pair::new(pack(28, 28, 30, 240), pack(246, 246, 246, 238));
@@ -34,6 +37,9 @@ pub const BAR_TEXT_SHADOW_ALPHA: u32 = 90;
 /// The Weather card in the Notification Center column: a blue plate laid over the glass (the same in Light and Dark,
 /// white text on it).
 pub const NC_WEATHER_TINT: u32 = pack(52, 108, 190, 225);
+/// Text on a widget whose container background is a light system colour (yellow, mint): near-black in both
+/// appearances, as the colour under it does not change with the appearance enough to carry white text.
+pub const NC_WIDGET_DARK_INK: u32 = pack(0, 0, 0, 230);
 /// Notification Center tiles (cards, Calendar, widget rows) and the desktop notification banners: lighter than a
 /// menu's tint so the desktop shows through the blur, light translucent tiles in Light as in the reference
 /// (27-Golden-Gate-Notification-Center.png). Straight alpha, as `glass::tint` takes it.
@@ -51,8 +57,10 @@ pub const BAR_TEXT_HALO_ALPHA: u32 = 60;
 pub const BAR_OPEN_CAPSULE_ON_LIGHT: u32 = pack(0, 0, 0, 31);
 /// The open menu title's light glass capsule (white at ~25%, premultiplied).
 pub const BAR_OPEN_CAPSULE: u32 = pack(64, 64, 64, 64);
-/// Menu item highlight capsule (accent, systemBlue) and the text on it.
-pub const MENU_HIGHLIGHT: u32 = TINT;
+/// Menu item highlight capsule: the user's accent colour (`controlAccentColor`, Settings > Appearance > Accent), and the text on it.
+pub fn menu_highlight() -> u32 {
+    accent_now()
+}
 pub const MENU_HIGHLIGHT_TEXT: u32 = WHITE;
 /// Menu shortcut glyphs: secondary label.
 pub const MENU_SHORTCUT: u32 = SECONDARY;
@@ -73,6 +81,12 @@ pub const DETAIL_BG: Pair = Pair::new(pack(0, 0, 0, 255), pack(255, 255, 255, 25
 pub const CONTENT_BG: Pair = Pair::new(pack(30, 30, 30, 255), pack(255, 255, 255, 255));
 /// A grouped card (secondarySystemGroupedBackground).
 pub const CARD_BG: Pair = Pair::new(pack(28, 28, 30, 255), pack(247, 247, 247, 255));
+/// The sea of a world map (the Clock's day and night map).
+pub const MAP_OCEAN: Pair = Pair::new(pack(0, 0, 0, 255), pack(214, 220, 228, 255));
+/// The land of a world map.
+pub const MAP_LAND: Pair = Pair::new(pack(66, 66, 70, 255), pack(250, 250, 250, 255));
+/// The shade laid over the night side of a world map (premultiplied black).
+pub const MAP_NIGHT: Pair = Pair::new(pack(0, 0, 0, 140), pack(0, 0, 0, 64));
 /// Hairline between rows.
 pub const SEPARATOR_C: Pair = Pair::new(pack(56, 56, 58, 255), pack(232, 232, 232, 255));
 /// Primary text.
@@ -151,6 +165,7 @@ pub const AVATAR_BG: u32 = pack(112, 112, 116, 255);
 pub const AVATAR_FG: u32 = pack(40, 40, 43, 255);
 pub const AVATAR_PT: f32 = 60.0;
 pub const SEPARATOR: u32 = pack(56, 56, 58, 255);
+/// Literal systemBlue. Does not follow the accent colour: use `accent_now()` for selections, focus and filled controls.
 pub const TINT: u32 = pack(10, 132, 255, 255); // systemBlue
 pub const MINUS_FILL: u32 = pack(209, 209, 214, 240); // home edit mode minus badge
 pub const SYSTEM_RED: u32 = pack(255, 69, 58, 255);
@@ -479,63 +494,44 @@ impl Ui {
         self.font.measure_var(text, self.pt(pt), &vars(pt, weight))
     }
 
+    /// Where the baseline of one line of `pt` text sits, in points below the top of a box `h` points tall, when the
+    /// line is centred vertically in the box as the controls draw it (the rendered line is ascent plus descent tall,
+    /// so the baseline is half the box plus half the difference of ascent and descent). Follows Dynamic Type.
+    pub fn centred_baseline(&self, pt: f32, h: f32) -> f32 {
+        if !(self.s > 0.0) {
+            return h / 2.0;
+        }
+        let m = self.font.line_metrics(self.pt(self.scaled(pt)));
+        h / 2.0 + (m.ascent - m.descent) / 2.0 / self.s
+    }
+
+    /// Distance in points from the top of an image that [`Ui::text`] rendered at `pt` to the line's baseline (the
+    /// renderer's 2 px edge pad plus the ascent), for a view that blits text at a fixed top instead of centring it.
+    pub fn image_baseline(&self, pt: f32) -> f32 {
+        if !(self.s > 0.0) {
+            return pt;
+        }
+        let m = self.font.line_metrics(self.pt(self.scaled(pt)));
+        (2.0 + m.ascent) / self.s
+    }
+
     pub fn fit(&self, text: &str, pt: f32, max_px: f32) -> String {
         let (pt, weight) = (self.scaled(pt), self.weight(Weight::Regular));
         self.font.fit_var(text, self.pt(pt), max_px, &vars(pt, weight))
     }
 
-    /// Greedy word wrap of `text` into lines no wider than `max_px`.
+    /// Greedy line wrap of `text` into lines no wider than `max_px`, at the line break opportunities of
+    /// [`crate::textbreak::wrap_paragraph`]: after spaces, between ideographs, kana and hangul (never before closing
+    /// or after opening punctuation), and between characters of a run wider than the line as a last resort. White
+    /// space, newlines included, collapses to single spaces.
     pub fn wrap(&self, text: &str, pt: f32, weight: Weight, max_px: f32) -> Vec<String> {
-        let mut lines = vec![];
-        let mut line = String::new();
-        for word in text.split_whitespace() {
-            let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
-            if !line.is_empty() && self.measure(&candidate, pt, weight) > max_px {
-                lines.push(std::mem::take(&mut line));
-                line = word.to_string();
-            } else {
-                line = candidate;
-            }
-        }
-        if !line.is_empty() {
-            lines.push(line);
-        }
-        lines
+        crate::textbreak::wrap_paragraph(text, max_px, &|s: &str| self.measure(s, pt, weight))
     }
 
-    /// Word wrap for text that comes from outside (device names, crash reasons, app names): like [`Ui::wrap`], but a
-    /// word wider than `max_px` is broken across lines, and at most `max_lines` lines are returned, the last one
-    /// ending in an ellipsis when text was dropped.
+    /// Line wrap for text that comes from outside (device names, crash reasons, app names): [`Ui::wrap`], with at most
+    /// `max_lines` lines returned, the last one ending in an ellipsis when text was dropped.
     pub fn wrap_capped(&self, text: &str, pt: f32, weight: Weight, max_px: f32, max_lines: usize) -> Vec<String> {
-        let mut lines: Vec<String> = vec![];
-        let mut line = String::new();
-        for word in text.split_whitespace() {
-            if self.measure(word, pt, weight) > max_px {
-                // break the over-wide word into chunks that each fit; the last chunk carries on as the current line
-                if !line.is_empty() {
-                    lines.push(std::mem::take(&mut line));
-                }
-                for c in word.chars() {
-                    let mut next = line.clone();
-                    next.push(c);
-                    if !line.is_empty() && self.measure(&next, pt, weight) > max_px {
-                        lines.push(std::mem::replace(&mut line, c.to_string()));
-                    } else {
-                        line = next;
-                    }
-                }
-                continue;
-            }
-            let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
-            if !line.is_empty() && self.measure(&candidate, pt, weight) > max_px {
-                lines.push(std::mem::replace(&mut line, word.to_string()));
-            } else {
-                line = candidate;
-            }
-        }
-        if !line.is_empty() {
-            lines.push(line);
-        }
+        let mut lines = self.wrap(text, pt, weight, max_px);
         if lines.len() > max_lines {
             lines.truncate(max_lines);
             if let Some(last) = lines.last_mut() {
@@ -756,7 +752,7 @@ impl AlertCard {
             let b = ui.pt(ALERT_CHECK_BOX_PT);
             let by = ry + (rh - b) / 2.0;
             if *on {
-                s.fill_rrect(rx, by, b, b, ui.pt(3.0), TINT);
+                s.fill_rrect(rx, by, b, b, ui.pt(3.0), accent_now());
                 // the tick: a short stroke down to the right, then a long one up to the right, in white dots
                 let t = ui.pt(1.8).max(1.0);
                 let mut dot = |px: f32, py: f32| s.fill_rrect(rx + px * b - t / 2.0, by + py * b - t / 2.0, t, t, t / 2.0, rgba(255, 255, 255, 255));
@@ -810,6 +806,16 @@ mod tests {
 
     fn ui() -> Ui {
         crate::tests::ui()
+    }
+
+    #[test]
+    fn the_centred_baseline_sits_below_the_middle_and_moves_with_the_box() {
+        let ui = ui();
+        let b = ui.centred_baseline(13.0, 22.0);
+        assert!(b > 11.0 && b < 22.0, "{b}");
+        // a taller box moves the baseline by half the growth; a larger size moves it further below the middle
+        assert!((ui.centred_baseline(13.0, 42.0) - b - 10.0).abs() < 1e-3);
+        assert!(ui.centred_baseline(26.0, 22.0) > b);
     }
 
     #[test]
@@ -931,15 +937,30 @@ mod tests {
     }
 
     #[test]
-    fn wrap_breaks_on_words_and_keeps_long_words() {
+    fn wrap_breaks_on_words_and_splits_long_words() {
         let ui = ui();
         let text = "Known networks will be joined automatically. If no known networks are available, you will be notified.";
         let lines = ui.wrap(text, 13.0, Weight::Regular, ui.pt(300.0));
         assert!(lines.len() >= 3, "{lines:?}");
         assert!(lines.iter().all(|l| ui.measure(l, 13.0, Weight::Regular) <= ui.pt(300.0)));
         assert_eq!(lines.join(" "), text);
-        assert_eq!(ui.wrap("supercalifragilistic", 13.0, Weight::Regular, 10.0), vec!["supercalifragilistic"]);
         assert!(ui.wrap("   ", 13.0, Weight::Regular, 100.0).is_empty());
+        // a word wider than the line breaks at the width as a last resort
+        let long = ui.wrap("supercalifragilistic", 13.0, Weight::Regular, ui.pt(40.0));
+        assert!(long.len() >= 2 && long.iter().all(|l| ui.measure(l, 13.0, Weight::Regular) <= ui.pt(40.0)), "{long:?}");
+        assert_eq!(long.concat(), "supercalifragilistic");
+    }
+
+    #[test]
+    fn wrap_breaks_cjk_text_between_characters() {
+        let ui = ui();
+        let max = ui.pt(120.0);
+        let text = "不想再收到我们的邮件？请在这里取消订阅（或点击「回复」）。";
+        let lines = ui.wrap(text, 13.0, Weight::Regular, max);
+        assert!(lines.len() >= 2, "{lines:?}");
+        assert!(lines.iter().all(|l| ui.measure(l, 13.0, Weight::Regular) <= max), "{lines:?}");
+        assert_eq!(lines.concat(), text);
+        assert!(lines.iter().all(|l| !l.starts_with('。') && !l.starts_with('？') && !l.ends_with('「')), "{lines:?}");
     }
 
     #[test]
@@ -1015,10 +1036,199 @@ pub mod system {
     /// `windowFrameColor`: the frame around a focused window (the same pair as the title area).
     pub const WINDOW_FRAME: Pair = super::WINDOW_FRAME_FOCUSED;
     /// `findHighlightColor`: the highlight behind find-in-page matches. Translucent yellow; the values are a design
-    /// approximation to confirm on Midget.
-    pub const FIND_HIGHLIGHT: Pair = Pair::new(pack(255, 214, 10, 180), pack(255, 204, 0, 180));
+    /// approximation to confirm on Midget (the reference catalogues hold no value for it). Premultiplied, as the fills
+    /// that draw it expect (it was straight alpha, which drew too bright).
+    pub const FIND_HIGHLIGHT: Pair = Pair::new(pack(180, 151, 7, 180), pack(180, 144, 0, 180));
     /// `shadowColor`: the default colour of a drop shadow, black at one third opacity in both appearances.
     pub const SHADOW: Pair = Pair::new(pack(0, 0, 0, 85), pack(0, 0, 0, 85));
+
+    // The remaining semantic names, measured from the reference appearance catalogues (the light and the dark system
+    // appearance's named-colour tables; docs/bifrost-ui.md, "NativeColor semantic colours"). Translucent values are
+    // premultiplied, as `Surface::fill_rrect` takes them: white at alpha `a` is `pack(a, a, a, a)`. A name the dark
+    // table leaves out keeps its light value in Dark, as the reference does.
+
+    /// `controlColor`: the face of a control (opaque white in Light, white at a quarter in Dark).
+    pub const CONTROL: Pair = Pair::new(pack(63, 63, 63, 63), pack(255, 255, 255, 255));
+    /// `controlTextColor`: text on a control, black or white at 85%.
+    pub const CONTROL_TEXT: Pair = Pair::new(pack(216, 216, 216, 216), pack(0, 0, 0, 216));
+    /// `disabledControlTextColor`: text on a disabled control, at a quarter.
+    pub const DISABLED_CONTROL_TEXT: Pair = Pair::new(pack(63, 63, 63, 63), pack(0, 0, 0, 63));
+    /// `selectedControlColor`: the background of a selected control; it follows the accent like the selection plate.
+    pub const SELECTED_CONTROL: Pair = SELECTION;
+    /// `selectedControlTextColor`: text on a selected control.
+    pub const SELECTED_CONTROL_TEXT: Pair = Pair::new(pack(216, 216, 216, 216), pack(0, 0, 0, 216));
+    /// `alternateSelectedControlTextColor`: text on an emphasised (accent) selection, white in both appearances.
+    pub const ALTERNATE_SELECTED_CONTROL_TEXT: Pair = Pair::new(pack(255, 255, 255, 255), pack(255, 255, 255, 255));
+    /// `selectedTextBackgroundColor`: the plate behind selected text in the key window (follows the accent).
+    pub const SELECTED_TEXT_BACKGROUND: Pair = SELECTION;
+    /// `selectedTextColor`: selected text keeps the text colour.
+    pub const SELECTED_TEXT: Pair = super::LABEL;
+    /// `unemphasizedSelectedTextBackgroundColor`: the selection plate when the window is not key (a neutral grey).
+    pub const UNEMPHASIZED_SELECTED_TEXT_BACKGROUND: Pair = Pair::new(pack(70, 70, 70, 255), pack(220, 220, 220, 255));
+    /// `unemphasizedSelectedTextColor`: text on that plate.
+    pub const UNEMPHASIZED_SELECTED_TEXT: Pair = super::LABEL;
+    /// `keyboardFocusIndicatorColor`: the focus ring. Measured blue; the reference ring also takes the accent.
+    pub const KEYBOARD_FOCUS_INDICATOR: Pair = Pair::new(pack(18, 86, 127, 127), pack(59, 153, 252, 255));
+    /// `textInsertionPointColor`: the caret follows the accent colour.
+    pub const TEXT_INSERTION_POINT: Pair = CONTROL_ACCENT;
+    /// `headerTextColor`: table and outline header titles.
+    pub const HEADER_TEXT: Pair = Pair::new(pack(255, 255, 255, 255), pack(0, 0, 0, 216));
+    /// `selectedMenuItemTextColor`: the title of the highlighted menu item, white in both appearances.
+    pub const SELECTED_MENU_ITEM_TEXT: Pair = Pair::new(pack(255, 255, 255, 255), pack(255, 255, 255, 255));
+    /// `highlightColor`: the light edge of a raised element.
+    pub const HIGHLIGHT: Pair = Pair::new(pack(180, 180, 180, 255), pack(255, 255, 255, 255));
+    /// `windowFrameTextColor`: text in a window's title area.
+    pub const WINDOW_FRAME_TEXT: Pair = Pair::new(pack(216, 216, 216, 216), pack(0, 0, 0, 216));
+    /// `quinaryLabelColor`: the faintest label level (5%).
+    pub const QUINARY_LABEL: Pair = Pair::new(pack(12, 12, 12, 12), pack(0, 0, 0, 12));
+    /// `systemFillColor`: the fill of a thin or small shape (a slider track), black or white at 10%.
+    pub const SYSTEM_FILL: Pair = Pair::new(pack(25, 25, 25, 25), pack(0, 0, 0, 25));
+    /// `secondarySystemFillColor`: the fill of a medium shape (a switch background), 8%.
+    pub const SECONDARY_SYSTEM_FILL: Pair = Pair::new(pack(20, 20, 20, 20), pack(0, 0, 0, 20));
+    /// `tertiarySystemFillColor`: the fill of a large shape (an input field, a search bar), 5%.
+    pub const TERTIARY_SYSTEM_FILL: Pair = Pair::new(pack(12, 12, 12, 12), pack(0, 0, 0, 12));
+    /// `quaternarySystemFillColor`: the fill of a large area holding complex content, 3%.
+    pub const QUATERNARY_SYSTEM_FILL: Pair = Pair::new(pack(7, 7, 7, 7), pack(0, 0, 0, 7));
+    /// `quinarySystemFillColor`: the faintest fill, 1%.
+    pub const QUINARY_SYSTEM_FILL: Pair = Pair::new(pack(2, 2, 2, 2), pack(0, 0, 0, 2));
+    /// The second of `alternatingContentBackgroundColors` (the first is `CONTROL_BACKGROUND`): striped table rows.
+    pub const ALTERNATING_ROW: Pair = Pair::new(pack(12, 12, 12, 12), pack(244, 245, 245, 255));
+    /// `controlShadowColor`: the shadow edge of a control, black at 27% in both appearances.
+    pub const CONTROL_SHADOW: Pair = Pair::new(pack(0, 0, 0, 68), pack(0, 0, 0, 68));
+    /// `controlDarkShadowColor`: the darkest control edge, opaque black.
+    pub const CONTROL_DARK_SHADOW: Pair = Pair::new(pack(0, 0, 0, 255), pack(0, 0, 0, 255));
+    /// `controlHighlightColor`: the lit edge of a control.
+    pub const CONTROL_HIGHLIGHT: Pair = Pair::new(pack(25, 25, 25, 25), pack(255, 255, 255, 255));
+    /// `controlLightHighlightColor`: the brightest control edge (the same values as `CONTROL_HIGHLIGHT`).
+    pub const CONTROL_LIGHT_HIGHLIGHT: Pair = CONTROL_HIGHLIGHT;
+
+    /// `alternatingContentBackgroundColors`: the row colours a striped table cycles through, in order.
+    pub const ALTERNATING_CONTENT_BACKGROUNDS: [Pair; 2] = [CONTROL_BACKGROUND, ALTERNATING_ROW];
+
+    /// Every semantic colour under its catalogue name (`"labelColor"`, `"systemFillColor"`, ...), the names a
+    /// document or a colour list uses to refer to a dynamic colour instead of fixed values.
+    pub const NAMED: &[(&str, Pair)] = &[
+        ("windowBackgroundColor", WINDOW_BACKGROUND),
+        ("controlBackgroundColor", CONTROL_BACKGROUND),
+        ("underPageBackgroundColor", UNDER_PAGE_BACKGROUND),
+        ("textBackgroundColor", TEXT_BACKGROUND),
+        ("labelColor", LABEL),
+        ("secondaryLabelColor", SECONDARY_LABEL),
+        ("tertiaryLabelColor", TERTIARY_LABEL),
+        ("quaternaryLabelColor", QUATERNARY_LABEL),
+        ("quinaryLabelColor", QUINARY_LABEL),
+        ("textColor", TEXT),
+        ("placeholderTextColor", PLACEHOLDER_TEXT),
+        ("separatorColor", SEPARATOR),
+        ("gridColor", GRID),
+        ("selectedContentBackgroundColor", SELECTED_CONTENT_BACKGROUND),
+        ("unemphasizedSelectedContentBackgroundColor", UNEMPHASIZED_SELECTED_CONTENT_BACKGROUND),
+        ("selectedTextBackgroundColor", SELECTED_TEXT_BACKGROUND),
+        ("selectedTextColor", SELECTED_TEXT),
+        ("unemphasizedSelectedTextBackgroundColor", UNEMPHASIZED_SELECTED_TEXT_BACKGROUND),
+        ("unemphasizedSelectedTextColor", UNEMPHASIZED_SELECTED_TEXT),
+        ("controlAccentColor", CONTROL_ACCENT),
+        ("controlColor", CONTROL),
+        ("controlTextColor", CONTROL_TEXT),
+        ("disabledControlTextColor", DISABLED_CONTROL_TEXT),
+        ("selectedControlColor", SELECTED_CONTROL),
+        ("selectedControlTextColor", SELECTED_CONTROL_TEXT),
+        ("alternateSelectedControlTextColor", ALTERNATE_SELECTED_CONTROL_TEXT),
+        ("keyboardFocusIndicatorColor", KEYBOARD_FOCUS_INDICATOR),
+        ("textInsertionPointColor", TEXT_INSERTION_POINT),
+        ("headerTextColor", HEADER_TEXT),
+        ("selectedMenuItemTextColor", SELECTED_MENU_ITEM_TEXT),
+        ("highlightColor", HIGHLIGHT),
+        ("shadowColor", SHADOW),
+        ("windowFrameColor", WINDOW_FRAME),
+        ("windowFrameTextColor", WINDOW_FRAME_TEXT),
+        ("findHighlightColor", FIND_HIGHLIGHT),
+        ("linkColor", LINK),
+        ("systemFillColor", SYSTEM_FILL),
+        ("secondarySystemFillColor", SECONDARY_SYSTEM_FILL),
+        ("tertiarySystemFillColor", TERTIARY_SYSTEM_FILL),
+        ("quaternarySystemFillColor", QUATERNARY_SYSTEM_FILL),
+        ("quinarySystemFillColor", QUINARY_SYSTEM_FILL),
+        ("controlShadowColor", CONTROL_SHADOW),
+        ("controlDarkShadowColor", CONTROL_DARK_SHADOW),
+        ("controlHighlightColor", CONTROL_HIGHLIGHT),
+        ("controlLightHighlightColor", CONTROL_LIGHT_HIGHLIGHT),
+        ("systemRedColor", SYSTEM_RED),
+        ("systemOrangeColor", SYSTEM_ORANGE),
+        ("systemYellowColor", SYSTEM_YELLOW),
+        ("systemGreenColor", SYSTEM_GREEN),
+        ("systemMintColor", SYSTEM_MINT),
+        ("systemTealColor", SYSTEM_TEAL),
+        ("systemCyanColor", SYSTEM_CYAN),
+        ("systemBlueColor", SYSTEM_BLUE),
+        ("systemIndigoColor", SYSTEM_INDIGO),
+        ("systemPurpleColor", SYSTEM_PURPLE),
+        ("systemPinkColor", SYSTEM_PINK),
+        ("systemBrownColor", SYSTEM_BROWN),
+        ("systemGrayColor", SYSTEM_GRAY),
+    ];
+
+    /// The semantic colour with a catalogue name, as `NAMED` lists it (exact, case-sensitive match).
+    pub fn named(name: &str) -> Option<Pair> {
+        NAMED.iter().find(|(n, _)| *n == name).map(|&(_, p)| p)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn every_catalogue_name_resolves_and_names_are_unique() {
+            for (i, (name, pair)) in NAMED.iter().enumerate() {
+                assert_eq!(named(name), Some(*pair), "{name}");
+                assert!(NAMED[..i].iter().all(|(n, _)| n != name), "{name} listed twice");
+            }
+            assert_eq!(named("labelColor"), Some(LABEL));
+            assert_eq!(named("LabelColor"), None, "names match exactly");
+            assert_eq!(named("noSuchColor"), None);
+        }
+
+        #[test]
+        fn translucent_semantic_colours_are_premultiplied() {
+            for (name, p) in NAMED {
+                for c in [p.dark, p.light] {
+                    let a = c >> 24;
+                    for shift in [0, 8, 16] {
+                        assert!((c >> shift) & 255 <= a, "{name}: channel above alpha in {c:#010x}");
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn the_find_highlight_is_premultiplied_system_yellow_at_seventy_percent() {
+            // every use fills it source-over with a premultiplied colour (`Surface::fill_rrect`, `Canvas::fill_rrect`)
+            let unpack = |c: u32| [c as u8, (c >> 8) as u8, (c >> 16) as u8];
+            for (yellow, find) in [(SYSTEM_YELLOW.dark, FIND_HIGHLIGHT.dark), (SYSTEM_YELLOW.light, FIND_HIGHLIGHT.light)] {
+                let [r, g, b] = unpack(yellow);
+                assert_eq!(find, crate::gfx::rgba(r, g, b, 180), "{find:#010x}");
+            }
+            // over an opaque pixel the result stays opaque and shows the yellow
+            let mut px = [crate::gfx::pack(255, 255, 255, 255); 4];
+            let mut s = crate::gfx::Surface { w: 2, h: 2, stride: 2, px: &mut px, y0: 0 };
+            s.fill_rrect(0.0, 0.0, 2.0, 2.0, 0.0, FIND_HIGHLIGHT.light);
+            assert_eq!(px[0] >> 24, 255);
+            assert_eq!(px[0] & 0xff, 255, "white under yellow keeps full red");
+            assert!((px[0] >> 16) & 0xff < 255, "blue drops under yellow");
+        }
+
+        #[test]
+        fn the_fill_levels_step_down_and_follow_the_appearance() {
+            let fills = [SYSTEM_FILL, SECONDARY_SYSTEM_FILL, TERTIARY_SYSTEM_FILL, QUATERNARY_SYSTEM_FILL, QUINARY_SYSTEM_FILL];
+            assert!(fills.windows(2).all(|w| (w[0].light >> 24) > (w[1].light >> 24)));
+            for f in fills {
+                assert_eq!(f.light & 0x00ff_ffff, 0, "black in Light");
+                assert_eq!(f.dark & 0xff, f.dark >> 24, "white in Dark");
+            }
+            assert_eq!(ALTERNATING_CONTENT_BACKGROUNDS[0], CONTROL_BACKGROUND);
+            assert!(TEXT_INSERTION_POINT.follows_accent && !LINK.follows_accent);
+        }
+    }
 }
 
 // ---- Settings > Appearance preferences that every app can read ----
@@ -1133,6 +1343,8 @@ mod appearance_guard {
         ("shell/rotate.rs", "letterbox bars"),
         ("shell/mod.rs", "backdrop shown before an app's first frame"),
         ("shell/desk.rs", "desktop backdrop and dock placeholder tiles"),
+        ("shell/desk/dock.rs", "dock placeholder tile (the Apps grid tile behind its dots)"),
+        ("shell/desk/draw.rs", "fallback icon tile for an app without an icon"),
         ("shell/desktop_bar.rs", "blur base under translucent materials"),
         ("shell/camera/", "camera viewfinder is always black"),
         ("apps/photobooth-desktop/", "camera viewfinder is always black"),

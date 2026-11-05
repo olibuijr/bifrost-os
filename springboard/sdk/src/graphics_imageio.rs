@@ -1,5 +1,6 @@
 //! Image files for apps: recognise a format from its bytes, read the first image as pixels, and write pixels back out
-//! as PNG, JPEG, GIF, BMP, TIFF or ICO. The codecs are `bifrost_render::cg::imageio`. WebP is read only.
+//! as PNG, JPEG, GIF, BMP, TIFF, ICO or WebP. The codecs are `bifrost_render::cg::imageio`. WebP is read in every
+//! variant (lossy, lossless, animated) and written lossless.
 //!
 //! ```ignore
 //! let format = graphics_imageio::detect(&bytes); // Some(Format::Jpeg)
@@ -34,8 +35,8 @@ pub fn can_write(format: Format) -> bool {
     format.can_write()
 }
 
-/// Writes straight RGBA pixels as one image in `format`. `None` for WebP, for a pixel buffer whose length is not
-/// `width * height * 4`, or when the codec refuses the size.
+/// Writes straight RGBA pixels as one image in `format` (WebP lossless). `None` for a pixel buffer whose length is
+/// not `width * height * 4`, or when the codec refuses the size.
 pub fn encode(format: Format, width: usize, height: usize, rgba: &[u8]) -> Option<Vec<u8>> {
     encode_with(format, width, height, rgba, None)
 }
@@ -92,9 +93,12 @@ mod tests {
     }
 
     #[test]
-    fn webp_is_read_only() {
-        assert!(!can_write(Format::Webp));
-        assert!(encode(Format::Webp, 2, 1, &two_pixels()).is_none());
+    fn webp_is_written_lossless() {
+        assert!(can_write(Format::Webp));
+        let bytes = encode(Format::Webp, 2, 1, &two_pixels()).expect("webp encodes");
+        assert_eq!(detect(&bytes), Some(Format::Webp));
+        let img = decode(&bytes).expect("webp decodes");
+        assert_eq!(img.px, decode(&encode(Format::Png, 2, 1, &two_pixels()).unwrap()).unwrap().px, "lossless");
     }
 
     #[test]

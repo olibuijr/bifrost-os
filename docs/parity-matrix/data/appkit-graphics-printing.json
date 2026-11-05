@@ -3,16 +3,16 @@
  "doc": "https://developer.apple.com/documentation/appkit",
  "macos_since": "10.0",
  "status": "partial",
- "bifrost": "springboard/render/src/gfx.rs, springboard/render/src/ui.rs, springboard/render/src/imgdec.rs, springboard/ui/src/panels.rs, springboard/ui/src/print.rs, springboard/sdk/src/image_object.rs, springboard/sdk/src/color_list.rs",
- "summary": "Semantic colours, a colour panel, colour spaces and conversions, colour lists, PNG/JPEG decoding, an NSImage-style object with representations, template flag and resizable caps, procedural symbol glyphs, a software 2D Surface and CUPS printing exist. The kit does not yet draw NSImage objects in a tint, no colour picker uses colour lists, and the Page Setup sheet is missing; a shell print sheet with printer, paper, orientation, scale and copies rows exists.",
+ "bifrost": "springboard/render/src/gfx.rs, springboard/render/src/ui.rs, springboard/render/src/imgdec.rs, springboard/ui/src/panels.rs, springboard/ui/src/print.rs, springboard/sdk/src/image_object.rs, springboard/sdk/src/color_list.rs, springboard/ui/src/color_well.rs, springboard/ui/src/printer_caps.rs",
+ "summary": "Semantic colours (every catalogue name, measured from the reference appearance catalogues, with lookup by name), a colour panel with picker modes, mask, continuity and slider components, a colour well control with the shared-panel protocol and a colour-list swatch popover, colour spaces and lists, PNG/JPEG/GIF/TIFF and other codecs, an NSImage-style object with per-codec representations that draws itself in a tint, at an opacity and as nine slices, procedural symbol glyphs, a software 2D Surface and Canvas, and CUPS printing with printer device descriptions. Missing: on-screen colour well and pickers in the shell, the eyedropper, the Page Setup sheet, re-valued legacy colour pairs, the symbol catalogue.",
  "rea_evidence": "ev_c13e34ac0a796f139c7afc1ac6d88343b2a61a27ec40e0a76c53e92c372eebaf",
  "features": [
   {
    "feature": "Images and PDF: image objects and representations",
    "apple": "NSImage, NSImageRep, NSBitmapImageRep, NSPDFImageRep (https://developer.apple.com/documentation/appkit/images-and-pdf)",
-   "bifrost": "springboard/sdk/src/image_object.rs (ImageObject, ImageRep, ImageCatalog, tint_template); springboard/sdk/src/image_source.rs (representation); springboard/render/src/gfx.rs (Image); springboard/render/src/imgdec.rs; springboard/sdk/tests/parity_sdk-complete-09.rs",
+   "bifrost": "springboard/sdk/src/image_object.rs (ImageObject, ImageRep, ImageCatalog, tint_template); springboard/sdk/src/image_source.rs (representation); springboard/render/src/gfx.rs (Image); springboard/render/src/imgdec.rs; springboard/sdk/tests/parity_sdk-complete-09.rs; springboard/sdk/src/image_object.rs (ImageObject::draw, ImageRep::codec, frame_count, is_animated)",
    "status": "partial",
-   "note": "ImageObject holds bitmap and vector representations, picks the best one for a target size and scale, keeps a point size, a template flag and cap insets, and computes nine-slice layouts; ImageCatalog registers named images and tint_template draws a template in a tint, all tested headless in sdk/tests/parity_sdk-complete-09.rs. Gap: there are no representation classes per codec (no TIFF, GIF, WebP or HEIC rep), and the kit's image widgets do not yet use the tint; the drawn result needs Midget."
+   "note": "ImageObject holds bitmap and vector representations, picks the best one for a target size and scale, keeps a point size, a template flag and cap insets, and computes nine-slice layouts; ImageCatalog registers named images and tint_template draws a template in a tint, all tested headless in sdk/tests/parity_sdk-complete-09.rs. Gap: there are no representation classes per codec (no TIFF, GIF, WebP or HEIC rep), and the kit's image widgets do not yet use the tint; the drawn result needs Midget. Built 2026-10-24: ImageObject::draw draws the decoded pixels on any Canvas, a template as a mask in the context tint (opacity scales the mask), other images as themselves, and cap insets as nine slices; ImageRep records its codec (PNG, JPEG, GIF, BMP, ICO, TIFF, WebP) and frame count, and from_encoded gives icons and multi-page TIFFs one representation per image and animations one with their frames; pixel tests in image_object::tests. So the tint is drawn and codec representations exist. Still missing: file DPI (72 dpi kept), HEIC, and a kit widget that takes an ImageObject. Midget check: none visible yet; host tests."
   },
   {
    "feature": "Images and PDF: symbol images",
@@ -40,7 +40,7 @@
    "apple": "NSGraphicsContext, NSRectFill, NSBezierPath fill/stroke of rects and rounded rects",
    "bifrost": "springboard/render/src/gfx.rs (Surface, fill_rrect, rrect_coverage, Damage); springboard/render/src/clip.rs (ClipStack, fill_clipped); springboard/render/src/affine.rs (Affine, TransformStack); springboard/render/tests/parity_sdk-complete-09.rs",
    "status": "partial",
-   "note": "software Surface with rect, rounded rect, squircle masks and damage tracking; nested clip rectangles (ClipStack) and affine transforms with a save and restore stack (TransformStack) are tested headless. Gap: Surface draws take no clip or transform itself, so apps apply them before drawing, and clipping paths other than rectangles are not modelled."
+   "note": "software Surface with rect, rounded rect, squircle masks and damage tracking; nested clip rectangles (ClipStack) and affine transforms with a save and restore stack (TransformStack) are tested headless. Gap: Surface draws take no clip or transform itself, so apps apply them before drawing, and clipping paths other than rectangles are not modelled. Refreshed 2026-10-24: the Canvas trait over Surface (springboard/render/src/canvas.rs, push_clip, push_transform, push_opacity) does apply rounded-rect clips, transforms and opacity to every draw, so only clipping paths other than (rounded) rectangles remain unmodelled."
   },
   {
    "feature": "Drawing: Bezier paths, gradients, shadows",
@@ -73,23 +73,23 @@
   {
    "feature": "Color: semantic system colours",
    "apple": "NSColor named colours, systemRed..systemGray, labelColor, controlAccentColor",
-   "bifrost": "springboard/render/src/ui.rs (mod system), docs/bifrost-ui.md section NSColor semantic colours",
+   "bifrost": "springboard/render/src/ui.rs (mod system), docs/bifrost-ui.md section NSColor semantic colours; springboard/render/src/ui.rs (system::CONTROL ... QUINARY_SYSTEM_FILL, ALTERNATING_CONTENT_BACKGROUNDS, NAMED, named)",
    "status": "partial",
-   "note": "most named colours as light/dark Pairs; windowFrameColor, findHighlightColor and shadowColor added (WINDOW_FRAME, FIND_HIGHLIGHT, SHADOW; findHighlight values are an approximation to confirm on Midget); user accent colour not wired; remaining NSColor names missing built on parity/team-k-appkit-graphics-printing; not yet verified on Midget."
+   "note": "most named colours as light/dark Pairs; windowFrameColor, findHighlightColor and shadowColor added (WINDOW_FRAME, FIND_HIGHLIGHT, SHADOW; findHighlight values are an approximation to confirm on Midget); user accent colour not wired; remaining NSColor names missing built on parity/team-k-appkit-graphics-printing; not yet verified on Midget. Built 2026-10-24: the remaining names (control, control text, disabled control text, selected control and text, unemphasized selected text, keyboard focus indicator, text insertion point, header text, selected menu item text, highlight, window frame text, quinary label, the five system fills, alternating content backgrounds, control shadow and highlight edges) with values measured from the reference light and dark appearance catalogues, stored premultiplied, and system::named(name) / NAMED to look a dynamic colour up by its catalogue name; tests ui::system::tests. The user accent already feeds controlAccentColor (Pair::following_accent, ToApp::Appearance), so that gap was stale. FIND_HIGHLIGHT is premultiplied now (it drew too bright). Still missing: the existing pairs (labels, window background, link, the 26A434 system colours) differ from the measured values and were not re-valued (lead decision with a Midget comparison), and the focus ring does not take the accent. Midget check: none visible yet; the lead runs the render ui::system tests on the host."
   },
   {
    "feature": "Color: colour panel",
    "apple": "NSColorPanel, NSColorWell",
-   "bifrost": "springboard/ui/src/panels.rs (ColorPanel)",
+   "bifrost": "springboard/ui/src/panels.rs (ColorPanel); springboard/ui/src/panels.rs (PanelMode, PanelModes, set_mode, set_mask, shows_alpha, is_continuous, track_rgb, attach_color_list, components, set_component); springboard/ui/src/color_well.rs (ColorWell, WellStyle, ColorWells, SwatchGrid, draw_well)",
    "status": "parity",
-   "note": "verified on Midget 0.7.25 by 5 tests. RGB plus alpha model with change callback; no colour well control, no picker modes (wheel, sliders, palettes, crayons)"
+   "note": "verified on Midget 0.7.25 by 5 tests. RGB plus alpha model with change callback; no colour well control, no picker modes (wheel, sliders, palettes, crayons) Built 2026-10-24: picker modes with the reference raw values (none -1 ... crayon 7) and the picker mask (a hidden picker moves to the first allowed), showsAlpha (default off), isContinuous with drag steps, attached colour lists, and slider components for grey, RGB, CMYK and HSB; a colour well control in the default, minimal and expanded styles with exclusive and additive activation, panel changes reaching active wells, takeColorFrom and drops, style clicks (panel toggle, swatch popover, expanded panel button), the popover swatch grid and draw_well; tests panels::tests and color_well::tests. Still missing: no shell screen draws the pickers or hosts a well, crayon and custom palette pickers have no content, no eyedropper. Midget check: none visible yet; host tests."
   },
   {
    "feature": "Color: colour spaces and lists",
    "apple": "NSColorSpace, NSColorList, NSColorPicker, colour sampler",
-   "bifrost": "springboard/sdk/src/color_list.rs (ColorList, ColorLists); springboard/sdk/src/graphics_color.rs; springboard/sdk/tests/parity_sdk-complete-09.rs; springboard/sdk/src/color_list.rs (ColorList::system, swatches, apply_to_panel, to_text, from_text, ColorLists::standard)",
+   "bifrost": "springboard/sdk/src/color_list.rs (ColorList, ColorLists); springboard/sdk/src/graphics_color.rs; springboard/sdk/tests/parity_sdk-complete-09.rs; springboard/sdk/src/color_list.rs (ColorList::system, swatches, apply_to_panel, to_text, from_text, ColorLists::standard); springboard/sdk/src/color_list.rs (swatch_grid, pick_into_well)",
    "status": "partial",
-   "note": "Colour spaces and conversions are in graphics_color (bifrost_render::cg::color, ICC profiles for apps). ColorList and ColorLists add NSColorList: ordered named colours with a registry by name, and a colour can be moved to a new position; tested headless. Gap: no colour well or picker uses the lists and there is no eyedropper, which need the Midget display. Built 2026-10-19: the System list holds the 13 named system colours in their light or dark values and every registry can start with it (ColorLists::standard); swatches() gives a colour well its keys and 8-bit colours, and apply_to_panel(key, panel) sets the colour panel's colour and opacity as picking a swatch does; to_text and from_text save and read a list as a text file (damaged lines are skipped). Still missing: no colour well in the shell draws the swatches and there is no eyedropper. Midget check: no visible screen yet; the lead runs the sdk color_list tests on the host, and on Midget an app that opens the colour panel and calls ColorList::system(false).apply_to_panel(\"Green\", &mut panel) shows the panel on (52, 199, 89)."
+   "note": "Colour spaces and conversions are in graphics_color (bifrost_render::cg::color, ICC profiles for apps). ColorList and ColorLists add NSColorList: ordered named colours with a registry by name, and a colour can be moved to a new position; tested headless. Gap: no colour well or picker uses the lists and there is no eyedropper, which need the Midget display. Built 2026-10-19: the System list holds the 13 named system colours in their light or dark values and every registry can start with it (ColorLists::standard); swatches() gives a colour well its keys and 8-bit colours, and apply_to_panel(key, panel) sets the colour panel's colour and opacity as picking a swatch does; to_text and from_text save and read a list as a text file (damaged lines are skipped). Still missing: no colour well in the shell draws the swatches and there is no eyedropper. Midget check: no visible screen yet; the lead runs the sdk color_list tests on the host, and on Midget an app that opens the colour panel and calls ColorList::system(false).apply_to_panel(\"Green\", &mut panel) shows the panel on (52, 199, 89). Built 2026-10-24: a colour well popover takes its swatch grid from a list (swatch_grid) and picking a swatch sets the well, and the panel when the well is active (pick_into_well); the panel keeps attached list names (attach_color_list). Still missing: a shell-drawn well and popover, and the eyedropper."
   },
   {
    "feature": "Printing: print info and operation",
@@ -108,9 +108,9 @@
   {
    "feature": "Printing: printer discovery",
    "apple": "NSPrinter",
-   "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/printer_caps.rs; wired: springboard/src/shell/print_sheet.rs (printers and targets) over springboard/ui/src/print.rs, springboard/ui/src/printer_caps.rs (imageable_rect)",
+   "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/printer_caps.rs; wired: springboard/src/shell/print_sheet.rs (printers and targets) over springboard/ui/src/print.rs, springboard/ui/src/printer_caps.rs (imageable_rect); springboard/ui/src/printer_caps.rs (make_and_model, formats, resolutions, default_resolution, language_level, device_description, DeviceDescription)",
    "status": "partial",
-   "note": "cups::Client::printers() lists queues; get_printer_attributes() reads capabilities (printer_caps.rs: PWG paper list with PPD names, duplex, colour modes, default media, status and reasons, Letter/A4 fallback, hardware margins from media-*-margin-supported); paper_size_in_points and imageable_rect(name) give paperSize(forPaperName:) and the printable rect; print panel not yet using them; deviceDescription and languageLevel missing; verify on Midget for parity."
+   "note": "cups::Client::printers() lists queues; get_printer_attributes() reads capabilities (printer_caps.rs: PWG paper list with PPD names, duplex, colour modes, default media, status and reasons, Letter/A4 fallback, hardware margins from media-*-margin-supported); paper_size_in_points and imageable_rect(name) give paperSize(forPaperName:) and the printable rect; print panel not yet using them; deviceDescription and languageLevel missing; verify on Midget for parity. Built 2026-10-24: make and model (type), accepted document formats, resolutions in dpi (IPP resolution values, dots per centimetre converted) with a default, language_level (3 for a PostScript-capable queue, else 0) and device_description (printer, resolution, default paper size, RGB or grey, 8 bits per sample); tests printer_caps::tests. So deviceDescription and languageLevel are no longer missing. Still missing: the print sheet does not use the capability lists. Midget check: with a CUPS queue on Midget, Client::get_printer_attributes(name).device_description() reports the queue resolution."
   },
   {
    "feature": "Visual effect material catalogue and blending (sidebar, titlebar, menu, popover, HUD, sheet, header, window and content backgrounds; behind- and within-window)",
@@ -128,10 +128,10 @@
   }
  ],
  "gaps": [
-  "Page Setup and accessory views: the shell print sheet has printer, paper, orientation, scale and copies rows, but no page layout panel and no accessory view controllers (print_panel.rs PageSetup is a model only).",
-  "NSImage drawing in the kit: image widgets do not draw an ImageObject in a tint yet (tint_template exists in image_object.rs), and there are no per-codec representation classes (TIFF, GIF, WebP, HEIC).",
-  "Colour well and picker modes that use colour lists",
-  "User accent colour feeding controlAccentColor; remaining NSColor names",
-  "Symbol catalogue beyond the 59 procedural glyphs"
+  "Page Setup and accessory views: the shell print sheet has printer, paper, orientation, scale, copies, pages, sides and colour rows, but no page layout panel and no accessory view controllers (print_panel.rs PageSetup is a model only); the sheet does not read the printer capability lists.",
+  "Colour well and pickers on screen: the well, picker modes and colour-list popover are models with drawing (ui/src/color_well.rs, ui/src/panels.rs), but no shell screen hosts them; no eyedropper; crayon and custom palette pickers have no content.",
+  "Semantic colour values: every name exists (render/src/ui.rs system::NAMED), but the older pairs (labels, window background, link, system colours) differ from the measured 26A434 values and await a lead re-valuing decision.",
+  "Images: file DPI, HEIC and a kit widget that takes an ImageObject.",
+  "Symbol catalogue beyond the procedural glyphs; clipping paths other than rounded rectangles."
  ]
 }

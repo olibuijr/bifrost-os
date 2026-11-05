@@ -1,5 +1,5 @@
 //! Streamed answers and the availability text for views that show a language model session (the part of
-//! `LanguageModelSession` a window or a SwiftUI-style view binds to: partial text while the model answers, a way to
+//! `LanguageModelSession` a window or a declarative-style view binds to: partial text while the model answers, a way to
 //! stop it, and a plain sentence when no model can run).
 //!
 //! - [`StreamingModelProvider`] is a [`ModelProvider`] that can hand over its answer in pieces. A provider that cannot

@@ -4639,7 +4639,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/ui/src/textbreak.rs; springboard/ui/src/language.rs; springboard/ui/src/lexical_tags.rs; springboard/ui/src/embedding.rs; springboard/ui/src/text_classifier.rs; springboard/ui/src/detect.rs; springboard/core/src/spellcheck.rs; springboard/sdk/src/embedding.rs",
+   "bifrost": "springboard/render/src/textbreak.rs; springboard/ui/src/language.rs; springboard/ui/src/lexical_tags.rs; springboard/ui/src/embedding.rs; springboard/ui/src/text_classifier.rs; springboard/ui/src/detect.rs; springboard/core/src/spellcheck.rs; springboard/sdk/src/embedding.rs",
    "status": "parity",
    "note": "The reference's natural language runtime (quantized per-script models, a dependency parser and tokenizer rules) is the counterpart of the NaturalLanguage row. BifrOSt covers token splitting, grapheme and line-break segmentation, language and script identification, rule-based lexical tagging, word and sentence embeddings, a trainable text classifier, spell checking and pattern-based data detection. The espresso weight files and parser models in the bundle are Apple ML model packs and are not mirrored. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],

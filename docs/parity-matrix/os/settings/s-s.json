@@ -791,7 +791,7 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/spotlight_scope.rs, springboard/src/shell/pages.rs, springboard/src/shell/quicksearch.rs",
+   "bifrost": "springboard/src/shell/search_scope.rs, springboard/src/shell/pages.rs, springboard/src/shell/quicksearch.rs",
    "status": "parity",
    "note": "has: search and index (quicksearch.rs); missing: a Spotlight settings page with indexed locations Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],

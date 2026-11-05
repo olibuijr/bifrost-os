@@ -8,7 +8,9 @@
 //! for the items the ranker does not score.
 //!
 //! Ranking: the query is split into words (`bifrost_ui::lexical_tags::words`) and every word must match an item
-//! (case and accent folded; prefix, word start or subsequence, see `super::fuzzy`). A title match outranks a keyword
+//! (case and accent folded, see `super::fuzzy`). Every field, the title (a mail subject) as well as the keywords and
+//! the description (a mail body, a note's text), counts only a prefix, a word start or a contiguous run, never letters
+//! scattered over the text, so a result always shows why it matched. A title match outranks a keyword
 //! match, which outranks a description match; then an item in the query's language (`bifrost_ui::language`) ranks
 //! above one in another language; then shorter matches; then the newest item.
 //! Expiry: an item can carry a Unix time after which it is dropped (`CSSearchableItem.expirationDate`), set through the
@@ -152,8 +154,120 @@ fn kind_of(url: &str) -> Option<&'static str> {
     }
 }
 
+/// Decodes the RFC 2047 encoded words (`=?utf-8?Q?=C3=86fing?=`, B and Q encodings in any case) of a title or a
+/// description an app indexed, so a mail subject donated as its raw header reads as text in Search. Whitespace between
+/// two encoded words is dropped and adjacent words of one charset are decoded together (a letter split across them
+/// comes out whole). UTF-8, US-ASCII and ISO-8859-1 (also for Windows-1252, whose 0x80 to 0x9f letters it cannot name)
+/// are read; a malformed word or another charset stays as written.
+pub fn decode_encoded_words(value: &str) -> String {
+    if !value.contains("=?") {
+        return value.to_string();
+    }
+    // the encoded words read since the last plain text: (charset, bytes, raw text)
+    let mut run: Option<(String, Vec<u8>, String)> = None;
+    // whitespace read after the last encoded word of `run`
+    let mut gap = String::new();
+    let mut out = String::new();
+    let flush = |out: &mut String, run: Option<(String, Vec<u8>, String)>| {
+        if let Some((charset, bytes, raw)) = run {
+            out.push_str(&decode_charset(&charset, &bytes).unwrap_or(raw));
+        }
+    };
+    let mut i = 0;
+    while i < value.len() {
+        let rest = &value[i..];
+        if let Some((len, charset, bytes)) = rest.starts_with("=?").then(|| parse_encoded_word(rest)).flatten() {
+            let raw = &rest[..len];
+            match run.as_mut() {
+                Some((cs, b, r)) if cs.eq_ignore_ascii_case(&charset) => {
+                    b.extend(bytes);
+                    r.push_str(&gap);
+                    r.push_str(raw);
+                }
+                _ => {
+                    flush(&mut out, run.take());
+                    run = Some((charset, bytes, raw.to_string()));
+                }
+            }
+            gap.clear();
+            i += len;
+            continue;
+        }
+        let Some(c) = rest.chars().next() else { break };
+        i += c.len_utf8();
+        if run.is_some() && c.is_whitespace() {
+            gap.push(c);
+            continue;
+        }
+        flush(&mut out, run.take());
+        out.push_str(&gap);
+        gap.clear();
+        out.push(c);
+    }
+    flush(&mut out, run.take());
+    out.push_str(&gap);
+    out
+}
+
+/// The encoded word that starts `s`: (bytes it takes, charset, decoded bytes). `None` when `s` does not start with a
+/// well-formed one.
+fn parse_encoded_word(s: &str) -> Option<(usize, String, Vec<u8>)> {
+    let rest = s.strip_prefix("=?")?;
+    let (charset, rest) = rest.split_once('?')?;
+    let (encoding, rest) = rest.split_once('?')?;
+    let end = rest.find("?=")?;
+    let text = &rest[..end];
+    if charset.is_empty() || charset.contains(char::is_whitespace) || text.contains(char::is_whitespace) {
+        return None;
+    }
+    let bytes = match encoding {
+        "B" | "b" => bifrost_core::plist::base64_decode(text)?,
+        "Q" | "q" => q_decode(text)?,
+        _ => return None,
+    };
+    Some((2 + charset.len() + 1 + encoding.len() + 1 + end + 2, charset.to_string(), bytes))
+}
+
+/// The bytes of a Q-encoded text: `_` is a space and `=XX` a byte. `None` for an `=` without two hex digits.
+fn q_decode(text: &str) -> Option<Vec<u8>> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'_' => out.push(b' '),
+            b'=' => {
+                let hex = bytes.get(i + 1..i + 3)?;
+                if !hex.iter().all(u8::is_ascii_hexdigit) {
+                    return None;
+                }
+                out.push(u8::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok()?);
+                i += 2;
+            }
+            b => out.push(b),
+        }
+        i += 1;
+    }
+    Some(out)
+}
+
+/// The text of `bytes` in `charset` (an RFC 2231 language suffix, `utf-8*is`, is ignored). `None` for a charset this
+/// cannot read or bytes that are not valid in it.
+fn decode_charset(charset: &str, bytes: &[u8]) -> Option<String> {
+    let name = charset.split('*').next().unwrap_or("").to_ascii_lowercase();
+    match name.as_str() {
+        "utf-8" | "utf8" => String::from_utf8(bytes.to_vec()).ok(),
+        "us-ascii" | "ascii" => bytes.is_ascii().then(|| bytes.iter().map(|&b| b as char).collect()),
+        "iso-8859-1" | "iso8859-1" | "iso_8859-1" | "latin1" | "l1" | "windows-1252" | "cp1252" => Some(bytes.iter().map(|&b| b as char).collect()),
+        _ => None,
+    }
+}
+
 impl Entry {
-    fn new(item: SearchableItem, indexed: u64) -> Entry {
+    fn new(mut item: SearchableItem, indexed: u64) -> Entry {
+        // a mail subject may come as its raw header; it is searched and shown decoded (stored entries are decoded on load)
+        item.title = decode_encoded_words(&item.title);
+        item.description = decode_encoded_words(&item.description);
         let text = format!("{} {} {}", item.title, item.keywords.join(" "), item.description);
         Entry {
             title_folded: super::fuzzy::fold(&item.title),
@@ -173,13 +287,49 @@ impl Entry {
 fn score(words: &[Matcher], e: &Entry, query_lang: Option<Language>) -> Option<(u8, u8, bool, usize)> {
     let (mut field, mut kind, mut len) = (0u8, 0u8, 0usize);
     for w in words {
-        let (f, r) = [(0u8, &e.title_folded), (1, &e.keywords_folded), (2, &e.desc_folded)].into_iter().filter_map(|(f, text)| w.rank_folded(text).map(|r| (f, r))).min()?;
+        let (f, r) = [(0u8, &e.title_folded), (1, &e.keywords_folded), (2, &e.desc_folded)].into_iter().filter_map(|(f, text)| field_rank(w, text).map(|r| (f, r))).min()?;
         field = field.max(f);
         kind += r.kind as u8;
         len += r.len;
     }
     let other_language = matches!((query_lang, e.lang), (Some(q), Some(l)) if q != l);
     Some((field, kind, other_language, len))
+}
+
+/// How word `w` matches one field of an indexed item (title, keywords or description): only by a prefix, a word start
+/// or a contiguous run. Scattered letters never count, not even in a title: a mail subject is a sentence that holds
+/// almost any short word's letters ("lantern" in "vuLnerAbility iN The nEws, youR moNey"). Apps keep their fuzzy name
+/// matching in Search itself (`quicksearch`); this ranks only what apps indexed.
+fn field_rank(w: &Matcher, text: &str) -> Option<super::fuzzy::Rank> {
+    let r = w.rank_folded(text)?;
+    (r.kind != super::fuzzy::Kind::Subsequence || text.contains(w.query())).then_some(r)
+}
+
+/// Words of context shown before the matched word in a description snippet, and the most words a snippet has.
+const SNIPPET_BEFORE: usize = 4;
+const SNIPPET_WORDS: usize = 14;
+
+/// The part of `description` around the first word that a query word matches (prefix or contiguous run, folded), with
+/// an ellipsis where text was cut; empty when no word of it matches. What a result row shows when the match is in the
+/// body rather than the title.
+fn snippet(words: &[Matcher], description: &str) -> String {
+    let all: Vec<&str> = description.split_whitespace().collect();
+    let Some(at) = all.iter().position(|word| {
+        let folded = super::fuzzy::fold(word);
+        words.iter().any(|w| !w.query().is_empty() && folded.contains(w.query()))
+    }) else {
+        return String::new();
+    };
+    let start = at.saturating_sub(SNIPPET_BEFORE);
+    let end = (start + SNIPPET_WORDS).min(all.len());
+    let mut out = all[start..end].join(" ");
+    if start > 0 {
+        out.insert_str(0, "\u{2026}");
+    }
+    if end < all.len() {
+        out.push('\u{2026}');
+    }
+    out
 }
 
 /// A search result.
@@ -197,6 +347,9 @@ pub struct Found {
     pub text: String,
     /// Unix seconds the item was indexed (or last replaced); 0 when unknown
     pub modified: u64,
+    /// the description text around the match when the title does not match the query (a mail found by its body); empty
+    /// when the title matches or the match is only in the keywords
+    pub snippet: String,
 }
 
 /// The entries a word query matched, and the query they matched for. A query whose words extend these (more typing)
@@ -361,7 +514,9 @@ impl Index {
                 let (app, list) = lists[ai];
                 let e = &list[ei];
                 let text = format!("{} {}", e.item.keywords.join(" "), e.item.description);
-                Found { app_id: app.to_string(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone(), kind: e.kind, thumbnail: e.item.thumbnail.clone(), text, modified: e.indexed }
+                let title_matches = !words.is_empty() && words.iter().all(|w| w.rank_folded(&e.title_folded).is_some());
+                let snippet = if title_matches || words.is_empty() { String::new() } else { snippet(&words, &e.item.description) };
+                Found { app_id: app.to_string(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone(), kind: e.kind, thumbnail: e.item.thumbnail.clone(), text, modified: e.indexed, snippet }
             })
             .collect()
     }
@@ -1189,6 +1344,22 @@ mod tests {
         SearchableItem { unique_id: id.into(), domain: domain.into(), title: title.into(), description: desc.into(), keywords: kw.iter().map(|s| s.to_string()).collect(), ..Default::default() }
     }
 
+    /// E2E9 3: a mail subject indexed as its raw RFC 2047 header is shown and found decoded.
+    #[test]
+    fn encoded_words_in_an_indexed_title_are_decoded() {
+        assert_eq!(decode_encoded_words("=?utf-8?Q?=C3=86fingasv=C3=A6=C3=B0i?="), "Æfingasvæði");
+        assert_eq!(decode_encoded_words("=?UTF-8?B?w4Z2aW50w70=?= og =?iso-8859-1?q?f=E6ri?="), "Ævintý og færi");
+        assert_eq!(decode_encoded_words("=?utf-8?Q?=C3?= =?utf-8?Q?=86_b?="), "Æ b", "a letter split across two words, the gap dropped");
+        assert_eq!(decode_encoded_words("Re: =?utf-8?q?hall=C3=B3?= vinur"), "Re: halló vinur");
+        assert_eq!(decode_encoded_words("plain = text ?= here"), "plain = text ?= here");
+        assert_eq!(decode_encoded_words("=?x-unknown?Q?abc?= =?utf-8?Q?=ZZ?="), "=?x-unknown?Q?abc?= =?utf-8?Q?=ZZ?=", "unreadable words stay as written");
+        let mut ix = Index::default();
+        ix.index("is.olibuijr.mail.desktop", vec![it("m1", "mail", "=?utf-8?Q?=C3=86fingasv=C3=A6=C3=B0i?=", "Ana", &[])]);
+        let found = ix.search("aefingasv", 5);
+        let found = if found.is_empty() { ix.search("æfingasv", 5) } else { found };
+        assert_eq!(found.first().map(|f| f.title.as_str()), Some("Æfingasvæði"));
+    }
+
     #[test]
     fn a_file_becomes_an_item_with_its_imported_metadata() {
         let dir = std::env::temp_dir().join(format!("bifrost-spot-file-{}", std::process::id()));
@@ -1255,6 +1426,59 @@ mod tests {
         }
         assert_eq!(scan_folder("Documents", &many).len(), SCAN_MAX_FILES);
         let _ = std::fs::remove_dir_all(&many);
+    }
+
+    /// E2E10 11: mails listed for "glacier" showed no match; letters scattered over a body no longer count, and a body
+    /// match shows the text around it.
+    #[test]
+    fn a_body_match_needs_the_word_and_shows_a_snippet() {
+        let mut ix = Index::default();
+        let body = "Hello Ana, we met at the conference last spring and I wanted to ask about the glacier tour you mentioned on Friday evening";
+        ix.index(
+            "mail",
+            vec![
+                it("scattered", "", "Familienforschung", "gestern las ich alle Akten, cirka einhundert Eintraege, ohne Resultat", &[]),
+                it("body", "", "Ny bokunarsida", body, &[]),
+                it("title", "", "Glacier walk", "booking", &[]),
+            ],
+        );
+        let found = ix.search("glacier", 10);
+        let ids: Vec<&str> = found.iter().map(|f| f.unique_id.as_str()).collect();
+        assert_eq!(ids, ["title", "body"], "scattered letters in a body are not a match");
+        assert_eq!(found[0].snippet, "", "a title match needs no snippet");
+        assert_eq!(found[1].snippet, "\u{2026}to ask about the glacier tour you mentioned on Friday evening");
+        assert!(ix.search("lacie", 10).iter().any(|f| f.unique_id == "body"), "a contiguous run inside a word still matches");
+    }
+
+    /// E2E11 4: "lantern" listed "PHP vulnerability in the news: your money is safe" and "glacier" a Polish genealogy
+    /// subject, both by letters scattered over the subject; a title now needs the word as well.
+    #[test]
+    fn a_title_match_needs_the_word_not_scattered_letters() {
+        let mut ix = Index::default();
+        ix.index(
+            "mail",
+            vec![
+                it("php", "", "PHP vulnerability in the news: your money is safe", "", &[]),
+                it("pl", "", "Kwerenda genealogiczna \u{2013} akty urodzenia: Agnes", "", &[]),
+                it("lamp", "", "The lantern festival", "", &[]),
+                it("mid", "", "Glacierwalk tickets", "", &[]),
+            ],
+        );
+        let ids = |q: &str| -> Vec<String> { ix.search(q, 10).into_iter().map(|f| f.unique_id).collect() };
+        assert_eq!(ids("lantern"), ["lamp"], "scattered letters in a subject are not a match");
+        assert_eq!(ids("glacier"), ["mid"], "a prefix of a title word still matches");
+        assert_eq!(ids("walk"), ["mid"], "a contiguous run inside a title word still matches");
+        assert_eq!(ids("fest"), ["lamp"]);
+    }
+
+    #[test]
+    fn a_snippet_cuts_long_text_on_both_sides() {
+        let words = [Matcher::new("needle")];
+        let text = (0..40).map(|i| if i == 20 { "Needle".to_string() } else { format!("w{i}") }).collect::<Vec<_>>().join(" ");
+        let s = snippet(&words, &text);
+        assert!(s.starts_with("\u{2026}w16 ") && s.ends_with("w29\u{2026}"), "{s}");
+        assert_eq!(snippet(&words, "needle at the start"), "needle at the start");
+        assert_eq!(snippet(&words, "no match here"), "");
     }
 
     #[test]

@@ -13,8 +13,8 @@ use bifrost_app::layout::UNIFIED_BAR_PT;
 const STRIP_TOP: f32 = 96.0;
 pub(super) const STRIP_H: f32 = 24.0;
 /// The alert's buttons.
-const ASK_CLEAR: u32 = 1;
-const ASK_CANCEL: u32 = 2;
+pub(super) const ASK_CLEAR: u32 = 1;
+pub(super) const ASK_CANCEL: u32 = 2;
 /// Extra touch room around the strip's links (points).
 const SLOP: f32 = 6.0;
 /// " • " between the count and Clear.
@@ -105,14 +105,35 @@ impl Reminders {
         s.fill_rrect(ui.pt(SPACE_XL), p.y + p.h - hair, self.w as f32 - ui.pt(SPACE_HUGE), hair, 0.0, SEPARATOR_C.now());
     }
 
-    /// The Clear alert while it is up.
+    /// The Clear alert while it is up (or Recently Deleted's purge alert, `purge.rs`, which shares its buttons).
     pub(super) fn clear_sheet(&self) -> Option<Sheet> {
+        if self.purge_ask.is_some() {
+            return self.purge_sheet();
+        }
         if !self.clear_ask {
             return None;
         }
         let n = self.completed_in_list();
         let buttons = vec![SheetButton::new(ASK_CLEAR, "Clear", ButtonRole::Default), SheetButton::new(ASK_CANCEL, "Cancel", ButtonRole::Cancel)];
-        Some(Sheet::alert(&clear_question(n), "They are removed from this list. Edit > Undo puts them back.", buttons))
+        Some(Sheet::alert(&clear_question(n), "They are removed from this list. Edit > Undo puts them back.", buttons).with_focus(self.ask_focus))
+    }
+
+    /// A key press while the Clear or purge alert is up, through the kit's sheet keys (`Sheet::handle_key`): Return
+    /// presses the default Clear (the purge alert's Delete is destructive, so never Return), Escape and Cmd+. cancel,
+    /// Cmd+D presses a plain Delete, Tab moves the focus ring (drawn on the button) and Space presses the focused one.
+    /// The alert takes every key. True when a frame is needed.
+    pub(super) fn ask_key(&mut self, ui: &Ui, key: &bifrost_app::KeyInput, t: f64) -> bool {
+        use bifrost_app::document::{sheet_key, AlertKey};
+        let Some(mut sheet) = self.clear_sheet() else { return false };
+        match sheet_key(&mut sheet, key) {
+            AlertKey::Answer(ASK_CLEAR) if self.purge_ask.is_some() => self.activate(ui, Target::PurgeConfirm, t),
+            AlertKey::Answer(ASK_CLEAR) => self.activate(ui, Target::ClearConfirm, t),
+            AlertKey::Answer(_) => self.activate(ui, Target::ClearCancel, t),
+            AlertKey::Focus => self.ask_focus = sheet.focus,
+            AlertKey::Ignored => return false,
+        }
+        self.dirty = true;
+        true
     }
 
     /// The window in points (the sheet's parent) and its title bar's height.
@@ -127,6 +148,7 @@ impl Reminders {
         let (parent, bar) = self.sheet_parent(ui);
         let k = ui.pt(1.0);
         match sheet.hit(parent, bar, 1.0, x / k, y / k) {
+            Hit::Button(ASK_CLEAR) if self.purge_ask.is_some() => Some(Target::PurgeConfirm),
             Hit::Button(ASK_CLEAR) => Some(Target::ClearConfirm),
             Hit::Button(_) => Some(Target::ClearCancel),
             _ => None,

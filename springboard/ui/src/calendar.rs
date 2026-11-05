@@ -94,7 +94,7 @@ pub struct MiniMonth {
     /// `(day, cell)` for every day of the month.
     pub days: Vec<(u32, Rect)>,
     /// The previous month's last days before the 1st and the next month's first days after the last, filling the six
-    /// rows (`NSDatePicker` shows them greyed, and a click on one goes to that day): `(date, cell)` in display order.
+    /// rows (the reference date picker shows them greyed, and a click on one goes to that day): `(date, cell)` in display order.
     pub outside: Vec<(Date, Rect)>,
 }
 

@@ -17,7 +17,7 @@ mod sheet;
 
 use super::cache::TextCache;
 use super::glyphs::{arc, disc, paint, ring, segment};
-use super::ui::{home_zone, Ui, Weight, CARD_RADIUS_PT, CAPSULE_RADIUS, SECONDARY, STORY_HUES, TINT, WHITE};
+use super::ui::{home_zone, Ui, Weight, CARD_RADIUS_PT, CAPSULE_RADIUS, SECONDARY, STORY_HUES, TINT, accent_now, WHITE};
 use super::ui::{CONTENT_BG, CARD_BG, SEPARATOR_C, LABEL, FIELD_BG, MATERIAL_HUD_SOLID, MATERIAL_TITLEBAR_SOLID};
 use super::keyboard::Out;
 use super::Event;
@@ -57,6 +57,40 @@ const SHOTS_PT: f32 = 276.0;
 fn icon_due(failed_at: Option<f64>, t: f64) -> bool {
     failed_at.is_none_or(|at| t - at >= ICON_RETRY_MS)
 }
+
+/// Where the store keeps an app's icon once it has loaded: `<root>/icon-cache/<id>.png`, so a fetch that fails
+/// later (no network yet, a slow server) still shows the real icon instead of a letter tile.
+fn icon_cache_path(root: &std::path::Path, id: &str) -> PathBuf {
+    let safe: String = id.chars().map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '_' }).collect();
+    root.join("icon-cache").join(format!("{safe}.png"))
+}
+
+/// An app's icon from disk: the installed copy first, then the copy cached from an earlier download, with `true` when
+/// it came from the cache (which the catalogue may have changed since). Read and decoded on a store worker ahead of
+/// any download, never on the UI thread, so the icons appear a moment after opening instead of letter tiles while the
+/// network catches up (E2E11 9). Each source must decode before it counts, so a damaged installed icon falls through
+/// to the cache.
+fn local_icon(local: Option<&std::path::Path>, cache: &std::path::Path) -> Option<(Image, bool)> {
+    let decode = |b: &[u8]| crate::cg::imageio::decode(b);
+    local
+        .filter(|p| p.is_file())
+        .and_then(|p| std::fs::read(p).ok())
+        .and_then(|b| decode(&b))
+        .map(|img| (img, false))
+        .or_else(|| std::fs::read(cache).ok().and_then(|b| decode(&b)).map(|img| (img, true)))
+}
+
+/// An icon that is on disk nowhere: the catalogue's download, written to `cache` once it decodes so the next
+/// opening paints it at once. An undecodable or failed download leaves the cache alone.
+fn fetch_icon(fetch: impl FnOnce() -> Option<Vec<u8>>, cache: &std::path::Path) -> Option<Image> {
+    let bytes = fetch()?;
+    let img = crate::cg::imageio::decode(&bytes)?;
+    if let Some(dir) = cache.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(cache, &bytes);
+    Some(img)
+}
 /// Height of one line of release notes under an update row.
 const NOTE_LINE: f32 = 18.0;
 const TODAY_HEAD: f32 = 127.0;
@@ -70,6 +104,19 @@ fn bg() -> u32 { CONTENT_BG.now() }
 const REVIEWS_FILE: &str = "store-reviews.json";
 
 fn cell() -> u32 { CARD_BG.now() }
+
+/// Paints the desktop sidebar column as Settings does: with behind-window vibrancy the premultiplied translucent
+/// `MATERIAL_SIDEBAR` tint is written over the pixels (not blended, so the frame keeps its alpha and the presenter
+/// blurs the desktop under the `.sidebar` material the shell declares, `take_wayland_materials`), else opaque.
+fn sidebar_fill(s: &mut Surface, w: usize, h: usize) {
+    let c = if super::apphost::vibrancy_available() {
+        let c = super::ui::MATERIAL_SIDEBAR.now();
+        rgba((c & 255) as u8, (c >> 8 & 255) as u8, (c >> 16 & 255) as u8, (c >> 24) as u8)
+    } else {
+        cell()
+    };
+    s.fill_rect(0, 0, w, h, c);
+}
 fn fill() -> u32 { FIELD_BG.now() }
 fn sep() -> u32 { SEPARATOR_C.now() }
 fn label() -> u32 { LABEL.now() }
@@ -140,6 +187,48 @@ const SIDE_ROWS_Y: f32 = 88.0;
 const SIDE_ROW_H: f32 = 36.0;
 const SIDE_ACCOUNT_H: f32 = 56.0;
 const SIDE_INSET: f32 = 10.0;
+
+/// The desktop window is full-size (its sidebar runs to the top edge under the traffic lights): the pane's content
+/// starts under the unified toolbar band, where the back control sits (`super::desk::UNIFIED_BAR_PT`).
+const DESKTOP_BAR_PT: f32 = super::desk::UNIFIED_BAR_PT;
+/// How wide a press on the pane's back control may be (pt from the pane's left edge).
+const BACK_HIT_PT: f32 = 140.0;
+
+thread_local! {
+    /// The width (pt from the pane's left edge) of the back control the desktop window last drew in its toolbar band,
+    /// 0 while no page is open and so no back control is shown. `draw_bars` keeps it; the shell's drag zone reads it
+    /// (`back_control_pt`), so the band only stops dragging where the back control is.
+    static BACK_SHOWN_PT: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
+}
+
+/// The width (pt) of the back control in the desktop window's toolbar band, 0 when none is shown.
+pub fn back_control_pt() -> f32 {
+    BACK_SHOWN_PT.with(|c| c.get())
+}
+
+pub(super) fn set_back_control_pt(w: f32) {
+    BACK_SHOWN_PT.with(|c| c.set(w.max(0.0)));
+}
+
+/// The sidebar width (px) of a desktop App Store window `w` px wide at `pt` px per point.
+fn sidebar_px(w: i32, pt: f32) -> i32 {
+    ((200.0 * pt) as i32).min(w / 3)
+}
+
+/// The desktop window's controls in its unified toolbar band, in window points, as the shell's drag zone needs them:
+/// the sidebar's search capsule and, while a page is open, the pane's back control (`back_pt` wide from the pane's
+/// left edge, `back_control_pt`; 0 when none is shown). The rest of the band moves the window.
+pub fn toolbar_controls(w_px: i32, pt: f32, back_pt: f32) -> Vec<bifrost_proto::Node> {
+    use bifrost_proto::{Node, Role};
+    let pt = pt.max(0.01);
+    let side = sidebar_px(w_px, pt) as f32 / pt;
+    let node = |id, role, label: &str, bounds| Node { id, role, label: label.into(), value: String::new(), bounds, enabled: true };
+    let mut controls = vec![node(1, Role::TextField, "Search", bifrost_ui::Rect { x: SIDE_INSET, y: SIDE_SEARCH_Y, w: (side - 2.0 * SIDE_INSET).max(0.0), h: SIDE_SEARCH_H })];
+    if back_pt > 0.0 {
+        controls.push(node(2, Role::Button, "Back", bifrost_ui::Rect { x: side, y: 0.0, w: back_pt.min(BACK_HIT_PT), h: DESKTOP_BAR_PT }));
+    }
+    controls
+}
 
 /// What a click in the desktop sidebar lands on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -266,6 +355,8 @@ pub fn button_for(a: &StoreApp, installed: Option<&str>, shell: u32) -> Btn {
 enum Done {
     Catalog(Result<Vec<StoreApp>, String>),
     Icon { id: String, image: Option<Image> },
+    /// an icon read from disk on a worker ([`local_icon`]); `url` and `cache` are what a download would need
+    LocalIcon { id: String, image: Option<Image>, from_cache: bool, url: String, cache: PathBuf },
     Shot { url: String, image: Option<Image> },
     Installed { id: String, result: Result<InstalledApp, String> },
 }
@@ -312,6 +403,8 @@ pub struct AppStore {
     icon_pending: HashSet<String>,
     /// when each icon that would not load failed (the clock of `maintain`)
     icon_failed: HashMap<String, f64>,
+    /// icons painted from the cache whose catalogue copy has been fetched again this session (once each)
+    icon_revalidated: HashSet<String>,
     /// the last time `maintain` ran
     clock: f64,
     jobs: HashMap<String, Job>,
@@ -391,7 +484,7 @@ impl AppStore {
         let installed = install::installed_in(&root);
         let reviews = bifrost_core::app_review::ReviewBook::from_text(&std::fs::read_to_string(root.join(REVIEWS_FILE)).unwrap_or_default());
         let desktop = true;
-        let sidebar = if desktop { (ui.pt(200.0) as i32).min(w / 3) } else { 0 };
+        let sidebar = if desktop { sidebar_px(w, ui.pt(1.0)) } else { 0 };
         AppStore {
             desktop,
             sidebar,
@@ -412,6 +505,7 @@ impl AppStore {
             icon_px: HashMap::new(),
             icon_pending: HashSet::new(),
             icon_failed: HashMap::new(),
+            icon_revalidated: HashSet::new(),
             clock: 0.0,
             jobs: HashMap::new(),
             coord: coordination::Coordinator::new(coordination::current_uid()),
@@ -443,7 +537,7 @@ impl AppStore {
     }
 
     pub fn set_size(&mut self, ui: &Ui, w: i32, h: i32) {
-        self.sidebar = if self.desktop { (ui.pt(200.0) as i32).min(w / 3) } else { 0 };
+        self.sidebar = if self.desktop { sidebar_px(w, ui.pt(1.0)) } else { 0 };
         self.w = (w - self.sidebar).max(1);
         self.h = h.max(1);
         self.fit_scroll(ui);
@@ -703,18 +797,21 @@ impl AppStore {
                 }
                 Done::Icon { id, image } => {
                     self.icon_pending.remove(&id);
-                    self.icon_px.retain(|(i, _), _| *i != id);
                     match image {
                         Some(img) => {
+                            self.icon_px.retain(|(i, _), _| *i != id);
                             self.icon_failed.remove(&id);
                             self.icons.insert(id, Some(img));
                         }
+                        // a revalidation that failed keeps the cached icon and is not retried
+                        None if self.icons.contains_key(&id) => {}
                         // not cached as missing: it is asked for again after ICON_RETRY_MS
                         None => {
                             self.icon_failed.insert(id, self.clock);
                         }
                     }
                 }
+                Done::LocalIcon { id, image, from_cache, url, cache } => self.local_icon_done(id, image, from_cache, url, cache),
                 // a cancelled job was already removed; a newer job for the same app must stay
                 Done::Installed { result: Err(e), .. } if e == install::CANCELLED => {}
                 Done::Installed { id, result } => {
@@ -800,17 +897,65 @@ impl AppStore {
                 continue;
             }
             let local = self.installed.iter().find(|i| i.id == id).map(|i| i.icon_path.clone());
+            // the catalogue's URL for this id (an installed app's own row carries none)
+            let url = if icon.is_empty() { self.catalog.iter().find(|a| a.id == id).map(|a| a.icon.clone()).unwrap_or_default() } else { icon };
+            let cache = icon_cache_path(&self.root, &id);
+            let Some(p) = &self.pool else {
+                // no workers: nothing reads the disk or the network, so the letter tile stays until the retry
+                self.icon_failed.insert(id, t);
+                continue;
+            };
+            // the installed or cached icon is read and decoded on a worker, ahead of the downloads, so the tick never
+            // waits on the disk; the letter tile shows until it answers (a frame or two). The network is asked only
+            // when neither is on disk, or to revalidate a cached copy (`local_icon_done`).
             self.icon_pending.insert(id.clone());
-            if let Some(p) = &self.pool {
-                p.spawn(move || {
+            let fallback = (id.clone(), url.clone(), cache.clone());
+            p.spawn_front_or(
+                move || {
                     crate::gfx::affinity::background_thread();
-                    let bytes = match local.filter(|p| p.is_file()) {
-                        Some(p) => std::fs::read(p).ok(),
-                        None if !icon.is_empty() => net::get(&net::absolute(&icon), 1_000_000).ok(),
-                        None => None,
-                    };
-                    Done::Icon { id, image: bytes.and_then(|b| crate::cg::imageio::decode(&b)) }
-                });
+                    let found = local_icon(local.as_deref(), &cache);
+                    let from_cache = found.as_ref().is_some_and(|(_, c)| *c);
+                    Done::LocalIcon { id, image: found.map(|(img, _)| img), from_cache, url, cache }
+                },
+                move || Done::LocalIcon { id: fallback.0, image: None, from_cache: false, url: fallback.1, cache: fallback.2 },
+            );
+        }
+    }
+
+    /// The worker's answer for an icon on disk. A found icon is painted; one from the cache is then fetched from the
+    /// catalogue once more in the background (once per session), so an icon the catalogue changed replaces the cached
+    /// copy. With nothing on disk the catalogue's copy is downloaded, or, without a URL, the retry waits as for a
+    /// failed fetch rather than asking every tick.
+    fn local_icon_done(&mut self, id: String, image: Option<Image>, from_cache: bool, url: String, cache: PathBuf) {
+        let download = match image {
+            Some(img) => {
+                self.icon_failed.remove(&id);
+                self.icon_px.retain(|(i, _), _| *i != id);
+                self.icons.insert(id.clone(), Some(img));
+                from_cache && !url.is_empty() && self.icon_revalidated.insert(id.clone())
+            }
+            None if url.is_empty() => {
+                self.icon_failed.insert(id.clone(), self.clock);
+                false
+            }
+            None => true,
+        };
+        self.dirty = true;
+        match &self.pool {
+            Some(p) if download => {
+                // still pending: its `Done::Icon` clears it
+                let fallback = id.clone();
+                p.spawn_or(
+                    move || {
+                        crate::gfx::affinity::background_thread();
+                        let fetch = || net::get(&net::absolute(&url), 1_000_000).ok();
+                        Done::Icon { image: fetch_icon(fetch, &cache), id }
+                    },
+                    move || Done::Icon { id: fallback, image: None },
+                );
+            }
+            _ => {
+                self.icon_pending.remove(&id);
             }
         }
     }
@@ -986,6 +1131,12 @@ impl AppStore {
     }
 
     /// Whether typing reaches the query field: the Search tab with no product page or sheet open (see `key`).
+    /// The desktop sidebar's width in px (0 on the phone layout): the shell declares this column a `.sidebar` material.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub fn sidebar_px(&self) -> i32 {
+        if self.desktop { self.sidebar } else { 0 }
+    }
+
     pub fn text_focused(&self) -> bool {
         self.tab == Tab::Search && self.page.is_none() && self.sheet.is_none()
     }
@@ -1092,6 +1243,12 @@ impl AppStore {
     }
 
     fn top(&self, ui: &Ui) -> f32 {
+        // the desktop window has no title bar. Today (Discover) starts at the top edge as the reference does, its
+        // large title under the empty toolbar band; the other tabs and the pages start under the band, which holds
+        // the back control and the inline title
+        if self.desktop {
+            return if self.page.is_none() && self.tab == Tab::Today { 0.0 } else { ui.pt(DESKTOP_BAR_PT) };
+        }
         if self.page.is_none() && self.tab == Tab::Today {
             return ui.pt(STATUS_PT);
         }
@@ -1202,7 +1359,7 @@ impl AppStore {
             return TABS.get(i).map(|(t, _)| Target::Tab(*t));
         }
         if y < self.top(ui) {
-            return (self.page.is_some() && x < ui.pt(140.0)).then_some(Target::Back);
+            return (self.page.is_some() && x < ui.pt(BACK_HIT_PT)).then_some(Target::Back);
         }
         if y >= bar {
             return None;
@@ -1539,7 +1696,14 @@ impl AppStore {
         if self.scroll.animating() {
             return Some(t);
         }
-        (!self.jobs.is_empty()).then(|| (self.progress_at + PROGRESS_MS).max(t))
+        // a failed icon is fetched again when its retry is due, without waiting for input to tick the store; one whose
+        // retry is in flight waits for the reply instead, so the loop does not spin until it arrives
+        let retry = self.icon_failed.iter().filter(|(id, _)| !self.icon_pending.contains(*id)).map(|(_, at)| (at + ICON_RETRY_MS).max(t)).reduce(f64::min);
+        let progress = (!self.jobs.is_empty()).then(|| (self.progress_at + PROGRESS_MS).max(t));
+        match (progress, retry) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     // ---- drawing ----
@@ -1583,10 +1747,10 @@ impl AppStore {
                 let c = (x + w / 2.0, mid);
                 let bounds = (c.0 - r - 4.0, mid - r - 4.0, 2.0 * r + 8.0, 2.0 * r + 8.0);
                 paint(s, bounds, sep(), ring(c, r, ui.pt(2.5)));
-                paint(s, bounds, TINT, arc(c, r, ui.pt(2.5), 0.0, (f.max(0.02)) * std::f32::consts::TAU - 0.0001));
+                paint(s, bounds, accent_now(), arc(c, r, ui.pt(2.5), 0.0, (f.max(0.02)) * std::f32::consts::TAU - 0.0001));
                 let q = r * 0.42;
-                paint(s, bounds, TINT, segment((c.0 - q, c.1 - q), (c.0 + q, c.1 + q), ui.pt(0.1)));
-                s.fill_rrect(c.0 - q, c.1 - q, 2.0 * q, 2.0 * q, ui.pt(2.0), TINT);
+                paint(s, bounds, accent_now(), segment((c.0 - q, c.1 - q), (c.0 + q, c.1 + q), ui.pt(0.1)));
+                s.fill_rrect(c.0 - q, c.1 - q, 2.0 * q, 2.0 * q, ui.pt(2.0), accent_now());
             }
             _ => {
                 let label = match b {
@@ -1598,7 +1762,7 @@ impl AppStore {
                 s.fill_rrect(x, y, w, h, CAPSULE_RADIUS, fill);
                 let size = if b == Btn::NeedsUpdate { 11.0 } else { 15.0 };
                 let lw = ui.measure(label, size, Weight::Bold);
-                self.put(s, ui, label, size, Weight::Bold, TINT, false, x + (w - lw) / 2.0, mid);
+                self.put(s, ui, label, size, Weight::Bold, accent_now(), false, x + (w - lw) / 2.0, mid);
             }
         }
     }
@@ -1667,7 +1831,7 @@ impl AppStore {
                     let cw = w / names.len() as f32;
                     for (i, name) in names.iter().enumerate() {
                         let on = self.category.map_or(i == 0, |c| c + 1 == i);
-                        let (fill, ink) = if on { (TINT, WHITE) } else { (cell(), SECONDARY) };
+                        let (fill, ink) = if on { (accent_now(), WHITE) } else { (cell(), SECONDARY) };
                         let cx = x + i as f32 * cw;
                         c.fill_rrect(cx + ui.pt(2.0), y + ui.pt(8.0), cw - ui.pt(4.0), ui.pt(34.0), CAPSULE_RADIUS, fill);
                         let label = ui.fit(name, 14.0, cw - ui.pt(14.0));
@@ -1733,9 +1897,9 @@ impl AppStore {
             return;
         }
         let (cx, cy, r) = (self.w as f32 - x - ui.pt(16.0), y + ui.pt(70.0), ui.pt(15.5));
-        paint(s, (cx - r - 4.0, cy - r - 4.0, 2.0 * r + 8.0, 2.0 * r + 8.0), TINT, ring((cx, cy), r, ui.pt(2.0)));
-        s.fill_rrect(cx - ui.pt(5.0), cy - ui.pt(11.0), ui.pt(10.0), ui.pt(10.0), ui.pt(5.0), TINT);
-        s.fill_rrect(cx - ui.pt(9.0), cy + ui.pt(2.0), ui.pt(18.0), ui.pt(9.0), ui.pt(4.5), TINT);
+        paint(s, (cx - r - 4.0, cy - r - 4.0, 2.0 * r + 8.0, 2.0 * r + 8.0), accent_now(), ring((cx, cy), r, ui.pt(2.0)));
+        s.fill_rrect(cx - ui.pt(5.0), cy - ui.pt(11.0), ui.pt(10.0), ui.pt(10.0), ui.pt(5.0), accent_now());
+        s.fill_rrect(cx - ui.pt(9.0), cy + ui.pt(2.0), ui.pt(18.0), ui.pt(9.0), ui.pt(4.5), accent_now());
         s.fill_rect(x as usize, (y + ui.pt(95.0)) as usize, (self.w as f32 - 2.0 * x) as usize, 1, sep());
     }
 
@@ -1963,12 +2127,16 @@ impl AppStore {
     fn draw_bars(&mut self, s: &mut Surface, ui: &Ui) {
         let top = self.top(ui) as usize;
         s.fill_rect(0, 0, self.w as usize, top, bg());
-        let mid = ui.pt(STATUS_PT + 22.0);
+        let mid = if self.desktop { ui.pt(DESKTOP_BAR_PT / 2.0) } else { ui.pt(STATUS_PT + 22.0) };
         if let Some((back_tab, id)) = self.page.as_ref().map(|p| (p.back, p.id.clone())) {
             let history = self.page.as_ref().is_some_and(|p| p.history);
             let prev = if history { self.find(&id).map(|a| a.name.clone()).unwrap_or_default() } else { Some(tab_name(back_tab, self.desktop)).filter(|n| !n.is_empty()).unwrap_or("Back").to_string() };
             let back = format!("\u{2039} {prev}");
             self.put(s, ui, &back, 17.0, Weight::Regular, TINT, false, ui.pt(MARGIN), mid);
+            if self.desktop {
+                // the band stops dragging over the back control only (the label and a little room either side)
+                set_back_control_pt(MARGIN + ui.measure(&back, 17.0, Weight::Regular) / ui.pt(1.0) + 8.0);
+            }
             if history {
                 let tw = ui.measure("Version History", 17.0, Weight::Semibold);
                 self.put(s, ui, "Version History", 17.0, Weight::Semibold, label(), false, (self.w as f32 - tw) / 2.0, mid);
@@ -1977,7 +2145,10 @@ impl AppStore {
                 let tw = ui.measure(&name, 17.0, Weight::Semibold);
                 self.put(s, ui, &name, 17.0, Weight::Semibold, label(), false, (self.w as f32 - tw) / 2.0, mid);
             }
-        } else if self.tab != Tab::Today && self.scroll.offset() > ui.pt(40.0) {
+        } else if self.desktop {
+            set_back_control_pt(0.0);
+        }
+        if self.page.is_none() && self.tab != Tab::Today && self.scroll.offset() > ui.pt(40.0) {
             let name = tab_name(self.tab, self.desktop);
             let tw = ui.measure(name, 17.0, Weight::Semibold);
             self.put(s, ui, name, 17.0, Weight::Semibold, label(), false, (self.w as f32 - tw) / 2.0, mid);
@@ -1993,7 +2164,7 @@ impl AppStore {
         let current = if self.page.is_some() { self.page.as_ref().map(|p| p.back).unwrap_or(self.tab) } else { self.tab };
         let badge = self.update_count();
         for (i, (tab, name)) in TABS.iter().enumerate() {
-            let col = if *tab == current { TINT } else { SECONDARY };
+            let col = if *tab == current { accent_now() } else { SECONDARY };
             let cx = cw * i as f32 + cw / 2.0;
             let cy = by + ui.pt(17.0);
             tab_glyph(s, ui, *tab, (cx, cy), col);
@@ -2013,7 +2184,7 @@ impl AppStore {
             let mut image = Image::new(self.w as usize, self.h as usize);
             let mut pane = Surface { w: image.w, h: image.h, stride: image.w, px: &mut image.px, y0: 0 };
             self.draw_pane(&mut pane, ui);
-            s.fill_rect(0, 0, self.sidebar as usize, self.h as usize, cell());
+            sidebar_fill(s, self.sidebar as usize, self.h as usize);
             s.blit(&image, self.sidebar, 0, 255, 255);
             self.draw_sidebar(s, ui);
             s.fill_rect(self.sidebar as usize - 1, 0, 1, self.h as usize, sep());
@@ -2048,7 +2219,7 @@ impl AppStore {
                 s.fill_rrect(x, y, w, h, ui.pt(9.0), SIDEBAR_SELECTED);
             }
             let mid = y + h / 2.0;
-            side_glyph(s, ui, *tab, (x + ui.pt(16.0), mid), if on { WHITE } else { TINT });
+            side_glyph(s, ui, *tab, (x + ui.pt(16.0), mid), if on { WHITE } else { accent_now() });
             self.put(s, ui, name, MAC_BODY_PT, Weight::Regular, if on { WHITE } else { label() }, false, x + ui.pt(34.0), mid);
             if *tab == Tab::Updates && badge > 0 {
                 let n = badge.min(99).to_string();
@@ -2114,7 +2285,7 @@ impl AppStore {
             let tw = ui.measure(text, size, weight);
             self.put(s, ui, text, size, weight, color, false, mid - tw / 2.0, y);
         }
-        s.fill_rrect(buy.0, buy.1, buy.2, buy.3, CAPSULE_RADIUS, TINT);
+        s.fill_rrect(buy.0, buy.1, buy.2, buy.3, CAPSULE_RADIUS, accent_now());
         s.fill_rrect(cancel.0, cancel.1, cancel.2, cancel.3, CAPSULE_RADIUS, fill());
         for (text, r, ink) in [("Buy", buy, WHITE), ("Cancel", cancel, TINT)] {
             let tw = ui.measure(text, 17.0, Weight::Semibold);
@@ -2293,499 +2464,4 @@ pub fn icon(size: usize) -> Image {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::shell::store::api::parse_catalog;
-
-    const SUM: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
-
-    #[test]
-    fn a_description_that_does_not_fit_ends_in_an_ellipsis_at_a_word() {
-        let ui = crate::shell::tests::ui();
-        let text = "A fast, private web browser powered by Servo, with its own BifrOSt profile";
-        let w = ui.measure("A fast, private web browser", 17.0, Weight::Regular) + 4.0;
-        let lines = wrap_clamped(&ui, text, 17.0, Weight::Regular, w, 2);
-        assert_eq!(lines.len(), 2);
-        assert!(lines[1].ends_with('\u{2026}'), "{lines:?}");
-        assert!(ui.measure(&lines[1], 17.0, Weight::Regular) <= w);
-        let kept = lines[1].trim_end_matches('\u{2026}');
-        assert!(text.contains(kept) && !kept.ends_with(' '), "cut at a word boundary: {kept:?}");
-        let all = wrap_clamped(&ui, text, 17.0, Weight::Regular, w, 4);
-        assert!(!all.last().unwrap().ends_with('\u{2026}'), "text that fits is untouched");
-        assert_eq!(all.join(" "), text);
-    }
-
-    #[test]
-    fn a_package_for_another_sdk_protocol_shows_needs_update_not_get_or_open() {
-        let mk = |p: u32, v: &str, kind: &str| StoreApp { id: "a".into(), version: v.into(), sdk_protocol: p, kind: kind.into(), ..Default::default() };
-        assert_eq!(button_for(&mk(1, "1.0.0", "app"), None, 2), Btn::NeedsUpdate, "no GET for an app that cannot run");
-        assert_eq!(button_for(&mk(1, "1.0.0", "app"), Some("1.0.0"), 2), Btn::NeedsUpdate, "no OPEN for an installed one either");
-        assert_eq!(button_for(&mk(2, "1.1.0", "app"), Some("1.0.0"), 2), Btn::Update, "a compatible newer version is an update");
-        assert_eq!(button_for(&mk(1, "1.1.0", "app"), Some("1.0.0"), 2), Btn::NeedsUpdate, "a newer incompatible one is no update");
-        assert_eq!(button_for(&mk(2, "1.0.0", "app"), None, 2), Btn::Get);
-        assert_eq!(button_for(&mk(0, "1.0.0", "app"), Some("1.0.0"), 2), Btn::Open, "unknown protocol: assume it runs");
-    }
-
-    #[test]
-    fn a_failed_icon_is_retried_after_a_minute_not_never() {
-        assert!(icon_due(None, 0.0));
-        assert!(!icon_due(Some(1_000.0), 1_000.0 + ICON_RETRY_MS - 1.0));
-        assert!(icon_due(Some(1_000.0), 1_000.0 + ICON_RETRY_MS));
-    }
-
-    fn store() -> AppStore {
-        let ui = crate::shell::tests::ui();
-        let mut s = AppStore::new(&ui, 1000, 1400, std::env::temp_dir().join(format!("apps-store-ui-{}", std::process::id())));
-        s.pool = None;
-        s.catalog = parse_catalog(&format!(
-            r#"{{"apps":[{{"id":"is.o.calc","name":"Calc","version":"1.1.0","sha256":"{SUM}","package":"/p","size":2000000}},{{"id":"is.o.chess","name":"Chess","version":"1.0.0","sha256":"{SUM}","package":"/q","category":"Games"}}]}}"#
-        ))
-        .unwrap();
-        s
-    }
-
-    fn local(id: &str, v: &str) -> InstalledApp {
-        InstalledApp { id: id.into(), name: id.into(), version: v.into(), ..Default::default() }
-    }
-
-    #[test]
-    fn a_new_window_starts_on_the_front_page() {
-        let mut s = store();
-        s.tab = Tab::Apps;
-        s.category = Some(0);
-        s.confirm_remove = Some("is.o.calc".into());
-        s.page = Some(Page { id: "is.o.calc".into(), back: Tab::Apps, desc: Vec::new(), list_scroll: 0.0, whatsnew: Vec::new(), history: false, hist: Vec::new() });
-        s.show_front_page();
-        assert_eq!(s.tab, Tab::Today);
-        assert!(s.page.is_none() && s.category.is_none() && s.confirm_remove.is_none());
-    }
-
-    #[test]
-    fn update_rows_show_two_note_lines_until_more_is_tapped() {
-        let mut s = store();
-        s.catalog[0].changelog = vec![api::Release { version: "1.1.0".into(), date: "2026-10-05".into(), notes: vec!["a".into(), "b".into(), "c".into()] }];
-        s.installed = vec![local("is.o.calc", "1.0.0")];
-        s.tab = Tab::Updates;
-        let find = |s: &AppStore| s.rows().into_iter().find_map(|r| if let Row::Update(i, n, m) = r { Some((i, n, m)) } else { None });
-        assert_eq!(find(&s), Some((0, 2, true)));
-        s.expanded.insert("is.o.calc".into());
-        assert_eq!(find(&s), Some((0, 3, false)));
-        assert!(Row::Update(0, 3, false).height() > Row::Update(0, 2, true).height() && Row::Update(0, 0, false).height() == ROW);
-    }
-
-    fn with_background_packages() -> AppStore {
-        let mut s = store();
-        for (id, kind) in [("is.o.update", "service"), ("is.o.audio", "service"), ("is.o.kb", "system"), ("is.o.files", "system-app")] {
-            s.catalog.push(StoreApp { id: id.into(), name: id.into(), version: "2.0.0".into(), min_shell: "0.0.0".into(), kind: kind.into(), category: "System".into(), ..Default::default() });
-        }
-        s
-    }
-
-    fn listed(s: &AppStore) -> Vec<String> {
-        s.rows().into_iter().filter_map(|r| if let Row::App(i) | Row::Update(i, ..) = r { Some(s.catalog[i].id.clone()) } else { None }).collect()
-    }
-
-    #[test]
-    fn services_are_hidden_from_every_tab_and_the_badge() {
-        let mut s = with_background_packages();
-        s.installed = vec![InstalledApp { kind: "service".into(), ..local("is.o.update", "1.0.0") }, local("is.o.audio", "1.0.0")];
-        for tab in [Tab::Today, Tab::Games, Tab::Apps, Tab::Updates, Tab::Search, Tab::Categories, Tab::Shelf(Shelf::Develop), Tab::Shelf(Shelf::Play)] {
-            s.tab = tab;
-            let ids = listed(&s);
-            assert!(!ids.iter().any(|i| i == "is.o.update" || i == "is.o.audio"), "{tab:?} lists a service");
-        }
-        assert_eq!(s.update_count(), 0);
-        let plan = api::system_plan(&s.catalog, &[], "9.9.9", &[]);
-        assert!(plan.iter().any(|a| a.id == "is.o.update") && plan.iter().any(|a| a.id == "is.o.audio"));
-        assert!(api::updates(&s.catalog, &s.installed).is_empty());
-    }
-
-    #[test]
-    fn background_packages_never_offer_get() {
-        let mut s = with_background_packages();
-        for a in s.catalog.clone().iter().filter(|a| a.is_preinstalled()) {
-            assert_ne!(s.button(a), Btn::Get, "{}", a.id);
-        }
-        let files = s.catalog.iter().find(|a| a.id == "is.o.files").unwrap().clone();
-        s.installed.push(InstalledApp { kind: "system-app".into(), ..local("is.o.files", "2.0.0") });
-        assert_eq!(s.button(&files), Btn::Open);
-        s.tab = Tab::Apps;
-        assert!(listed(&s).contains(&"is.o.kb".to_string()));
-    }
-
-    #[test]
-    fn button_follows_install_state() {
-        let mut s = store();
-        let calc = s.catalog[0].clone();
-        assert_eq!(s.button(&calc), Btn::Get);
-        s.installed.push(local("is.o.calc", "1.0.0"));
-        assert_eq!(s.button(&calc), Btn::Update);
-        s.installed[0].version = "1.1.0".into();
-        assert_eq!(s.button(&calc), Btn::Open);
-        s.jobs.insert(calc.id.clone(), Job { done: Arc::new(AtomicU64::new(500_000)), size: 2_000_000, cancel: Arc::new(AtomicBool::new(false)) });
-        assert_eq!(s.button(&calc), Btn::Progress(0.25));
-    }
-
-    #[test]
-    fn tabs_split_apps_and_games_and_updates_list_only_newer() {
-        let mut s = store();
-        s.tab = Tab::Games;
-        assert!(s.rows().iter().any(|r| matches!(r, Row::App(1))) && !s.rows().iter().any(|r| matches!(r, Row::App(0))));
-        s.tab = Tab::Updates;
-        assert!(s.rows().iter().any(|r| matches!(r, Row::Note(n) if n.contains("up to date"))));
-        s.installed.push(local("is.o.calc", "1.0.0"));
-        assert_eq!(s.update_list(), vec![0]);
-        assert!(s.rows().contains(&Row::Header("Available Updates".into(), true)));
-    }
-
-    #[test]
-    fn open_hands_the_installed_app_to_the_host() {
-        let mut s = store();
-        s.installed.push(local("is.o.calc", "1.1.0"));
-        s.press_button("is.o.calc");
-        assert_eq!(s.take_launch().map(|a| a.id), Some("is.o.calc".to_string()));
-        assert!(s.take_launch().is_none());
-    }
-
-    #[test]
-    fn icon_is_opaque_and_sizes_read_well() {
-        assert!(icon(64).px.iter().all(|p| p >> 24 == 255));
-        assert_eq!((size_text(0), size_text(2_500_000), size_text(900)), ("-".to_string(), "2.5 MB".to_string(), "900 bytes".to_string()));
-        assert_eq!(row_detail("Productivity", "1.7.0", 2_500_000), "Productivity \u{b7} v1.7.0 \u{b7} 2.5 MB", "every row names the version the store has");
-        assert_eq!(crate::bare::timezone::civil_from_days(0), (1970, 1, 1));
-    }
-
-    fn with_system() -> AppStore {
-        let mut s = store();
-        s.catalog.push(StoreApp { id: "is.o.kb".into(), name: "Keyboard".into(), version: "1.1.0".into(), kind: "system".into(), category: "System".into(), size: 11_000_000, ..Default::default() });
-        s
-    }
-
-    #[test]
-    fn apps_tab_lists_system_components_in_their_own_section() {
-        let mut s = with_system();
-        s.tab = Tab::Apps;
-        let rows = s.rows();
-        let at = rows.iter().position(|r| *r == Row::Header("System".into(), false)).expect("System header");
-        assert_eq!(rows[at + 1..], [Row::App(2)]);
-        assert!(!rows[..at].contains(&Row::App(2)), "not among Top Apps");
-        s.tab = Tab::Games;
-        assert!(!s.rows().contains(&Row::App(2)));
-        s.tab = Tab::Today;
-        assert!(!s.rows().contains(&Row::App(2)) && !s.rows().iter().any(|r| matches!(r, Row::Cards(c) if c.iter().any(|k| k.apps().contains(&2)))));
-        s.tab = Tab::Search;
-        assert!(!s.rows().contains(&Row::App(2)));
-    }
-
-    #[test]
-    fn system_components_have_no_get_or_open_only_update_and_count_in_the_badge() {
-        let mut s = with_system();
-        let kb = s.catalog[2].clone();
-        assert_eq!(s.button(&kb), Btn::None, "not installed yet: preinstalled in the background, no GET");
-        s.installed.push(InstalledApp { kind: "system".into(), ..local("is.o.kb", "1.1.0") });
-        assert_eq!(s.button(&kb), Btn::None, "current: no OPEN");
-        s.press_button("is.o.kb");
-        assert!(s.take_launch().is_none(), "a system component never opens");
-        assert_eq!(s.update_count(), 0);
-        s.installed[0].version = "1.0.0".into();
-        assert_eq!(s.button(&kb), Btn::Update);
-        assert_eq!((s.update_count(), s.update_list()), (1, vec![2]));
-        s.installed.push(local("is.o.calc", "1.0.0"));
-        assert_eq!(s.update_count(), 2, "apps and system components both count");
-        assert_eq!(category_label(&kb), "System Component");
-        assert_eq!(category_label(&s.catalog[0]), "Utilities");
-    }
-
-    #[test]
-    fn purchased_lists_installed_apps_by_purchase_day_and_hides_services() {
-        let mut s = store();
-        s.installed = vec![
-            InstalledApp { purchased: 120, ..local("is.o.chess", "1.0.0") },
-            InstalledApp { purchased: 100, ..local("is.o.calc", "1.1.0") },
-            InstalledApp { kind: "service".into(), purchased: 90, ..local("is.o.update", "1.0.0") },
-            InstalledApp { purchased: 9_999_999, ..local("is.o.later", "1.0.0") },
-        ];
-        assert_eq!(s.purchased(200), vec![0, 1], "the service and the purchase after today are left out");
-        s.tab = Tab::Updates;
-        let rows = s.rows();
-        let at = rows.iter().position(|r| *r == Row::Header("Purchased".into(), false)).expect("Purchased header");
-        assert_eq!(rows[at + 1..at + 3], [Row::App(1), Row::App(0)], "chess (bought first) then calc, both in the catalogue");
-        assert_eq!(rows[at + 3], Row::Restore, "Restore Purchases closes the tab");
-    }
-
-    #[test]
-    fn a_paid_app_opens_the_purchase_sheet_and_installs_nothing_yet() {
-        let mut s = store();
-        s.catalog[1].price = Some(bifrost_ui::purchase::Price::new(990, 0, "ISK"));
-        let chess = s.catalog[1].clone();
-        s.press_button(&chess.id);
-        assert!(s.jobs.is_empty(), "no download before the customer confirms");
-        let open = s.sheet.as_ref().expect("the sheet is up");
-        assert_eq!((open.id.as_str(), open.purchase.price.display()), ("is.o.chess", "990 ISK".to_string()));
-        assert_eq!(s.button(&chess), Btn::Get);
-    }
-
-    #[test]
-    fn rating_an_app_keeps_the_review_and_reopens_it_for_editing() {
-        let ui = crate::shell::tests::ui();
-        let mut s = store();
-        let _ = std::fs::remove_file(s.root.join(REVIEWS_FILE));
-        s.reviews = bifrost_core::app_review::ReviewBook::new();
-        let sidebar = s.sidebar as f32;
-        let to_window = |r: (f32, f32, f32, f32)| (r.0 + r.2 / 2.0 + sidebar, r.1 + r.3 / 2.0);
-        s.activate(&ui, Target::Rate("is.o.chess".into()));
-        assert_eq!(s.review.as_ref().map(|r| r.id.as_str()), Some("is.o.chess"));
-        let (x, y) = to_window(review_sheet::rating_rects(&ui, s.w, s.h)[3]);
-        s.touch(&ui, Event::Up(x, y), 0.0);
-        let (x, y) = to_window(review_sheet::body_rect(&ui, s.w, s.h));
-        s.touch(&ui, Event::Up(x, y), 0.0);
-        assert!(s.take_keyboard_request(), "a tap on a field raises the keyboard");
-        s.key(Out::Text("Fun to play".into()));
-        let (x, y) = to_window(review_sheet::buttons(&ui, s.w, s.h).0);
-        s.touch(&ui, Event::Up(x, y), 0.0);
-        assert!(s.review.is_none(), "Send closes the sheet");
-        let kept = s.reviews.get("is.o.chess").expect("the review is in the book");
-        assert_eq!((kept.stars, kept.body.as_str()), (4, "Fun to play"));
-        // the book is on disk, so a new store opens the sheet with the review to edit
-        let again = AppStore::new(&ui, 1000, 1400, s.root.clone());
-        assert_eq!(again.reviews.get("is.o.chess"), s.reviews.get("is.o.chess"));
-        s.activate(&ui, Target::Rate("is.o.chess".into()));
-        assert_eq!(s.review.as_ref().map(|r| (r.stars(), r.body().to_string())), Some((4, "Fun to play".to_string())));
-        let (x, y) = to_window(review_sheet::buttons(&ui, s.w, s.h).1);
-        s.touch(&ui, Event::Up(x, y), 0.0);
-        assert!(s.review.is_none(), "Cancel closes it and keeps the earlier review");
-        assert_eq!(s.reviews.get("is.o.chess").map(|r| r.stars), Some(4));
-        s.activate(&ui, Target::Rate("is.o.nothing".into()));
-        assert!(s.review.is_none(), "an app the catalogue does not list has no sheet");
-    }
-
-    #[test]
-    fn tapping_buy_records_the_purchase_and_cancel_records_nothing() {
-        let ui = crate::shell::tests::ui();
-        let mut s = store();
-        s.catalog[1].price = Some(bifrost_ui::purchase::Price::new(990, 0, "ISK"));
-        let chess = s.catalog[1].clone();
-        // the pane sits right of the sidebar on desktop, so window x = sidebar + pane x
-        let sidebar = s.sidebar as f32;
-        let to_window = |r: (f32, f32, f32, f32)| (r.0 + r.2 / 2.0 + sidebar, r.1 + r.3 / 2.0);
-        s.press_button(&chess.id);
-        let (cancel_x, cancel_y) = to_window(sheet::sheet_buttons(&ui, s.w, s.h).1);
-        s.touch(&ui, Event::Up(cancel_x, cancel_y), 0.0);
-        assert!(s.sheet.is_none());
-        assert!(!s.bought.is_entitled(&chess.id, today_days()), "a cancelled sheet records nothing");
-        s.press_button(&chess.id);
-        let (buy_x, buy_y) = to_window(sheet::sheet_buttons(&ui, s.w, s.h).0);
-        s.touch(&ui, Event::Up(buy_x, buy_y), 0.0);
-        assert!(s.sheet.is_none(), "Buy closes the sheet");
-        assert!(s.bought.is_entitled(&chess.id, today_days()), "the purchase is in the ledger");
-        assert!(s.jobs.is_empty(), "the test store has no worker pool, so the install is not started");
-    }
-
-    #[test]
-    fn an_install_request_goes_through_the_coordinator() {
-        let mut s = store();
-        let calc = s.catalog[0].clone();
-        s.start(&calc.id);
-        assert!(s.jobs.is_empty(), "no worker pool: the install is not started");
-        assert!(s.coord.jobs().is_empty(), "and the coordinator does not keep the failed job");
-        let phases: Vec<coordination::Phase> = s
-            .coord
-            .drain_events()
-            .into_iter()
-            .filter_map(|e| match e {
-                coordination::Event::Phase { phase, .. } => Some(phase),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(phases, vec![coordination::Phase::Queued, coordination::Phase::Downloading, coordination::Phase::Failed]);
-    }
-
-    #[test]
-    fn a_second_install_waits_while_one_downloads() {
-        let mut s = store();
-        let (calc, chess) = (s.catalog[0].id.clone(), s.catalog[1].id.clone());
-        s.coord.request(&calc, coordination::current_uid(), 100).unwrap();
-        s.coord.request(&chess, coordination::current_uid(), 100).unwrap();
-        s.jobs.insert(calc.clone(), Job { done: Arc::new(AtomicU64::new(0)), size: 100, cancel: Arc::new(AtomicBool::new(false)) });
-        s.jobs.insert(chess.clone(), Job { done: Arc::new(AtomicU64::new(0)), size: 100, cancel: Arc::new(AtomicBool::new(false)) });
-        assert_eq!(s.coord.start_next().as_deref(), Some(calc.as_str()));
-        assert_eq!(s.coord.start_next(), None, "the second download waits its turn");
-        // the download counter feeds the coordinator, and the job is still shown with its ring
-        s.jobs[&calc].done.store(60, Ordering::Relaxed);
-        s.sync_coordinator();
-        assert_eq!(s.coord.job(&calc).map(|j| j.done), Some(60));
-        assert!(s.jobs.contains_key(&chess), "the waiting install keeps its progress ring");
-    }
-
-    #[test]
-    fn restore_purchases_reports_the_count_on_the_updates_tab() {
-        let ui = crate::shell::tests::ui();
-        let mut s = store();
-        s.tab = Tab::Updates;
-        assert!(s.rows().contains(&Row::Restore));
-        s.activate(&ui, Target::Restore);
-        assert_eq!(s.restored.as_deref(), Some("No purchases to restore."));
-        assert!(s.rows().iter().any(|r| *r == Row::Note("No purchases to restore.".into())));
-    }
-
-    #[test]
-    fn a_search_matches_every_word_across_name_summary_category_and_id() {
-        let mut calc = StoreApp { id: "is.o.calc".into(), name: "Calc".into(), summary: "Adds numbers quickly".into(), category: "Utilities".into(), ..Default::default() };
-        assert!(matches_query(&calc, ""), "an empty query matches everything");
-        assert!(matches_query(&calc, "CALC") && matches_query(&calc, "numbers utilities"));
-        assert!(matches_query(&calc, "o.calc"), "the id is searched too");
-        assert!(!matches_query(&calc, "calc chess"), "every word must match");
-        calc.summary.clear();
-        assert!(!matches_query(&calc, "numbers"));
-    }
-
-    #[test]
-    fn typing_filters_the_search_tab_and_says_when_nothing_matches() {
-        let mut s = store();
-        s.tab = Tab::Search;
-        assert!(!s.rows().contains(&Row::Search), "on the desktop the query field is the sidebar's");
-        s.desktop = false;
-        assert!(s.rows().contains(&Row::Search), "the tablet's query field is the first row under the title");
-        s.desktop = true;
-        s.key(Out::Text("chess".into()));
-        assert_eq!(s.query, "chess");
-        assert_eq!(listed(&s), vec!["is.o.chess".to_string()]);
-        s.key(Out::Backspace);
-        s.key(Out::Backspace);
-        s.key(Out::Backspace);
-        s.key(Out::Backspace);
-        s.key(Out::Backspace);
-        assert_eq!(listed(&s).len(), 2, "an empty query lists every app again");
-        s.key(Out::Text("zzz".into()));
-        assert!(s.rows().iter().any(|r| matches!(r, Row::Note(n) if n.starts_with("No results"))));
-        s.key(Out::Enter);
-        s.key(Out::Named("Up"));
-        assert_eq!(s.query, "zzz", "keys other than text and backspace are ignored");
-    }
-
-    #[test]
-    fn typing_goes_nowhere_off_the_search_tab_or_on_a_product_page() {
-        let mut s = store();
-        s.tab = Tab::Apps;
-        s.key(Out::Text("x".into()));
-        assert!(s.query.is_empty(), "the Apps tab has no query field");
-        s.tab = Tab::Search;
-        s.page = Some(Page { id: "is.o.calc".into(), back: Tab::Search, desc: vec![], list_scroll: 0.0, whatsnew: vec![], history: false, hist: vec![] });
-        s.key(Out::Text("x".into()));
-        assert!(s.query.is_empty(), "a product page is open");
-    }
-
-    #[test]
-    fn tapping_the_query_field_asks_for_the_keyboard_once() {
-        let ui = crate::shell::tests::ui();
-        let mut s = store();
-        s.desktop = false;
-        s.tab = Tab::Search;
-        let mut field_row_y = None;
-        s.each_row(&ui, |r, ry, _| {
-            if *r == Row::Search {
-                field_row_y = Some(ry);
-            }
-        });
-        assert!(field_row_y.is_some(), "the Search row is laid out");
-        s.activate(&ui, Target::SearchField);
-        assert!(s.take_keyboard_request());
-        assert!(!s.take_keyboard_request(), "the request is read once");
-    }
-
-    /// A catalogue with one app per shelf category and one with a category no shelf names.
-    fn shelved() -> AppStore {
-        let mut s = store();
-        s.catalog = parse_catalog(&format!(
-            r#"{{"apps":[{{"id":"is.o.draw","name":"Draw","version":"1.0.0","sha256":"{SUM}","package":"/a","category":"Graphics & Design"}},
-                {{"id":"is.o.words","name":"Words","version":"1.0.0","sha256":"{SUM}","package":"/b","category":"Productivity"}},
-                {{"id":"is.o.chess","name":"Chess","version":"1.0.0","sha256":"{SUM}","package":"/c","category":"Games"}},
-                {{"id":"is.o.calc","name":"Calc","version":"1.0.0","sha256":"{SUM}","package":"/d","category":"Utilities"}},
-                {{"id":"is.o.maps","name":"Maps","version":"1.0.0","sha256":"{SUM}","package":"/e","category":"Travel"}}]}}"#
-        ))
-        .unwrap();
-        s
-    }
-
-    #[test]
-    fn each_shelf_lists_the_apps_of_its_categories_and_categories_lists_them_all() {
-        let mut s = shelved();
-        for (shelf, want) in [(Shelf::Create, "is.o.draw"), (Shelf::Work, "is.o.words"), (Shelf::Play, "is.o.chess"), (Shelf::Develop, "is.o.calc")] {
-            s.tab = Tab::Shelf(shelf);
-            assert_eq!(listed(&s), vec![want.to_string()], "{shelf:?}");
-            assert_eq!(s.rows()[0], Row::Title(shelf.title()));
-        }
-        s.tab = Tab::Categories;
-        let mut all = listed(&s);
-        all.sort();
-        assert_eq!(all, ["is.o.calc", "is.o.chess", "is.o.draw", "is.o.maps", "is.o.words"], "a category no shelf names is still listed");
-        assert!(s.rows().contains(&Row::Header("Travel".into(), false)));
-        s.catalog.retain(|a| a.id != "is.o.draw");
-        s.tab = Tab::Shelf(Shelf::Create);
-        assert!(s.rows().iter().any(|r| matches!(r, Row::Note(n) if n.contains("create"))), "an empty shelf says so");
-    }
-
-    #[test]
-    fn the_desktop_sidebar_has_a_search_field_the_sections_and_the_account_chip() {
-        let ui = crate::shell::tests::ui();
-        let mut s = shelved();
-        let names: Vec<&str> = SIDEBAR.iter().map(|(_, n)| *n).collect();
-        assert_eq!(names, ["Discover", "Create", "Work", "Play", "Develop", "Categories", "Updates"]);
-        let (fx, fy, fw, fh) = s.side_search_rect(&ui);
-        assert!(fy + fh <= s.side_row_rect(&ui, 0).1, "the search field sits above the sections");
-        assert_eq!(s.side_hit(&ui, fx + fw / 2.0, fy + fh / 2.0), Some(SideHit::Search));
-        let (rx, ry, rw, rh) = s.side_row_rect(&ui, 3);
-        assert_eq!(s.side_hit(&ui, rx + rw / 2.0, ry + rh / 2.0), Some(SideHit::Tab(Tab::Shelf(Shelf::Play))));
-        let (ax, ay, aw, ah) = s.side_account_rect(&ui);
-        assert!(ay > s.side_row_rect(&ui, SIDEBAR.len() - 1).1, "the account chip is at the foot");
-        assert_eq!(s.side_hit(&ui, ax + aw / 2.0, ay + ah / 2.0), Some(SideHit::Account));
-        // a click on the field opens the results and raises the keyboard; typing filters them
-        s.touch(&ui, Event::Up(fx + fw / 2.0, fy + fh / 2.0), 0.0);
-        assert_eq!(s.tab, Tab::Search);
-        assert!(s.take_keyboard_request() && s.text_focused());
-        s.key(Out::Text("draw".into()));
-        assert_eq!(listed(&s), vec!["is.o.draw".to_string()]);
-        s.touch(&ui, Event::Up(rx + rw / 2.0, ry + rh / 2.0), 0.0);
-        assert_eq!(s.tab, Tab::Shelf(Shelf::Play));
-        assert_eq!(tab_name(Tab::Today, true), "Discover");
-        assert_eq!(tab_name(Tab::Today, false), "Today");
-        assert_eq!(tab_name(Tab::Categories, false), "Categories");
-    }
-
-    #[test]
-    fn the_account_chip_shows_the_local_names_initials() {
-        assert_eq!(initials("Ada Lovelace"), "AL");
-        assert_eq!(initials("owner"), "O");
-        assert_eq!(initials("Ólafur Búi Ólafsson"), "ÓB");
-        assert_eq!(initials(""), "");
-    }
-
-    #[test]
-    fn remove_takes_two_taps_and_only_for_an_app_the_customer_chose() {
-        let mut confirm = None;
-        assert!(!remove_step(&mut confirm, "is.o.calc"), "the first tap only asks");
-        assert_eq!(confirm.as_deref(), Some("is.o.calc"));
-        assert!(remove_step(&mut confirm, "is.o.calc"), "the second tap removes");
-        assert!(confirm.is_none());
-
-        let mut s = with_system();
-        s.installed = vec![local("is.o.calc", "1.0.0"), InstalledApp { kind: "system".into(), ..local("is.o.kb", "1.0.0") }];
-        assert!(s.can_remove("is.o.calc"));
-        assert!(!s.can_remove("is.o.kb"), "a system component is never removed here");
-        assert!(!s.can_remove("is.o.chess"), "an app that is not installed has nothing to remove");
-        s.jobs.insert("is.o.calc".into(), Job { done: Arc::new(AtomicU64::new(0)), size: 1, cancel: Arc::new(AtomicBool::new(false)) });
-        assert!(!s.can_remove("is.o.calc"), "not while it is being downloaded");
-    }
-
-    #[test]
-    fn the_product_page_reserves_a_strip_only_for_apps_with_screenshots() {
-        let ui = crate::shell::tests::ui();
-        let mut s = store();
-        s.catalog[0].screenshots = vec!["/s/1.png".into()];
-        s.page = Some(Page { id: "is.o.calc".into(), back: Tab::Today, desc: vec![], list_scroll: 0.0, whatsnew: vec![], history: false, hist: vec![] });
-        assert_eq!(s.shots_pt(), SHOTS_PT);
-        s.page = Some(Page { id: "is.o.chess".into(), back: Tab::Today, desc: vec![], list_scroll: 0.0, whatsnew: vec![], history: false, hist: vec![] });
-        assert_eq!(s.shots_pt(), 0.0);
-        assert!(s.page_height(&ui) > 0.0);
-    }
-}
+mod tests;

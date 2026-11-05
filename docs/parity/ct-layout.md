@@ -13,7 +13,7 @@ truncation", "Attributed string styling", and the layout side of "Writing direct
 | Frame (lines, line origins, visible string range, path, draw) | `typeset.rs` `Frame`, `FrameLine` |
 | Line (glyph count, runs, string range, typographic bounds, image bounds, pen offset for flush, offset for string index, string index for position, truncated line, justified line, draw) | `typeset.rs` `TextLine` |
 | Run (glyph count, attributes, status, string indices, positions, advances, typographic bounds, draw) | `typeset.rs` `TextRun`, `RunStatus` |
-| Line breaking (UAX 14 subset) and grapheme clusters (UAX 29 subset) | `springboard/ui/src/textbreak.rs` |
+| Line breaking (UAX 14 subset) and grapheme clusters (UAX 29 subset) | `springboard/render/src/textbreak.rs` |
 | Glyph advances in one place | `springboard/ui/src/textmetrics.rs` `GlyphSource`, `glyph_advances` |
 | Paragraph styles | `springboard/ui/src/paragraph.rs` (`ParagraphStyle`: alignment, first-line/head/tail indents, tab stops, default tab interval, line break mode, line height multiple and limits, line spacing, paragraph spacing before and after, base direction) |
 | Attributes in the attributed string | `springboard/sdk/src/attributed.rs` (`Attrs`, `Attribute`, `AttributeKey`) |

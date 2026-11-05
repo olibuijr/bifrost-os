@@ -9,20 +9,22 @@
 //!
 //! Touches in a window come in points; the calendar lays out in pixels, so `window_input` in `main.rs` scales them.
 
-use super::{Calendar, Draft, Target};
+use super::{overlay, Calendar, Draft, Target};
 use springboard::deildu::scroll::Scroller;
 use springboard::gfx::Surface;
 use springboard::shell::textfield::TextField;
 use springboard::shell::ui::Ui;
 
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_TITLE3_PT};
+use bifrost_app::ContextItem;
+
+/// The event menu's choices (`context_items`, `context_action`).
+const CTX_OPEN: u32 = 1;
+const CTX_DELETE: u32 = 2;
 
 /// The size of an editor window, in points (the same size as a contact card window).
 pub const EDITOR_WIDTH: f32 = 480.0;
 pub const EDITOR_HEIGHT: f32 = 560.0;
-
-/// Two taps on the same event within this many milliseconds are a double-click.
-pub const DOUBLE_TAP_MS: f64 = 400.0;
 
 /// The title of an editor window: the event's title, or "Event" for an event with none.
 pub fn window_title(title: &str) -> String {
@@ -116,12 +118,13 @@ impl Calendar {
         self.panes.iter().any(|p| p.editor.as_ref().is_some_and(|d| d.event.id == id))
     }
 
-    /// Records a tap on event `id` at `t` ms. The first tap selects the event; a second tap on it within
-    /// [`DOUBLE_TAP_MS`] asks the app to open its editor in a window.
-    pub fn tap_event(&mut self, id: u64, t: f64) {
+    /// Records a click on event `id` with its click count (the kit's `ClickCounter`, which has the system's double-click
+    /// interval and slop). A single click selects the event; the second click of a double-click on it asks the app to
+    /// open its editor in a window.
+    pub fn tap_event(&mut self, id: u64, clicks: u8) {
         self.dirty = true;
-        let double = self.last_tap.is_some_and(|(last, at)| last == id && t - at <= DOUBLE_TAP_MS);
-        self.last_tap = if double { None } else { Some((id, t)) };
+        let double = clicks >= 2 && self.last_tap == Some(id);
+        self.last_tap = if double { None } else { Some(id) };
         if double {
             self.open_request = Some(id);
         } else {
@@ -175,7 +178,7 @@ impl Calendar {
                 self.save_extras();
                 self.error = None;
                 self.notice = None;
-                self.undo = Some((removed, t + super::UNDO_MS));
+                self.offer_undo(removed, t);
                 self.picked = None;
                 self.last_tap = None;
                 let gone: Vec<u32> = self.panes.iter().filter(|p| p.editor.as_ref().is_some_and(|d| d.event.id == id)).map(|p| p.window).collect();
@@ -189,6 +192,41 @@ impl Calendar {
                 self.error = Some("Could not save. The event is still here.".into());
                 false
             }
+        }
+    }
+
+    /// A secondary click at `(x, y)` (window pixels, as a touch): the menu of the event under it, Open and Delete Event,
+    /// which also selects that event. Empty off the events and while an editor or a sheet is open.
+    pub fn context_items(&mut self, ui: &Ui, x: f32, y: f32) -> Vec<ContextItem> {
+        self.layout_columns(ui);
+        if self.editor.is_some() || self.sheet_open() || self.event_pop.is_some() || self.cal_menu.is_some() || x < self.x0 {
+            return Vec::new();
+        }
+        let Some(Target::Row(id)) = self.hit(ui, x - self.x0, y) else { return Vec::new() };
+        if overlay::is_overlay(id) {
+            return Vec::new();
+        }
+        self.picked = Some(id);
+        self.dirty = true;
+        vec![ContextItem::new(CTX_OPEN, "Open"), ContextItem::new(CTX_DELETE, "Delete Event")]
+    }
+
+    /// The choice from the event menu of `context_items`; true when something changed. Open asks the app for the event's
+    /// window (as a double-click does), Delete Event deletes it with the Undo bar.
+    pub fn context_action(&mut self, ui: &Ui, choice: u32, t: f64) -> bool {
+        self.dirty = true;
+        let Some(id) = self.picked_event() else { return false };
+        match choice {
+            CTX_OPEN => {
+                self.open_request = Some(id);
+                true
+            }
+            CTX_DELETE => {
+                let deleted = self.delete_picked(t);
+                self.fit_scroll(ui);
+                deleted
+            }
+            _ => false,
         }
     }
 
@@ -257,13 +295,14 @@ mod tests {
     }
 
     #[test]
-    fn two_quick_taps_on_one_event_are_a_double_click() {
-        // the window is opened by the app; here only the tap bookkeeping is checked, through the same rule the code uses
-        let double = |last: Option<(u64, f64)>, id: u64, t: f64| last.is_some_and(|(l, at)| l == id && t - at <= DOUBLE_TAP_MS);
-        assert!(double(Some((7, 1000.0)), 7, 1300.0));
-        assert!(!double(Some((7, 1000.0)), 7, 1500.0), "too slow for a double-click");
-        assert!(!double(Some((7, 1000.0)), 8, 1100.0), "a tap on another event is a new first tap");
-        assert!(!double(None, 7, 0.0));
+    fn the_double_click_follows_the_kit_counter() {
+        // E2E R7: two clicks 100 ms apart did not open the editor; the kit's counter has the system interval and slop
+        use bifrost_app::controls::text::ClickCounter;
+        let mut clicks = ClickCounter::default();
+        assert_eq!(clicks.press(1000.0, 50.0, 50.0), 1);
+        assert_eq!(clicks.press(1100.0, 51.0, 50.0), 2, "100 ms apart and a point off is a double-click");
+        assert_eq!(clicks.press(5000.0, 50.0, 50.0), 1, "too slow for a double-click");
+        assert_eq!(clicks.press(5100.0, 90.0, 50.0), 1, "too far from the first click");
     }
 
     #[test]

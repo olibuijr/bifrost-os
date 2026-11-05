@@ -23,6 +23,9 @@ const MAX_OUTPUT: u64 = 1 << 20;
 /// The interface used when the kernel lists none. A missing interface is reported in the footer, not hidden.
 const FALLBACK_IFACE: &str = "wlan0";
 
+/// What `iw` reports, in plain words, when the interface is not a usable Wi-Fi device.
+const NO_ADAPTER: &str = "No Wi-Fi adapter is available";
+
 /// What the radio looked like at one poll.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Reading {
@@ -115,9 +118,32 @@ fn run_limited(program: &str, args: &[&str], limit: Duration) -> Result<String, 
     }
 }
 
+/// Says what `iw` reported in plain language. `iw` prints the kernel's error as `command failed: <text> (-<errno>)`;
+/// the known ones become a sentence, anything else keeps its text without the errno suffix.
+fn plain_iw_error(raw: &str) -> String {
+    let text = raw.trim();
+    let reason = text.strip_prefix("command failed:").unwrap_or(text).trim();
+    let lower = reason.to_lowercase();
+    if lower.contains("no such device") || lower.contains("(-19)") {
+        NO_ADAPTER.into()
+    } else if lower.contains("resource busy") || lower.contains("(-16)") {
+        "The Wi-Fi adapter is busy. Try again in a moment".into()
+    } else if lower.contains("network is down") || lower.contains("(-100)") {
+        "Wi-Fi is turned off".into()
+    } else if text.starts_with("command failed:") {
+        // drop the trailing "(-N)" errno
+        match reason.rfind(" (-") {
+            Some(at) if reason.ends_with(')') => reason[..at].to_string(),
+            _ => reason.to_string(),
+        }
+    } else {
+        text.to_string()
+    }
+}
+
 /// Runs `iw` with `args` and returns its standard output, or a message for the user. Killed after `limit`.
 pub fn run_iw(args: &[&str], limit: Duration) -> Result<String, String> {
-    run_limited("iw", args, limit)
+    run_limited("iw", args, limit).map_err(|e| plain_iw_error(&e))
 }
 
 /// Reads the interfaces and the link of the first wireless interface once.
@@ -223,6 +249,7 @@ pub fn spawn_scan(iface: String, result: Arc<Mutex<Option<Result<ScanOutcome, St
             Ok(text) => Ok(ScanOutcome { samples: model::parse_scan(&text), cached: false }),
             Err(fresh_err) => match run_iw(&["dev", &iface, "scan", "dump"], LINK_LIMIT) {
                 Ok(text) => Ok(ScanOutcome { samples: model::parse_scan(&text), cached: true }),
+                Err(_) if fresh_err == NO_ADAPTER => Err(fresh_err),
                 Err(_) => Err(format!("Scan failed: {fresh_err}")),
             },
         };
@@ -243,6 +270,14 @@ mod tests {
         assert_eq!(run_limited("echo", &["hello"], Duration::from_secs(5)), Ok("hello\n".to_string()));
         let err = run_limited("sh", &["-c", "echo nope >&2; exit 3"], Duration::from_secs(5)).unwrap_err();
         assert_eq!(err, "nope");
+    }
+
+    #[test]
+    fn iw_errors_are_said_in_plain_language() {
+        assert_eq!(plain_iw_error("command failed: No such device (-19)\n"), NO_ADAPTER);
+        assert_eq!(plain_iw_error("command failed: Network is down (-100)"), "Wi-Fi is turned off");
+        assert_eq!(plain_iw_error("command failed: Invalid argument (-22)"), "Invalid argument");
+        assert_eq!(plain_iw_error("iw could not run: not found"), "iw could not run: not found");
     }
 
     #[test]

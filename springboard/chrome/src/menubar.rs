@@ -386,7 +386,7 @@ fn paint_popup(c: &mut dyn Canvas, face: u64, layout: &PopupLayout, items: &[Men
             c.fill_rrect(
                 RectF::new(PAD_PT, span.top, layout.w - 2.0 * PAD_PT, span.h),
                 ROW_RADIUS_PT,
-                ui::MENU_HIGHLIGHT,
+                ui::menu_highlight(),
             );
         }
         let color = if selected {
@@ -682,7 +682,9 @@ pub fn run() -> Result<(), String> {
     loop {
         let events = display.dispatch(-1, Some(link.fd()))?;
         for m in link.recv().map_err(|e| format!("shell link closed: {e}"))? {
-            if let ToChrome::MenuBar(model) = m {
+            if crate::model::apply_appearance(&m) {
+                bar.changed();
+            } else if let ToChrome::MenuBar(model) = m {
                 bar.set_model(model);
             }
         }

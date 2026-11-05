@@ -1,5 +1,5 @@
-//! Format > Font > Show Fonts (Cmd+T) and Show Colors (Shift+Cmd+C): the font panel (`NSFontPanel`), with columns for the
-//! family, the typeface and the size, and the colour panel (`NSColorPanel`) with the document's palette. Both float over
+//! Format > Font > Show Fonts (Cmd+T) and Show Colors (Shift+Cmd+C): the font panel (the reference font panel), with columns for the
+//! family, the typeface and the size, and the colour panel (the reference colour panel) with the document's palette. Both float over
 //! the page like the app's other panels, apply a choice to the selection at once (as the shared panels do), and close
 //! with Done or Esc. The family column lists every family a document can use (`text::families`: the three base families,
 //! then the installed ones), scrolls with its arrows, Up and Down and the scroll wheel, and jumps to a family by typing

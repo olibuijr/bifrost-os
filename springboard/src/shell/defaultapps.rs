@@ -273,6 +273,7 @@ mod tests {
             include_str!("../../apps/music-desktop/manifest.toml"),
             include_str!("../../apps/videoplayer-desktop/manifest.toml"),
             include_str!("../../apps/books-desktop/manifest.toml"),
+            include_str!("../../apps/script-editor-desktop/manifest.toml"),
         ] {
             let m = apphost::Manifest::parse(text).unwrap();
             r.register(manifest_handler(&m).or_else(|| first_party(&m.id)).unwrap());
@@ -302,6 +303,21 @@ mod tests {
         assert!(png.iter().all(|c| c.app != "is.olibuijr.files.desktop" && c.app != "is.olibuijr.music.desktop"), "{png:?}");
         let pdf = r.open_with("report.pdf");
         assert!(pdf.iter().any(|c| c.app == "is.olibuijr.books.desktop") && pdf[0].app == preview, "{pdf:?}");
+    }
+
+    #[test]
+    fn script_editor_is_offered_for_scripts_and_plain_text_but_takes_no_default() {
+        let r = shipped();
+        let editor = "is.olibuijr.scripteditor.desktop";
+        let sh = r.open_with("run.sh");
+        assert!(sh.iter().any(|c| c.app == editor), "it edits shell scripts: {sh:?}");
+        assert_eq!(sh[0].app, "bifrost.terminal", "Terminal keeps running scripts; Script Editor is an alternative");
+        let txt = r.open_with("notes.txt");
+        assert!(txt.iter().any(|c| c.app == editor), "it reads and writes plain text: {txt:?}");
+        assert_eq!(txt[0].app, "is.olibuijr.textedit.desktop", "TextEdit keeps owning plain text");
+        // it opens UTF-8 text only, so it does not claim rich text or pictures
+        assert!(r.open_with("letter.rtf").iter().all(|c| c.app != editor));
+        assert!(r.open_with("shot.png").iter().all(|c| c.app != editor));
     }
 
     #[test]

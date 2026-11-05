@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.6.10
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 0.6.9
+
+- The sidebar shows a hint before the first search.
+
+## 0.6.8
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 0.6.7
+
+- The search field edits like a standard text field: Select All (Cmd+A) selects the word so typing replaces it instead of appending, Left, Right, Home and End move the caret, Delete removes the character after it, and Cut, Copy, Paste, Undo and Redo act on the field (Copy with no selection still copies the definition).
+
+## 0.6.6
+
+- The sidebar lists every match again: the rows that are not selected were invisible under the rows clip (their vibrant text blended into nothing), so only the selected word showed.
+- Up and Down move the sidebar's selection and show that word, scrolling its row into view.
+- The sidebar's rows scroll no further than their end; a list that fits the column does not scroll.
+
+## 0.6.5
+
+- Typing a word selects the first match in the sidebar and shows its entry at once, as the reference does; Return chooses it. The search field keeps what was typed.
+- The sidebar's rows are clipped below the traffic lights' band, so a scrolled list no longer draws under them.
+- The subtitle under the title reads "151,378 words" instead of a dictionary count that was cut off.
+- A word asked for while Dictionary is not running (a Spotlight dictionary hit, Open in Dictionary, the Services menu) is shown once the app has started, instead of an empty search. The app also takes a word or a `dict:` URL as its launch argument.
+
+## 0.6.4
+
+- The window follows the Golden Gate Dictionary: a sidebar of the matching headwords under the traffic lights (the word on screen selected), a top bar with the title and how many were found, Back and Forward and a text size pull-down in the kit toolbar, and the kit search field at the top right. The Back and Forward buttons no longer sit under the traffic lights.
+- The entry shows the headword large, with its pronunciation when the dictionary gives one, the part of speech in grey and the senses as plain text. Only the terms of cross-reference lines (Synonyms, See also, Compare) that a dictionary defines are links, not every word of the definition.
+- A window narrower than 560 pt has no sidebar and lists the matches in the content column; File > New Window opens at 720 by 560 pt.
+- Cross-reference links stay on their terms when a line breaks after a hyphen, between Chinese, Japanese or Korean characters, or inside a long word.
+- Choosing a word in the sidebar keeps the list of matches for the search. The sidebar scrolls with the wheel and by dragging when the matches do not fit, and keeps the selected word in view.
+
+## 0.6.3
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.6.2 — 2026-10-23
 
 - Clicks in extra windows land under the pointer on scaled screens.

@@ -13,7 +13,10 @@
 //! (`Shell::system_reload`). With Automatic Updates on (the default), App Store
 //! apps update the same way, like Golden Gate "Install application updates from the
 //! App Store": silently, and only while the app is not running; an open app
-//! keeps its offer and updates on a later check, after it quits.
+//! keeps its offer and updates on a later check, after it quits. An app that
+//! started while its update was downloading (the login restore after an OS
+//! update) is quit and reopened at the new version with its windows restored
+//! (`Shell::app_update_relaunch`), so no stale binary keeps running.
 //! Network work runs on a worker thread only.
 
 use super::notify::store::Notification;
@@ -703,6 +706,8 @@ impl Shell {
                 }
                 self.dirty = true;
             }
+            // an app updated while it ran (here, by the store, or over ssh) is quit and reopened at the new version
+            self.app_update_relaunch(t);
         }
         // a system package updated from the App Store's UPDATE button
         let from_store = self.store.as_mut().map(|s| s.take_system_installed()).unwrap_or_default();

@@ -333,6 +333,7 @@ impl super::Shell {
     }
 
     /// Opens the install sheet for the first package archive among `files`. False when none is one.
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub(super) fn package_open_files(&mut self, files: &[PathBuf]) -> bool {
         let Some(path) = files.iter().find(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(super::pacman_update::is_package_file)) else { return false };
         self.package_install_open(Source::File(path.clone()))

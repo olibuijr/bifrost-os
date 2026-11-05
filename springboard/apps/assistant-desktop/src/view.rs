@@ -1040,6 +1040,10 @@ impl Assistant {
         let Some(conv) = self.current() else { return };
         let (view_h, empty) = (g.bottom - g.top, conv.messages.is_empty());
         if empty {
+            // A sheet covers the centre, so the empty-state copy would peek out around its edges.
+            if self.sheet.is_some() || self.diag_open {
+                return;
+            }
             let mid = g.top + view_h / 2.0;
             let cx = g.cont_x + g.cont_w / 2.0;
             put_centred(s, &mut self.labels, ui, "How can I help?", MAC_TITLE1_PT, Weight::Semibold, LABEL.now(), cx, mid - ui.pt(10.0));

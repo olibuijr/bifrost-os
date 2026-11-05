@@ -32,6 +32,10 @@ use window::{
 const HELP_URL: &str = "https://bifrost.olibuijr.com/docs/system-information";
 
 impl App for SysInfo {
+    /// A single-window utility: the red light quits it (`applicationShouldTerminateAfterLastWindowClosed:`).
+    fn terminates_after_last_window_closed(&self) -> bool {
+        true
+    }
     fn id(&self) -> &str {
         "is.olibuijr.sysinfo.desktop"
     }
@@ -256,7 +260,7 @@ impl SysInfo {
                         }
                         self.dragged = true;
                         let press = self.press;
-                        self.drag_scroll(press, last - y)
+                        bifrost_app::pans_now() && self.drag_scroll(press, last - y)
                     }
                     TouchKind::Up => {
                         let released = self.hit(&ctx.ui, x, y);

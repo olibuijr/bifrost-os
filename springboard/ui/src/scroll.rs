@@ -18,6 +18,23 @@ const SPRING_W: f32 = 0.012;
 const RUBBER_D: f32 = 1000.0;
 const SAMPLES: usize = 16;
 
+/// The overlay scroll indicator (knob), in points: thin and inset from the trailing edge, as `NativeScrollView` draws it.
+pub const INDICATOR_W_PT: f32 = 3.0;
+pub const INDICATOR_INSET_PT: f32 = 3.0;
+pub const INDICATOR_MIN_PT: f32 = 24.0;
+
+/// The knob's top and length along a viewport `viewport` long whose content scrolls `max` further, scrolled to
+/// `offset`: the knob is as long as the visible share of the content (at least `min_len`) and travels the rest of the
+/// track. None when there is nothing to scroll. All lengths in the same unit.
+pub fn indicator(viewport: f32, max: f32, offset: f32, min_len: f32) -> Option<(f32, f32)> {
+    if !(viewport > 0.0 && max > 0.0) {
+        return None;
+    }
+    let len = (viewport * viewport / (viewport + max)).max(min_len).min(viewport);
+    let t = (offset / max).clamp(0.0, 1.0);
+    Some((t * (viewport - len), len))
+}
+
 /// Where a revealed rectangle is placed in the viewport: the edge or the middle of the target meets that viewport place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Anchor {
@@ -50,6 +67,10 @@ struct Touch {
     y0: f32,
     offset0: f32,
     dragging: bool,
+    /// whether a drag of this touch pans (`crate::pan`): a pointer drag on a desktop does not, so it never starts one
+    pans: bool,
+    /// a touch that does not pan moved past the slop: it is not a tap either
+    slid: bool,
     /// the finger position the drag is measured from (past the slop, so the content does not jump)
     anchor: f32,
     samples: [(f64, f32); SAMPLES],
@@ -119,6 +140,11 @@ impl Scroller {
         self.touch.is_some_and(|t| t.dragging)
     }
 
+    /// How far the content scrolls: its length past the viewport (0 when it fits).
+    pub fn max(&self) -> f32 {
+        self.max
+    }
+
     pub fn set_max(&mut self, max: f32) {
         self.max = max.max(0.0);
         if self.touch.is_none() && self.motion.is_none() {
@@ -150,7 +176,7 @@ impl Scroller {
     pub fn down(&mut self, y: f32, t: f64) {
         // a touch during a fling catches the content where it is
         self.motion = None;
-        let mut tc = Touch { y0: y, offset0: self.offset, dragging: false, anchor: y, samples: [(0.0, 0.0); SAMPLES], n: 0 };
+        let mut tc = Touch { y0: y, offset0: self.offset, dragging: false, pans: crate::pan::pans_now(), slid: false, anchor: y, samples: [(0.0, 0.0); SAMPLES], n: 0 };
         tc.push(t, y);
         self.touch = Some(tc);
     }
@@ -158,6 +184,10 @@ impl Scroller {
     pub fn moved(&mut self, y: f32, t: f64) {
         let max = self.max;
         let Some(tc) = self.touch.as_mut() else { return };
+        if !tc.pans {
+            tc.slid |= (y - tc.y0).abs() > SLOP;
+            return;
+        }
         if !tc.dragging && (y - tc.y0).abs() > SLOP {
             tc.dragging = true;
             tc.anchor = tc.y0 + SLOP.copysign(y - tc.y0);
@@ -182,7 +212,7 @@ impl Scroller {
         self.moved(y, t);
         let Some(tc) = self.touch.take() else { return false };
         if !tc.dragging {
-            return true;
+            return !tc.slid;
         }
         let fv = tc.velocity();
         let v = if paused || fv.abs() < MIN_FLING { 0.0 } else { -fv };
@@ -245,6 +275,52 @@ impl Default for Scroller {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_indicator_shows_the_visible_share_and_travels_the_track() {
+        assert_eq!(super::indicator(100.0, 0.0, 0.0, 24.0), None, "nothing to scroll");
+        assert_eq!(super::indicator(100.0, 100.0, 0.0, 24.0), Some((0.0, 50.0)), "half the content is visible");
+        assert_eq!(super::indicator(100.0, 100.0, 100.0, 24.0), Some((50.0, 50.0)), "at the end");
+        assert_eq!(super::indicator(100.0, 100.0, -40.0, 24.0), Some((0.0, 50.0)), "a rubber band keeps it in the track");
+        assert_eq!(super::indicator(100.0, 9900.0, 0.0, 24.0).map(|k| k.1), Some(24.0), "a long list keeps a grabbable knob");
+    }
+
+    fn drag(s: &mut super::Scroller) -> bool {
+        s.down(100.0, 0.0);
+        s.moved(60.0, 16.0);
+        s.moved(20.0, 32.0);
+        s.up(20.0, 48.0)
+    }
+
+    #[test]
+    fn a_pointer_drag_on_a_desktop_does_not_pan_or_fling_and_is_not_a_tap() {
+        use crate::form_factor::FormFactor;
+        use crate::pan::{with_touch, TouchSource};
+        let mut s = super::Scroller::new();
+        s.set_max(500.0);
+        let tap = with_touch(FormFactor::Desktop, TouchSource::Pointer, || drag(&mut s));
+        assert!(!tap, "a press that slid away is no click");
+        assert_eq!((s.offset(), s.animating(), s.dragging()), (0.0, false, false));
+        let click = with_touch(FormFactor::Desktop, TouchSource::Pointer, || {
+            s.down(100.0, 0.0);
+            s.up(101.0, 10.0)
+        });
+        assert!(click, "a press that stayed put is a click");
+    }
+
+    #[test]
+    fn a_finger_drag_pans_on_a_desktop_and_either_source_pans_on_a_tablet() {
+        use crate::form_factor::FormFactor;
+        use crate::pan::{with_touch, TouchSource};
+        for (form, source) in [(FormFactor::Desktop, TouchSource::Finger), (FormFactor::Tablet, TouchSource::Finger), (FormFactor::Tablet, TouchSource::Pointer)] {
+            let mut s = super::Scroller::new();
+            s.set_max(500.0);
+            let tap = with_touch(form, source, || drag(&mut s));
+            assert!(!tap);
+            assert!(s.offset() > 50.0, "{form:?} {source:?}: {}", s.offset());
+            assert!(s.animating(), "the release flings");
+        }
+    }
+
     #[test]
     fn the_wheel_moves_the_offset_by_its_travel_within_the_range() {
         let mut s = super::Scroller::new();

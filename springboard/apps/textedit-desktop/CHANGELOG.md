@@ -1,5 +1,73 @@
 # Changelog
 
+## 1.13.14
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 1.13.13
+
+- The Make Plain Text sheet takes Cmd+., the Tab focus ring and Space; Shift+Tab and Cmd+Delete work in the close alert.
+
+## 1.13.12
+
+- The save sheet takes Cmd+D for Don't Save, and Tab shows a focus ring that Space presses.
+
+## 1.13.11
+
+- The Window menu lists each document once, Open Recent brings an open document forward, File has one Print, the menu bar says TextEdit, and a text file dropped on the window opens.
+
+## 1.13.10
+
+- The red close button on a second document window asks about that document, like Cmd+W.
+
+## 1.13.9
+
+- The red close button asks before closing an edited document.
+
+## 1.13.8
+
+- An unsaved Untitled document autosaved at Quit opens again, still edited, at the next launch; the Preferences menu is now Settings.
+
+## 1.13.7
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 1.13.6
+
+- Closing the last document closes its window too, and Text Editor keeps running with no window, as the reference does (it used to leave an empty, disabled window). Clicking its Dock icon, choosing it in the app switcher or opening it again shows a new Untitled; File > New or a file opened meanwhile brings the window back with that document (with the matching system update).
+
+## 1.13.5
+
+- Undo of Make Plain Text makes the document rich text again: the format bar, the ruler and the formatting commands come back with the fonts. Redo makes it plain text again.
+- The Make Plain Text confirmation is an alert sheet attached under the title bar, like the save confirmation, with OK (the default) stacked above Cancel.
+- Closing the main window's document now draws the other document where its window was: the system moves the window on screen, not only in its records (with the matching system update).
+
+## 1.13.4
+
+- Format > Make Plain Text asks first, as the reference does: "Convert this document to plain text?", with OK and Cancel (it used to convert at once unless the document had attachments).
+- A converted document takes the fixed-pitch plain text font instead of keeping Helvetica.
+- Undo of Make Plain Text also restores the rich text default font, so text typed afterwards is no longer in the plain font.
+- A plain text file opened from disk uses the plain text font too, so every plain document has one font.
+- The save confirmation is a sheet attached to the window's title bar, with full-width stacked buttons.
+- Closing the main window's document keeps the other document where its window was: the main window moves there instead of the document jumping into the main window's frame.
+
+## 1.13.3
+
+- A second document window shows one title row, like the first: it opens with full-size content, so the system draws no title bar over the window's own.
+- The save confirmation is a sheet hanging from the title bar: the whole document name shows (the title wraps), and Save is the blue default button that Return presses.
+- Plain text documents show no format bar; the page starts under the title row.
+- The window reports where its caret is, so Look Up opens under the selection instead of under the menu bar.
+
+## 1.13.2
+
+- Each document has its own window: File > New (and Duplicate, or shared text) opens a second window and keeps the first; a file opened while the front window holds an empty Untitled takes its place; closing a document closes its window.
+- The Services submenu lists the services for the selected text, and Look Up with only a caret defines the word at the caret: the document reports its selection to the system as text fields do.
+- Closing an edited document, with File > Close or the window's close button, asks first: a sheet offers Don't Save, Cancel and Save, and the document closes only once it is answered. The close button used to take the window away and bring the document straight back.
+
+## 1.13.1
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 1.13.0 — 2026-10-23
 
 - Fonts (Cmd+T) and Colors panels; text draws in its chosen family; all installed families are listed.

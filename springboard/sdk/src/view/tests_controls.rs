@@ -401,6 +401,58 @@ fn a_stack_aligns_children_across_its_axis() {
     assert_eq!((Align::TOP, Align::BOTTOM), (Align::Leading, Align::Trailing));
 }
 
+/// A fixed-size view without text (an image), for baseline alignment.
+struct Block {
+    base: ViewBase,
+    size: (f32, f32),
+}
+impl View for Block {
+    crate::view_base!();
+    fn intrinsic(&self, _ui: &Ui) -> (f32, f32) {
+        self.size
+    }
+}
+
+fn baseline_row(ui: &Ui, align: Align) -> (Stack, f32) {
+    let mut big = Label::new("Title");
+    big.pt = bifrost_render::ui::MAC_LARGE_TITLE_PT;
+    let mut row = Stack::hstack(8.0, vec![Box::new(big), Box::new(Button::new("OK", "ok")), Box::new(Block { base: ViewBase::default(), size: (20.0, 30.0) })]).aligned(align);
+    row.layout(ui, rect(0.0, 10.0, 400.0, 120.0));
+    let first = row.children()[0].frame().y + row.children()[0].baselines(ui).unwrap().0;
+    (row, first)
+}
+
+#[test]
+fn first_baseline_alignment_lines_up_text_of_different_sizes_and_images_by_their_bottom() {
+    let ui = ui();
+    let (row, line) = baseline_row(&ui, Align::FirstBaseline);
+    let button = &row.children()[1];
+    assert!((button.frame().y + button.baselines(&ui).unwrap().0 - line).abs() < 1e-3, "button baseline {} vs {line}", button.frame().y);
+    // the view without text sits on the baseline with its bottom edge
+    assert!((row.children()[2].frame().bottom() - line).abs() < 1e-3);
+    // nothing rises above the stack's top, and the lowest guide's owner stays at the top
+    assert!(row.children().iter().all(|c| c.frame().y >= 10.0 - 1e-3));
+    assert!(row.children().iter().any(|c| (c.frame().y - 10.0).abs() < 1e-3));
+    // the stack reports the shared line as its own baselines
+    let (f, l) = row.baselines(&ui).unwrap();
+    assert!((10.0 + f - line).abs() < 1e-3 && (10.0 + l - line).abs() < 1e-3);
+}
+
+#[test]
+fn last_baseline_alignment_uses_the_last_line_and_a_vertical_stack_ignores_baselines() {
+    let ui = ui();
+    let (row, line) = baseline_row(&ui, Align::LastBaseline);
+    let button = &row.children()[1];
+    assert!((button.frame().y + button.baselines(&ui).unwrap().1 - line).abs() < 1e-3);
+    let mut col = Stack::vstack(0.0, vec![Box::new(Button::new("OK", "ok"))]).aligned(Align::FirstBaseline);
+    col.layout(&ui, rect(0.0, 0.0, 300.0, 100.0));
+    assert_eq!(col.children()[0].frame().x, 0.0);
+    // a stack with no text has no baselines
+    let mut blocks = Stack::hstack(0.0, vec![Box::new(Block { base: ViewBase::default(), size: (10.0, 10.0) })]);
+    blocks.layout(&ui, rect(0.0, 0.0, 100.0, 100.0));
+    assert_eq!(blocks.baselines(&ui), None);
+}
+
 #[test]
 fn a_stack_with_insets_and_spacing_stacks_children_in_order_and_routes_clicks() {
     let ui = ui();
@@ -473,4 +525,35 @@ fn a_form_with_no_sections_lays_out_and_draws() {
     w.layout(&ui, rect(0.0, 0.0, 100.0, 100.0));
     draws(&mut w, 100, 100);
     assert!(w.ax_nodes().is_empty());
+}
+
+// ---- Accent colour ----
+
+/// The accent is process-wide: tests that change it run one at a time.
+static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn drawn_with_green_accent<V: View + 'static>(v: V, size: (usize, usize)) -> (Vec<u32>, u32) {
+    use crate::kit::appearance::{accent, accent_now, set_accent, Accent};
+    let keep = accent();
+    set_accent(Accent::Green);
+    let green = accent_now();
+    let (mut w, _) = one(v, (size.0 as f32, size.1 as f32));
+    let mut px = vec![0u32; size.0 * size.1];
+    w.draw(&mut Surface { w: size.0, h: size.1, stride: size.0, px: &mut px, y0: 0 }, &ui());
+    set_accent(keep);
+    (px, green)
+}
+
+#[test]
+fn a_checked_checkbox_a_slider_and_a_progress_bar_are_filled_with_the_chosen_accent_not_system_blue() {
+    let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let blue = crate::kit::ui::TINT;
+    for (name, (px, green)) in [
+        ("checkbox", drawn_with_green_accent(Checkbox::new("C", true, "c"), (120, 24))),
+        ("slider", drawn_with_green_accent(Slider::new("Volume", values::Slider::new(0.0, 10.0, 10.0, None), "volume"), (118, 28))),
+        ("progress", drawn_with_green_accent(ProgressIndicator::bar(1.0), (100, 10))),
+    ] {
+        assert!(px.contains(&green), "{name}: filled with the accent");
+        assert!(!px.contains(&blue), "{name}: no fixed systemBlue left");
+    }
 }

@@ -70,6 +70,11 @@ pub struct Properties {
     pub is_indexed: bool,
     pub icc_profile: Option<Vec<u8>>,
     pub profile_name: Option<String>,
+    /// The XMP packet (UTF-8 XML) when the file carries one: JPEG APP1, PNG `iTXt` `XML:com.adobe.xmp`, WebP `XMP `.
+    pub xmp: Option<Vec<u8>>,
+    /// The image resource blocks of a JPEG APP13 segment, header included (the IPTC datasets live in resource
+    /// 0x0404; `bifrost_core::imgmeta::iptc_from_app13` reads them).
+    pub image_resources: Option<Vec<u8>>,
     pub exif: Dict,
     pub tiff: Dict,
     pub gps: Dict,
@@ -484,6 +489,45 @@ pub fn build_block(tiff: &Dict, exif: &Dict, gps: &Dict) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// Like [`build_block`], with a JPEG thumbnail in a second directory (IFD1: Compression 6, JPEGInterchangeFormat and
+/// its length), the place camera files keep the small preview. Without a thumbnail this is `build_block`.
+pub fn build_block_with_thumbnail(tiff: &Dict, exif: &Dict, gps: &Dict, thumbnail: Option<&[u8]>) -> Option<Vec<u8>> {
+    let Some(thumb) = thumbnail.filter(|t| t.starts_with(&[0xFF, 0xD8])) else {
+        return build_block(tiff, exif, gps);
+    };
+    let mut out = match build_block(tiff, exif, gps) {
+        Some(b) => b,
+        // No other metadata: an empty IFD0 that only links to IFD1.
+        None => vec![b'I', b'I', 42, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    };
+    let ifd1_off = out.len();
+    let n0 = u16::from_le_bytes([out[8], out[9]]) as usize;
+    let next_at = 8 + 2 + n0 * 12;
+    out[next_at..next_at + 4].copy_from_slice(&(ifd1_off as u32).to_le_bytes());
+    let long = |tag: u16, v: u32| OutEntry { tag, typ: 4, count: 1, data: v.to_le_bytes().to_vec() };
+    // Three entries whose values fit in place: 2 + 3 * 12 + 4 bytes, then the JPEG bytes.
+    let thumb_off = ifd1_off + 2 + 3 * 12 + 4;
+    let entries = vec![OutEntry { tag: 0x0103, typ: 3, count: 1, data: 6u16.to_le_bytes().to_vec() }, long(0x0201, thumb_off as u32), long(0x0202, thumb.len() as u32)];
+    out.extend(ifd_bytes(entries, ifd1_off));
+    out.extend(thumb);
+    Some(out)
+}
+
+/// The JPEG thumbnail that IFD1 of a TIFF-structured block points at (JPEGInterchangeFormat and its length).
+/// `None` when the block has no second directory, the directory has no JPEG, or the bytes are not a JPEG.
+pub fn thumbnail_of_block(d: &[u8]) -> Option<&[u8]> {
+    let b = Block::new(d)?;
+    let (_, next) = b.ifd(b.first_ifd()?)?;
+    if next == 0 {
+        return None;
+    }
+    let (entries, _) = b.ifd(next)?;
+    let value = |tag: u16| entries.iter().find(|e| e.tag == tag).and_then(|e| b.uints(e).first().copied());
+    let (off, len) = (value(0x0201)? as usize, value(0x0202)? as usize);
+    let jpeg = d.get(off..off.checked_add(len)?)?;
+    jpeg.starts_with(&[0xFF, 0xD8]).then_some(jpeg)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -515,6 +559,25 @@ mod tests {
         props.absorb_exif(&blob);
         assert_eq!(props.orientation, 6);
         assert_eq!(props.dpi_width, Some(300.0));
+    }
+
+    #[test]
+    fn a_thumbnail_rides_in_ifd1_and_comes_back() {
+        let jpeg = [0xFF, 0xD8, 0xFF, 0xD9, 1, 2, 3];
+        let mut tiff = Dict::new();
+        tiff.insert("Orientation".into(), PropValue::Int(6));
+        let mut gps = Dict::new();
+        gps.insert("LatitudeRef".into(), PropValue::Text("N".into()));
+        let blob = build_block_with_thumbnail(&tiff, &Dict::new(), &gps, Some(&jpeg)).unwrap();
+        assert_eq!(thumbnail_of_block(&blob), Some(jpeg.as_slice()));
+        let p = parse_block(&blob).unwrap();
+        assert_eq!(p.tiff["Orientation"], PropValue::Int(6));
+        assert_eq!(p.gps["LatitudeRef"].as_str(), Some("N"));
+        assert!(!p.tiff.contains_key("Tag_0201"), "IFD1 is not read as image metadata");
+        let only = build_block_with_thumbnail(&Dict::new(), &Dict::new(), &Dict::new(), Some(&jpeg)).unwrap();
+        assert_eq!(thumbnail_of_block(&only), Some(jpeg.as_slice()));
+        assert!(build_block_with_thumbnail(&Dict::new(), &Dict::new(), &Dict::new(), Some(b"not a jpeg")).is_none());
+        assert_eq!(thumbnail_of_block(&build_block(&tiff, &Dict::new(), &Dict::new()).unwrap()), None);
     }
 
     #[test]

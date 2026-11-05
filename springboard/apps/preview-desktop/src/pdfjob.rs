@@ -3,6 +3,7 @@
 //! the app loop, waking it so `App::tick` can take them and draw.
 
 use crate::find::Hit;
+use crate::model;
 use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::kit::Image;
 use crate::inspector;
@@ -25,6 +26,8 @@ pub struct Key {
     pub page: usize,
     pub w: usize,
     pub h: usize,
+    /// The quarter turns the picture is drawn with (a sidebar thumbnail follows its page's turn).
+    pub quarters: u8,
 }
 
 /// One outline entry: its title, its depth and the source page it goes to, when it names one.
@@ -187,6 +190,10 @@ pub fn take(inbox: &Inbox) -> Vec<Reply> {
 pub fn render(key: Key) -> Job {
     Box::new(move |pdf: &Pdf| {
         let img = pdf.pages.get(key.page).and_then(|p| draw::render_page_fit(&pdf.doc, p, key.w, key.h));
+        let img = match img {
+            Some(img) if key.quarters != 0 => Some(model::rotate(&img, key.quarters)),
+            other => other,
+        };
         Reply::Rendered(key, img)
     })
 }

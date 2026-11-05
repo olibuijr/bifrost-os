@@ -216,6 +216,9 @@ struct Entry<D> {
     tried: Option<Stamp>,
     /// the folder a package document was read from, which a save writes back to (None for a file)
     package: Option<PathBuf>,
+    /// the device and inode of the document's file, so the same file arriving under a new grant (opened again from
+    /// Files or the Dock) finds this document instead of opening a second copy
+    file_id: Option<(u64, u64)>,
 }
 
 impl<D> Entry<D> {
@@ -248,6 +251,71 @@ enum Pending {
 struct CloseAlert {
     doc: DocId,
     alert: Alert,
+    /// The button Tab moved the focus ring to (an `AlertAction` id); `None` until the first Tab.
+    focus: Option<u32>,
+}
+
+/// What a key did to the close confirmation (`DocumentController::alert_key`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AlertKey {
+    /// The key pressed button `choice` (`alert::SAVE`, `CANCEL` or `DONT_SAVE`): the app answers with `answer_alert`.
+    Answer(u32),
+    /// Tab moved the focus ring: redraw the sheet.
+    Focus,
+    /// The key did nothing, and the sheet used it up all the same.
+    Ignored,
+}
+
+/// The `KeyCombo` of a key the shell delivered: named keys by their shell code, text by its character (Space is a key),
+/// and a chord by its evdev key with Cmd (Meta), Ctrl, Shift and Alt.
+pub fn key_combo(input: &crate::KeyInput) -> Option<bifrost_ui::keys::KeyCombo> {
+    use crate::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};
+    use crate::KeyInput;
+    use bifrost_ui::keys::{Key, KeyCombo};
+    if let Some((evdev, bits)) = input.as_chord() {
+        // Tab (Shift+Tab steps the focus back) and Backspace (Cmd+Delete is a sheet's Don't Save) arrive as chords too
+        let key = match crate::wl::input::printable(evdev, crate::wl::input::Mods::default()) {
+            Some(' ') => Key::Space,
+            Some(c) => Key::Char(c),
+            None if evdev == 15 => Key::Tab,
+            None if evdev == 14 => Key::Delete,
+            None => return None,
+        };
+        return Some(KeyCombo { cmd: bits & CHORD_META != 0, ctrl: bits & CHORD_CTRL != 0, alt: bits & CHORD_ALT != 0, shift: bits & CHORD_SHIFT != 0, key });
+    }
+    let key = match input {
+        KeyInput::Code(1) | KeyInput::Code(27) => Key::Escape,
+        KeyInput::Code(13) => Key::Return,
+        KeyInput::Code(9) => Key::Tab,
+        KeyInput::Code(8) => Key::Delete,
+        KeyInput::Code(_) => return None,
+        KeyInput::Text(t) => {
+            let mut chars = t.chars();
+            match (chars.next(), chars.next()) {
+                (Some(' '), None) => Key::Space,
+                (Some(c), None) => Key::Char(c.to_ascii_lowercase()),
+                _ => return None,
+            }
+        }
+    };
+    Some(KeyCombo::new(key))
+}
+
+/// A key press on a sheet an app keeps itself (Disk Utility, Notes, Sticky Notes): the same keys as the close
+/// confirmation (`Sheet::handle_key`). Return presses the default button, Escape and Cmd+. Cancel, Cmd+D the Don't Save
+/// (or Delete) button, Tab moves the focus ring (kept in `sheet.focus`, which the sheet draws) and Space presses the
+/// focused button. `Answer` carries the id of the button pressed; the app runs it and drops the sheet. A key the shell
+/// cannot map to a combo does nothing (`Ignored`).
+pub fn sheet_key(sheet: &mut bifrost_ui::sheet::Sheet, input: &crate::KeyInput) -> AlertKey {
+    let Some(combo) = key_combo(input) else { return AlertKey::Ignored };
+    let out = sheet.handle_key(combo, sheet.focus);
+    let moved = out.focus != sheet.focus;
+    sheet.focus = out.focus;
+    match out.answer {
+        Some(choice) => AlertKey::Answer(choice),
+        None if moved => AlertKey::Focus,
+        None => AlertKey::Ignored,
+    }
 }
 
 /// `NativeDocumentController` plus the per-document bookkeeping of `NativeDocument`.
@@ -258,7 +326,11 @@ pub struct DocumentController<D: Document> {
     recents: Vec<RecentDocument>,
     pending: HashMap<u32, Pending>,
     alert: Option<CloseAlert>,
+    /// A quit is waiting on the edited documents (`request_quit`): each is asked in turn, and Cancel or a failed save ends it.
+    quitting: bool,
     sent: Option<(String, bool, String)>,
+    /// The document the shell's window state follows when it is not the active one (see `set_state_doc`).
+    state_doc: Option<DocId>,
     /// autosave delay in ms; `AUTOSAVE_DELAY_MS` unless changed
     pub autosave_delay: f64,
     /// the saved versions of every open document, kept under `document-<id>`; each save adds one (see `on_saved`)
@@ -274,7 +346,7 @@ impl<D: Document> Default for DocumentController<D> {
 
 impl<D: Document> DocumentController<D> {
     pub fn new() -> Self {
-        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), pending: HashMap::new(), alert: None, sent: None, autosave_delay: AUTOSAVE_DELAY_MS, revisions: RevisionStore::default(), now: 0.0 }
+        DocumentController { docs: Vec::new(), active: None, next_id: 0, recents: Vec::new(), pending: HashMap::new(), alert: None, quitting: false, sent: None, state_doc: None, autosave_delay: AUTOSAVE_DELAY_MS, revisions: RevisionStore::default(), now: 0.0 }
     }
 
     // ---- the document list ----
@@ -303,6 +375,13 @@ impl<D: Document> DocumentController<D> {
         if self.entry(id).is_some() {
             self.active = Some(id);
         }
+    }
+    /// The document whose title, edited flag and file name `sync` reports to the shell, instead of the active one's. An
+    /// app with a window per document sets the main window's document: the shell labels the main window with this state
+    /// (the Window menu, the close light), and the other windows by their own titles, so the active document's state
+    /// would list it twice and leave the main window's document unnamed. `None` follows the active document again.
+    pub fn set_state_doc(&mut self, id: Option<DocId>) {
+        self.state_doc = id;
     }
     /// `displayName`: "Untitled", "Untitled 2" or the file name.
     pub fn display_name(&self, id: DocId) -> Option<String> {
@@ -339,7 +418,7 @@ impl<D: Document> DocumentController<D> {
     fn add(&mut self, doc: D, untitled: Option<u32>, name: String, grant: Option<GrantId>, uttype: &str) -> DocId {
         self.next_id += 1;
         let id = DocId(self.next_id);
-        self.docs.push(Entry { id, doc, untitled, name, grant, uttype: uttype.into(), now: Stamp::default(), saved: Stamp::default(), edit_since: None, tried: None, package: None });
+        self.docs.push(Entry { id, doc, untitled, name, grant, uttype: uttype.into(), now: Stamp::default(), saved: Stamp::default(), edit_since: None, tried: None, package: None, file_id: None });
         self.active = Some(id);
         id
     }
@@ -585,7 +664,7 @@ impl<D: Document> DocumentController<D> {
             .action(alert::CANCEL, "Cancel", AlertStyle::Cancel)
             .action(alert::DONT_SAVE, "Don\u{2019}t Save", AlertStyle::Destructive);
         self.active = Some(id);
-        self.alert = Some(CloseAlert { doc: id, alert });
+        self.alert = Some(CloseAlert { doc: id, alert, focus: None });
         Vec::new()
     }
 
@@ -593,6 +672,34 @@ impl<D: Document> DocumentController<D> {
     /// `Alert::button_order`). `None` when no close is waiting.
     pub fn alert(&self) -> Option<&Alert> {
         self.alert.as_ref().map(|a| &a.alert)
+    }
+
+    /// The close confirmation as the kit's alert sheet, with the focus ring on the button Tab reached. Draw this, not
+    /// `alert().sheet()`, so the ring shows. `None` when no close is waiting.
+    pub fn alert_sheet(&self) -> Option<bifrost_ui::sheet::Sheet> {
+        self.alert.as_ref().map(|a| a.alert.sheet().with_focus(a.focus))
+    }
+
+    /// A key press while the close confirmation is up: Return presses Save, Escape and Cmd+. Cancel, Cmd+D Don't Save,
+    /// Tab moves the focus ring, Space presses the focused button. `None` when no close is waiting (the key is not the
+    /// confirmation's). An answer is only returned, never applied: the app calls `answer_alert` with it.
+    pub fn alert_key(&mut self, input: &crate::KeyInput) -> Option<AlertKey> {
+        let a = self.alert.as_mut()?;
+        let Some(combo) = key_combo(input) else { return Some(AlertKey::Ignored) };
+        let out = a.alert.sheet().handle_key(combo, a.focus);
+        let moved = out.focus != a.focus;
+        a.focus = out.focus;
+        Some(match out.answer {
+            Some(choice) => AlertKey::Answer(choice),
+            None if moved => AlertKey::Focus,
+            None => AlertKey::Ignored,
+        })
+    }
+
+    /// The document the waiting close confirmation is for, so an app with a window per document shows the alert as a
+    /// sheet on that document's window. `None` when no close is waiting.
+    pub fn alert_doc(&self) -> Option<DocId> {
+        self.alert.as_ref().map(|a| a.doc)
     }
 
     /// The user pressed button `choice` (`alert::SAVE`, `CANCEL` or `DONT_SAVE`; the id of an `AlertAction`).
@@ -604,7 +711,44 @@ impl<D: Document> DocumentController<D> {
                 Vec::new()
             }
             alert::DONT_SAVE => self.finish_close(host, doc).into_iter().collect(),
-            _ => Vec::new(),
+            _ => {
+                // Cancel keeps the document as it is, edited, and stops a quit that was waiting on it
+                self.quitting = false;
+                Vec::new()
+            }
+        }
+    }
+
+    /// `applicationShouldTerminate`: true when nothing is unsaved and the app may quit now. Otherwise the first edited
+    /// document asks (the close alert, [`DocumentController::alert_doc`] says which) and `false` comes back; the app answers
+    /// with `answer_alert` and calls `advance_quit` after every answer and every `handle`, which asks for the next edited
+    /// document and finally says when to quit. Cancel, or a save that fails or is cancelled, ends the quit.
+    pub fn request_quit(&mut self, host: &dyn DocumentHost) -> bool {
+        self.quitting = true;
+        self.advance_quit(host)
+    }
+
+    /// True when a quit is waiting on the documents ([`DocumentController::request_quit`]).
+    pub fn quitting(&self) -> bool {
+        self.quitting
+    }
+
+    /// Moves a waiting quit on: asks about the next edited document, waits while an alert or a save is open, and returns
+    /// true once no edited document is left and the app may quit. False when no quit is waiting.
+    pub fn advance_quit(&mut self, host: &dyn DocumentHost) -> bool {
+        if !self.quitting || self.alert.is_some() || self.pending.values().any(|p| matches!(p, Pending::Save { .. })) {
+            return false;
+        }
+        match self.docs.iter().find(|e| e.edited()).map(|e| e.id) {
+            Some(id) => {
+                // the answer to the sheet must not find the document saved behind it
+                let _ = self.close(host, id);
+                false
+            }
+            None => {
+                self.quitting = false;
+                true
+            }
         }
     }
 
@@ -629,11 +773,9 @@ impl<D: Document> DocumentController<D> {
         let out = match ev {
             DocumentEvent::Opened(file) => self.on_opened(host, vec![file])?,
             DocumentEvent::OpenedMany { request, docs } => {
-                if !self.pending.contains_key(&request) {
-                    return None;
-                }
                 if docs.is_empty() {
-                    self.pending.remove(&request);
+                    // an empty inbound batch is nothing to report; an empty answer to our panel is a cancel
+                    self.pending.remove(&request)?;
                     vec![failed(None, Some(DocErrorCode::Cancelled), "nothing chosen")]
                 } else {
                     self.on_opened(host, docs)?
@@ -649,7 +791,13 @@ impl<D: Document> DocumentController<D> {
 
     fn on_opened(&mut self, host: &dyn DocumentHost, files: Vec<crate::Document>) -> Option<Vec<Notice>> {
         let request = files.first()?.request;
-        let pending = self.pending.remove(&request)?;
+        // an inbound document (`application:openURLs:`): a file opened with this app from Files or the Dock, shared
+        // or handed over by another app. No request of ours asked for it; it opens like a file chosen in the open panel.
+        let pending = match self.pending.remove(&request) {
+            Some(p) => p,
+            None if is_inbound(request) => Pending::Open,
+            None => return None,
+        };
         let mut out = Vec::new();
         for file in files {
             // a folder grant is a package (the panels hand over folders only for package types)
@@ -678,14 +826,21 @@ impl<D: Document> DocumentController<D> {
                 }
                 continue;
             }
-            if let Some(id) = self.docs.iter().find(|e| e.grant == Some(file.grant)).map(|e| e.id) {
-                host.release(file.grant);
+            // already open (same grant, or the same file under a new grant): that document comes to the front
+            let fid = file_id(&file.file);
+            if let Some(id) = self.docs.iter().find(|e| e.grant == Some(file.grant) || (fid.is_some() && e.file_id == fid)).map(|e| e.id) {
+                if self.entry(id).is_some_and(|e| e.grant != Some(file.grant)) {
+                    host.release(file.grant);
+                }
                 self.active = Some(id);
                 continue;
             }
             match D::read(&bytes, &uttype) {
                 Ok(doc) => {
                     let id = self.add(doc, None, file.name.clone(), Some(file.grant), &uttype);
+                    if let Some(e) = self.entry_mut(id) {
+                        e.file_id = fid;
+                    }
                     self.note_recent(host, file.grant, &file.name);
                     out.push(Notice::Opened(id));
                 }
@@ -712,8 +867,10 @@ impl<D: Document> DocumentController<D> {
         match read {
             Ok((doc, path)) => {
                 let id = self.add(doc, None, name.clone(), Some(file.grant), &uttype);
+                let fid = file_id(&file.file);
                 if let Some(e) = self.entry_mut(id) {
                     e.package = Some(path);
+                    e.file_id = fid;
                 }
                 self.note_recent(host, file.grant, &name);
                 Notice::Opened(id)
@@ -808,6 +965,8 @@ impl<D: Document> DocumentController<D> {
         }
         // a package keeps its folder, which a later save writes back to; a saved file has none
         e.package = if file.file.metadata().is_ok_and(|m| m.is_dir()) { package_path(&file.file) } else { None };
+        // the save renamed its file into place, so the document now lives at that file's inode
+        e.file_id = file_id(&file.file);
         // every save is a version of the document; a folder package has no single byte stream, so it keeps none
         if !file.file.metadata().is_ok_and(|m| m.is_dir()) {
             let mut bytes = Vec::new();
@@ -836,6 +995,9 @@ impl<D: Document> DocumentController<D> {
 
     fn on_failed(&mut self, host: &dyn DocumentHost, request: u32, code: DocErrorCode) -> Option<Vec<Notice>> {
         let pending = self.pending.remove(&request)?;
+        if matches!(pending, Pending::Save { after: After::Close, .. }) {
+            self.quitting = false;
+        }
         let doc = match pending {
             Pending::Save { doc, .. } => Some(doc),
             Pending::Revert(id) => Some(id),
@@ -890,7 +1052,9 @@ impl<D: Document> DocumentController<D> {
     }
 
     fn autosave(&mut self, host: &dyn DocumentHost, id: DocId) {
-        if self.saving(id) {
+        // a document waiting for its close answer stays as it is: an autosave behind the sheet would clear the edited
+        // flag, and Cancel would keep a document that no longer says it has unsaved changes
+        if self.saving(id) || self.alert.as_ref().is_some_and(|a| a.doc == id) {
             return;
         }
         let Some(e) = self.entry(id) else { return };
@@ -951,7 +1115,8 @@ impl<D: Document> DocumentController<D> {
     /// Sends the active document's title, edited flag and file name to the shell when they changed (the dirty dot in the
     /// close light and " - Edited" in the title bar). `tick` and `handle` call it; call it after your own edits too.
     pub fn sync(&mut self, host: &dyn DocumentHost) {
-        let state = match self.active.and_then(|id| self.entry(id)) {
+        let shown = self.state_doc.filter(|id| self.entry(*id).is_some()).or(self.active);
+        let state = match shown.and_then(|id| self.entry(id)) {
             Some(e) => (e.title(), e.edited(), if e.untitled.is_none() { e.name.clone() } else { String::new() }),
             None => (String::new(), false, String::new()),
         };
@@ -1041,6 +1206,18 @@ fn failed(doc: Option<DocId>, code: Option<DocErrorCode>, message: &str) -> Noti
 // ---- autosave copies of untitled documents ----
 
 const AUTOSAVE_DIR: &str = "autosave";
+
+/// Whether `request` is an inbound document the shell sent unasked (`share::INBOUND` set): a file opened with this app
+/// from Files or the Dock, a share, or a drop.
+fn is_inbound(request: u32) -> bool {
+    crate::share::is_inbound(request)
+}
+
+/// The device and inode of an open file, which name it whatever grant it came under.
+fn file_id(file: &std::fs::File) -> Option<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt;
+    file.metadata().ok().map(|m| (m.dev(), m.ino()))
+}
 
 /// The path a granted descriptor was opened from (Linux keeps it in `/proc/self/fd`); `None` when it has none.
 fn package_path(file: &std::fs::File) -> Option<PathBuf> {
@@ -1486,6 +1663,83 @@ mod tests {
     }
 
     #[test]
+    fn cmd_d_in_the_close_alert_chooses_dont_save_and_tab_space_walks_the_buttons() {
+        use crate::proto::{CHORD_FLAG, CHORD_META};
+        let m = Mock::new("closekeys");
+        let mut c = DocumentController::<Text>::new();
+        let id = c.new_document();
+        c.mark_edited(id);
+        assert_eq!(c.alert_key(&crate::KeyInput::Code(13)), None, "no alert, not the confirmation's key");
+        c.close(&m, id);
+        assert_eq!(c.alert_sheet().unwrap().focus, None, "no ring until Tab");
+        // Cmd+D is the chord on evdev key 32 with Meta
+        let cmd_d = crate::KeyInput::Code(CHORD_FLAG | 32 | (CHORD_META << 8));
+        assert_eq!(c.alert_key(&cmd_d), Some(AlertKey::Answer(alert::DONT_SAVE)));
+        assert_eq!(c.answer_alert(&m, alert::DONT_SAVE), vec![Notice::Closed(id)]);
+        // Return still saves and Escape cancels
+        let id = c.new_document();
+        c.mark_edited(id);
+        c.close(&m, id);
+        assert_eq!(c.alert_key(&crate::KeyInput::Code(13)), Some(AlertKey::Answer(alert::SAVE)));
+        assert_eq!(c.alert_key(&crate::KeyInput::Code(1)), Some(AlertKey::Answer(alert::CANCEL)));
+        // Tab: Save, then Don't Save (the order the buttons are drawn); Space presses the focused one
+        let (tab, space) = (crate::KeyInput::Code(9), crate::KeyInput::Text(" ".into()));
+        assert_eq!(c.alert_key(&space), Some(AlertKey::Ignored), "Space with no focus presses nothing");
+        assert_eq!(c.alert_key(&tab), Some(AlertKey::Focus));
+        assert_eq!(c.alert_sheet().unwrap().focus, Some(alert::SAVE));
+        assert_eq!(c.alert_key(&tab), Some(AlertKey::Focus));
+        assert_eq!(c.alert_sheet().unwrap().focus, Some(alert::DONT_SAVE));
+        assert_eq!(c.alert_key(&space), Some(AlertKey::Answer(alert::DONT_SAVE)));
+        assert_eq!(c.answer_alert(&m, alert::DONT_SAVE), vec![Notice::Closed(id)]);
+        assert!(c.alert_sheet().is_none());
+    }
+
+    #[test]
+    fn cmd_delete_and_shift_tab_reach_the_close_alert_as_chords() {
+        use crate::proto::{CHORD_META, CHORD_SHIFT};
+        let m = Mock::new("closechords");
+        let mut c = DocumentController::<Text>::new();
+        let id = c.new_document();
+        c.mark_edited(id);
+        c.close(&m, id);
+        let combo = key_combo(&crate::KeyInput::chord(14, CHORD_META)).expect("Cmd+Backspace is a combo");
+        assert!(combo.cmd && !combo.shift);
+        assert_eq!(combo.key, bifrost_ui::keys::Key::Delete);
+        // Cmd+Delete is the sheet's Don't Save
+        assert_eq!(c.alert_key(&crate::KeyInput::chord(14, CHORD_META)), Some(AlertKey::Answer(alert::DONT_SAVE)));
+        let combo = key_combo(&crate::KeyInput::chord(15, CHORD_SHIFT)).expect("Shift+Tab is a combo");
+        assert!(combo.shift && combo.key == bifrost_ui::keys::Key::Tab);
+        // Tab twice reaches Don't Save; Shift+Tab steps back to Save
+        let tab = crate::KeyInput::Code(9);
+        assert_eq!(c.alert_key(&tab), Some(AlertKey::Focus));
+        assert_eq!(c.alert_key(&tab), Some(AlertKey::Focus));
+        assert_eq!(c.alert_sheet().unwrap().focus, Some(alert::DONT_SAVE));
+        assert_eq!(c.alert_key(&crate::KeyInput::chord(15, CHORD_SHIFT)), Some(AlertKey::Focus));
+        assert_eq!(c.alert_sheet().unwrap().focus, Some(alert::SAVE));
+    }
+
+    #[test]
+    fn sheet_key_drives_a_sheet_an_app_keeps_itself() {
+        use crate::proto::{CHORD_FLAG, CHORD_META};
+        use bifrost_ui::sheet::{ButtonRole, Sheet, SheetButton};
+        let mut sheet = Sheet::alert(
+            "Delete this note?",
+            "",
+            vec![SheetButton::new(1, "Cancel", ButtonRole::Cancel), SheetButton::new(2, "Delete", ButtonRole::Destructive)],
+        );
+        let (tab, space) = (crate::KeyInput::Code(9), crate::KeyInput::Text(" ".into()));
+        assert_eq!(sheet_key(&mut sheet, &space), AlertKey::Ignored, "Space with no focus presses nothing");
+        assert_eq!(sheet_key(&mut sheet, &crate::KeyInput::Code(13)), AlertKey::Ignored, "no default button");
+        assert_eq!(sheet_key(&mut sheet, &tab), AlertKey::Focus);
+        assert_eq!(sheet.focus, Some(2), "the ring is kept in the sheet, which draws it");
+        assert_eq!(sheet_key(&mut sheet, &space), AlertKey::Answer(2));
+        assert_eq!(sheet_key(&mut sheet, &crate::KeyInput::Code(1)), AlertKey::Answer(1), "Escape cancels");
+        let cmd_d = crate::KeyInput::Code(CHORD_FLAG | 32 | (CHORD_META << 8));
+        assert_eq!(sheet_key(&mut sheet, &cmd_d), AlertKey::Answer(2), "Cmd+D presses Delete");
+        assert_eq!(sheet_key(&mut sheet, &crate::KeyInput::Code(40)), AlertKey::Ignored, "a key with no combo does nothing");
+    }
+
+    #[test]
     fn save_in_the_close_alert_saves_then_closes() {
         let m = Mock::new("closesave");
         let mut c = DocumentController::<Text>::new();
@@ -1499,6 +1753,81 @@ mod tests {
         let n = c.handle(&m, DocumentEvent::Saved(m.file(req, "a.txt", 4, "b"))).unwrap();
         assert_eq!(n, vec![Notice::Saved(id, SaveOp::Save), Notice::Closed(id)]);
         assert!(c.is_empty());
+    }
+
+    /// Cancel on the close sheet keeps the document edited, and an autosave tick while the sheet is up cannot clear the flag
+    /// behind it.
+    #[test]
+    fn cancel_on_the_close_sheet_keeps_the_document_edited_even_across_an_autosave() {
+        let m = Mock::new("cancelkeeps");
+        let mut c = DocumentController::<Text>::new();
+        let id = open(&mut c, &m, "a.txt", 4, "a");
+        c.get_mut(id).unwrap().0 = "b".into();
+        c.note_change(id, count(1));
+        c.tick(&m, 0.0);
+        c.close(&m, id);
+        let before = m.log().len();
+        c.tick(&m, AUTOSAVE_DELAY_MS * 2.0);
+        assert_eq!(m.log().len(), before, "no autosave behind the sheet");
+        assert!(c.answer_alert(&m, alert::CANCEL).is_empty());
+        assert!(c.is_edited(id));
+        assert_eq!(c.window_title(id).unwrap(), "a.txt \u{2013} Edited");
+        assert_eq!(c.len(), 1);
+    }
+
+    /// Quit asks for every edited document in turn: Don't Save lets it go on, Cancel stops it and keeps the documents
+    /// edited, and with none left it says the app may quit.
+    #[test]
+    fn quit_asks_for_every_edited_document_and_cancel_stops_it() {
+        let m = Mock::new("quit");
+        let mut c = DocumentController::<Text>::new();
+        let clean = c.new_document();
+        assert!(c.request_quit(&m), "nothing edited: quit now");
+        let (a, b) = (c.new_document(), c.new_document());
+        c.mark_edited(a);
+        c.mark_edited(b);
+        assert!(!c.request_quit(&m), "edited documents ask first");
+        assert!(c.quitting());
+        assert_eq!(c.alert_doc(), Some(a));
+        assert!(!c.advance_quit(&m), "waits while the sheet is up");
+        c.answer_alert(&m, alert::DONT_SAVE);
+        assert!(!c.advance_quit(&m));
+        assert_eq!(c.alert_doc(), Some(b), "the next edited document asks");
+        c.answer_alert(&m, alert::CANCEL);
+        assert!(!c.quitting(), "Cancel ends the quit");
+        assert!(!c.advance_quit(&m));
+        assert!(c.is_edited(b) && c.get(clean).is_some());
+        // asked again: Don't Save on the last one lets the app quit
+        assert!(!c.request_quit(&m));
+        c.answer_alert(&m, alert::DONT_SAVE);
+        assert!(c.advance_quit(&m), "no edited document left");
+        assert!(!c.quitting());
+    }
+
+    /// Save in the quit sheet waits for the save, then goes on; a cancelled save panel ends the quit.
+    #[test]
+    fn quit_waits_for_a_save_and_a_cancelled_save_ends_it() {
+        let m = Mock::new("quitsave");
+        let mut c = DocumentController::<Text>::new();
+        let id = open(&mut c, &m, "a.txt", 4, "a");
+        c.get_mut(id).unwrap().0 = "b".into();
+        c.note_change(id, count(1));
+        assert!(!c.request_quit(&m));
+        c.answer_alert(&m, alert::SAVE);
+        assert!(!c.advance_quit(&m), "the save is under way");
+        let req = m.next.get();
+        c.handle(&m, DocumentEvent::SaveTo(m.file(req, "a.txt", 4, ""))).unwrap();
+        c.handle(&m, DocumentEvent::Saved(m.file(req, "a.txt", 4, "b"))).unwrap();
+        assert!(c.advance_quit(&m), "saved and closed: quit");
+        // an untitled one: the save panel is cancelled, the quit is off and the document stays edited
+        let u = c.new_document();
+        c.mark_edited(u);
+        assert!(!c.request_quit(&m));
+        c.answer_alert(&m, alert::SAVE);
+        let req = m.next.get();
+        c.handle(&m, DocumentEvent::Failed { request: req, code: DocErrorCode::Cancelled }).unwrap();
+        assert!(!c.quitting() && !c.advance_quit(&m));
+        assert!(c.is_edited(u));
     }
 
     #[test]
@@ -1745,5 +2074,64 @@ mod tests {
         first.close(&m, id);
         let seen = second.recents(&m).to_vec();
         assert_eq!(seen, vec![RecentDocument { grant: [9; 16], name: "shared.txt".into() }]);
+    }
+
+    /// A file the shell hands over as an inbound document under `grant`, the same file on disk each time.
+    fn inbound(request: u32, path: &Path, name: &str, grant: u8) -> crate::Document {
+        let file = std::fs::OpenOptions::new().read(true).write(true).open(path).unwrap();
+        crate::Document { request, grant: [grant; 16], name: name.into(), size: 0, mode: DocMode::Read, file }
+    }
+
+    #[test]
+    fn an_inbound_file_opens_as_a_document_without_a_request_of_ours() {
+        // "open with the default app" (Files, the Dock's stack): the shell sends the grant unasked
+        let m = Mock::new("inbound");
+        let mut c = DocumentController::<Text>::new();
+        let untitled = c.new_document();
+        let path = m.dir.join("notes.txt");
+        std::fs::write(&path, "from the dock").unwrap();
+        let req = crate::share::INBOUND | 1;
+        let n = c.handle(&m, DocumentEvent::Opened(inbound(req, &path, "notes.txt", 3))).expect("the controller takes it");
+        let [Notice::Opened(id)] = n[..] else { panic!("{n:?}") };
+        assert_ne!(id, untitled);
+        assert_eq!(c.active(), Some(id), "the opened file is in front");
+        assert_eq!(c.get(id), Some(&Text("from the dock".into())));
+        assert_eq!(c.display_name(id).as_deref(), Some("notes.txt"));
+        assert_eq!(c.recents(&m)[0].name, "notes.txt", "it joins Open Recent");
+        // several at once (a drop of many files on the Dock icon)
+        let other = m.dir.join("other.txt");
+        std::fs::write(&other, "b").unwrap();
+        let req = crate::share::INBOUND | 2;
+        let n = c.handle(&m, DocumentEvent::OpenedMany { request: req, docs: vec![inbound(req, &other, "other.txt", 4)] }).unwrap();
+        assert!(matches!(n[..], [Notice::Opened(_)]), "{n:?}");
+        assert_eq!(c.len(), 3);
+    }
+
+    #[test]
+    fn the_same_file_opened_again_under_a_new_grant_brings_its_document_to_the_front() {
+        let m = Mock::new("inbound-again");
+        let mut c = DocumentController::<Text>::new();
+        let path = m.dir.join("notes.txt");
+        std::fs::write(&path, "x").unwrap();
+        c.handle(&m, DocumentEvent::Opened(inbound(crate::share::INBOUND | 1, &path, "notes.txt", 3))).unwrap();
+        let first = c.active().unwrap();
+        let second = c.new_document();
+        assert_eq!(c.active(), Some(second));
+        let n = c.handle(&m, DocumentEvent::Opened(inbound(crate::share::INBOUND | 2, &path, "notes.txt", 7))).unwrap();
+        assert!(n.is_empty(), "no second copy: {n:?}");
+        assert_eq!(c.len(), 2);
+        assert_eq!(c.active(), Some(first), "the open document comes to the front");
+        assert!(m.log().contains(&"release:7".to_string()), "the new grant is not kept");
+        assert!(!m.log().contains(&"release:3".to_string()), "the document keeps its own grant");
+    }
+
+    #[test]
+    fn a_reply_to_a_request_the_controller_did_not_make_is_left_to_the_app() {
+        let m = Mock::new("not-ours");
+        let mut c = DocumentController::<Text>::new();
+        let file = m.file(41, "own-panel.txt", 2, "x");
+        assert!(c.handle(&m, DocumentEvent::Opened(file)).is_none(), "the app's own panel answer");
+        assert!(c.handle(&m, DocumentEvent::OpenedMany { request: 42, docs: vec![] }).is_none());
+        assert!(c.is_empty());
     }
 }

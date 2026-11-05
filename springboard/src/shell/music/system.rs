@@ -8,6 +8,7 @@ use crate::gfx::{rgba, Image, Surface};
 use crate::layout::Rect;
 use crate::shell::switcher::draw_scaled;
 use crate::shell::ui::{Ui, Weight, WHITE};
+use std::sync::Arc;
 
 /// The feedback icons' size in pt.
 pub const FEEDBACK_ICON_PT: f32 = 20.0;
@@ -30,7 +31,8 @@ pub fn rating_fraction(min: f64, max: f64, value: f64) -> f32 {
 /// so worker threads can paint it.
 pub struct LockCardView<'a> {
     card: LockCard,
-    art: Option<&'a Image>,
+    /// the cover the owner published; None draws the glyph
+    art: Option<Arc<Image>>,
     title: &'a Image,
     artist: &'a Image,
     playing: bool,
@@ -48,10 +50,11 @@ pub struct LockCardView<'a> {
 }
 
 impl<'a> LockCardView<'a> {
-    /// The card for what the audio service plays: no artwork, the labels come from the shell.
+    /// The card for what the audio service plays: the labels come from the shell, the cover from the shown Now Playing
+    /// session (the glyph without one).
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn service(ui: &Ui, w: i32, title: &'a Image, artist: &'a Image, snap: &crate::svc::audio::Snapshot, scrub: Option<f32>, pressed: Option<nowplaying::Target>) -> Self {
-        LockCardView { card: LockCard::new(ui, w), art: None, title, artist, playing: snap.playing, feedback: crate::shell::services::now_playing::feedback(), live: snap.live.is_some() || snap.track.as_ref().is_some_and(|t| t.url.is_some()), position_ms: snap.position_ms, duration_ms: snap.duration_ms, scrub, pressed, route: String::new() }
+        LockCardView { card: LockCard::new(ui, w), art: crate::shell::services::now_playing::artwork(), title, artist, playing: snap.playing, feedback: crate::shell::services::now_playing::feedback(), live: snap.live.is_some() || snap.track.as_ref().is_some_and(|t| t.url.is_some()), position_ms: snap.position_ms, duration_ms: snap.duration_ms, scrub, pressed, route: String::new() }
     }
 
     /// Paints the card `dy` px above its resting place (the lock screen lifts).
@@ -60,7 +63,7 @@ impl<'a> LockCardView<'a> {
         let y = |v: f32| v + dy as f32;
         s.fill_rrect(c.card.x, y(c.card.y), c.card.w, c.card.h, ui.pt(20.0), rgba(255, 255, 255, 46));
         let r = Rect { x: c.art.x as i32, y: y(c.art.y) as i32, w: c.art.w as i32, h: c.art.h as i32 };
-        match self.art {
+        match &self.art {
             Some(img) => draw_scaled(s, img, r, ui.pt(6.0), 255),
             None => draw_scaled(s, &icons::placeholder(64, 0.0), r, ui.pt(6.0), 255),
         }

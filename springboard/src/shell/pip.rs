@@ -10,7 +10,7 @@ use crate::gfx::{rgba, Image, Surface};
 use bifrost_ui::pip_window::{self, Controller, Corner, Event, State};
 use bifrost_ui::Rect;
 
-/// The floating window's corner radius in pt: the grouped-card radius of the macOS-style design.
+/// The floating window's corner radius in pt: the grouped-card radius of the reference-style design.
 pub const WINDOW_RADIUS_PT: f32 = 13.0;
 
 /// The part of `rect` that lies on a `w` by `h` surface, as `(x, y, width, height)` in pixels, or `None` when nothing

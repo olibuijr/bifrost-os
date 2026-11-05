@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Remove finished Claude Code worktrees under .claude/worktrees. A worktree goes only when it is clean (no changes
-# to tracked or untracked files), not locked, and its branch is already merged into main, so no commit is lost.
+# to tracked or untracked files), not locked, and its HEAD is already merged into main or integration, so no commit is lost.
 # The branch ref stays. Each removal also deletes that worktree's build output (springboard/target*, target/).
 # usage: tools/worktree-prune.sh [--apply]   (default: dry run, lists what would go)
 set -euo pipefail
@@ -14,8 +14,9 @@ while IFS=$'\t' read -r wt locked; do
   [ "$locked" = 0 ] || { echo "skip (locked) $wt"; continue; }
   if [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then echo "skip (changes) $wt"; continue; fi
   b=$(git -C "$wt" symbolic-ref --short -q HEAD || true)
-  if [ -z "$b" ] || ! git merge-base --is-ancestor "$(git -C "$wt" rev-parse HEAD)" main; then
-    echo "skip (not merged) $wt ${b:-detached}"; continue
+  head=$(git -C "$wt" rev-parse HEAD)
+  if [ -z "$b" ] || ! { git merge-base --is-ancestor "$head" main || git merge-base --is-ancestor "$head" integration; } 2>/dev/null; then
+    echo "skip (not merged into main or integration) $wt ${b:-detached}"; continue
   fi
   if [ "$APPLY" = 1 ]; then
     git worktree remove "$wt" && echo "removed $wt"

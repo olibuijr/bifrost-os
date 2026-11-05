@@ -16,6 +16,7 @@
 use crate::graphics_color::Color;
 use bifrost_render::appearance::Pair;
 use bifrost_render::ui::system;
+use bifrost_ui::color_well::{ColorWells, SwatchGrid};
 use bifrost_ui::panels::ColorPanel;
 
 /// One named list of colours.
@@ -167,6 +168,23 @@ impl ColorList {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+
+    /// The swatch grid a colour well popover shows for this list, `columns` swatches a row.
+    pub fn swatch_grid(&self, columns: usize, cell: f32, gap: f32) -> SwatchGrid {
+        SwatchGrid { count: self.entries.len(), columns: columns.max(1), cell, gap }
+    }
+
+    /// Picking swatch `index` of the popover of well `well`: the well takes that colour (the panel follows when the
+    /// well is active). Returns the picked key, or none for an index past the list or a disabled well.
+    pub fn pick_into_well(&self, index: usize, wells: &mut ColorWells, well: usize, panel: &mut ColorPanel) -> Option<&str> {
+        let (key, color) = self.entries.get(index)?;
+        if !wells.get(well).is_some_and(|w| w.enabled) {
+            return None;
+        }
+        let [r, g, b, a] = color.to_rgba8();
+        wells.take_color(well, (r, g, b), a as f32 / 255.0, panel);
+        Some(key.as_str())
+    }
 }
 
 /// The colour lists an app has registered, in the order they were added.
@@ -231,6 +249,27 @@ mod tests {
 
     fn blue() -> Color {
         Color::from_rgba8(0, 0, 255, 255)
+    }
+
+    #[test]
+    fn picking_a_swatch_sets_the_well_and_an_active_wells_panel() {
+        use bifrost_ui::color_well::{ColorWell, WellStyle};
+        let list = ColorList::system(false);
+        let grid = list.swatch_grid(5, 12.0, 2.0);
+        assert_eq!(grid.count, 13);
+        let mut wells = ColorWells::new();
+        let w = wells.add(ColorWell::new(WellStyle::Expanded, (0, 0, 0)));
+        let mut panel = ColorPanel::new((0, 0, 0));
+        let green = list.keys().iter().position(|k| *k == "Green").unwrap();
+        assert_eq!(list.pick_into_well(green, &mut wells, w, &mut panel), Some("Green"));
+        let [r, g, b, _] = list.color("Green").unwrap().to_rgba8();
+        assert_eq!(wells.get(w).unwrap().color, (r, g, b));
+        assert_eq!(panel.color(), (0, 0, 0), "an inactive well leaves the panel");
+        wells.activate(w, true, &mut panel);
+        let red = list.keys().iter().position(|k| *k == "Red").unwrap();
+        list.pick_into_well(red, &mut wells, w, &mut panel);
+        assert_eq!(panel.color(), wells.get(w).unwrap().color);
+        assert_eq!(list.pick_into_well(99, &mut wells, w, &mut panel), None);
     }
 
     #[test]

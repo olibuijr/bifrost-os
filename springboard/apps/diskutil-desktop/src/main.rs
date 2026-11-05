@@ -19,12 +19,11 @@ mod window;
 
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, TouchKind};
 use crate::actions::Action;
-use crate::model::Kind;
 use bifrost_core::disk_format::Personality;
 use bifrost_core::json::Json;
-use window::{Ask, DiskUtility, Target, B_DETACH, REFRESH_S, SHEET_CANCEL};
+use window::{Ask, DiskUtility, Target, B_DETACH, REFRESH_S};
 
 /// Menu item ids.
 const MENU_DETACH: u32 = 1;
@@ -55,7 +54,17 @@ const MENU_CONVERT: u32 = 43;
 const MENU_RESIZE: u32 = 44;
 const MENU_OPEN_IMAGE_RW: u32 = 45;
 
+/// The window size in points, from the configured size in pixels and the display scale.
+fn size_pt(w_px: u32, h_px: u32, scale: f32) -> (f32, f32) {
+    let scale = scale.max(f32::EPSILON);
+    (w_px as f32 / scale, h_px as f32 / scale)
+}
+
 impl App for DiskUtility {
+    /// A single-window utility: the red light quits it (`applicationShouldTerminateAfterLastWindowClosed:`).
+    fn terminates_after_last_window_closed(&self) -> bool {
+        true
+    }
     fn id(&self) -> &str {
         "is.olibuijr.diskutil.desktop"
     }
@@ -64,24 +73,22 @@ impl App for DiskUtility {
     /// sidebar mode, the erase format and the partition layouts.
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let idle = !self.busy();
-        let node = self.selected_node();
         let mountable = self.can_mount();
-        let mounted = self.can_unmount();
+        let unmountable = self.can_unmount();
+        let mounted = self.selected_mounted();
         let ejectable = self.can_eject();
-        let has = idle && node.is_some();
-        let renamable = has && node.is_some_and(|n| n.fs_type.is_some());
-        // the running system's volume and disk cannot be erased, restored over, partitioned or repaired in place
-        let system = self.selected_is_system();
-        let whole_disk = idle && node.is_some_and(|n| n.kind == Kind::Disk) && !system;
-        let has_other = has && !system;
+        // each command asks the same predicate as its toolbar button; the running system's volume and disk cannot be
+        // erased, restored over, partitioned or repaired in place
+        let (renamable, erasable, restorable, repairable) = (self.can_rename(), self.can_erase(), self.can_restore(), self.can_first_aid());
+        let whole_disk = self.can_partition();
         let fs = self.erase_fs;
         let mut disk = vec![
             AppMenuItem::new(MENU_RENAME, "Rename\u{2026}").enabled(renamable),
-            AppMenuItem::new(MENU_ERASE, "Erase\u{2026}").key("cmd+shift+e").enabled(has_other),
-            AppMenuItem::new(MENU_RESTORE, "Restore\u{2026}").enabled(has_other),
+            AppMenuItem::new(MENU_ERASE, "Erase\u{2026}").key("cmd+shift+e").enabled(erasable),
+            AppMenuItem::new(MENU_RESTORE, "Restore\u{2026}").enabled(restorable),
             AppMenuItem::new(MENU_RAID, "RAID Assistant\u{2026}").enabled(idle),
             AppMenuItem::separator(),
-            AppMenuItem::new(MENU_FIRST_AID, "Run First Aid\u{2026}").key("cmd+shift+a").enabled(has_other),
+            AppMenuItem::new(MENU_FIRST_AID, "Run First Aid\u{2026}").key("cmd+shift+a").enabled(repairable),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_FS_EXT4, "Format as ext4").checked(fs == Personality::Ext4),
             AppMenuItem::new(MENU_FS_EXFAT, "Format as exFAT").checked(fs == Personality::ExFat),
@@ -104,13 +111,15 @@ impl App for DiskUtility {
                     AppMenuItem::new(MENU_OPEN_IMAGE, "Open Disk Image\u{2026}").key("cmd+o").enabled(idle),
                     AppMenuItem::new(MENU_OPEN_IMAGE_RW, "Open Disk Image for Writing\u{2026}").enabled(idle),
                     AppMenuItem::separator(),
-                    AppMenuItem::new(MENU_INFO, "Get Info").key("cmd+i").enabled(idle && node.is_some()),
+                    AppMenuItem::new(MENU_INFO, "Get Info").key("cmd+i").enabled(self.has_selection()),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_MOUNT, "Mount").key("cmd+m").enabled(mountable),
-                    AppMenuItem::new(MENU_UNMOUNT, "Unmount").key("cmd+u").enabled(mounted),
+                    AppMenuItem::new(MENU_UNMOUNT, "Unmount").key("cmd+u").enabled(unmountable),
                     AppMenuItem::new(MENU_EJECT, "Eject").key("cmd+e").enabled(ejectable),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_SHOW_IN_FILES, "Show in Files").key("cmd+shift+r").enabled(mounted),
+                    // a disk tool has nothing to print: no File > Print… from the shell
+                    AppMenuItem::no_print(),
                 ],
             },
             AppMenu {
@@ -127,7 +136,7 @@ impl App for DiskUtility {
                     AppMenuItem::new(MENU_CONVERT, "Convert Image\u{2026}").enabled(idle),
                     AppMenuItem::new(MENU_RESIZE, "Resize Image\u{2026}").enabled(idle),
                     AppMenuItem::separator(),
-                    AppMenuItem::new(MENU_DETACH, "Detach Disk Image").enabled(idle && self.selected_image()),
+                    AppMenuItem::new(MENU_DETACH, "Detach Disk Image").enabled(self.can_detach()),
                 ],
             },
         ]
@@ -141,7 +150,8 @@ impl App for DiskUtility {
 
     fn configure(&mut self, ctx: &Ctx) {
         ctx.enable_sudden_termination(); // keeps no unsaved state
-        self.size = (ctx.cfg.w as f32, ctx.cfg.h as f32);
+        // `cfg` is in pixels, the layout in points: a scaled window would otherwise lay out wider than it is
+        self.size = size_pt(ctx.cfg.w, ctx.cfg.h, ctx.ui.pt(1.0));
         if self.last_refresh.is_infinite() {
             let t = self.now;
             self.refresh(t, true);
@@ -278,16 +288,11 @@ impl DiskUtility {
                     }
                 }
             }
-            Input::Key(KeyInput::Text(text)) => self.form_text(&text),
-            Input::Key(KeyInput::Code(code)) => {
+            Input::Key(key) => {
                 if self.form.is_some() {
-                    self.form_code(code)
-                } else if self.sheet.is_some() && matches!(code, 1 | 27) {
-                    // Escape answers a confirmation with Cancel
-                    let t = self.now;
-                    self.activate(Target::Sheet(SHEET_CANCEL), t)
+                    self.form_key(&key)
                 } else {
-                    false
+                    self.sheet_key(&key)
                 }
             }
             // a published control (accessibility, `bifrost pc midget tap-window`): the same action as a click
@@ -302,4 +307,31 @@ impl DiskUtility {
 
 fn main() {
     bifrost_app::run(DiskUtility::new());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_app::kit::{Font, Ui};
+    use bifrost_app::proto::Configure;
+
+    fn test_ctx() -> Ctx {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    #[test]
+    fn the_file_menu_opts_out_of_print() {
+        let menus = DiskUtility::new().main_menu(&test_ctx());
+        let file = menus.iter().find(|m| m.title == "File").expect("File menu");
+        assert!(file.items.iter().any(|i| i.no_print), "no Print… for a disk tool");
+        assert!(!menus.iter().flat_map(|m| m.items.iter()).any(|i| i.prints), "and no print command of its own");
+    }
+
+    #[test]
+    fn the_configured_pixel_size_becomes_points() {
+        assert_eq!(size_pt(1200, 780, 1.5), (800.0, 520.0));
+        assert_eq!(size_pt(600, 400, 1.0), (600.0, 400.0));
+    }
 }

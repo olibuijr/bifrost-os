@@ -8,7 +8,7 @@
 //!
 //! X-Wing hybrid (ML-KEM-768 with X25519) is in the [`xwing`] submodule with the same object shape. Not here: the
 //! official FIPS 203 known-answer vectors and the X-Wing draft vectors, which are not in the repo yet; see the
-//! `Post-quantum KEM` row in `docs/parity-matrix/data/apple-cryptokit.json`.
+//! `Post-quantum KEM` row in the cryptography file under `docs/parity-matrix/data/`.
 
 use crate::entropy;
 use bifrost_core::mlkem::{self, Error as CoreError};

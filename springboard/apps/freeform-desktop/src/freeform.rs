@@ -22,8 +22,8 @@ use bifrost_app::controls::tips::{self, Datastore, Tip, TipSection, TipView, Tip
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::ui::{
-    Ui, Weight, BLACK, DETAIL_BG, LABEL, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_YELLOW, TINT,
-    TOAST_FILL, WHITE,
+    Ui, Weight, BLACK, DETAIL_BG, LABEL, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE, SYSTEM_RED, SYSTEM_YELLOW, TINT, accent_now,
+    TOAST_FILL, WHITE, CONTENT_BG,
 };
 use bifrost_app::kit::ui::{SPACE_L, SPACE_S, SPACE_XXL, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, SEPARATOR_C, LABEL_2};
@@ -42,8 +42,28 @@ pub use itemtools::{Shared, MAX_FILE_BYTES};
 use itemtools::{ItemDrag, Linking, Pick, Pictures, Search};
 use viewport::to_board;
 
-/// The board is paper in both appearances, so a saved PNG looks the same either way.
+/// The board is stored and exported on white paper in both appearances, so a saved PNG looks the same either way.
 const PAPER: u32 = WHITE;
+
+/// How a stored (white paper, dark ink) pixel looks in Dark appearance: lightness inverted with the hue kept (the
+/// `invert` + `hue-rotate(180)` filter), paper landing on the window's content grey and black ink on white, so black
+/// strokes and text read as light ink on a dark board and colours stay the hue they were drawn in.
+fn on_dark_paper(px: u32) -> u32 {
+    let lo = (CONTENT_BG.dark & 255) as f32;
+    let (r, g, b) = (255.0 - (px & 255) as f32, 255.0 - ((px >> 8) & 255) as f32, 255.0 - ((px >> 16) & 255) as f32);
+    let ch = |v: f32| (lo + v.clamp(0.0, 255.0) * (255.0 - lo) / 255.0).round() as u32;
+    let (nr, ng, nb) = (
+        -0.574 * r + 1.430 * g + 0.144 * b,
+        0.426 * r + 0.430 * g + 0.144 * b,
+        0.426 * r + 1.430 * g - 0.856 * b,
+    );
+    ch(nr) | ch(ng) << 8 | ch(nb) << 16 | 0xFF00_0000
+}
+
+/// Whether the app is in Light appearance (the board is only recoloured in Dark).
+fn light_now() -> bool {
+    bifrost_app::kit::appearance::scheme() >= 0.5
+}
 /// One colour well in the toolbar's colour slot (points).
 const WELL_PT: f32 = 28.0;
 const BAR_PEN: u32 = 1;
@@ -2002,10 +2022,10 @@ impl Freeform {
         let gap = ui.pt(ROTATE_GAP_PT);
         let line = ui.pt(1.0).max(1.0);
         // the stem from the top edge to the rotate handle
-        s.fill_rrect(b.x + b.w / 2.0 - line / 2.0, b.y + top - gap, line, gap, 0.0, TINT);
+        s.fill_rrect(b.x + b.w / 2.0 - line / 2.0, b.y + top - gap, line, gap, 0.0, accent_now());
         for (_, (x, y)) in arrange::handle_points(b, gap) {
             let (x0, y0) = (x - side / 2.0, y + top - side / 2.0);
-            s.fill_rrect(x0, y0, side, side, 0.0, TINT);
+            s.fill_rrect(x0, y0, side, side, 0.0, accent_now());
             s.fill_rrect(x0 + line, y0 + line, side - 2.0 * line, side - 2.0 * line, 0.0, DETAIL_BG.now());
         }
     }
@@ -2014,10 +2034,10 @@ impl Freeform {
     fn outline(&self, s: &mut Surface, ui: &Ui, top: f32, b: Rect) {
         let t = ui.pt(1.0).max(1.0);
         let (x0, y0) = (b.x, b.y + top);
-        s.fill_rrect(x0, y0, b.w, t, 0.0, TINT);
-        s.fill_rrect(x0, y0 + b.h, b.w, t, 0.0, TINT);
-        s.fill_rrect(x0, y0, t, b.h, 0.0, TINT);
-        s.fill_rrect(x0 + b.w, y0, t, b.h, 0.0, TINT);
+        s.fill_rrect(x0, y0, b.w, t, 0.0, accent_now());
+        s.fill_rrect(x0, y0 + b.h, b.w, t, 0.0, accent_now());
+        s.fill_rrect(x0, y0, t, b.h, 0.0, accent_now());
+        s.fill_rrect(x0 + b.w, y0, t, b.h, 0.0, accent_now());
     }
 
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, _t: f64) {
@@ -2032,13 +2052,26 @@ impl Freeform {
             self.cache.clear();
         }
         let top = self.canvas_top(ui);
+        let light = light_now();
         for row in 0..self.ch {
             let y = top + row as i32;
             if y < 0 || y >= self.h {
                 break;
             }
-            for col in 0..self.cw {
-                *s.at(col, y as usize) = self.canvas[row * self.cw + col];
+            let line = &self.canvas[row * self.cw..(row + 1) * self.cw];
+            if light {
+                for (col, &p) in line.iter().enumerate() {
+                    *s.at(col, y as usize) = p;
+                }
+            } else {
+                // most of a board is one colour: the last conversion is reused while the pixels repeat
+                let mut last = (PAPER, on_dark_paper(PAPER));
+                for (col, &p) in line.iter().enumerate() {
+                    if p != last.0 {
+                        last = (p, on_dark_paper(p));
+                    }
+                    *s.at(col, y as usize) = last.1;
+                }
             }
         }
         if self.grid {
@@ -2055,7 +2088,7 @@ impl Freeform {
             let d = ui.pt(bifrost_app::kit::ui::SPACE_XXS);
             for &p in self.lasso.points().iter().step_by(2) {
                 let (x, y) = self.view_pt(p);
-                s.fill_rrect(x, y + top as f32, d, d, d / 2.0, TINT);
+                s.fill_rrect(x, y + top as f32, d, d, d / 2.0, accent_now());
             }
         }
         if self.inspector {
@@ -2064,15 +2097,17 @@ impl Freeform {
         widgets::toolbar_band(s, ui, Rect { x: 0.0, y: 0.0, w: self.w as f32 / ui.s, h: UNIFIED_BAR_PT });
         let pressed = self.pressed.and_then(target_id);
         let placed = widgets::toolbar(s, ui, self.bar_bounds(ui), &self.bar(), pressed);
+        let light = light_now();
         if let Some(r) = placed.rect_of(BAR_COLORS) {
             let d = WELL_PT - SPACE_S;
             for (i, c) in COLORS.iter().enumerate() {
                 let (x, y) = (r.x + SPACE_S + i as f32 * WELL_PT + SPACE_XS, r.y + (r.h - d) / 2.0);
                 if self.color == i && self.tool != Tool::Eraser {
                     s.fill_rrect(ui.pt(x - 3.0), ui.pt(y - 3.0), ui.pt(d + 6.0), ui.pt(d + 6.0), ui.pt(d + 6.0) / 2.0, LABEL.now());
-                    s.fill_rrect(ui.pt(x - 1.5), ui.pt(y - 1.5), ui.pt(d + 3.0), ui.pt(d + 3.0), ui.pt(d + 3.0) / 2.0, PAPER);
+                    s.fill_rrect(ui.pt(x - 1.5), ui.pt(y - 1.5), ui.pt(d + 3.0), ui.pt(d + 3.0), ui.pt(d + 3.0) / 2.0, if light { PAPER } else { on_dark_paper(PAPER) });
                 }
-                s.fill_rrect(ui.pt(x), ui.pt(y), ui.pt(d), ui.pt(d), ui.pt(d) / 2.0, *c);
+                // a well shows the ink as it will look on the board, so the black one is light on a dark board
+                s.fill_rrect(ui.pt(x), ui.pt(y), ui.pt(d), ui.pt(d), ui.pt(d) / 2.0, if light { *c } else { on_dark_paper(*c) });
             }
         }
         self.placed = Some(placed);
@@ -2216,6 +2251,46 @@ mod model_tests {
         let mut app = Freeform::new(ui, 200, 200);
         app.ensure_canvas(ui);
         app
+    }
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn the_selection_frame_and_handles_follow_the_chosen_accent_not_system_blue() {
+        use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let ui = test_ui();
+        let app = board(&ui);
+        let b = Rect { x: 20.0, y: 20.0, w: 60.0, h: 40.0 };
+        let keep = accent();
+        set_accent(Accent::Green);
+        let green = accent_now();
+        let mut px = vec![0u32; 120 * 120];
+        app.outline(&mut Surface { w: 120, h: 120, stride: 120, px: &mut px, y0: 0 }, &ui, 0.0, b);
+        let mut handles = vec![0u32; 120 * 120];
+        app.draw_handles(&mut Surface { w: 120, h: 120, stride: 120, px: &mut handles, y0: 0 }, &ui, 0.0, b);
+        set_accent(keep);
+        for (name, px) in [("outline", px), ("handles", handles)] {
+            assert!(px.contains(&green), "{name}: drawn in the accent");
+            assert!(!px.contains(&TINT), "{name}: no fixed systemBlue left");
+        }
+    }
+
+    #[test]
+    fn the_pen_palette_keeps_a_literal_blue() {
+        assert!(COLORS.contains(&TINT));
+    }
+
+    #[test]
+    fn dark_board_swaps_paper_and_ink_and_keeps_hues() {
+        let paper = on_dark_paper(PAPER);
+        assert_eq!(paper & 0x00FF_FFFF, CONTENT_BG.dark & 0x00FF_FFFF, "paper becomes the content grey");
+        assert_eq!(on_dark_paper(BLACK), WHITE, "black ink becomes white");
+        let red = on_dark_paper(SYSTEM_RED);
+        let (r, g, b) = (red & 255, (red >> 8) & 255, (red >> 16) & 255);
+        assert!(r > g && r > b, "red stays red, just lighter");
+        assert!(lum(red) > lum(SYSTEM_RED) / 2, "a colour stays readable on the dark board");
     }
 
     #[test]

@@ -133,7 +133,7 @@ impl Shell {
             let mut ls = Surface { w: iw, h: ih, stride: iw, px: &mut image.px, y0: 0 };
             ls.fill_rrect(0.0, 0.0, w, h, h / 2.0, FILL);
             ls.blit_colored(&img, pad_x as i32, pad_y as i32, WHITE, 255);
-            self.a11y_layers[0] = Some(crate::shell::capture_flow::Layer { x: x as i32, y: y as i32, image, input: Some([0, 0, 0, 0]) });
+            self.a11y_layers[0] = Some(crate::shell::capture_flow::Layer::new(x as i32, y as i32, image, Some([0, 0, 0, 0])));
         } else {
             self.a11y_layers[0] = None;
             s.fill_rrect(x, y, w, h, h / 2.0, FILL);

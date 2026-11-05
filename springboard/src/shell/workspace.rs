@@ -345,7 +345,10 @@ impl super::Shell {
                     }
                     if let super::AppId::External(to) = def {
                         let request = self.app_share.next_inbound();
-                        self.inbound_files(app_id, &key, to, request, &batch);
+                        // like the reference's file manager, an open hands the app a read-write document when the
+                        // person owns it and may write it; Files holds the whole home, so it may grant that
+                        let may_write = super::services::app_has_permission(app_id, "storage");
+                        self.open_files_in(app_id, &key, to, request, &batch, may_write);
                     }
                 }
                 (WorkspaceStatus::Ok, Vec::new())

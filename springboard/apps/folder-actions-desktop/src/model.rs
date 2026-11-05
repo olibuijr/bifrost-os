@@ -2,6 +2,7 @@
 //! the window draws and hit-tests with (points, no pixels).
 
 use bifrost_app::folder_actions::{Action, Offer, Setup};
+use bifrost_app::layout::Layout;
 
 /// A rectangle in points.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -61,6 +62,14 @@ pub fn action_lines(setup: &Setup, a: &Action) -> (String, String) {
 /// The two lines a row shows for an action that can be attached.
 pub fn offer_lines(o: &Offer) -> (String, String) {
     (o.title.clone(), o.name.clone())
+}
+
+/// Left edge and width, in points, of the form column in a window `w` x `h` points. The window has no sidebar, so the
+/// column is centred in the whole window (the layout's own sidebar column would leave the left of the window empty).
+pub fn form_column(w: f32, h: f32) -> (f32, f32) {
+    let mut l = Layout::from_points(w, h, 0.0, 0.0);
+    l.sidebar = 0.0;
+    l.readable()
 }
 
 /// How many list rows fit in `height_pt`, never fewer than `min` nor more than `max`.
@@ -161,6 +170,15 @@ mod tests {
         let gone = Action { folder: "/x".into(), app: "a.old".into(), intent: "tag".into() };
         assert_eq!(action_lines(&s, &gone).1, "a.old: tag (not available)");
         assert_eq!(offer_lines(&s.offers[0]), ("Import File".to_string(), "Notes".to_string()));
+    }
+
+    #[test]
+    fn the_form_column_is_centred_in_the_whole_window_with_no_empty_sidebar() {
+        let (x, w) = form_column(1200.0, 780.0);
+        assert!((x - (1200.0 - w) / 2.0).abs() < 0.01, "centred: x {x}, w {w}");
+        assert!(x < 260.0, "does not start after a sidebar-wide empty column");
+        let (x, w) = form_column(700.0, 500.0);
+        assert!(x < 40.0 && x + w <= 700.0);
     }
 
     #[test]

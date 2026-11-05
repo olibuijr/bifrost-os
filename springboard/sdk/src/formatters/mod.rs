@@ -2,11 +2,12 @@
 //! currency, `DateFormatter`, `ByteCountFormatter`, `MeasurementFormatter`, `ListFormatter`) lives in
 //! `locale.rs` and is re-exported here; this module adds the styles that file lacks: spell-out and ordinal
 //! numbers (`number`), the named `RelativeDateTimeFormatter` style (`relative`), and
-//! `DateComponentsFormatter` (`date_components`), and the internet date-time form (`iso8601`).
+//! `DateComponentsFormatter` (`date_components`), the internet date-time form (`iso8601`), and person names (`person_name`).
 
 pub mod date_components;
 pub mod iso8601;
 pub mod number;
+pub mod person_name;
 pub mod relative;
 
 pub use crate::locale::{byte_count, list, measurement, relative_date_time, DateFormatter, DateStyle, Locale, Measurement, NumberFormatter, NumberStyle, Unit};

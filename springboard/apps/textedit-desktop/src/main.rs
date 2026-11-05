@@ -1,4 +1,4 @@
-//! Text Editor as an installed BifrOSt app: plain and rich text documents, opened and saved as RTF, HTML or plain text
+//! TextEdit as an installed BifrOSt app: plain and rich text documents, opened and saved as RTF, HTML or plain text
 //! through the shell's document panels, with character and paragraph formatting, fonts, find and replace, spelling, a
 //! tab ruler, printing with page setup, a word count, and undo and redo.
 //!
@@ -6,6 +6,7 @@
 //! `layout.rs`, the spelling in `spell.rs`, the PDF for printing in `print.rs`, and the window in `view.rs`. This file
 //! wires them to the SDK: the document controller, menus, keys, touches and the canvas.
 
+mod doc_windows;
 mod docx;
 mod encoding;
 mod family_font;
@@ -34,7 +35,7 @@ mod zipdoc;
 use bifrost_app::controls::undo::ChangeCount;
 use bifrost_app::controls::nav::ToolbarLayout;
 use bifrost_app::controls::Node;
-use bifrost_app::document::{is_menu_id, item, DocId, DocumentController, DocumentHost, Notice};
+use bifrost_app::document::{is_menu_id, item, AlertKey, DocId, DocumentController, DocumentHost, Notice};
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::pasteboard::NativePasteboard;
 use bifrost_app::kit::ui::Ui;
@@ -120,6 +121,8 @@ struct TextEditApp {
     image_request: Option<u32>,
     /// Format > Make Plain Text is asking to remove the attachments first
     plain_sheet: bool,
+    /// the confirmation's button that has the focus ring (Tab moves it); `None` until Tab
+    plain_focus: Option<u32>,
     drop_sessions: Vec<u32>,
     /// File > Show Properties: the document being edited and the panel's draft, while the panel is open
     props: Option<(DocId, properties::Panel)>,
@@ -142,6 +145,21 @@ struct TextEditApp {
     rich_clip: Option<(String, Vec<Cell>)>,
     /// Format > Text > Copy Ruler: the tab stop distance copied, for Paste Ruler
     ruler: Option<f32>,
+    /// the document windows (`doc_windows`): the window being handled, its document and size in px (None for the main
+    /// window, which is the configured size), the other windows' parked state, the document notices not yet placed in
+    /// windows, and whether the input being handled was already routed to its window
+    current: bifrost_app::app_windows::WindowId,
+    current_doc: Option<DocId>,
+    size: Option<(u32, u32)>,
+    views: Vec<doc_windows::View>,
+    notices: Vec<Notice>,
+    routed: bool,
+    /// The text state last reported to the shell (`ctx.text_state`): the active document's selection and caret, which
+    /// the Services submenu and Look Up read, as an SDK text field reports its own.
+    text_published: Option<bifrost_app::proto::TextState>,
+    /// The caret rectangle last reported to the shell (`ctx.caret_rect`) and the window it is in: Look Up opens under
+    /// it, an input method's candidates beside it.
+    caret_published: Option<(bifrost_app::app_windows::WindowId, (f32, f32, f32, f32))>,
 }
 
 /// What a press in the page did.
@@ -223,6 +241,48 @@ fn word_here(doc: &TextDocument) -> Option<(Range<usize>, String)> {
     let range = if doc.text.has_selection() { doc.text.selection() } else { spell::word_at(doc.text.cells(), doc.text.head())? };
     let word: String = doc.text.cells()[range.clone()].iter().map(|c| c.ch).collect();
     (!word.is_empty() && !word.chars().any(char::is_whitespace)).then_some((range, word))
+}
+
+/// Characters of context reported on each side of the selection (`TextState::text` is a window of the document).
+const TEXT_STATE_CONTEXT: usize = 400;
+
+/// The document's selection as the text state an SDK text field reports (`ctx.text_state`): a window of the text around
+/// the selection, at most `MAX_SURROUNDING` bytes, with the caret (`cursor`) and the selection's other end (`anchor`) as
+/// byte offsets into it. A selection longer than the window is cut at the window's end.
+fn text_state_of(doc: &TextDocument) -> bifrost_app::proto::TextState {
+    let cells = doc.text.cells();
+    let len = cells.len();
+    let (anchor, head) = (doc.text.anchor().min(len), doc.text.head().min(len));
+    let (from, to) = (anchor.min(head), anchor.max(head));
+    let limit = bifrost_app::proto::MAX_SURROUNDING;
+    let w = |i: usize| cells[i].ch.len_utf8();
+    // the selection first, then context on both sides while it fits
+    let mut used = 0;
+    let mut hi = from;
+    while hi < to && used + w(hi) <= limit {
+        used += w(hi);
+        hi += 1;
+    }
+    let (mut lo, mut end) = (from, hi);
+    loop {
+        let mut grew = false;
+        if lo > 0 && from - lo < TEXT_STATE_CONTEXT && used + w(lo - 1) <= limit {
+            lo -= 1;
+            used += w(lo);
+            grew = true;
+        }
+        if hi == to && end < len && end - to < TEXT_STATE_CONTEXT && used + w(end) <= limit {
+            used += w(end);
+            end += 1;
+            grew = true;
+        }
+        if !grew {
+            break;
+        }
+    }
+    let text: String = cells[lo..end].iter().map(|c| c.ch).collect();
+    let offset = |i: usize| cells[lo..i.clamp(lo, hi)].iter().map(|c| c.ch.len_utf8()).sum::<usize>() as u32;
+    bifrost_app::proto::TextState { text, cursor: offset(head), anchor: offset(anchor), marked: None }
 }
 
 /// The cells with every size scaled by the view zoom; the text itself is unchanged.
@@ -308,7 +368,10 @@ impl TextEditApp {
             export_request: None,
             image_request: None,
             plain_sheet: false,
+            plain_focus: None,
             drop_sessions: Vec::new(),
+            text_published: None,
+            caret_published: None,
             props: None,
             link: None,
             line: None,
@@ -320,6 +383,25 @@ impl TextEditApp {
             spacing_sheet: None,
             rich_clip: None,
             ruler: None,
+            current: bifrost_app::app_windows::WindowId::MAIN,
+            current_doc: None,
+            size: None,
+            views: Vec::new(),
+            notices: Vec::new(),
+            routed: false,
+        }
+    }
+
+    /// The documents a launch starts with: the untitled ones autosaved when the app last quit (Cmd+Q saves nothing else
+    /// and asks nothing, so the text comes back edited, as the reference's Untitled documents do), or one new Untitled
+    /// when there are none.
+    fn start_documents(&mut self, host: &dyn DocumentHost) {
+        let restored = self.docs.restore(host);
+        if restored.is_empty() {
+            let id = self.docs.new_document();
+            self.apply_new_defaults(id);
+        } else {
+            self.after_documents(&restored);
         }
     }
 
@@ -351,8 +433,10 @@ impl TextEditApp {
 
     /// The window's regions for the current window size, find bar and document. The ruler shows for rich text only.
     fn geometry(&self, ui: &Ui, width_px: u32, height_px: u32) -> view::Geometry {
+        let rich = active_doc(&self.docs).is_none_or(|d| d.rich);
         let ruler = self.opts.show_ruler && active_doc(&self.docs).is_some_and(|d| d.rich);
-        view::geometry_with(width_px as f32 / ui.s, height_px as f32 / ui.s, self.find_open, ruler, self.opts.wrap_window)
+        // a plain text document has no format bar (E2E9 11): the page starts under the title row
+        view::geometry_with(width_px as f32 / ui.s, height_px as f32 / ui.s, self.find_open, ruler, self.opts.wrap_window, rich)
     }
 
     /// The format bar's status: what the document has at the caret, or in the first selected character.
@@ -366,7 +450,7 @@ impl TextEditApp {
     /// The window's title: the document's name, with "Edited" after it while it has unsaved changes. The window has no
     /// title row of its own (the shell draws none for a full-size window), so the app draws the title in its toolbar.
     fn window_title(&self) -> String {
-        self.docs.active().and_then(|id| self.docs.window_title(id)).unwrap_or_else(|| "Text Editor".to_string())
+        self.docs.active().and_then(|id| self.docs.window_title(id)).unwrap_or_else(|| "TextEdit".to_string())
     }
 
     /// The find bar's buttons: none while it is closed.
@@ -392,15 +476,32 @@ impl TextEditApp {
         }
     }
 
-    /// A document was opened or created: the page starts at the top.
+    /// A document was reverted: the page starts at the top. A created or opened one is placed in a window by
+    /// `sync_windows`, whose page then starts at the top.
+    /// Reports the active document's selection and caret to the shell when they changed (`ctx.text_state`), so the
+    /// Services submenu lists the services for a selection and Look Up finds the word at the caret. No document reports
+    /// an empty state.
+    pub(crate) fn sync_text_state(&mut self, ctx: &Ctx) {
+        let now = active_doc(&self.docs).map(text_state_of).unwrap_or_default();
+        if self.text_published.as_ref() != Some(&now) {
+            // an empty state clears the shell's caret too: the next caret is reported again
+            if now == bifrost_app::proto::TextState::default() {
+                self.caret_published = None;
+            }
+            ctx.text_state(now.clone());
+            self.text_published = Some(now);
+        }
+    }
+
     fn after_documents(&mut self, notices: &[Notice]) {
         for n in notices {
-            if matches!(n, Notice::Created(_) | Notice::Opened(_) | Notice::Reverted(_)) {
+            if matches!(n, Notice::Reverted(_)) {
                 self.scroll = 0.0;
                 self.follow = true;
                 self.revision += 1;
             }
         }
+        self.notices.extend(notices.iter().cloned());
     }
 
     /// Rebuilds the layout and the misspelled words of the active document when they are stale.
@@ -435,7 +536,8 @@ impl TextEditApp {
                 || self.settings
                 || self.encodings_panel
                 || self.spelling_panel
-                || self.plain_sheet;
+                || self.plain_sheet
+                || self.close_alert_here();
             if find_field && !sheet_open && matches!(action, Action::Paste | Action::PasteMatch) {
                 let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
                 return self.type_into(&line);
@@ -455,6 +557,9 @@ impl TextEditApp {
         if matches!(action, Action::Paste | Action::PasteMatch) && panel_open {
             let line = clipboard::text().map(|s| s.lines().next().unwrap_or("").to_string()).unwrap_or_default();
             return self.type_into(&line);
+        }
+        if let Action::CloseAnswer(choice) = action {
+            return self.answer_close(ctx, choice);
         }
         if matches!(action, Action::PlainDone) {
             self.plain_sheet = false;
@@ -480,6 +585,12 @@ impl TextEditApp {
                         if let Notice::Created(created) = n {
                             self.apply_new_defaults(*created);
                         }
+                    }
+                }
+                // Open Recent on a document that is already open: its window comes forward
+                if id >= item::RECENT {
+                    if let Some(open) = self.docs.active().filter(|a| self.shown(*a)) {
+                        self.raise_doc(ctx, open);
                     }
                 }
                 self.after_documents(&notices);
@@ -826,8 +937,8 @@ impl TextEditApp {
             return false;
         }
         let changed = match action {
-            Action::Undo => doc.text.undo(),
-            Action::Redo => doc.text.redo(),
+            Action::Undo => doc.undo(),
+            Action::Redo => doc.redo(),
             Action::Cut => {
                 let picked = doc.text.cells()[doc.text.selection()].to_vec();
                 let picture = picture_of(doc, &picked);
@@ -989,9 +1100,11 @@ impl TextEditApp {
                 true
             }
             Action::MakePlain => {
-                // attachments are dropped only after the confirmation sheet says so
-                if doc.rich && doc.text.has_attachments() {
+                // a rich document with anything in it is converted only after the confirmation sheet says so (its
+                // styles and attachments are lost), as the reference asks "Convert this document to plain text?"
+                if doc.rich && !doc.text.cells().is_empty() {
                     self.plain_sheet = true;
+                    self.plain_focus = None;
                     return true;
                 }
                 let was_rich = doc.rich;
@@ -1118,7 +1231,7 @@ impl TextEditApp {
         if apply && !typed.is_empty() {
             link = links::normalize(&typed).map_or(0, |url| links::intern(&url));
             if link == 0 {
-                self.note = Some(format!("\"{typed}\" is not an address Text Editor can link to"));
+                self.note = Some(format!("\"{typed}\" is not an address TextEdit can link to"));
                 self.link = Some(sheet);
                 return true;
             }
@@ -1158,7 +1271,7 @@ impl TextEditApp {
 
     /// A press while the link panel is open: a button, or nothing (the page behind it is not reachable).
     fn touch_link(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::layout_rows(geom.width, geom.body_top, 1);
         let can_remove = self.link.as_ref().is_some_and(|s| s.had_link);
         let buttons = view::link_buttons(&ctx.ui, &layout, can_remove);
@@ -1179,7 +1292,7 @@ impl TextEditApp {
             return false;
         }
         let (px, py, dy) = (x / ctx.ui.s, y / ctx.ui.s, dy / ctx.ui.s);
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         if let Some(panel) = self.fonts.as_mut() {
             let layout = font_panel::fonts_layout(geom.width, geom.body_top);
             if layout.family.contains(px, py) {
@@ -1198,6 +1311,7 @@ impl TextEditApp {
             || self.settings
             || self.spelling_panel
             || self.plain_sheet
+            || self.close_alert_here()
             || self.line.is_some()
             || self.link.is_some();
         if sheet || py < geom.body_top || py >= geom.body_bottom {
@@ -1214,7 +1328,7 @@ impl TextEditApp {
     /// A press while the font panel is open: a family, typeface or size applies to the selection at once; the arrows
     /// scroll the families; Done closes. A press elsewhere is used up (the panel floats over the page).
     fn touch_fonts(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = font_panel::fonts_layout(geom.width, geom.body_top);
         let Some(panel) = self.fonts.as_mut() else { return false };
         match font_panel::fonts_hit(&layout, panel, px, py) {
@@ -1236,7 +1350,7 @@ impl TextEditApp {
 
     /// A press while the colour panel is open: a swatch colours the selection, Done closes.
     fn touch_colors(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = font_panel::colors_layout(geom.width, geom.body_top);
         match font_panel::colors_hit(&layout, px, py) {
             Some(Some(i)) => self.perform(ctx, Action::Color(i)),
@@ -1257,7 +1371,7 @@ impl TextEditApp {
 
     /// A press while the Preferences panel is open: Done, a row (which changes that setting), or nothing.
     fn touch_settings(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::list_layout(geom.width, geom.body_top, prefs::Setting::ALL.len());
         let buttons = view::list_buttons(&ctx.ui, &layout, Action::SettingsDone);
         if let Some(action) = buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
@@ -1272,7 +1386,7 @@ impl TextEditApp {
     /// A press while the Customize Encodings List panel is open: Done, a row (which lists or unlists that encoding), or
     /// nothing.
     fn touch_encodings(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::list_layout(geom.width, geom.body_top, encoding::ALL.len());
         let buttons = view::list_buttons(&ctx.ui, &layout, Action::EncodingsDone);
         if let Some(action) = buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
@@ -1286,7 +1400,7 @@ impl TextEditApp {
 
     /// A press while the Show Spelling and Grammar panel is open: a button, or nothing (the page is not reachable).
     fn touch_spelling(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::layout_rows(geom.width, geom.body_top, 2);
         let buttons = view::spelling_buttons(&ctx.ui, &layout);
         match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
@@ -1309,7 +1423,7 @@ impl TextEditApp {
 
     /// A press while the Select Line panel is open: a button, or nothing (the page behind it is not reachable).
     fn touch_line(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::layout_rows(geom.width, geom.body_top, 1);
         let buttons = view::line_buttons(&ctx.ui, &layout);
         match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
@@ -1341,7 +1455,7 @@ impl TextEditApp {
 
     /// A press while the properties panel is open: a button, a field, or nothing (the page behind it is not reachable).
     fn touch_properties(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::layout(geom.width, geom.body_top);
         let buttons = view::properties_buttons(&ctx.ui, &layout);
         if let Some(b) = buttons.iter().find(|b| b.rect.contains(px, py)) {
@@ -1529,7 +1643,7 @@ impl TextEditApp {
 
     /// A press while the Spacing panel is open: a button or a field, or nothing (the page is not reachable).
     fn touch_spacing(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let layout = properties::layout_rows(geom.width, geom.body_top, 3);
         let buttons = view::spacing_buttons(&ctx.ui, &layout);
         if let Some(action) = buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
@@ -1613,7 +1727,7 @@ impl TextEditApp {
         } else {
             // kept as on screen: the lines break where the window breaks them, and the whole column is scaled down to
             // the printable width (never up)
-            let window = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h).text_w;
+            let window = self.geom(ctx).text_w;
             let scale = if window > 0.0 { (width / window).min(1.0) } else { 1.0 };
             let cells = zoomed(doc.text.cells(), scale);
             let layout = layout::layout_tabs(&cells, window * scale, &measure, doc.text.tab_width() * scale);
@@ -1688,14 +1802,84 @@ impl TextEditApp {
         was_rich
     }
 
-    /// The Make Plain Text confirmation's touches: the buttons it shows.
+    /// A quit waiting on the documents (`quit_requested`) goes on after every answer: the next edited document asks on its own
+    /// window, which comes forward, and with none left the app exits (`Ctx::terminate`). True when a sheet was raised.
+    fn continue_quit(&mut self, ctx: &Ctx) -> bool {
+        if !self.docs.quitting() {
+            return false;
+        }
+        if self.docs.advance_quit(ctx) {
+            ctx.terminate();
+            return false;
+        }
+        match self.docs.alert_doc() {
+            Some(doc) if self.current_doc != Some(doc) => self.raise_doc(ctx, doc),
+            _ => false,
+        }
+    }
+
+    /// Whether the window being handled shows the close confirmation: its document is the one waiting to close.
+    fn close_alert_here(&self) -> bool {
+        self.current_doc.is_some() && self.docs.alert_doc() == self.current_doc
+    }
+
+    /// The close confirmation was answered: Save saves and then closes, Don't Save closes now (`sync_windows` closes the
+    /// window), Cancel keeps the document and its window as they are.
+    fn answer_close(&mut self, ctx: &Ctx, choice: u8) -> bool {
+        if self.docs.alert_doc().is_none() {
+            return false;
+        }
+        let notices = self.docs.answer_alert(ctx, choice as u32);
+        self.after_documents(&notices);
+        true
+    }
+
+    /// The close confirmation's touches: the buttons it shows; the rest of the window is blocked while it is up.
+    fn touch_close_alert(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geom(ctx);
+        let Some(sheet) = self.close_sheet() else { return false };
+        let (parent, bar) = close_sheet_parent(&geom);
+        match sheet.hit(parent, bar, 1.0, px, py) {
+            bifrost_app::controls::sheet::Hit::Button(id) => self.perform(ctx, Action::CloseAnswer(id as u8)),
+            _ => true,
+        }
+    }
+
+    /// The close confirmation of this window's document as the kit's alert sheet (`Alert::sheet`, E2E9 6): it hangs
+    /// from the title bar, its title wraps instead of being cut, and Save is the accent-filled default (Return).
+    fn close_sheet(&self) -> Option<bifrost_app::controls::sheet::Sheet> {
+        self.docs.alert_sheet().filter(|_| self.close_alert_here())
+    }
+
+    /// The Make Plain Text confirmation as the kit's alert sheet (E2E11 6), hung from the title bar like the close
+    /// confirmation: stacked full-width buttons, OK the default on top. `None` while it is not up.
+    fn plain_alert_sheet(&self) -> Option<bifrost_app::controls::sheet::Sheet> {
+        self.plain_sheet.then(|| view::plain_alert(active_doc(&self.docs).is_some_and(|d| d.text.has_attachments())).sheet().with_focus(self.plain_focus))
+    }
+
+    /// A key press while the Make Plain Text confirmation is up (`Sheet::handle_key`); it takes every key.
+    fn plain_key(&mut self, ctx: &Ctx, key: &KeyInput) -> bool {
+        let Some(mut sheet) = self.plain_alert_sheet() else { return false };
+        match bifrost_app::document::sheet_key(&mut sheet, key) {
+            AlertKey::Answer(view::PLAIN_OK) => self.perform(ctx, Action::PlainDone),
+            AlertKey::Answer(_) => self.perform(ctx, Action::PlainCancel),
+            AlertKey::Focus => {
+                self.plain_focus = sheet.focus;
+                true
+            }
+            AlertKey::Ignored => false,
+        }
+    }
+
+    /// The Make Plain Text confirmation's touches: its buttons; the rest of the window is blocked while it is up.
     fn touch_plain(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
-        let layout = properties::layout_rows(geom.width, geom.body_top, 1);
-        let buttons = view::plain_buttons(&ctx.ui, &layout);
-        match buttons.iter().find(|b| b.rect.contains(px, py)).and_then(|b| b.action) {
-            Some(action) => self.perform(ctx, action),
-            None => true,
+        let geom = self.geom(ctx);
+        let Some(sheet) = self.plain_alert_sheet() else { return false };
+        let (parent, bar) = close_sheet_parent(&geom);
+        match sheet.hit(parent, bar, 1.0, px, py) {
+            bifrost_app::controls::sheet::Hit::Button(view::PLAIN_OK) => self.perform(ctx, Action::PlainDone),
+            bifrost_app::controls::sheet::Hit::Button(_) => self.perform(ctx, Action::PlainCancel),
+            _ => true,
         }
     }
 
@@ -1786,7 +1970,7 @@ impl TextEditApp {
     /// Typed text: into the find field when it has the keyboard, otherwise into the page.
     fn type_into(&mut self, s: &str) -> bool {
         let printable: String = s.chars().filter(|c| !c.is_control()).collect();
-        if printable.is_empty() {
+        if printable.is_empty() || self.close_alert_here() {
             return false;
         }
         // the font panel jumps to the family whose name is typed (and applies it, as clicking it would)
@@ -1983,7 +2167,7 @@ impl TextEditApp {
         if self.refuse_edit() {
             return true;
         }
-        let width = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h).text_w;
+        let width = self.geom(ctx).text_w;
         self.ensure_layout(&ctx.ui, width);
         let Some(cache) = self.cache.as_ref() else { return false };
         let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
@@ -1998,7 +2182,7 @@ impl TextEditApp {
 
     /// Page Up or Page Down: the caret goes a window's height of lines up or down, and with Shift the selection grows to it.
     fn page_move(&mut self, ctx: &Ctx, down: bool, shift: bool) -> bool {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         self.ensure_layout(&ctx.ui, geom.text_w);
         let (aspects, fit) = self.cache.as_ref().map_or((Vec::new(), 0.0), |c| (c.art.aspects.clone(), c.width));
         let measure = view::measure_in(&ctx.ui, &aspects, fit);
@@ -2033,12 +2217,13 @@ impl TextEditApp {
             && !self.plain_sheet
             && self.fonts.is_none()
             && !self.colors_panel
+            && !self.close_alert_here()
     }
 
     /// A navigation key, with the modifiers a chord carries: Shift extends the selection, Alt or Ctrl move by word, Cmd by
     /// line (and to the ends of the text for Up and Down).
     fn navigate(&mut self, ctx: &Ctx, nav: select::Nav, mods: select::NavMods) -> bool {
-        let width = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h).text_w;
+        let width = self.geom(ctx).text_w;
         self.move_caret(&ctx.ui, width, nav, mods)
     }
 
@@ -2120,7 +2305,7 @@ impl TextEditApp {
     /// A control the window published was activated (assistive technology): the same as pressing it in its middle.
     fn activate(&mut self, ctx: &Ctx, node: u64) -> bool {
         let Some(item) = format_bar::item_of_node(node) else { return false };
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let status = self.status();
         let placed = format_bar::layout(&ctx.ui, &geom, &status);
         let (hit, rect) = if item == format_bar::OVERFLOW {
@@ -2140,6 +2325,10 @@ impl TextEditApp {
         let (px, py) = (x / ctx.ui.s, y / ctx.ui.s);
         match kind {
             TouchKind::Down => {
+                // the close confirmation is a sheet over the whole window: it takes the touches first
+                if self.close_alert_here() {
+                    return self.touch_close_alert(ctx, px, py);
+                }
                 if self.fonts.is_some() {
                     return self.touch_fonts(ctx, px, py);
                 }
@@ -2170,7 +2359,7 @@ impl TextEditApp {
                 if self.link.is_some() {
                     return self.touch_link(ctx, px, py);
                 }
-                let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+                let geom = self.geom(ctx);
                 let status = self.status();
                 let placed = format_bar::layout(&ctx.ui, &geom, &status);
                 if let Some(hit) = format_bar::hit(&placed, px, py) {
@@ -2215,7 +2404,7 @@ impl TextEditApp {
                 if !self.drag {
                     return false;
                 }
-                let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+                let geom = self.geom(ctx);
                 self.page_drag(&ctx.ui, &geom, px, py)
             }
             TouchKind::Up | TouchKind::Cancel => {
@@ -2225,7 +2414,9 @@ impl TextEditApp {
         }
     }
 
-    fn text_menu(&self) -> AppMenu {
+    /// Edit: the items the shell's own Edit menu (Undo, Cut, Copy, Paste, Select All) does not have. The shell merges this
+    /// menu into its Edit, so the bar reads File, Edit, Format, View, Window, Help as the reference's does.
+    fn edit_menu(&self) -> AppMenu {
         let doc = active_doc(&self.docs);
         let (has_sel, enabled) = doc.map_or((false, false), |d| (d.text.has_selection(), true));
         let has_find = !self.find.is_empty();
@@ -2278,7 +2469,7 @@ impl TextEditApp {
             AppMenuItem::separator(),
             menu_item(Action::Complete, "Complete", "alt+escape", enabled),
         ];
-        AppMenu { title: "Text".into(), items }
+        AppMenu { title: "Edit".into(), items }
     }
 
     /// Format, laid out as the reference TextEdit's: Font and Text submenus, then the document switches (Make Plain Text,
@@ -2376,6 +2567,8 @@ impl TextEditApp {
         for (index, e) in encoding::ALL.iter().enumerate().filter(|(i, e)| self.opts.lists_encoding(*i) || current == Some(**e)) {
             items.push(menu_item(Action::Encoding(index as u8), e.name(), "", enabled && !rich).checked(current == Some(*e)).depth(1));
         }
+        items.push(AppMenuItem::separator().depth(1));
+        items.push(menu_item(Action::ShowEncodings, "Customize Encodings List\u{2026}", "", true).depth(1));
         items.push(AppMenuItem::submenu("Reinterpret As"));
         for (index, e) in encoding::ALL.iter().enumerate() {
             items.push(menu_item(Action::Reinterpret(index as u8), e.name(), "", enabled && !rich).depth(1));
@@ -2397,31 +2590,6 @@ impl TextEditApp {
         AppMenu { title: "View".into(), items }
     }
 
-    /// Preferences: the format of new documents. The other options live in the menus they belong to (spelling and
-    /// substitutions in Edit, the ruler and wrapping in View, the header and footer in File) and are kept in the
-    /// preferences too.
-    fn preferences_menu(&self) -> AppMenu {
-        let mut items = vec![
-            menu_item(Action::ShowSettings, "Preferences\u{2026}", "cmd+,", true),
-            AppMenuItem::submenu("New Documents"),
-            menu_item(Action::NewPlain(false), "Rich Text", "", true).checked(!self.opts.new_plain).depth(1),
-            menu_item(Action::NewPlain(true), "Plain Text", "", true).checked(self.opts.new_plain).depth(1),
-            AppMenuItem::submenu("Plain Text Encoding"),
-        ];
-        for (index, e) in encoding::ALL.iter().enumerate() {
-            items.push(menu_item(Action::DefaultEncoding(index as u8), e.name(), "", true).checked(self.opts.default_encoding == *e).depth(1));
-        }
-        items.push(menu_item(Action::ShowEncodings, "Customize Encodings List\u{2026}", "", true));
-        // every installed family (`text::families`), not only the three base ones
-        items.push(AppMenuItem::submenu("Default Font"));
-        for index in 0..text::families().len().min(256) {
-            let index = index as u8;
-            items.push(menu_item(Action::DefaultFont(index), view::family_name(index), "", true).checked(self.opts.default_font == index).depth(1));
-        }
-        items.push(menu_item(Action::MarkupAsCode, "Show RTF and HTML Files as Code", "", true).checked(self.opts.markup_as_code));
-        AppMenu { title: "Preferences".into(), items }
-    }
-
     /// File: the document controller's items, then Print and Page Setup.
     fn file_menu(&self) -> AppMenu {
         let mut menu = self.docs.file_menu();
@@ -2432,7 +2600,7 @@ impl TextEditApp {
         menu.items.push(menu_item(Action::ExportPdf, "Export as PDF\u{2026}", "", enabled));
         menu.items.push(menu_item(Action::ShowProperties, "Show Properties\u{2026}", "cmd+alt+p", enabled));
         menu.items.push(AppMenuItem::separator());
-        menu.items.push(menu_item(Action::Print, "Print\u{2026}", "cmd+p", enabled));
+        menu.items.push(AppMenuItem::print(Action::Print.id().unwrap_or(0)).enabled(enabled));
         menu.items.push(menu_item(Action::HeaderFooter, "Print Header and Footer", "", enabled).checked(self.opts.header_footer));
         menu.items.push(menu_item(Action::Rewrap, "Rewrap to Fit Page", "", enabled).checked(self.opts.rewrap));
         menu.items.push(AppMenuItem::submenu("Paper Size"));
@@ -2444,6 +2612,8 @@ impl TextEditApp {
         let portrait = self.print_info.orientation == Orientation::Portrait;
         menu.items.push(menu_item(Action::Landscape(false), "Portrait", "", true).checked(portrait).depth(1));
         menu.items.push(menu_item(Action::Landscape(true), "Landscape", "", true).checked(!portrait).depth(1));
+        // the shell shows this one in the application menu (a Settings\u{2026} item on Cmd+, is not listed in File)
+        menu.items.push(menu_item(Action::ShowSettings, "Settings\u{2026}", "cmd+,", true));
         menu
     }
 }
@@ -2459,16 +2629,23 @@ fn menu_item(action: Action, title: &str, key: &str, enabled: bool) -> AppMenuIt
 }
 
 impl TextEditApp {
-    /// A new untitled document holding `doc`, shown from its top (as `after_documents` does for a created document).
+    /// A new untitled document holding `doc`, in a window of its own (`sync_windows` places it).
     fn open_untitled(&mut self, doc: TextDocument) {
         let id = self.docs.new_document();
         if let Some(d) = self.docs.get_mut(id) {
             *d = doc;
         }
-        self.scroll = 0.0;
-        self.follow = true;
         self.revision += 1;
+        self.notices.push(Notice::Created(id));
     }
+}
+
+/// Whether a dragged item is a file TextEdit opens as a document: a text, rich text or other text-typed file (a picture
+/// is inserted into the page instead).
+fn is_document_file(item: &dnd::DragItem) -> bool {
+    matches!(item.payload, dnd::Payload::File { .. })
+        && dnd::image_format_of(item).is_none()
+        && item.types.iter().any(|t| bifrost_app::controls::uttype::conforms(t, "public.text"))
 }
 
 impl App for TextEditApp {
@@ -2480,7 +2657,7 @@ impl App for TextEditApp {
     /// (the file's contents as an untitled document, so Save asks for a place to write it).
     fn rpc(&mut self, ctx: Option<&Ctx>, _data_dir: &std::path::Path, method: &str, params: &Json) -> Result<Json, RpcError> {
         if ctx.is_none() {
-            return Err(RpcError::new(INTERNAL_ERROR, "Text Editor is not running yet"));
+            return Err(RpcError::new(INTERNAL_ERROR, "TextEdit is not running yet"));
         }
         let call = ServiceCall::from_params(params).ok_or_else(|| RpcError::new(INVALID_PARAMS, "the service call has no text or path"))?;
         let doc = match method {
@@ -2500,12 +2677,25 @@ impl App for TextEditApp {
             }
             _ => return Err(RpcError::new(METHOD_NOT_FOUND, format!("no method {method}"))),
         };
+        if let Some(ctx) = ctx {
+            self.enter(ctx.key_window());
+        }
         self.open_untitled(doc);
+        if let Some(ctx) = ctx {
+            self.sync_windows(ctx);
+        }
         Ok(Json::Obj(Vec::new()))
     }
 
     fn id(&self) -> &str {
         "is.olibuijr.textedit.desktop"
+    }
+
+    /// Look Up and the Services menu act on the document's selection (the text is drawn here, not in an SDK field);
+    /// with only a caret, on the word at the caret, as Look Up defines it. `Some("")` when there is neither.
+    fn selected_text(&mut self, _ctx: &Ctx) -> Option<String> {
+        let Some(doc) = active_doc(&self.docs) else { return Some(String::new()) };
+        Some(doc.text.selected_text().unwrap_or_else(|| text_state_of(doc).word_at_cursor().to_string()))
     }
 
     fn configure(&mut self, ctx: &Ctx) {
@@ -2514,23 +2704,272 @@ impl App for TextEditApp {
         self.opts = Options::read(&|key| DocumentHost::pref(ctx, key));
         self.spelling.enabled = self.opts.spell_enabled;
         document::set_markup_as_code(self.opts.markup_as_code);
-        // pictures dropped from Files or another app land in this window (see `drag`)
-        dnd::register_types(ctx, &["public.image"]);
-        // a window starts with an untitled document, as a new document would
+        // pictures dropped from Files or another app land in this window, and text documents open (see `drag`)
+        dnd::register_types(ctx, &["public.image", "public.text"]);
+        // a window starts with an untitled document, as a new document would. Not while the main window is ordered out
+        // after the last document closed: a later configure (appearance, scale) must not bring a window back
+        if self.docs.is_empty() && ctx.windows().main_shown() {
+            self.start_documents(ctx);
+        }
+        self.sync_windows(ctx);
+    }
+
+    /// The red button and Cmd+W on the main window ask the app instead of quitting it: the main window's document closes as
+    /// File > Close closes it. A clean one closes at once, an edited one raises the confirmation on the main window and
+    /// closes when it is answered with Save or Don't Save, and with the last document closed the window is ordered out
+    /// (`sync_windows`). The other windows close through `window_closed`.
+    fn handles_close_request(&self) -> bool {
+        true
+    }
+
+    fn close_requested(&mut self, ctx: &Ctx) -> bool {
+        self.enter(bifrost_app::app_windows::WindowId::MAIN);
+        self.routed = true;
+        self.menu_action(ctx, item::CLOSE);
+        true
+    }
+
+    /// The red button on a document window asks as Cmd+W in it does: that window's document closes as File > Close closes
+    /// it (a clean one with its window, an edited one raises the confirmation on that window and keeps both until it is
+    /// answered). A window this app does not know is ignored, never answered with the main window's document.
+    fn window_close_requested(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId) -> bool {
+        if window.is_main() {
+            return self.close_requested(ctx);
+        }
+        self.enter(window);
+        if self.current != window {
+            return false;
+        }
+        self.routed = true;
+        self.menu_action(ctx, item::CLOSE);
+        true
+    }
+
+    /// Activated (Dock, the app switcher, Search) with no window open, after the last document closed: the shell has put
+    /// the main window back, and it shows a new Untitled. The reference shows its open panel here when the cloud-storage
+    /// document picker is on; this editor starts with an Untitled on launch, so a reopen does the same (E2E12 2).
+    fn reopen(&mut self, ctx: &Ctx) -> bool {
         if self.docs.is_empty() {
             let id = self.docs.new_document();
             self.apply_new_defaults(id);
+            // the window shows it from its top (`sync_windows`)
+            self.notices.push(Notice::Created(id));
         }
+        self.sync_windows(ctx);
+        true
     }
 
     /// The format bar's items are the window's controls (the shell moves the window by its title row, except over these).
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
-        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let status = self.status();
         format_bar::nodes(&format_bar::layout(&ctx.ui, &geom, &status), &status)
     }
 
+    /// Input for the main window, or (`routed`) for the window `window_event` entered. Touches belong to the main window;
+    /// keys and commands to the key window.
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        if !std::mem::take(&mut self.routed) {
+            let target = if matches!(ev, Input::Touch { .. }) { bifrost_app::app_windows::WindowId::MAIN } else { ctx.key_window() };
+            self.enter(target);
+        }
+        let changed = self.input(ctx, ev);
+        self.sync_windows(ctx);
+        changed
+    }
+
+    fn window_event(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId, ev: Input) -> bool {
+        self.enter(window);
+        if self.current != window {
+            return false;
+        }
+        // a document window's touches arrive in window points; the page takes px, as the main window's
+        let ev = if window.is_main() { ev } else { bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0)) };
+        self.routed = true;
+        self.event(ctx, ev)
+    }
+
+    /// A menu item chosen while a document window is key acts on that window's document (the default sends it to the
+    /// main window only).
+    fn window_input(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId, input: bifrost_app::proto::WindowInput) -> bool {
+        if let bifrost_app::proto::WindowInput::MenuAction(id) = input {
+            self.enter(window);
+            self.routed = true;
+            return self.menu_action(ctx, id);
+        }
+        bifrost_app::app_windows::default_window_input(self, ctx, window, input)
+    }
+
+    /// The wheel over a document window scrolls that window's page (its location comes in window points).
+    fn window_pointer(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        if window.is_main() {
+            return self.pointer(ctx, ev);
+        }
+        self.enter(window);
+        if self.current != window {
+            return false;
+        }
+        match *ev {
+            bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } => {
+                let s = ctx.ui.s;
+                self.wheel(ctx, x * s, y * s, dy * s)
+            }
+            _ => false,
+        }
+    }
+
+    fn draw_window(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId, s: &mut Surface, t: f64) -> Damage {
+        if window.is_main() {
+            return self.draw(ctx, s, t);
+        }
+        self.draw_doc_window(ctx, window, s)
+    }
+
+    fn window_closed(&mut self, ctx: &Ctx, window: bifrost_app::app_windows::WindowId) -> bool {
+        self.doc_window_closed(ctx, window)
+    }
+
+    /// The scroll wheel, in place of the drag the shell would emulate for it (which placed the caret and selected text).
+    fn pointer_interest(&self) -> u32 {
+        bifrost_app::pointer_events::WHEEL
+    }
+
+    fn pointer(&mut self, ctx: &Ctx, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        self.enter(bifrost_app::app_windows::WindowId::MAIN);
+        match *ev {
+            bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } => self.wheel(ctx, x, y, dy),
+            _ => false,
+        }
+    }
+
+    /// Copy and Paste are enabled only when they have something to act on.
+    fn commands(&self, _ctx: &Ctx) -> Commands {
+        let (has_sel, can_undo, can_redo) = match active_doc(&self.docs) {
+            Some(d) => (d.text.has_selection(), d.text.can_undo(), d.text.can_redo()),
+            None => (false, false, false),
+        };
+        Commands::default()
+            .with(Command::Cut, has_sel)
+            .with(Command::Copy, has_sel)
+            .with(Command::Paste, clipboard::text().is_some())
+            .with(Command::SelectAll, active_doc(&self.docs).is_some())
+            .with(Command::Undo, can_undo)
+            .with(Command::Redo, can_redo)
+    }
+
+    fn undo_titles(&self, _ctx: &Ctx) -> (String, String) {
+        match active_doc(&self.docs) {
+            Some(d) => (
+                d.text.undo_name().map_or("Undo".into(), |n| format!("Undo {n}")),
+                d.text.redo_name().map_or("Redo".into(), |n| format!("Redo {n}")),
+            ),
+            None => ("Undo".into(), "Redo".into()),
+        }
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        vec![self.file_menu(), self.edit_menu(), self.format_menu(), self.view_menu()]
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if !std::mem::take(&mut self.routed) {
+            self.enter(ctx.key_window());
+        }
+        let changed = if is_menu_id(id) {
+            self.perform(ctx, Action::Document(id))
+        } else {
+            match Action::from_id(id) {
+                Some(action) => self.perform(ctx, action),
+                None => false,
+            }
+        };
+        self.sync_windows(ctx);
+        changed
+    }
+
+    /// A picture dragged over the window is accepted when it is a picture and the page can take it (rich text, editable);
+    /// a text or rich text file is accepted always and opens as a document of its own, as a drop on the Dock icon does.
+    /// On the drop the files arrive as documents (see `picture_event`, else the document controller opens them as inbound
+    /// files); the drop is answered here.
+    fn drag(&mut self, ctx: &Ctx, ev: dnd::Event) -> bool {
+        let dnd::Event::Dest { session, phase, items, .. } = ev else { return false };
+        let pictures = items.iter().any(|item| dnd::image_format_of(item).is_some());
+        let pictures = pictures && active_doc(&self.docs).is_some_and(|d| d.rich && !d.read_only);
+        let takes_documents = items.iter().any(is_document_file);
+        let takes = pictures || takes_documents;
+        match phase {
+            DragPhase::Entered | DragPhase::Updated => {
+                // only a picture drop is inserted here; a document drop is left to the document controller
+                if pictures && !self.drop_sessions.contains(&session) {
+                    if self.drop_sessions.len() >= 16 {
+                        self.drop_sessions.remove(0);
+                    }
+                    self.drop_sessions.push(session);
+                }
+                dnd::reply(ctx, session, if takes { dragop::COPY } else { 0 });
+            }
+            DragPhase::Exited => self.drop_sessions.retain(|s| *s != session),
+            DragPhase::Perform => {
+                // the files follow as documents (`picture_event` inserts them); the drop is accepted here
+                dnd::performed(ctx, session, takes);
+            }
+        }
+        true
+    }
+
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        self.enter(ctx.key_window());
+        let changed = self.document_event(ctx, ev);
+        self.sync_windows(ctx);
+        changed
+    }
+
+    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        self.docs.tick(ctx, t);
+        let asking = self.continue_quit(ctx);
+        self.sync_titles(ctx);
+        asking
+    }
+
+    /// Cmd+Q, the application menu's and the Dock's Quit ask for every edited document (the close confirmation, Save, Don't
+    /// Save or Cancel) before the app exits; logout and shutdown still send `Quit` and only autosave.
+    fn quit_requested(&mut self, ctx: &Ctx) -> bool {
+        let quit = self.docs.request_quit(ctx);
+        if !quit {
+            self.continue_quit(ctx);
+        }
+        quit
+    }
+
+    fn next_wake(&self, _t: f64) -> Option<f64> {
+        self.docs.next_wake()
+    }
+
+    fn suspend(&mut self, ctx: &Ctx) {
+        self.docs.suspend(ctx);
+    }
+
+    /// The window draws through `Canvas`, so the same routine serves the CPU `Surface` and the GPU canvas.
+    fn draws_canvas(&self) -> bool {
+        true
+    }
+
+    fn draw_canvas(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, _t: f64) -> Damage {
+        self.enter(bifrost_app::app_windows::WindowId::MAIN);
+        let d = self.paint(ctx, canvas);
+        self.enter(ctx.key_window());
+        d
+    }
+
+    /// The shared-memory path: the same routine on the CPU `Surface`, which implements `Canvas`.
+    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
+        self.draw_canvas(ctx, s, t)
+    }
+}
+
+impl TextEditApp {
+    /// The input of the window being handled.
+    fn input(&mut self, ctx: &Ctx, ev: Input) -> bool {
         match ev {
             Input::Command(command) => match command {
                 Command::Cut => self.perform(ctx, Action::Cut),
@@ -2540,6 +2979,16 @@ impl App for TextEditApp {
                 Command::Undo => self.perform(ctx, Action::Undo),
                 Command::Redo => self.perform(ctx, Action::Redo),
             },
+            // the close confirmation: Return saves, Escape cancels, Cmd+D is Don't Save, Tab moves the focus ring and Space
+            // presses the focused button; other keys do nothing behind the sheet
+            Input::Key(key) if self.close_alert_here() => match self.docs.alert_key(&key) {
+                Some(AlertKey::Answer(choice)) => self.perform(ctx, Action::CloseAnswer(choice as u8)),
+                Some(AlertKey::Focus) => true,
+                _ => false,
+            },
+            // the Make Plain Text confirmation takes the same sheet keys: Return is OK, Escape and Cmd+. cancel, Tab moves
+            // the focus ring and Space presses the focused button; other keys do nothing behind it
+            Input::Key(key) if self.plain_sheet => self.plain_key(ctx, &key),
             Input::Key(KeyInput::Text(s)) => self.type_into(&s),
             Input::Key(KeyInput::Code(code)) => {
                 if code & CHORD_FLAG != 0 {
@@ -2613,13 +3062,6 @@ impl App for TextEditApp {
                 }
                 if self.spelling_panel && code == 27 {
                     return self.perform(ctx, Action::SpellingDone);
-                }
-                if self.plain_sheet {
-                    return match code {
-                        13 => self.perform(ctx, Action::PlainDone),
-                        1 | 27 => self.perform(ctx, Action::PlainCancel),
-                        _ => false,
-                    };
                 }
                 if self.line.is_some() {
                     return match code {
@@ -2704,83 +3146,7 @@ impl App for TextEditApp {
         }
     }
 
-    /// The scroll wheel, in place of the drag the shell would emulate for it (which placed the caret and selected text).
-    fn pointer_interest(&self) -> u32 {
-        bifrost_app::pointer_events::WHEEL
-    }
-
-    fn pointer(&mut self, ctx: &Ctx, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
-        match *ev {
-            bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } => self.wheel(ctx, x, y, dy),
-            _ => false,
-        }
-    }
-
-    /// Copy and Paste are enabled only when they have something to act on.
-    fn commands(&self, _ctx: &Ctx) -> Commands {
-        let (has_sel, can_undo, can_redo) = match active_doc(&self.docs) {
-            Some(d) => (d.text.has_selection(), d.text.can_undo(), d.text.can_redo()),
-            None => (false, false, false),
-        };
-        Commands::default()
-            .with(Command::Cut, has_sel)
-            .with(Command::Copy, has_sel)
-            .with(Command::Paste, clipboard::text().is_some())
-            .with(Command::SelectAll, active_doc(&self.docs).is_some())
-            .with(Command::Undo, can_undo)
-            .with(Command::Redo, can_redo)
-    }
-
-    fn undo_titles(&self, _ctx: &Ctx) -> (String, String) {
-        match active_doc(&self.docs) {
-            Some(d) => (
-                d.text.undo_name().map_or("Undo".into(), |n| format!("Undo {n}")),
-                d.text.redo_name().map_or("Redo".into(), |n| format!("Redo {n}")),
-            ),
-            None => ("Undo".into(), "Redo".into()),
-        }
-    }
-
-    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        vec![self.file_menu(), self.text_menu(), self.format_menu(), self.view_menu(), self.preferences_menu()]
-    }
-
-    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
-        if is_menu_id(id) {
-            return self.perform(ctx, Action::Document(id));
-        }
-        match Action::from_id(id) {
-            Some(action) => self.perform(ctx, action),
-            None => false,
-        }
-    }
-
-    /// A picture dragged over the window is accepted when it is a picture and the page can take it (rich text, editable).
-    /// On the drop the files arrive as documents (see `picture_event`); the drop is answered here.
-    fn drag(&mut self, ctx: &Ctx, ev: dnd::Event) -> bool {
-        let dnd::Event::Dest { session, phase, items, .. } = ev else { return false };
-        let pictures = items.iter().any(|item| dnd::image_format_of(item).is_some());
-        let takes = pictures && active_doc(&self.docs).is_some_and(|d| d.rich && !d.read_only);
-        match phase {
-            DragPhase::Entered | DragPhase::Updated => {
-                if takes && !self.drop_sessions.contains(&session) {
-                    if self.drop_sessions.len() >= 16 {
-                        self.drop_sessions.remove(0);
-                    }
-                    self.drop_sessions.push(session);
-                }
-                dnd::reply(ctx, session, if takes { dragop::COPY } else { 0 });
-            }
-            DragPhase::Exited => self.drop_sessions.retain(|s| *s != session),
-            DragPhase::Perform => {
-                // the files follow as documents (`picture_event` inserts them); the drop is accepted here
-                dnd::performed(ctx, session, takes);
-            }
-        }
-        true
-    }
-
-    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+    fn document_event(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
         let ev = match self.export_event(ctx, ev) {
             Ok(handled) => return handled,
             Err(ev) => ev,
@@ -2798,28 +3164,12 @@ impl App for TextEditApp {
         }
     }
 
-    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
-        self.docs.tick(ctx, t);
-        false
-    }
-
-    fn next_wake(&self, _t: f64) -> Option<f64> {
-        self.docs.next_wake()
-    }
-
-    fn suspend(&mut self, ctx: &Ctx) {
-        self.docs.suspend(ctx);
-    }
-
-    /// The window draws through `Canvas`, so the same routine serves the CPU `Surface` and the GPU canvas.
-    fn draws_canvas(&self) -> bool {
-        true
-    }
-
-    fn draw_canvas(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, _t: f64) -> Damage {
+    /// Draws the window being handled (`doc_windows`): the main window from `draw_canvas`, a document window from
+    /// `draw_window`.
+    pub(crate) fn paint(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas) -> Damage {
         let (w, h) = canvas.size();
         let ui = &ctx.ui;
-        let geom = self.geometry(ui, ctx.cfg.w, ctx.cfg.h);
+        let geom = self.geom(ctx);
         let find = self.find_buttons(ui, &geom);
         view::draw_bar(canvas, ui, &geom);
         view::draw_title(canvas, ui, &geom, &self.window_title());
@@ -2833,9 +3183,11 @@ impl App for TextEditApp {
         let matches = self.find_matches();
         view::page_clip(canvas, ui, &geom, self.opts.dark_background);
         let view_h = geom.body_bottom - geom.body_top;
+        let mut caret_now = None;
         if let (Some(doc), Some(cache)) = (active_doc(&self.docs), self.cache.as_ref()) {
             let sel = doc.text.selection();
             let head = doc.text.head();
+            let caret_at = if sel.is_empty() { head } else { sel.start };
             if self.follow {
                 let (_, top, height) = cache.layout.caret(&cache.cells, head, &view::measure_in(ui, &cache.art.aspects, cache.layout.width));
                 if top < self.scroll {
@@ -2862,8 +3214,18 @@ impl App for TextEditApp {
                 &matches,
                 self.opts.dark_background,
             );
+            // where the caret (or the selection's start) is in the window, in points, as the page draws it
+            let (x, top, height) = cache.layout.caret(&cache.cells, caret_at, &view::measure_in(ui, &cache.art.aspects, cache.layout.width));
+            caret_now = Some(caret_in_window(&geom, self.scroll, (x, top, height)));
         }
         canvas.pop_clip();
+        // the key window's caret goes to the shell (`firstRectForCharacterRange:`): Look Up opens under the selection
+        if let Some(rect) = caret_now.filter(|_| ctx.key_window() == self.current) {
+            if self.caret_published != Some((self.current, rect)) {
+                ctx.caret_rect(rect.0, rect.1, rect.2, rect.3);
+                self.caret_published = Some((self.current, rect));
+            }
+        }
         if let Some((_, panel)) = &self.props {
             let layout = properties::layout(geom.width, geom.body_top);
             let buttons = view::properties_buttons(ui, &layout);
@@ -2875,10 +3237,14 @@ impl App for TextEditApp {
             let buttons = view::link_buttons(ui, &layout, sheet.had_link);
             view::draw_sheet(canvas, ui, &layout, "Link", &[("Address", sheet.url.as_str())], 0, &buttons);
         }
-        if self.plain_sheet {
-            let layout = properties::layout_rows(geom.width, geom.body_top, 1);
-            let buttons = view::plain_buttons(ui, &layout);
-            view::draw_confirm(canvas, ui, &layout, "Make Plain Text", "Attachments will be removed from the document.", &buttons);
+        if let Some(sheet) = self.plain_alert_sheet() {
+            let (parent, bar) = close_sheet_parent(&geom);
+            bifrost_app::widgets::sheet(canvas, ui, parent, bar, &sheet, 1.0, None);
+        }
+        // the close confirmation of this window's document, over everything else in the window
+        if let Some(sheet) = self.close_sheet() {
+            let (parent, bar) = close_sheet_parent(&geom);
+            bifrost_app::widgets::sheet(canvas, ui, parent, bar, &sheet, 1.0, None);
         }
         if let Some(typed) = &self.line {
             let layout = properties::layout_rows(geom.width, geom.body_top, 1);
@@ -2906,7 +3272,7 @@ impl App for TextEditApp {
             let layout = properties::list_layout(geom.width, geom.body_top, prefs::Setting::ALL.len());
             let buttons = view::list_buttons(ui, &layout, Action::SettingsDone);
             let rows: Vec<(&str, String)> = prefs::Setting::ALL.iter().map(|s| (s.label(), s.value(&self.opts))).collect();
-            view::draw_list(canvas, ui, &layout, "Preferences", &rows, &buttons);
+            view::draw_list(canvas, ui, &layout, "Settings", &rows, &buttons);
         }
         if self.encodings_panel {
             let layout = properties::list_layout(geom.width, geom.body_top, encoding::ALL.len());
@@ -2933,11 +3299,6 @@ impl App for TextEditApp {
         d.all();
         d
     }
-
-    /// The shared-memory path: the same routine on the CPU `Surface`, which implements `Canvas`.
-    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
-        self.draw_canvas(ctx, s, t)
-    }
 }
 
 /// The standard editing command a Cmd (or Ctrl) chord names: A select all, C copy, X cut, V paste, Z undo (Shift redo).
@@ -2960,881 +3321,17 @@ fn main() {
     bifrost_app::run(TextEditApp::new());
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bifrost_app::document::Document;
-    use text::{Cell, Style};
-
-    fn doc(s: &str) -> TextDocument {
-        let mut d = TextDocument::untitled();
-        d.text.load(s.chars().map(|ch| Cell { ch, style: Style::default() }).collect());
-        d
-    }
-
-    #[test]
-    fn an_untitled_document_holds_the_text_it_is_given_and_shows_from_the_top() {
-        let mut app = TextEditApp::new();
-        app.scroll = 40.0;
-        app.open_untitled(doc("shared text"));
-        assert_eq!(active_doc(&app.docs).unwrap().text.text(), "shared text");
-        assert!(app.follow);
-        assert_eq!(app.scroll, 0.0);
-    }
-
-    #[test]
-    fn spelling_works_on_the_word_at_the_caret_or_a_single_word_selection() {
-        let mut d = doc("helo world");
-        d.text.select(2, 2);
-        assert_eq!(word_here(&d), Some((0..4, "helo".to_string())));
-        d.text.select(5, 5);
-        assert_eq!(word_here(&d), Some((5..10, "world".to_string())));
-        d.text.select(0, 10);
-        assert_eq!(word_here(&d), None, "a selection of two words is not a word");
-        d.text.select(4, 4);
-        assert_eq!(word_here(&d), Some((0..4, "helo".to_string())), "the end of a word still belongs to it");
-    }
-
-    #[test]
-    fn prevent_editing_refuses_text_changes_but_not_copying_or_view_commands() {
-        assert!(edits_text(Action::Paste));
-        assert!(edits_text(Action::Delete));
-        assert!(edits_text(Action::Transform(Transform::Upper)));
-        assert!(edits_text(Action::Strike));
-        assert!(edits_text(Action::Undo));
-        assert!(!edits_text(Action::Copy));
-        assert!(!edits_text(Action::Find));
-        assert!(!edits_text(Action::ZoomIn));
-        assert!(!edits_text(Action::PreventEditing));
-        assert!(!edits_text(Action::CopyStyle));
-    }
-
-    #[test]
-    fn zooming_scales_sizes_only() {
-        let cells = vec![Cell { ch: 'a', style: Style { size: 12.0, ..Style::default() } }];
-        let big = zoomed(&cells, 2.0);
-        assert_eq!(big[0].style.size, 24.0);
-        assert_eq!(big[0].ch, 'a');
-        assert_eq!(cells[0].style.size, 12.0, "the document keeps its own size");
-    }
-
-    #[test]
-    fn formatting_commands_include_the_new_character_styles() {
-        assert!(is_formatting(Action::Strike));
-        assert!(is_formatting(Action::Superscript));
-        assert!(is_formatting(Action::Highlight(2)));
-        assert!(is_formatting(Action::PasteStyle));
-        assert!(!is_formatting(Action::CopyStyle));
-    }
-
-    fn app_with_plain(bytes: &[u8]) -> TextEditApp {
-        let mut app = TextEditApp::new();
-        let id = app.docs.new_document();
-        *app.docs.get_mut(id).unwrap() = TextDocument::read_bytes(bytes, false).unwrap();
-        app
-    }
-
-    #[test]
-    fn choosing_an_encoding_marks_a_plain_document_edited_and_only_when_it_changes() {
-        let mut app = app_with_plain(b"abc");
-        let id = app.docs.active().unwrap();
-        assert!(!app.docs.is_edited(id));
-        assert!(!app.set_encoding(Encoding::Utf8), "the encoding it already has changes nothing");
-        assert!(!app.docs.is_edited(id));
-        assert!(app.set_encoding(Encoding::Utf16Le));
-        assert_eq!(active_doc(&app.docs).unwrap().encoding, Encoding::Utf16Le);
-        assert!(app.docs.is_edited(id));
-    }
-
-    #[test]
-    fn rich_text_and_read_only_documents_refuse_an_encoding() {
-        let mut app = TextEditApp::new();
-        app.docs.new_document();
-        assert!(app.set_encoding(Encoding::Latin1));
-        assert_eq!(active_doc(&app.docs).unwrap().encoding, Encoding::Utf8, "rich text keeps its encoding");
-        assert!(app.note.as_deref().is_some_and(|n| n.contains("Make Plain Text")));
-        let mut plain = app_with_plain(b"abc");
-        active_doc_mut(&mut plain.docs).unwrap().read_only = true;
-        assert!(plain.set_encoding(Encoding::Latin1));
-        assert_eq!(active_doc(&plain.docs).unwrap().encoding, Encoding::Utf8);
-    }
-
-    #[test]
-    fn reinterpreting_rereads_the_text_and_is_undoable() {
-        // a classic-set file that was guessed as Windows text
-        let mut app = app_with_plain(&[0x8e, b'x']);
-        assert_eq!(active_doc(&app.docs).unwrap().encoding, Encoding::Windows1252);
-        assert_eq!(active_doc(&app.docs).unwrap().text.text(), "\u{17d}x");
-        assert!(app.reinterpret(Encoding::Roman));
-        let doc = active_doc(&app.docs).unwrap();
-        assert_eq!(doc.text.text(), "éx");
-        assert_eq!(doc.encoding, Encoding::Roman);
-        assert!(doc.text.can_undo());
-        // text that is not bytes of the old set cannot be reread
-        let mut app = app_with_plain("→".as_bytes());
-        active_doc_mut(&mut app.docs).unwrap().encoding = Encoding::Latin1;
-        assert!(app.reinterpret(Encoding::Roman));
-        assert_eq!(active_doc(&app.docs).unwrap().text.text(), "→");
-        assert!(app.note.as_deref().is_some_and(|n| n.contains("cannot be read")));
-    }
-
-    #[test]
-    fn the_properties_panel_applies_on_done_and_discards_on_cancel() {
-        let mut app = app_with_plain(b"abc");
-        let id = app.docs.active().unwrap();
-        assert!(app.open_properties());
-        app.props.as_mut().unwrap().1.type_text("  Plan ");
-        assert!(app.close_properties(false));
-        assert!(app.props.is_none());
-        assert!(active_doc(&app.docs).unwrap().properties.is_empty(), "Cancel keeps nothing");
-        assert!(!app.docs.is_edited(id));
-
-        app.open_properties();
-        app.props.as_mut().unwrap().1.type_text("  Plan ");
-        app.props.as_mut().unwrap().1.next_field();
-        app.props.as_mut().unwrap().1.type_text("Ada");
-        assert!(app.close_properties(true));
-        let props = &active_doc(&app.docs).unwrap().properties;
-        assert_eq!((props.title.as_str(), props.author.as_str()), ("Plan", "Ada"));
-        assert!(app.docs.is_edited(id), "changed properties are unsaved changes");
-
-        // unchanged properties are not an edit
-        let mut quiet = app_with_plain(b"x");
-        let qid = quiet.docs.active().unwrap();
-        quiet.open_properties();
-        quiet.close_properties(true);
-        assert!(!quiet.docs.is_edited(qid));
-    }
-
-    #[test]
-    fn properties_cannot_change_while_editing_is_prevented() {
-        let mut app = app_with_plain(b"abc");
-        active_doc_mut(&mut app.docs).unwrap().read_only = true;
-        app.open_properties();
-        app.props.as_mut().unwrap().1.type_text("Title");
-        app.close_properties(true);
-        assert!(active_doc(&app.docs).unwrap().properties.is_empty());
-    }
-
-    fn app_with_text(s: &str, select: Range<usize>) -> TextEditApp {
-        let mut app = TextEditApp::new();
-        let id = app.docs.new_document();
-        let doc = app.docs.get_mut(id).unwrap();
-        doc.text.load(s.chars().map(|ch| Cell { ch, style: Style::default() }).collect());
-        doc.text.select(select.start, select.end);
-        app
-    }
-
-    #[test]
-    fn adding_a_link_links_the_selection_and_remove_link_takes_it_off() {
-        let mut app = app_with_text("see the docs", 4..12);
-        let id = app.docs.active().unwrap();
-        assert!(app.open_link_sheet());
-        assert!(!app.link.as_ref().unwrap().had_link);
-        app.link.as_mut().unwrap().url = "example.com/docs".into();
-        assert!(app.finish_link(true));
-        assert!(app.link.is_none());
-        let doc = active_doc(&app.docs).unwrap();
-        assert_eq!(links::url(doc.text.link_at(5)).as_deref(), Some("https://example.com/docs"));
-        assert_eq!(doc.text.link_at(3), 0);
-        assert!(app.docs.is_edited(id));
-
-        // with the caret inside the link the panel opens on it, with its address
-        active_doc_mut(&mut app.docs).unwrap().text.select(6, 6);
-        assert!(app.open_link_sheet());
-        let sheet = app.link.as_ref().unwrap();
-        assert_eq!((sheet.url.as_str(), sheet.had_link, sheet.range.clone()), ("https://example.com/docs", true, 4..12));
-        assert!(app.finish_link(false));
-        assert_eq!(active_doc(&app.docs).unwrap().text.link_at(5), 0);
-    }
-
-    #[test]
-    fn an_empty_address_removes_the_link_and_a_bad_one_stays_in_the_panel() {
-        let mut app = app_with_text("a link here", 2..6);
-        app.open_link_sheet();
-        app.link.as_mut().unwrap().url = "two words".into();
-        assert!(app.finish_link(true));
-        assert!(app.link.is_some(), "the panel stays open for another try");
-        assert!(app.note.as_deref().is_some_and(|n| n.contains("not an address")));
-        assert_eq!(active_doc(&app.docs).unwrap().text.link_at(3), 0);
-        app.link.as_mut().unwrap().url = "https://example.org".into();
-        assert!(app.finish_link(true));
-        assert_ne!(active_doc(&app.docs).unwrap().text.link_at(3), 0);
-        app.open_link_sheet();
-        app.link.as_mut().unwrap().url.clear();
-        assert!(app.finish_link(true));
-        assert_eq!(active_doc(&app.docs).unwrap().text.link_at(3), 0, "Done with no address removes the link");
-    }
-
-    #[test]
-    fn links_need_a_selection_rich_text_and_an_editable_document() {
-        let mut none = app_with_text("text", 2..2);
-        assert!(none.open_link_sheet());
-        assert!(none.link.is_none());
-        assert!(none.note.as_deref().is_some_and(|n| n.contains("Select the text")));
-
-        let mut plain = app_with_text("text", 0..4);
-        active_doc_mut(&mut plain.docs).unwrap().rich = false;
-        assert!(plain.open_link_sheet());
-        assert!(plain.link.is_none());
-        assert!(plain.note.as_deref().is_some_and(|n| n.contains("rich text")));
-
-        let mut locked = app_with_text("text", 0..4);
-        active_doc_mut(&mut locked.docs).unwrap().read_only = true;
-        assert!(locked.open_link_sheet());
-        assert!(locked.link.is_none());
-    }
-
-    #[test]
-    fn smart_links_link_an_address_when_the_word_ends() {
-        let mut app = app_with_text("", 0..0);
-        app.opts.smart_links = true;
-        assert!(app.insert_raw("see www.example.com"));
-        assert_eq!(active_doc(&app.docs).unwrap().text.link_at(8), 0, "no link until the word ends");
-        assert!(app.insert_raw(" "));
-        let doc = active_doc(&app.docs).unwrap();
-        assert_eq!(links::url(doc.text.link_at(8)).as_deref(), Some("https://www.example.com"));
-        assert_eq!(doc.text.link_at(3), 0);
-        assert_eq!(doc.text.link_at(19), 0, "the blank after it is not part of the link");
-        assert_eq!(doc.text.style().link, 0, "typing goes on outside the link");
-        // a plain word, and an address that is already a link, are left alone
-        assert!(app.insert_raw("hello "));
-        assert!(active_doc(&app.docs).unwrap().text.cells()[20..].iter().all(|c| c.style.link == 0));
-        // with the option off nothing is linked
-        let mut off = app_with_text("", 0..0);
-        off.insert_raw("www.example.com ");
-        assert_eq!(active_doc(&off.docs).unwrap().text.link_at(2), 0);
-        // a plain text document is never linked
-        let mut plain = app_with_text("", 0..0);
-        plain.opts.smart_links = true;
-        active_doc_mut(&mut plain.docs).unwrap().rich = false;
-        plain.insert_raw("www.example.com ");
-        assert_eq!(active_doc(&plain.docs).unwrap().text.link_at(2), 0);
-    }
-
-    #[test]
-    fn typing_into_the_link_panel_takes_an_address_without_blanks() {
-        let mut app = app_with_text("text", 0..4);
-        app.open_link_sheet();
-        assert!(app.type_into("https://exa mple.com"));
-        assert_eq!(app.link.as_ref().unwrap().url, "https://example.com");
-        assert!(app.backspace());
-        assert_eq!(app.link.as_ref().unwrap().url, "https://example.co");
-        assert_eq!(active_doc(&app.docs).unwrap().text.text(), "text", "the page is untouched");
-    }
-
-    #[test]
-    fn only_rich_text_takes_formatting_commands() {
-        assert!(is_formatting(Action::Bold));
-        assert!(is_formatting(Action::Color(2)));
-        assert!(is_formatting(Action::List(text::ListKind::Bullet)));
-        assert!(!is_formatting(Action::MakePlain));
-        assert!(!is_formatting(Action::Find));
-        assert!(!is_formatting(Action::Print));
-    }
-
-    // ---- the page and the format bar, through a context with no shell behind it ----
-
-    const SENTENCE: &str = "Hello from the BifrOSt E2E run.";
-
-    fn window(w: u32, h: u32) -> Ctx {
-        use bifrost_app::kit::{Font, Ui};
-        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
-        let cfg = bifrost_app::Configure { w, h, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
-        Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg)
-    }
-
-    /// The window point a quarter of the way into the character at `index` on the first line of the page: the caret nearest
-    /// to it is the one before that character, and the character under it is that one.
-    fn middle_of(app: &TextEditApp, ctx: &Ctx, text: &str, index: usize) -> (f32, f32) {
-        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
-        let width = |ch: char| view::char_width(&ctx.ui, ch, &Style::default());
-        let before: f32 = text.chars().take(index).map(width).sum();
-        let this = text.chars().nth(index).map_or(0.0, width);
-        (geom.text_x + before + this * 0.25, geom.body_top + 6.0)
-    }
-
-    fn press(app: &mut TextEditApp, ctx: &Ctx, kind: TouchKind, (x, y): (f32, f32), t: f64) -> bool {
-        app.touch(ctx, kind, x * ctx.ui.s, y * ctx.ui.s, t)
-    }
-
-    fn selected(app: &TextEditApp) -> String {
-        active_doc(&app.docs).unwrap().text.selected_text().unwrap_or_default()
-    }
-
-    fn wheel_at(app: &mut TextEditApp, ctx: &Ctx, (x, y): (f32, f32), dy: f32) -> bool {
-        use bifrost_app::pointer_events::{Phase, PointerEvent};
-        let ev = PointerEvent::Wheel { x: x * ctx.ui.s, y: y * ctx.ui.s, dx: 0.0, dy: dy * ctx.ui.s, precise: false, phase: Phase::None, momentum: Phase::None };
-        app.pointer(ctx, &ev)
-    }
-
-    /// E2E: the wheel scrolls the page (the emulated drag it replaces placed the caret and selected text), stops at the
-    /// ends of the text, and over the Fonts panel it goes to the family column, never to the page under the panel.
-    #[test]
-    fn the_wheel_scrolls_the_page_and_over_the_fonts_panel_its_families() {
-        let ctx = window(1200, 780);
-        assert_eq!(TextEditApp::new().pointer_interest(), bifrost_app::pointer_events::WHEEL);
-        let long: String = (0..200).map(|i| format!("line {i}\n")).collect();
-        let mut app = app_with_text(&long, 0..0);
-        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
-        app.ensure_layout(&ctx.ui, geom.text_w);
-        let page = (geom.text_x + 10.0, geom.body_top + 40.0);
-        assert!(wheel_at(&mut app, &ctx, page, -40.0), "a wheel turned down shows the text below");
-        assert_eq!(app.scroll, 40.0);
-        assert_eq!(selected(&app), "", "no text is selected by the wheel");
-        assert_eq!(active_doc(&app.docs).unwrap().text.head(), 0, "and the caret stays");
-        assert!(wheel_at(&mut app, &ctx, page, 15.0));
-        assert_eq!(app.scroll, 25.0);
-        wheel_at(&mut app, &ctx, page, 1.0e6);
-        assert_eq!(app.scroll, 0.0, "the top of the text");
-        assert!(!wheel_at(&mut app, &ctx, page, 30.0), "already at the top");
-        wheel_at(&mut app, &ctx, page, -1.0e6);
-        let bottom = app.scroll;
-        assert!(bottom > 0.0 && bottom < app.cache.as_ref().unwrap().layout.height, "the end of the text: {bottom}");
-        assert!(!wheel_at(&mut app, &ctx, (page.0, geom.body_top - 4.0), 30.0), "the format bar does not scroll");
-
-        // the Fonts panel: its family column takes the wheel (three families fit, so nothing moves) and the page under
-        // the panel keeps its place
-        app.fonts = Some(font_panel::Fonts::new(0));
-        let layout = font_panel::fonts_layout(geom.width, geom.body_top);
-        let column = (layout.family.x + 4.0, layout.family.y + 4.0);
-        assert!(!wheel_at(&mut app, &ctx, column, 30.0));
-        assert!(!wheel_at(&mut app, &ctx, (layout.done.x + 1.0, layout.done.y + 1.0), 30.0));
-        assert_eq!(app.scroll, bottom);
-        // beside the panel the page still scrolls
-        let beside = (layout.frame.x + layout.frame.w + 4.0, geom.body_bottom - 10.0);
-        assert!(!layout.frame.contains(beside.0, beside.1));
-        assert!(wheel_at(&mut app, &ctx, beside, 30.0));
-        assert_eq!(app.scroll, bottom - 30.0);
-    }
-
-    #[test]
-    fn a_press_on_the_first_line_places_the_caret_though_the_find_fields_overlap_it() {
-        // the report: clicks never moved the caret, because the closed find bar's fields sat over the first line and took the press
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, SENTENCE.len()..SENTENCE.len());
-        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
-        let point = middle_of(&app, &ctx, SENTENCE, 3);
-        assert!(geom.find_field.contains(point.0, point.1), "the point is under the hidden find field: {point:?} {:?}", geom.find_field);
-        assert!(press(&mut app, &ctx, TouchKind::Down, point, 0.0));
-        let doc = active_doc(&app.docs).unwrap();
-        assert_eq!(doc.text.head(), 3, "the caret is at the character pressed, not at the end");
-        assert_eq!(app.focus, Focus::Body);
-        // typing goes in at the caret
-        press(&mut app, &ctx, TouchKind::Up, point, 10.0);
-        app.type_into("X");
-        let text = active_doc(&app.docs).unwrap().text.text();
-        assert_eq!(text, "HelXlo from the BifrOSt E2E run.");
-    }
-
-    #[test]
-    fn a_double_click_selects_the_word_and_typing_replaces_it() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, SENTENCE.len()..SENTENCE.len());
-        let point = middle_of(&app, &ctx, SENTENCE, 7);
-        press(&mut app, &ctx, TouchKind::Down, point, 0.0);
-        press(&mut app, &ctx, TouchKind::Up, point, 40.0);
-        assert_eq!(selected(&app), "");
-        press(&mut app, &ctx, TouchKind::Down, point, 120.0);
-        press(&mut app, &ctx, TouchKind::Up, point, 160.0);
-        assert_eq!(selected(&app), "from");
-        app.type_into("X");
-        assert_eq!(active_doc(&app.docs).unwrap().text.text(), "Hello X the BifrOSt E2E run.");
-    }
-
-    #[test]
-    fn a_triple_click_selects_the_paragraph_and_a_fourth_press_starts_over() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, 0..0);
-        let point = middle_of(&app, &ctx, SENTENCE, 7);
-        for (k, t) in [0.0, 100.0, 200.0].into_iter().enumerate() {
-            press(&mut app, &ctx, TouchKind::Down, point, t);
-            press(&mut app, &ctx, TouchKind::Up, point, t + 30.0);
-            let expected = [0, 4, SENTENCE.len()][k];
-            assert_eq!(selected(&app).len(), expected, "press {}", k + 1);
-        }
-        press(&mut app, &ctx, TouchKind::Down, point, 300.0);
-        assert_eq!(selected(&app), "", "the fourth press places the caret again");
-    }
-
-    #[test]
-    fn dragging_selects_by_characters_and_by_words_after_a_double_click() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, 0..0);
-        // a plain drag from the middle of "from" to the middle of "BifrOSt"
-        let (from, to) = (middle_of(&app, &ctx, SENTENCE, 7), middle_of(&app, &ctx, SENTENCE, 16));
-        press(&mut app, &ctx, TouchKind::Down, from, 0.0);
-        assert!(press(&mut app, &ctx, TouchKind::Move, to, 20.0));
-        assert_eq!(selected(&app), "rom the B", "from the character pressed to the one under the pointer");
-        press(&mut app, &ctx, TouchKind::Up, to, 30.0);
-        assert!(!press(&mut app, &ctx, TouchKind::Move, from, 40.0), "a move with the button up does nothing");
-        // press twice and hold: the drag takes whole words
-        press(&mut app, &ctx, TouchKind::Down, from, 2000.0);
-        press(&mut app, &ctx, TouchKind::Up, from, 2010.0);
-        press(&mut app, &ctx, TouchKind::Down, from, 2100.0);
-        press(&mut app, &ctx, TouchKind::Move, to, 2120.0);
-        assert_eq!(selected(&app), "from the BifrOSt");
-    }
-
-    #[test]
-    fn the_navigation_chords_extend_the_selection_and_plain_keys_collapse_it() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, SENTENCE.len()..SENTENCE.len());
-        // Shift+Home (evdev 102) selects back to the start of the line, Shift+End forward again
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(102, CHORD_SHIFT))));
-        assert_eq!(selected(&app), SENTENCE);
-        // Shift+Right moves the head from the start; the anchor stays at the end of the text
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(106, CHORD_SHIFT))));
-        assert_eq!(selected(&app), &SENTENCE[1..]);
-        // Alt+Shift+Right moves the head one word on
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(106, CHORD_SHIFT | CHORD_ALT))));
-        assert_eq!(selected(&app), &SENTENCE[5..]);
-        // Left alone collapses to the start of the selection, then Home (plain code 36) goes to the line start
-        assert!(app.event(&ctx, Input::Key(KeyInput::Code(37))));
-        assert_eq!(active_doc(&app.docs).unwrap().text.selection(), 5..5);
-        assert!(app.event(&ctx, Input::Key(KeyInput::Code(36))));
-        assert_eq!(active_doc(&app.docs).unwrap().text.head(), 0);
-        assert!(app.event(&ctx, Input::Key(KeyInput::Code(35))));
-        assert_eq!(active_doc(&app.docs).unwrap().text.head(), SENTENCE.len());
-        // Cmd+Left is the line start as well, and a chord on another key is not a move
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(105, CHORD_META))));
-        assert_eq!(active_doc(&app.docs).unwrap().text.head(), 0);
-        assert!(!app.event(&ctx, Input::Key(KeyInput::chord(49, CHORD_META))), "a chord on another key is not a move");
-        // Cmd+A as a chord (the shell sends it so when its last report of the commands is stale) selects everything
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(30, CHORD_META))));
-        assert_eq!(active_doc(&app.docs).unwrap().text.selection(), 0..SENTENCE.len());
-    }
-
-    #[test]
-    fn the_navigation_keys_leave_a_panel_or_the_find_field_alone() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, 3..3);
-        app.focus = Focus::Find;
-        assert!(!app.event(&ctx, Input::Key(KeyInput::chord(102, CHORD_SHIFT))), "the find field has the keyboard");
-        assert_eq!(active_doc(&app.docs).unwrap().text.head(), 3);
-        app.focus = Focus::Body;
-        app.open_line_sheet();
-        assert!(!app.event(&ctx, Input::Key(KeyInput::chord(107, CHORD_SHIFT))), "a panel is open over the page");
-        assert_eq!(active_doc(&app.docs).unwrap().text.head(), 3);
-    }
-
-    #[test]
-    fn the_editing_commands_act_on_the_focused_find_field_or_sheet_not_the_document() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, 0..5);
-        app.find_open = true;
-        app.focus = Focus::Find;
-        clipboard::set_text("needle\nsecond");
-        assert!(app.event(&ctx, Input::Command(Command::Paste)));
-        assert_eq!(app.find, "needle", "paste goes into the find field");
-        assert_eq!(text_of(&app), SENTENCE, "the document is untouched");
-        // Select All, Copy and Cut are the field's (QA W2-12: Cmd+A appended to the query instead); Undo does nothing
-        assert!(app.event(&ctx, Input::Command(Command::SelectAll)), "Cmd+A selects the find field's text");
-        assert!(app.find_sel);
-        assert!(!app.event(&ctx, Input::Command(Command::Undo)));
-        clipboard::set_text("");
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(45, CHORD_META))), "Cmd+X as a chord cuts the field's text");
-        assert_eq!((app.find.as_str(), clipboard::text().as_deref()), ("", Some("needle")));
-        assert_eq!(text_of(&app), SENTENCE, "cut and undo left the document alone");
-        assert_eq!(caret_of(&app), 0..5, "select all left the selection alone");
-        // a sheet open over the page: the same
-        app.find_open = false;
-        app.focus = Focus::Body;
-        app.open_line_sheet();
-        for command in [Command::Cut, Command::SelectAll, Command::Undo] {
-            assert!(!app.event(&ctx, Input::Command(command)));
-        }
-        assert_eq!(text_of(&app), SENTENCE);
-        assert_eq!(caret_of(&app), 0..5);
-    }
-
-    /// QA W2-12: Cmd+A in the find field, live matches while typing, the previous query selected on reopening, and no
-    /// "not found" left in the status row after the bar closes.
-    #[test]
-    fn the_find_bar_searches_as_it_is_typed_and_reopens_with_the_query_selected() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text("the lazy dog and the lazy cat", 0..0);
-        assert!(app.perform(&ctx, Action::Find));
-        // the shared find pasteboard may hold another test's query
-        app.find.clear();
-        app.find_sel = false;
-        for c in ["l", "a", "z"] {
-            app.event(&ctx, Input::Key(KeyInput::Text(c.into())));
-        }
-        assert_eq!(caret_of(&app), 4..7, "the first match is selected while typing");
-        assert_eq!(app.find_matches(), vec![4..7, 21..24], "every match is highlighted");
-        app.event(&ctx, Input::Key(KeyInput::Text("q".into())));
-        assert_eq!(app.note.as_deref(), Some("\"lazq\" not found"));
-        assert!(app.find_matches().is_empty());
-        app.backspace();
-        assert_eq!((app.find.as_str(), app.note.as_deref()), ("laz", None));
-        // closing clears the note and the highlight
-        app.event(&ctx, Input::Key(KeyInput::Text("q".into())));
-        assert!(app.perform(&ctx, Action::FindDone));
-        assert_eq!(app.note, None);
-        assert!(app.find_matches().is_empty(), "no highlight once the bar is closed");
-        // reopening selects the previous query: typing replaces it, Cmd+A selects it again
-        app.perform(&ctx, Action::Find);
-        assert!(app.find_sel);
-        app.event(&ctx, Input::Key(KeyInput::Text("cat".into())));
-        assert_eq!(app.find, "cat");
-        assert_eq!(caret_of(&app), 26..29);
-        app.event(&ctx, Input::Command(Command::SelectAll));
-        app.event(&ctx, Input::Key(KeyInput::Text("dog".into())));
-        assert_eq!(app.find, "dog", "Cmd+A then typing replaces the query");
-        app.event(&ctx, Input::Command(Command::SelectAll));
-        app.backspace();
-        assert_eq!(app.find, "", "Backspace over the selected query clears it");
-        assert_eq!(text_of(&app), "the lazy dog and the lazy cat", "the page was never edited");
-    }
-
-    #[test]
-    fn find_all_lists_every_match_without_overlap() {
-        let app = app_with_text("aaaa Aa", 0..0);
-        let doc = active_doc(&app.docs).unwrap();
-        assert_eq!(doc.text.find_all("aa", false, 10), vec![0..2, 2..4, 5..7]);
-        assert_eq!(doc.text.find_all("aa", true, 10), vec![0..2, 2..4]);
-        assert_eq!(doc.text.find_all("aa", false, 1), vec![0..2], "the limit holds");
-        assert!(doc.text.find_all("", false, 10).is_empty());
-    }
-
-    /// The titles of the direct children of submenu `header` of `menu` (its top level when `header` is None).
-    fn level_titles(menu: &AppMenu, header: Option<&str>) -> Vec<String> {
-        let (start, depth) = match header {
-            None => (0, 0),
-            Some(h) => {
-                let at = menu.items.iter().position(|i| i.submenu && i.title == h).unwrap_or_else(|| panic!("no {h} submenu"));
-                (at + 1, menu.items[at].depth + 1)
-            }
-        };
-        menu.items[start..].iter().take_while(|i| i.depth >= depth).filter(|i| i.depth == depth).map(|i| i.title.clone()).collect()
-    }
-
-    /// QA: Format reached the menu bar's old 48-item cap before Color, so Color, Copy and Paste Style, Make Plain Text and the
-    /// encodings were dropped. Format is now laid out as the reference's (Font and Text submenus), every item reaches the
-    /// shell, and the Font submenu lists every family.
-    #[test]
-    fn the_format_menu_has_font_and_text_submenus_and_nothing_is_cut() {
-        let app = app_with_text("Hello world", 0..5);
-        let format = app.format_menu();
-        let top = level_titles(&format, None);
-        assert_eq!(&top[..2], ["Font", "Text"], "{top:?}");
-        for want in ["Prevent Editing", "Allow Hyphenation", "Text Encoding", "Reinterpret As"] {
-            assert!(top.iter().any(|t| t == want), "{want} is in Format: {top:?}");
-        }
-        assert!(top.iter().any(|t| t == "Make Plain Text" || t == "Make Rich Text"));
-        assert!(top.iter().any(|t| t == "Wrap to Window" || t == "Wrap to Page"));
-        let font = level_titles(&format, Some("Font"));
-        for want in ["Show Fonts", "Bold", "Italic", "Underline", "Outline", "Styles\u{2026}", "Bigger", "Smaller", "Kern", "Ligatures", "Baseline", "Show Colors", "Color", "Copy Style", "Paste Style"] {
-            assert!(font.iter().any(|t| t == want), "{want} is in Format > Font: {font:?}");
-        }
-        for family in text::families() {
-            assert!(font.iter().any(|t| t == family), "the family {family} is in Format > Font");
-        }
-        let text = level_titles(&format, Some("Text"));
-        for want in ["Align Left", "Center", "Justify", "Align Right", "Writing Direction", "Copy Ruler", "Paste Ruler", "Spacing\u{2026}", "Lists", "Tables\u{2026}"] {
-            assert!(text.iter().any(|t| t == want), "{want} is in Format > Text: {text:?}");
-        }
-        assert!(text.iter().any(|t| t == "Show Ruler" || t == "Hide Ruler"));
-        assert_eq!(level_titles(&format, Some("Writing Direction")), ["Left to Right", "Right to Left"]);
-        assert_eq!(level_titles(&format, Some("Baseline")), ["Superscript", "Subscript"]);
-        // the shell takes every item of every menu, and they fit the packets
-        let menus = vec![app.file_menu(), app.text_menu(), format.clone(), app.view_menu(), app.preferences_menu()];
-        for m in &menus {
-            assert_eq!(m.dropped_items(), 0, "{} loses items", m.title);
-            assert!(m.items.iter().all(|i| i.depth <= bifrost_app::proto::MAX_APP_MENU_DEPTH), "{}", m.title);
-        }
-        assert!(bifrost_app::proto::app_menu_packets(&menus).dropped.is_empty());
-        // the ruler and the wrapping width moved to Format; View has the zoom
-        let view = level_titles(&app.view_menu(), None);
-        assert!(!view.iter().any(|t| t.contains("Ruler") || t.starts_with("Wrap")), "{view:?}");
-        // every enabled item's id is one the app reads back
-        for i in format.items.iter().filter(|i| i.enabled && !i.submenu && !i.separator) {
-            assert!(Action::from_id(i.id).is_some(), "{} has id {}", i.title, i.id);
-        }
-    }
-
-    /// Format > Font lists 256 families without losing an item: a submenu's own budget holds them.
-    #[test]
-    fn a_font_submenu_with_every_family_still_fits() {
-        let app = app_with_text("Hello", 0..0);
-        let mut format = app.format_menu();
-        let at = format.items.iter().position(|i| i.title == "Copy Style").unwrap();
-        for k in 0..256u32 {
-            format.items.insert(at + 1, AppMenuItem::new(1 + k, &format!("Installed Family {k}")).depth(1));
-        }
-        assert_eq!(format.dropped_items(), 0);
-        let out = bifrost_app::proto::app_menu_packets(&[app.file_menu(), app.text_menu(), format.clone(), app.view_menu(), app.preferences_menu()]);
-        assert!(out.dropped.is_empty(), "{:?}", out.dropped);
-    }
-
-    /// Preferences > Default Font lists every family a document can use, and choosing one keeps it.
-    #[test]
-    fn preferences_default_font_lists_every_family() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text("Hello", 0..0);
-        let prefs = app.preferences_menu();
-        assert_eq!(level_titles(&prefs, Some("Default Font")), text::families().to_vec());
-        let last = (text::families().len() - 1) as u8;
-        assert!(app.menu_action(&ctx, Action::DefaultFont(last).id().unwrap()));
-        assert_eq!(app.opts.default_font, last);
-        assert!(!app.perform(&ctx, Action::DefaultFont(last + 1)), "an index past the families is refused");
-    }
-
-    /// QA W2-11: Cmd+T did nothing and the Format menu had no Show Fonts or Show Colors.
-    #[test]
-    fn show_fonts_and_show_colors_open_panels_that_format_the_selection() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text("Hello world", 0..5);
-        let format = app.format_menu();
-        let item = |title: &str| format.items.iter().find(|i| i.title == title).cloned();
-        assert_eq!(item("Show Fonts").map(|i| (i.id, i.key)), Some((Action::ShowFonts.id().unwrap(), "cmd+t".to_string())));
-        assert_eq!(item("Show Colors").map(|i| (i.id, i.key)), Some((Action::ShowColors.id().unwrap(), "cmd+shift+c".to_string())));
-        // the menu item (Cmd+T) opens the panel; a family, a typeface and a size apply to the selection at once
-        assert!(app.menu_action(&ctx, Action::ShowFonts.id().unwrap()), "Cmd+T is the menu item's key equivalent");
-        assert!(app.fonts.is_some() && !app.page_has_keys());
-        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
-        let l = font_panel::fonts_layout(geom.width, geom.body_top);
-        let row = |r: bifrost_app::controls::Rect, i: usize| (r.x + 6.0, r.y + font_panel::ROW_H * (i as f32 + 0.5));
-        press(&mut app, &ctx, TouchKind::Down, row(l.family, 2), 0.0);
-        press(&mut app, &ctx, TouchKind::Down, row(l.face, 1), 100.0);
-        press(&mut app, &ctx, TouchKind::Down, row(l.size, 5), 200.0);
-        let style = active_doc(&app.docs).unwrap().text.cells()[0].style;
-        assert_eq!((style.font, style.bold, style.italic, style.size), (2, true, false, text::SIZES[5]));
-        assert_eq!(active_doc(&app.docs).unwrap().text.cells()[6].style.font, 0, "only the selection");
-        // Up steps to the previous family; typing a name jumps to it; Esc closes
-        app.event(&ctx, Input::Key(KeyInput::Code(38)));
-        assert_eq!(app.status().style.font, 1);
-        app.event(&ctx, Input::Key(KeyInput::Text("hel".into())));
-        assert_eq!(app.status().style.font, 0, "Helvetica");
-        app.event(&ctx, Input::Key(KeyInput::Code(27)));
-        assert!(app.fonts.is_none() && app.page_has_keys());
-        // Show Colors: a swatch colours the selection, Done closes
-        app.perform(&ctx, Action::ShowColors);
-        let c = font_panel::colors_layout(geom.width, geom.body_top);
-        let s = c.swatches[1];
-        press(&mut app, &ctx, TouchKind::Down, (s.x + 4.0, s.y + 4.0), 300.0);
-        assert_eq!(active_doc(&app.docs).unwrap().text.cells()[0].style.color, 1);
-        press(&mut app, &ctx, TouchKind::Down, (c.done.x + 2.0, c.done.y + 2.0), 400.0);
-        assert!(!app.colors_panel);
-        assert!(app.docs.is_edited(app.docs.active().unwrap()), "formatting is an unsaved change");
-    }
-
-    #[test]
-    fn an_installed_family_beyond_the_base_three_maps_to_a_base_face_and_keeps_its_name() {
-        // the tests see only the base families; the mapping rules still hold for any index
-        assert_eq!(text::base_family(1), 1);
-        assert_eq!(text::base_family(200), 0, "an index past the list falls back to the default");
-        assert_eq!(text::export_name(2), "Courier New");
-        assert_eq!(text::family_index("times"), Some(1));
-        assert_eq!(text::family_for_name("Liberation Mono"), 2, "a fixed-width name maps to Courier");
-    }
-
-    fn text_of(app: &TextEditApp) -> String {
-        active_doc(&app.docs).unwrap().text.text()
-    }
-
-    fn caret_of(app: &TextEditApp) -> Range<usize> {
-        active_doc(&app.docs).unwrap().text.selection()
-    }
-
-    /// The report: Cmd+A, C, X, V did nothing and Undo had nothing to undo. The shell sends them as the standard commands
-    /// (`Input::Command`); each one acts on the page, and each edit is one undo step.
-    #[test]
-    fn select_all_copy_cut_paste_and_undo_act_on_the_page() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, 5..5);
-        assert!(app.event(&ctx, Input::Command(Command::SelectAll)));
-        assert_eq!(caret_of(&app), 0..SENTENCE.len(), "Cmd+A selects everything");
-        app.event(&ctx, Input::Command(Command::Copy));
-        assert_eq!(clipboard::text().as_deref(), Some(SENTENCE), "Cmd+C reaches the clipboard");
-        assert_eq!(text_of(&app), SENTENCE, "copy leaves the text");
-        assert!(app.event(&ctx, Input::Command(Command::Cut)));
-        assert_eq!(text_of(&app), "", "Cmd+X removes the selection");
-        assert_eq!(clipboard::text().as_deref(), Some(SENTENCE));
-        assert!(app.event(&ctx, Input::Command(Command::Undo)));
-        assert_eq!(text_of(&app), SENTENCE, "Cmd+Z puts the cut back");
-        assert!(app.event(&ctx, Input::Command(Command::Redo)));
-        assert_eq!(text_of(&app), "", "Shift+Cmd+Z cuts again");
-        assert!(app.event(&ctx, Input::Command(Command::Paste)));
-        assert_eq!(text_of(&app), SENTENCE, "Cmd+V pastes the clipboard");
-        assert!(app.event(&ctx, Input::Command(Command::Undo)));
-        assert_eq!(text_of(&app), "", "the paste is an undo step of its own");
-        // the app reports what it takes, so the shell sends the command (and not the chord)
-        let commands = app.commands(&ctx);
-        assert!(commands.supports(Command::SelectAll) && commands.supports(Command::Paste) && commands.supports(Command::Redo));
-    }
-
-    /// Option+Backspace deletes a word, Cmd+Backspace the line before the caret, Option+Delete a word forward, Fn+Delete a
-    /// character forward, and Ctrl+K the rest of the paragraph; each is one chord and one undo step.
-    #[test]
-    fn the_delete_chords_remove_a_word_or_a_line() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, 22..22);
-        // Option+Backspace (evdev 14) after "BifrOSt" removes the word
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(14, CHORD_ALT))));
-        assert_eq!(text_of(&app), "Hello from the  E2E run.");
-        assert_eq!(caret_of(&app), 15..15);
-        // Cmd+Backspace removes everything back to the start of the line
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(14, CHORD_META))));
-        assert_eq!(text_of(&app), " E2E run.");
-        assert_eq!(caret_of(&app), 0..0);
-        // Option+Delete (evdev 111) removes the next word, blanks first; plain Delete one character
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(111, CHORD_ALT))));
-        assert_eq!(text_of(&app), " run.");
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(111, 0))));
-        assert_eq!(text_of(&app), "run.");
-        // Ctrl+E is the line end, Ctrl+H a backspace, Ctrl+A the line start, Ctrl+D a forward delete, Ctrl+K the rest
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(18, CHORD_CTRL))));
-        assert_eq!(caret_of(&app), 4..4);
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(35, CHORD_CTRL))));
-        assert_eq!(text_of(&app), "run");
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(30, CHORD_CTRL))));
-        assert_eq!(caret_of(&app), 0..0);
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(32, CHORD_CTRL))));
-        assert_eq!(text_of(&app), "un");
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(37, CHORD_CTRL))));
-        assert_eq!(text_of(&app), "");
-        // with a selection each of them deletes the selection
-        let mut app = app_with_text(SENTENCE, 6..10);
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(14, CHORD_ALT))));
-        assert_eq!(text_of(&app), "Hello  the BifrOSt E2E run.");
-        // the undo stack has the steps
-        assert!(app.event(&ctx, Input::Command(Command::Undo)));
-        assert_eq!(text_of(&app), SENTENCE);
-    }
-
-    #[test]
-    fn page_up_and_page_down_move_a_window_of_lines_and_extend_with_shift() {
-        let ctx = window(1200, 780);
-        let long: String = (0..200).map(|i| format!("line {i}\n")).collect();
-        let mut app = app_with_text(&long, 0..0);
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(109, 0))), "Page Down");
-        let down = caret_of(&app).start;
-        assert!(down > 0 && down < long.len(), "the caret moved down by a page, not to the end: {down}");
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(109, CHORD_SHIFT))), "Shift+Page Down");
-        let sel = caret_of(&app);
-        assert_eq!(sel.start, down, "the selection grows from where Page Down left the caret");
-        assert!(sel.end > sel.start);
-        assert!(app.event(&ctx, Input::Key(KeyInput::chord(104, 0))), "Page Up");
-        assert_eq!(caret_of(&app).start, caret_of(&app).end, "a plain Page Up collapses the selection");
-    }
-    fn centre(r: bifrost_app::controls::Rect) -> (f32, f32) {
-        (r.x + r.w / 2.0, r.y + r.h / 2.0)
-    }
-
-    #[test]
-    fn the_format_bar_buttons_format_the_selection_and_show_its_state() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, 6..10);
-        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
-        let placed = format_bar::layout(&ctx.ui, &geom, &app.status());
-        let bold = centre(placed.rect_of(format_bar::BOLD).unwrap());
-        assert!(press(&mut app, &ctx, TouchKind::Down, bold, 0.0));
-        let doc = active_doc(&app.docs).unwrap();
-        assert_eq!(doc.text.selection(), 6..10, "the press on a button keeps the selection");
-        assert!(doc.text.cells()[6..10].iter().all(|c| c.style.bold));
-        assert!(!doc.text.cells()[0].style.bold && !doc.text.cells()[10].style.bold);
-        assert!(app.status().style.bold, "the bar shows the style of the selection");
-        // without a selection the button sets the typing style
-        active_doc_mut(&mut app.docs).unwrap().text.select(31, 31);
-        let italic = centre(placed.rect_of(format_bar::ITALIC).unwrap());
-        press(&mut app, &ctx, TouchKind::Down, italic, 100.0);
-        app.type_into("z");
-        let typed = active_doc(&app.docs).unwrap().text.cells().last().copied().unwrap();
-        assert!(typed.ch == 'z' && typed.style.italic && !typed.style.bold, "{typed:?}");
-    }
-
-    #[test]
-    fn a_pop_up_opens_its_menu_and_the_choice_formats_the_selection() {
-        use bifrost_app::proto::ToShell;
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, 0..5);
-        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
-        let placed = format_bar::layout(&ctx.ui, &geom, &app.status());
-        let size = centre(placed.rect_of(format_bar::SIZE).unwrap());
-        assert!(!press(&mut app, &ctx, TouchKind::Down, size, 0.0));
-        let sent = ctx.take_sent();
-        let items = sent.iter().find_map(|m| match m {
-            ToShell::ContextMenu { items, .. } => Some(items.clone()),
-            _ => None,
-        });
-        let items = items.expect("the size pop-up opens a menu");
-        assert_eq!(items.len(), text::SIZES.len());
-        // the choice comes back with the menu id of its action
-        let eighteen = items.iter().find(|i| i.label == "18").expect("a row for 18").id;
-        assert!(app.event(&ctx, Input::ContextAction(eighteen)));
-        assert!(active_doc(&app.docs).unwrap().text.cells()[..5].iter().all(|c| c.style.size == 18.0));
-        assert_eq!(app.status().style.size, 18.0);
-        // the style pop-up sets bold and italic together
-        assert!(app.event(&ctx, Input::ContextAction(Action::FontStyle(3).id().unwrap())));
-        let first = active_doc(&app.docs).unwrap().text.cells()[0].style;
-        assert!(first.bold && first.italic);
-        assert!(app.event(&ctx, Input::ContextAction(Action::FontStyle(0).id().unwrap())));
-        let first = active_doc(&app.docs).unwrap().text.cells()[0].style;
-        assert!(!first.bold && !first.italic);
-    }
-
-    #[test]
-    fn the_overflow_button_of_a_narrow_window_opens_the_hidden_controls() {
-        use bifrost_app::proto::ToShell;
-        let ctx = window(520, 600);
-        let mut app = app_with_text(SENTENCE, 0..0);
-        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
-        let placed = format_bar::layout(&ctx.ui, &geom, &app.status());
-        let more = placed.overflow_button.expect("the bar overflows at 520 points");
-        let nodes = app.controls(&ctx);
-        assert!(nodes.iter().any(|n| n.label == "More Formatting" && n.bounds == more), "the button is a control");
-        assert!(nodes.iter().all(|n| n.bounds.right() <= geom.width + 0.01), "no control is cut by the window's edge");
-        press(&mut app, &ctx, TouchKind::Down, centre(more), 0.0);
-        let menu = ctx.take_sent().into_iter().find_map(|m| match m {
-            ToShell::ContextMenu { items, .. } => Some(items),
-            _ => None,
-        });
-        assert!(menu.is_some_and(|items| !items.is_empty() && items.len() <= 32));
-        // the same through the control: assistive technology activates it
-        assert!(!app.event(&ctx, Input::Activate(format_bar::NODE_BASE + u64::from(format_bar::OVERFLOW))));
-        assert!(ctx.take_sent().iter().any(|m| matches!(m, ToShell::ContextMenu { .. })));
-    }
-
-    #[test]
-    fn the_controls_the_window_publishes_are_the_format_bar() {
-        let ctx = window(1200, 780);
-        let app = app_with_text(SENTENCE, 0..0);
-        let nodes = app.controls(&ctx);
-        assert_eq!(nodes.len(), format_bar::ALL.len());
-        assert!(nodes.iter().all(|n| !n.label.is_empty()));
-        // none of the old text buttons (New, Open, Save, Undo, Redo, Find, Print) is a control any more
-        for gone in ["New", "Open", "Save", "Undo", "Redo", "Find", "Print", "Bullets", "Numbers"] {
-            assert!(!nodes.iter().any(|n| n.label == gone), "{gone}");
-        }
-    }
-
-    #[test]
-    fn the_title_row_names_the_document_and_says_when_it_has_unsaved_changes() {
-        let mut app = app_with_text("", 0..0);
-        assert_eq!(app.window_title(), "Untitled");
-        app.type_into("x");
-        assert_eq!(app.window_title(), "Untitled \u{2013} Edited");
-        assert_eq!(TextEditApp::new().window_title(), "Text Editor", "with no document the app's own name shows");
-    }
-
-    #[test]
-    fn a_plain_text_document_takes_no_press_on_the_format_bar() {
-        let ctx = window(1200, 780);
-        let mut app = app_with_text(SENTENCE, 0..5);
-        active_doc_mut(&mut app.docs).unwrap().rich = false;
-        let geom = app.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
-        let placed = format_bar::layout(&ctx.ui, &geom, &app.status());
-        let bold = centre(placed.rect_of(format_bar::BOLD).unwrap());
-        assert!(!press(&mut app, &ctx, TouchKind::Down, bold, 0.0));
-        assert!(!active_doc(&app.docs).unwrap().text.cells()[0].style.bold);
-        assert!(ctx.take_sent().is_empty());
-    }
-
-    #[test]
-    fn the_size_and_style_actions_count_as_formatting() {
-        assert!(is_formatting(Action::Size(3)));
-        assert!(is_formatting(Action::FontStyle(1)));
-    }
+/// The window a document-modal sheet covers (points) and the height of the title bar it hangs from: the unified title
+/// row, above the format bar.
+fn close_sheet_parent(geom: &view::Geometry) -> (bifrost_app::controls::Rect, f32) {
+    (bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: geom.width, h: geom.height }, bifrost_app::layout::UNIFIED_BAR_PT)
 }
+
+/// The caret `(x, top, height)` of the page's layout as a rectangle in the window, in points: the text column starts at
+/// `text_x` and the page at `body_top`, scrolled by `scroll`. The caret is one point wide.
+fn caret_in_window(geom: &view::Geometry, scroll: f32, (x, top, height): (f32, f32, f32)) -> (f32, f32, f32, f32) {
+    (geom.text_x + x, geom.body_top - scroll + top, 1.0, height)
+}
+
+#[cfg(test)]
+mod tests;

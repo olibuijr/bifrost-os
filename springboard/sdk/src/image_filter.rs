@@ -10,6 +10,7 @@ use bifrost_render::effect_chain as e;
 use bifrost_render::gfx::Image;
 
 pub use bifrost_render::composite_filters::{blend_names, Blend, ColorMatrix};
+pub use bifrost_render::composite_ops::{ExtraBlend, MaskChannel, Operator};
 pub use bifrost_render::effect_chain::{filter_names, filters_in, search, Category, Filter, InputRange};
 
 /// An ordered chain of named colour filters. `apply` runs each filter over the whole image in turn,
@@ -55,6 +56,40 @@ pub fn blend(foreground: &Image, background: &Image, mode: Blend) -> Option<Imag
     }
     let px = c::composite(&foreground.px, &background.px, foreground.w, foreground.h, mode)?;
     Some(Image { w: foreground.w, h: foreground.h, px })
+}
+
+/// Puts `source` against `background` under a Porter-Duff operator (`CISourceInCompositing`,
+/// `CISourceOutCompositing`, `CISourceAtopCompositing`) or the channel product
+/// (`CIMultiplyCompositing`). Both images are premultiplied and the same size; `None` otherwise.
+pub fn composite(source: &Image, background: &Image, op: Operator) -> Option<Image> {
+    if source.w != background.w || source.h != background.h {
+        return None;
+    }
+    let px = bifrost_render::composite_ops::operate(&source.px, &background.px, source.w, source.h, op)?;
+    Some(Image { w: source.w, h: source.h, px })
+}
+
+/// Composites `foreground` over `background` under one of the newer blend modes (`CILinearBurnBlendMode`,
+/// `CILinearDodgeBlendMode`, `CILinearLightBlendMode`, `CIPinLightBlendMode`, `CIVividLightBlendMode`,
+/// `CIDivideBlendMode`, `CISubtractBlendMode`). Same size rules as `blend`.
+pub fn blend_extra(foreground: &Image, background: &Image, mode: ExtraBlend) -> Option<Image> {
+    if foreground.w != background.w || foreground.h != background.h {
+        return None;
+    }
+    let px = bifrost_render::composite_ops::blend(&foreground.px, &background.px, foreground.w, foreground.h, mode)?;
+    Some(Image { w: foreground.w, h: foreground.h, px })
+}
+
+/// Mixes `image` and `background` by one channel of `mask`: the background where it is 0, the image where
+/// it is 1 (`CIBlendWithMask` reads green, the grey mask's channel; `CIBlendWithRedMask`,
+/// `CIBlendWithBlueMask` and `CIBlendWithAlphaMask` read their own). All three must be the same size.
+pub fn blend_with_mask(image: &Image, background: &Image, mask: &Image, channel: MaskChannel) -> Option<Image> {
+    let same = |o: &Image| o.w == image.w && o.h == image.h;
+    if !same(background) || !same(mask) {
+        return None;
+    }
+    let px = bifrost_render::composite_ops::blend_with_mask(&image.px, &background.px, &mask.px, image.w, image.h, channel)?;
+    Some(Image { w: image.w, h: image.h, px })
 }
 
 /// Applies a colour matrix to every pixel of `img` (`CIColorMatrix`).
@@ -134,6 +169,20 @@ mod tests {
     fn linear_gradient_returns_an_image_of_the_requested_size() {
         let g = linear_gradient(4, 3, (0.0, 0.0), (4.0, 0.0), 0xff00_0000, 0xffff_ffff);
         assert_eq!((g.w, g.h, g.px.len()), (4, 3, 12));
+    }
+
+    #[test]
+    fn operators_extra_blends_and_masks_keep_the_size_and_refuse_mismatches() {
+        let red = solid(2, 1, 0xff00_00ff);
+        let blue = solid(2, 1, 0xffff_0000);
+        assert_eq!(composite(&red, &blue, Operator::SourceAtop), Some(red.clone()));
+        assert_eq!(composite(&red, &solid(1, 1, 0), Operator::SourceIn), None);
+        let out = blend_extra(&red, &blue, ExtraBlend::LinearDodge).unwrap();
+        assert_eq!(out.px[0], 0xffff_00ff, "red plus blue is magenta");
+        let mask = Image { w: 2, h: 1, px: vec![0xff00_ff00, 0xff00_0000] };
+        let mixed = blend_with_mask(&red, &blue, &mask, MaskChannel::Green).unwrap();
+        assert_eq!(mixed.px, vec![0xff00_00ff, 0xffff_0000]);
+        assert_eq!(blend_with_mask(&red, &blue, &solid(1, 1, 0), MaskChannel::Green), None);
     }
 
     #[test]

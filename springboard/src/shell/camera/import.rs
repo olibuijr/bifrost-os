@@ -5,7 +5,7 @@
 
 use super::devices;
 use super::super::cache::TextCache;
-use super::super::ui::{home_zone, Ui, Weight, CARD_BG, CONTENT_BG, LABEL, SECONDARY, TINT, WHITE};
+use super::super::ui::{home_zone, Ui, Weight, CARD_BG, CONTENT_BG, LABEL, SECONDARY, TINT, accent_now, WHITE};
 use super::super::Event;
 use super::RADIUS;
 use crate::gfx::Surface;
@@ -343,7 +343,7 @@ impl ImportView {
         let title = (self.w as f32 / 4.0, ui.pt(10.0), self.w as f32 / 2.0, ui.pt(36.0));
         Self::put(s, ui, cache, "Import from Camera", 17.0, Weight::Semibold, LABEL.now(), title, true);
         let imp = self.import_rect(ui);
-        let (fill, text) = if self.import_enabled() { (TINT, WHITE) } else { (CARD_BG.now(), SECONDARY) };
+        let (fill, text) = if self.import_enabled() { (accent_now(), WHITE) } else { (CARD_BG.now(), SECONDARY) };
         let fill = if self.pressed == Some(Target::Import) { SECONDARY } else { fill };
         s.fill_rrect(imp.0, imp.1, imp.2, imp.3, RADIUS, fill);
         Self::put(s, ui, cache, "Import", 15.0, Weight::Semibold, text, imp, true);
@@ -379,7 +379,7 @@ impl ImportView {
             let picked = self.picked.contains(&pos);
             let pressed = self.pressed == Some(Target::Row(pos));
             let fill = match (picked, pressed) {
-                (true, _) => TINT,
+                (true, _) => accent_now(),
                 (false, true) => SECONDARY,
                 _ => CARD_BG.now(),
             };

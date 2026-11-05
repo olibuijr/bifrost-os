@@ -69,7 +69,7 @@ impl Calendar {
     /// The heading of what the window shows: the month and year, the year, or the day or week range.
     fn print_title(&self) -> String {
         match self.view {
-            View::Month => format!("{} {}", MONTHS[(self.selected.month - 1) as usize], self.selected.year),
+            View::Month => format!("{} {}", MONTHS[(self.month_date().month - 1) as usize], self.month_date().year),
             View::Year => self.selected.year.to_string(),
             _ => self.range_label(),
         }
@@ -81,7 +81,7 @@ impl Calendar {
         let title = self.print_title();
         let days = match self.view {
             View::Week => self.view_days(),
-            view => range_days(view, self.selected, self.week_start()),
+            view => range_days(view, self.month_date(), self.week_start()),
         };
         let shown: Vec<CalendarEvent> = self.shown_events().map(Cow::into_owned).collect();
         let text = agenda_text(&title, &days, &shown);
@@ -96,7 +96,7 @@ impl Calendar {
         let grid = printgrid::Grid {
             view: self.view,
             title: title.clone(),
-            selected: self.selected,
+            selected: self.month_date(),
             days: self.view_days(),
             first_weekday: self.prefs.weekday_at(0),
             day_start: u32::from(self.prefs.day_start),

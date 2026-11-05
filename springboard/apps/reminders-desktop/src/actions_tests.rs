@@ -59,12 +59,13 @@ fn a_deleted_reminder_waits_in_recently_deleted_and_restores_from_there() {
     assert!(app.data.items.is_empty());
     assert_eq!(app.kept_count, 1, "the sidebar count sees the kept reminder");
     app.activate(&ui, Target::Deleted, 20.0);
-    let kept: Vec<String> = app.deleted.clone().expect("the page is open").into_iter().map(|r| r.title).collect();
+    let kept: Vec<String> = app.deleted.clone().expect("the page is open").into_iter().map(|k| k.reminder.title).collect();
     assert_eq!(kept, vec!["Buy milk".to_string()]);
+    let row = app.deleted.as_ref().unwrap()[0].row;
     // the page draws with its row and restore link
     let mut buf = vec![0u32; 1200 * 1920];
     app.draw(&mut bifrost_app::kit::Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 30.0);
-    app.activate(&ui, Target::Restore(id), 40.0);
+    app.activate(&ui, Target::Restore(row), 40.0);
     assert_eq!(titles(&app), vec!["Buy milk".to_string()]);
     assert!(app.deleted.as_ref().expect("still on the page").is_empty());
     assert_eq!(app.kept_count, 0);
@@ -196,6 +197,39 @@ fn cmd_backspace_deletes_the_selected_reminder_and_escape_cancels_the_editor() {
     assert!(app.escape(&ui, 25.0), "Escape cancels the editor");
     assert!(app.editor.is_none());
     assert!(!app.escape(&ui, 26.0), "Escape on the list does nothing");
+    cleanup(&path);
+}
+
+#[test]
+fn delete_and_backspace_delete_the_selected_reminder_and_escape_closes_details_from_a_field() {
+    let (mut app, ui, path) = app("delete-key");
+    for (i, n) in ["A", "B", "C"].iter().enumerate() {
+        add(&mut app, &ui, n, i as f64 * 10.0);
+    }
+    app.screen = Screen::Items;
+    app.rebuild(&ui);
+    app.key(&ui, Out::Backspace, 30.0);
+    assert_eq!(titles(&app).len(), 3, "nothing selected, nothing deleted");
+    app.key(&ui, Out::Named("Down"), 31.0);
+    let id = app.selected_item().unwrap();
+    app.key(&ui, Out::Named("Delete"), 32.0);
+    assert_eq!(titles(&app).len(), 2, "Delete removes the selected reminder");
+    assert!(app.data.items.iter().all(|r| r.id != id));
+    assert!(app.undo.is_some(), "the undo bar offers it back");
+    app.key(&ui, Out::Named("Down"), 33.0);
+    app.key(&ui, Out::Backspace, 34.0);
+    assert_eq!(titles(&app).len(), 1, "Backspace removes it too");
+    // in a text field Backspace edits the text and never deletes the reminder
+    let row = app.rows.iter().position(|r| matches!(r, Row::Item { .. })).unwrap();
+    app.activate(&ui, Target::Info(row), 40.0);
+    assert!(app.details_popover());
+    app.set_focus(Some(Field::Title), 41.0);
+    app.key(&ui, Out::Backspace, 42.0);
+    app.key(&ui, Out::Named("Delete"), 43.0);
+    assert_eq!(app.data.items.len(), 1);
+    // Escape closes the popover even while a field in it has focus, keeping its edits
+    assert!(app.escape(&ui, 44.0));
+    assert!(app.editor.is_none() && !app.details_popover());
     cleanup(&path);
 }
 
@@ -486,15 +520,27 @@ fn smart_list_tiles_can_be_hidden_and_a_pinned_list_gets_a_tile() {
 }
 
 #[test]
-fn a_tile_name_wider_than_the_tile_wraps_instead_of_being_cut() {
-    use bifrost_app::kit::ui::{Weight, MAC_BODY_PT, SPACE_M};
+fn a_tile_name_fits_the_tile_whole() {
+    use bifrost_app::kit::ui::{Weight, MAC_BODY_PT, MAC_SUBHEAD_PT, SPACE_M};
     let (app, ui, path) = app("tile-labels");
     let room = ui.pt(app.tile_rect(&ui, 0).w) - ui.pt(2.0 * SPACE_M);
-    let lines = Reminders::tile_label_lines(&ui, "Recently Deleted", room);
-    assert_eq!(lines, ["Recently", "Deleted"], "two whole lines, no ellipsis");
-    assert!(lines.iter().all(|l| ui.measure(l, MAC_BODY_PT, Weight::Semibold) <= room));
-    assert_eq!(Reminders::tile_label_lines(&ui, "Today", room), ["Today"]);
-    assert_eq!(Reminders::tile_label_lines(&ui, "Scheduled", room), ["Scheduled"]);
+    // E2E13 8: "Recently Deleted" was cut to "Recently Dele..."; it shows whole, on one line or wrapped onto two
+    let (lines, pt) = Reminders::tile_label(&ui, "Recently Deleted", room);
+    assert!(lines.len() <= 2 && lines.iter().all(|l| ui.measure(l, pt, Weight::Semibold) <= room), "{lines:?} at {pt} pt is wider than the tile");
+    assert_eq!(lines.join(" "), "Recently Deleted", "no ellipsis");
+    assert!(pt >= MAC_SUBHEAD_PT && pt <= MAC_BODY_PT);
+    assert_eq!(Reminders::tile_label(&ui, "Today", room), (vec!["Today".to_string()], MAC_BODY_PT));
+    assert_eq!(Reminders::tile_label(&ui, "Scheduled", room), (vec!["Scheduled".to_string()], MAC_BODY_PT));
+    // a narrow tile wraps the name at its space
+    let narrow = ui.measure("Recently", MAC_SUBHEAD_PT, Weight::Semibold) + 1.0;
+    let (lines, pt) = Reminders::tile_label(&ui, "Recently Deleted", narrow.max(ui.measure("Deleted", MAC_SUBHEAD_PT, Weight::Semibold) + 1.0));
+    assert_eq!(lines, ["Recently", "Deleted"], "two lines at {pt} pt");
+    // a name too long for two lines of the smallest style is cut with an ellipsis on one line inside the tile
+    let (cut, pt) = Reminders::tile_label(&ui, "Averyveryverylongsmartlistname that never fits", room);
+    assert_eq!(pt, MAC_SUBHEAD_PT);
+    assert_eq!(cut.len(), 1);
+    assert!(cut[0].ends_with('\u{2026}'));
+    assert!(ui.measure(&cut[0], pt, Weight::Semibold) <= room);
     cleanup(&path);
 }
 
@@ -1102,8 +1148,14 @@ fn return_in_the_name_field_commits_new_reminder_and_new_list() {
     app.activate(&ui, Target::New, 0.0);
     app.key(&ui, Out::Text("Call Anna".into()), 1.0);
     app.key(&ui, Out::Enter, 2.0);
-    assert!(app.editor.is_none(), "Return is Done");
     assert_eq!(titles(&app), ["Call Anna"]);
+    // the new-reminder field stays open and focused, so a second reminder can be typed straight away
+    assert!(app.editor.as_ref().is_some_and(|e| e.id.is_none()), "Return keeps a fresh new reminder open");
+    app.key(&ui, Out::Text("Call Bo".into()), 2.5);
+    app.key(&ui, Out::Enter, 2.6);
+    assert_eq!(titles(&app), ["Call Anna", "Call Bo"]);
+    app.activate(&ui, Target::Cancel, 2.7);
+    assert!(app.editor.is_none());
     let lists = app.data.lists.len();
     app.activate(&ui, Target::NewList, 3.0);
     app.key(&ui, Out::Text("Errands".into()), 4.0);
@@ -1148,10 +1200,18 @@ fn deleting_a_list_asks_first_and_the_more_button_and_right_click_open_its_menu(
     assert!(app.data.lists.iter().any(|l| l.id == work), "the first press only asks");
     assert!(app.list_edit.as_ref().unwrap().confirm_delete);
     assert_eq!(app.notice.as_deref(), Some(delete_list_question(1).as_str()));
+    assert!(app.notice.as_deref().unwrap().contains(CONFIRM_DELETE_LIST), "the caption names the button it asks you to press");
     app.activate(&ui, Target::Cancel, 12.0);
     app.activate(&ui, Target::ListInfo(work), 13.0);
     assert!(!app.list_edit.as_ref().unwrap().confirm_delete, "a new form asks again");
     app.activate(&ui, Target::Cancel, 14.0);
+
+    // List > Delete List... does the same from the menu bar: it asks, then the form's Delete removes the list
+    assert!(app.can_delete_list(), "a list is open and another remains");
+    assert!(app.delete_open_list(&ui, 15.0));
+    assert!(app.data.lists.iter().any(|l| l.id == work), "the menu item only asks");
+    assert!(app.list_edit.as_ref().is_some_and(|e| e.confirm_delete));
+    app.activate(&ui, Target::Cancel, 16.0);
 
     // the toolbar's "..." is a menu, not List Info
     app.activate(&ui, Target::List(work), 20.0);
@@ -1309,7 +1369,7 @@ fn the_i_on_the_selected_row_opens_details_in_a_popover_over_the_list() {
 }
 
 #[test]
-fn escape_drops_the_details_edits_and_a_new_reminder_keeps_the_full_form() {
+fn escape_keeps_the_details_edits_and_a_new_reminder_keeps_the_full_form() {
     let (mut app, ui, path) = app("details-escape");
     add(&mut app, &ui, "Feed cat", 0.0);
     app.screen = Screen::Items;
@@ -1318,12 +1378,226 @@ fn escape_drops_the_details_edits_and_a_new_reminder_keeps_the_full_form() {
     app.activate(&ui, Target::Info(row), 10.0);
     assert!(app.details_popover());
     app.title.set_text(&ui, "Changed");
+    app.activate(&ui, Target::Flag, 15.0);
     assert!(app.escape(&ui, 20.0));
     assert!(app.editor.is_none());
-    assert_eq!(app.data.items[0].title, "Feed cat", "Escape cancels");
+    assert!(app.data.items[0].flagged, "Escape keeps the flag");
+    assert_eq!(app.data.items[0].title, "Changed", "Escape keeps the edit, as a press outside does");
     app.activate(&ui, Target::New, 30.0);
     assert!(app.editor.is_some() && !app.details_popover(), "a new reminder still opens the full form");
     assert!(app.details_geometry(&ui).is_none());
     app.activate(&ui, Target::Cancel, 40.0);
+    cleanup(&path);
+}
+
+#[test]
+fn cmd_backspace_never_deletes_a_selected_reminder_that_another_list_hides() {
+    use bifrost_proto::CHORD_META;
+    let (mut app, ui, path) = app("hidden-selection");
+    add(&mut app, &ui, "E2E rem", 0.0);
+    let id = id_of(&app, "E2E rem");
+    app.selected = Some(id);
+    assert_eq!(app.selected_item(), Some(id), "on screen in All");
+    app.activate(&ui, Target::NewList, 10.0);
+    app.key(&ui, Out::Text("E2E list".into()), 11.0);
+    app.key(&ui, Out::Enter, 12.0);
+    let list = app.data.lists.last().unwrap().id;
+    // the view changes without the selection being cleared: the selection is not on screen, so nothing is deleted
+    app.view = View::List(list);
+    app.rebuild(&ui);
+    assert_eq!(app.selected_item(), None);
+    assert!(!app.chord(&ui, 14, CHORD_META, 20.0), "nothing on screen is selected");
+    assert!(!app.delete_selected(&ui, 21.0));
+    assert_eq!(titles(&app), ["E2E rem"]);
+    // opening a list from the sidebar drops the selection made in another list
+    app.activate(&ui, Target::Smart(Smart::All), 30.0);
+    app.selected = Some(id);
+    app.activate(&ui, Target::List(list), 31.0);
+    assert_eq!(app.selected, None);
+    // Recently Deleted hides the list: Down and Cmd+Backspace never reach the reminder under it
+    app.activate(&ui, Target::Smart(Smart::All), 40.0);
+    app.selected = Some(id);
+    app.activate(&ui, Target::Deleted, 41.0);
+    app.key(&ui, Out::Named("Down"), 42.0);
+    assert!(!app.chord(&ui, 14, CHORD_META, 43.0));
+    assert_eq!(titles(&app), ["E2E rem"]);
+    cleanup(&path);
+}
+
+#[test]
+fn recently_deleted_deletes_permanently_and_deletes_all_after_asking() {
+    use bifrost_proto::CHORD_META;
+    let (mut app, ui, path) = app("purge");
+    for (i, title) in ["One", "Two", "Three"].iter().enumerate() {
+        add(&mut app, &ui, title, i as f64 * 10.0);
+    }
+    for (i, title) in ["One", "Two", "Three"].iter().enumerate() {
+        app.selected = Some(id_of(&app, title));
+        assert!(app.delete_selected(&ui, 40.0 + i as f64));
+    }
+    assert_eq!(app.kept_count, 3);
+    app.activate(&ui, Target::Deleted, 50.0);
+    let kept: Vec<u64> = app.deleted.as_ref().unwrap().iter().map(|k| k.row).collect();
+    assert_eq!(app.kept_selected(), None, "the page opens with nothing selected");
+    assert!(!app.chord(&ui, 14, CHORD_META, 51.0), "nothing selected, nothing asked");
+
+    // a click on the row selects it (the Restore link at its trailing edge restores); Cmd+Backspace asks first
+    let (x, y, w, h) = app.deleted_row_rect(&ui, 0);
+    assert_eq!(app.hit(&ui, x + w / 4.0, y + h / 2.0), Some(Target::KeptRow(kept[0])));
+    assert_eq!(app.hit(&ui, x + w - ui.pt(SPACE_S), y + h / 2.0), Some(Target::Restore(kept[0])));
+    app.activate(&ui, Target::KeptRow(kept[0]), 52.0);
+    assert!(app.chord(&ui, 14, CHORD_META, 53.0));
+    assert_eq!(app.purge_ask, Some(Purge::One(kept[0])));
+    assert!(app.clear_sheet().is_some(), "the alert is up");
+    app.key(&ui, Out::Enter, 54.0);
+    assert!(app.purge_ask.is_some(), "Return does not answer a destructive button");
+    assert!(app.escape(&ui, 55.0) && app.purge_ask.is_none(), "Escape keeps it");
+    assert_eq!(app.kept_count, 3);
+    assert!(app.chord(&ui, 14, CHORD_META, 56.0));
+    app.activate(&ui, Target::PurgeConfirm, 57.0);
+    assert_eq!(app.kept_count, 2);
+    let left: Vec<u64> = app.deleted.as_ref().unwrap().iter().map(|k| k.row).collect();
+    assert_eq!(left, kept[1..].to_vec());
+    assert_eq!(app.kept_selected(), None);
+
+    // the right click selects the row and offers Restore, Delete Permanently and Delete All
+    let (x, y, w, h) = app.deleted_row_rect(&ui, 0);
+    let menu = app.context_menu_at(&ui, x + app.x0 + w / 4.0, y + h / 2.0).expect("the kept row's menu");
+    let rows: Vec<String> = menu.iter().filter(|i| !i.is_separator()).map(|i| i.label.clone()).collect();
+    assert_eq!(rows, ["Restore", "Delete Permanently...", "Delete All..."]);
+    assert_eq!(app.kept_selected(), Some(kept[1]));
+    assert!(app.context_action(&ui, purge::CTX_PURGE, 60.0));
+    app.activate(&ui, Target::PurgeConfirm, 61.0);
+    assert_eq!(app.kept_count, 1);
+
+    // the toolbar's "..." shows the same menu; Delete All empties the page
+    assert!(app.controls(&ui).iter().any(|n| n.label == "Recently Deleted Actions"), "the page's ... button is named for it");
+    app.activate(&ui, Target::ListMenu(0.0, 0.0), 70.0);
+    let (_, _, items) = app.take_menu_request().expect("the page's menu");
+    assert!(items.iter().any(|i| i.id == purge::CTX_PURGE_ALL && i.enabled));
+    assert!(app.context_action(&ui, purge::CTX_PURGE_ALL, 71.0));
+    assert_eq!(app.purge_ask, Some(Purge::All));
+    app.activate(&ui, Target::PurgeConfirm, 72.0);
+    assert_eq!(app.kept_count, 0);
+    assert!(app.deleted.as_ref().unwrap().is_empty());
+    assert!(archive::kept(&archive::path_beside(&path)).unwrap().is_empty(), "gone from the store for good");
+    cleanup(&path);
+}
+
+#[test]
+fn delete_permanently_names_and_removes_the_chosen_kept_reminder_when_ids_repeat() {
+    // E2E N3: delete the only reminder, add another, delete it too; the second row's Delete Permanently acts on it
+    let (mut app, ui, path) = app("purge-same-id");
+    let store = archive::path_beside(&path);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    // a store from before the fix, where a deleted reminder 1 is already kept
+    archive::keep(&store, &[model::Reminder::new(1, "E2E test list")]).unwrap();
+    app.refresh_kept();
+    add(&mut app, &ui, "E2E rem", 0.0);
+    let id = id_of(&app, "E2E rem");
+    assert_ne!(id, 1, "a new reminder does not take the id of a kept one");
+    app.selected = Some(id);
+    assert!(app.delete_selected(&ui, 10.0));
+    app.activate(&ui, Target::Deleted, 20.0);
+    let rows: Vec<(u64, String)> = app.deleted.as_ref().unwrap().iter().map(|k| (k.row, k.reminder.title.clone())).collect();
+    assert_eq!(rows.iter().map(|(_, t)| t.as_str()).collect::<Vec<_>>(), ["E2E test list", "E2E rem"]);
+    app.activate(&ui, Target::KeptRow(rows[1].0), 21.0);
+    assert!(app.purge_selected());
+    let sheet = app.purge_sheet().expect("the alert is up");
+    assert!(format!("{sheet:?}").contains("E2E rem") && !format!("{sheet:?}").contains("E2E test list"), "the alert names the chosen row");
+    app.activate(&ui, Target::PurgeConfirm, 22.0);
+    let left: Vec<String> = archive::kept(&store).unwrap().into_iter().map(|r| r.title).collect();
+    assert_eq!(left, ["E2E test list"]);
+    cleanup(&path);
+}
+
+#[test]
+fn reminders_sharing_an_id_in_the_store_are_purged_by_their_row() {
+    let (mut app, ui, path) = app("purge-dup-rows");
+    let store = archive::path_beside(&path);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    archive::keep(&store, &[model::Reminder::new(1, "First")]).unwrap();
+    archive::keep(&store, &[model::Reminder::new(1, "Second")]).unwrap();
+    app.activate(&ui, Target::Deleted, 10.0);
+    let second = app.deleted.as_ref().unwrap()[1].row;
+    app.activate(&ui, Target::KeptRow(second), 11.0);
+    assert_eq!(app.kept_selected(), Some(second));
+    assert!(app.purge_selected());
+    app.activate(&ui, Target::PurgeConfirm, 12.0);
+    let left: Vec<String> = app.deleted.as_ref().unwrap().iter().map(|k| k.reminder.title.clone()).collect();
+    assert_eq!(left, ["First"]);
+    cleanup(&path);
+}
+
+#[test]
+fn undo_of_a_delete_takes_the_reminder_back_out_of_recently_deleted() {
+    // E2E N4: the Undo strip puts the reminder back and its Recently Deleted row goes; redo keeps it again
+    let (mut app, ui, path) = app("undo-delete-archive");
+    let store = archive::path_beside(&path);
+    add(&mut app, &ui, "E2E rem2", 0.0);
+    app.selected = Some(id_of(&app, "E2E rem2"));
+    assert!(app.delete_selected(&ui, 10.0));
+    assert_eq!(app.kept_count, 1);
+    app.activate(&ui, Target::Undo, 11.0);
+    assert_eq!(titles(&app), ["E2E rem2"]);
+    assert_eq!(app.kept_count, 0, "the sidebar count drops");
+    assert!(archive::kept(&store).unwrap().is_empty(), "the row leaves the store");
+    assert!(app.step_history(&ui, true), "redo");
+    assert!(app.data.items.is_empty());
+    assert_eq!(app.kept_count, 1, "the redo keeps it again");
+    assert!(app.step_history(&ui, false), "undo again");
+    assert_eq!(app.kept_count, 0);
+    cleanup(&path);
+}
+
+#[test]
+fn the_clear_and_purge_alerts_take_return_cmd_period_cmd_d_and_the_tab_focus_ring() {
+    use bifrost_app::KeyInput;
+    use bifrost_proto::{CHORD_FLAG, CHORD_META};
+    // Cmd+. is the chord on evdev key 52 with Meta, Cmd+D the one on key 32
+    let cmd_period = KeyInput::Code(CHORD_FLAG | 52 | (CHORD_META << 8));
+    let cmd_d = KeyInput::Code(CHORD_FLAG | 32 | (CHORD_META << 8));
+    let (tab, space, ret) = (KeyInput::Code(9), KeyInput::Text(" ".into()), KeyInput::Code(13));
+    let (mut app, ui, path) = list_with_completed("completed-clear-keys");
+    render(&mut app, &ui);
+    assert_eq!(app.alert_key(&ui, &ret, 90.0), None, "no alert, not its key");
+    app.activate(&ui, Target::ClearAsk, 100.0);
+    assert!(app.clear_ask);
+    assert_eq!(app.clear_sheet().unwrap().focus, None, "no ring until Tab");
+    assert_eq!(app.alert_key(&ui, &space, 101.0), Some(false), "Space with no focus presses nothing");
+    assert_eq!(app.alert_key(&ui, &KeyInput::Text("x".into()), 102.0), Some(false), "the alert takes every key");
+    // Tab: Clear (the default, drawn first), then Cancel; Space presses Cancel
+    assert_eq!(app.alert_key(&ui, &tab, 110.0), Some(true));
+    assert_eq!(app.clear_sheet().unwrap().focus, Some(completed::ASK_CLEAR));
+    assert_eq!(app.alert_key(&ui, &tab, 111.0), Some(true));
+    assert_eq!(app.clear_sheet().unwrap().focus, Some(completed::ASK_CANCEL));
+    assert_eq!(app.alert_key(&ui, &space, 112.0), Some(true));
+    assert!(!app.clear_ask && app.data.items.len() == 3, "Space on Cancel keeps the completed reminders");
+    // Cmd+. cancels
+    app.activate(&ui, Target::ClearAsk, 120.0);
+    assert_eq!(app.clear_sheet().unwrap().focus, None, "the ring starts over");
+    assert_eq!(app.alert_key(&ui, &cmd_period, 121.0), Some(true));
+    assert!(!app.clear_ask && app.data.items.len() == 3);
+    // Return is Clear
+    app.activate(&ui, Target::ClearAsk, 130.0);
+    assert_eq!(app.alert_key(&ui, &ret, 131.0), Some(true));
+    assert!(!app.clear_ask && app.data.items.len() == 1, "Return clears the completed reminders");
+    cleanup(&path);
+
+    // the purge alert: Delete is destructive, so Return does not answer it; Cmd+D presses a plain Delete
+    let (mut app, ui, path) = self::app("purge-alert-keys");
+    add(&mut app, &ui, "Gone", 0.0);
+    app.selected = Some(id_of(&app, "Gone"));
+    assert!(app.delete_selected(&ui, 10.0));
+    app.activate(&ui, Target::Deleted, 20.0);
+    let row = app.deleted.as_ref().expect("the page is open")[0].row;
+    assert!(app.ask_purge(purge::Purge::One(row)));
+    assert_eq!(app.alert_key(&ui, &ret, 30.0), Some(false), "Return does not answer a destructive button");
+    assert!(app.purge_ask.is_some());
+    assert_eq!(app.alert_key(&ui, &cmd_period, 31.0), Some(true));
+    assert!(app.purge_ask.is_none() && app.kept_count == 1, "Cmd+. keeps it");
+    assert!(app.ask_purge(purge::Purge::One(row)));
+    assert_eq!(app.alert_key(&ui, &cmd_d, 40.0), Some(true));
+    assert!(app.purge_ask.is_none() && app.kept_count == 0, "Cmd+D presses Delete");
     cleanup(&path);
 }

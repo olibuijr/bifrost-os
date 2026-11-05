@@ -1,11 +1,42 @@
 //! Artwork for a media item as a pure model: `Artwork` (an identifier the system caches by, and the image sizes the item
 //! can supply), `ArtworkSize`, and `ArtworkError`. [`Artwork::choose`] picks the size to load for a target,
 //! [`aspect_fit`] gives the drawn size inside a target, and [`request_pixels`] turns points and a display scale into
-//! the pixel size a provider is asked for (the size argument of an artwork provider). No image bytes are decoded or
-//! drawn here.
+//! the pixel size a provider is asked for (the size argument of an artwork provider).
+//!
+//! [`ArtworkImage`] is the pixels themselves, the part that crosses the `now_playing` service: straight RGBA8, at most
+//! [`WIRE_SIDE_MAX`] on a side, so a publish stays under 90 KB of JSON. [`ArtworkImage::to_json`] and
+//! [`ArtworkImage::from_json`] are the wire form (`{w, h, rgba: base64}`); the shell turns it into an image with
+//! [`ArtworkImage::to_image`] and falls back to its glyph when there is none or it is malformed. An app may pass
+//! pixels, or the encoded PNG or JPEG bytes of its cover: [`ArtworkImage::from_encoded`] decodes them here, before
+//! anything is sent, and averages them down to fit.
+//!
+//! [`ArtworkProvider`] is the artwork-with-bounds-size request handler: the app registers a closure that returns the
+//! cover (pixels or encoded bytes) for a requested size, and the SDK asks it for the size the shell needs
+//! ([`ArtworkProvider::image_for`]). Animated artwork exists only on the reference's tablet and phone platform and is
+//! not applicable here.
+
+use bifrost_core::json::Json;
+use bifrost_core::plist::{base64_decode, base64_encode};
+use bifrost_render::cg::imageio;
+use bifrost_render::gfx::Image;
 
 /// The largest side a representation may have, in pixels.
 pub const MAX_SIDE: u32 = 16_384;
+
+/// The largest side of the pixels an app sends to the shell, in pixels. 128 by 128 RGBA is 64 KB, 87 KB as base64: the
+/// service frame holds it with room for the rest of the publish, and it is sharp on the 44 pt tile and the detail art.
+pub const WIRE_SIDE_MAX: u32 = 128;
+
+/// The most bytes of pixel data a wire artwork may carry.
+pub const WIRE_BYTES_MAX: usize = (WIRE_SIDE_MAX as usize) * (WIRE_SIDE_MAX as usize) * 4;
+
+/// The most pixels an encoded cover may have once decoded (a 5000 by 5000 picture). A larger one is refused from its
+/// header, before any pixel is allocated.
+pub const ENCODED_PIXELS_MAX: u64 = 25_000_000;
+
+/// The size of the cover the shell draws, in points: the Now Playing detail art. [`ArtworkProvider::request_side`] turns
+/// it into the pixels to ask for.
+pub const SHELL_COVER_POINTS: u32 = 64;
 
 /// The pixel size of one image representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,8 +62,15 @@ impl ArtworkSize {
 pub enum ArtworkError {
     /// The identifier is empty after trimming.
     EmptyId,
-    /// A side is zero or larger than [`MAX_SIDE`].
+    /// A side is zero or larger than [`MAX_SIDE`] (or [`WIRE_SIDE_MAX`] for wire pixels).
     InvalidSize,
+    /// The pixel data is missing, is not base64, or does not hold width times height RGBA pixels.
+    BadPixels,
+    /// The bytes are not a PNG or JPEG picture, or they would not decode, or the picture is larger than
+    /// [`ENCODED_PIXELS_MAX`].
+    Undecodable,
+    /// A provider had no artwork for the requested size.
+    Unavailable,
 }
 
 /// `Artwork`: an identifier and the representations the item can supply.
@@ -116,6 +154,241 @@ pub fn request_pixels(points: u32, scale_percent: u32) -> Option<u32> {
     }
 }
 
+/// Artwork pixels: straight (not premultiplied) RGBA8 rows, at most [`WIRE_SIDE_MAX`] on a side. The wire form of
+/// `MPNowPlayingInfoPropertyArtwork` for the `now_playing` service.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArtworkImage {
+    width: u32,
+    height: u32,
+    rgba: Vec<u8>,
+}
+
+impl ArtworkImage {
+    /// Pixels from straight RGBA8 bytes. Each side is 1 to [`WIRE_SIDE_MAX`] and `rgba` holds exactly width times
+    /// height pixels.
+    pub fn new(width: u32, height: u32, rgba: Vec<u8>) -> Result<Self, ArtworkError> {
+        if width == 0 || height == 0 || width > WIRE_SIDE_MAX || height > WIRE_SIDE_MAX {
+            return Err(ArtworkError::InvalidSize);
+        }
+        if rgba.len() != width as usize * height as usize * 4 {
+            return Err(ArtworkError::BadPixels);
+        }
+        Ok(ArtworkImage { width, height, rgba })
+    }
+
+    /// Pixels from a premultiplied image as the shell draws them (`bifrost_render::gfx::Image`: R in the low byte of
+    /// each `u32`). An image larger than [`WIRE_SIDE_MAX`] is averaged down to fit, keeping its aspect ratio.
+    pub fn from_premultiplied(width: usize, height: usize, px: &[u32]) -> Result<Self, ArtworkError> {
+        ArtworkImage::from_premultiplied_fit(width, height, px, WIRE_SIDE_MAX)
+    }
+
+    /// Like [`ArtworkImage::from_premultiplied`], averaging down to at most `side` pixels (1 to [`WIRE_SIDE_MAX`]) on a
+    /// side. An image that already fits is kept as it is.
+    pub fn from_premultiplied_fit(width: usize, height: usize, px: &[u32], side: u32) -> Result<Self, ArtworkError> {
+        if width == 0 || height == 0 || width.checked_mul(height) != Some(px.len()) {
+            return Err(ArtworkError::BadPixels);
+        }
+        let side = side.clamp(1, WIRE_SIDE_MAX) as usize;
+        let (dw, dh) = if width <= side && height <= side {
+            (width, height)
+        } else if width >= height {
+            (side, (height * side / width).max(1))
+        } else {
+            ((width * side / height).max(1), side)
+        };
+        let mut rgba = Vec::with_capacity(dw * dh * 4);
+        for dy in 0..dh {
+            let y0 = dy * height / dh;
+            let y1 = ((dy + 1) * height / dh).max(y0 + 1).min(height);
+            for dx in 0..dw {
+                let x0 = dx * width / dw;
+                let x1 = ((dx + 1) * width / dw).max(x0 + 1).min(width);
+                let mut sum = [0u64; 4];
+                for y in y0..y1 {
+                    for p in &px[y * width + x0..y * width + x1] {
+                        for (c, total) in sum.iter_mut().enumerate() {
+                            *total += ((p >> (8 * c)) & 255) as u64;
+                        }
+                    }
+                }
+                let n = ((y1 - y0) * (x1 - x0)) as u64;
+                let a = sum[3] / n;
+                let straight = |c: u64| if a == 0 { 0 } else { ((c / n * 255 + a / 2) / a).min(255) as u8 };
+                rgba.extend_from_slice(&[straight(sum[0]), straight(sum[1]), straight(sum[2]), a as u8]);
+            }
+        }
+        ArtworkImage::new(dw as u32, dh as u32, rgba)
+    }
+
+    /// Pixels from the encoded bytes of a PNG or JPEG cover, averaged down to at most [`WIRE_SIDE_MAX`] on a side.
+    pub fn from_encoded(bytes: &[u8]) -> Result<Self, ArtworkError> {
+        ArtworkImage::from_encoded_fit(bytes, WIRE_SIDE_MAX)
+    }
+
+    /// Like [`ArtworkImage::from_encoded`], averaging down to at most `side` pixels (1 to [`WIRE_SIDE_MAX`]) on a side.
+    /// Other formats, a picture over [`ENCODED_PIXELS_MAX`] (read from the header) and bytes that do not decode give
+    /// [`ArtworkError::Undecodable`]. A picture that already fits is not enlarged.
+    pub fn from_encoded_fit(bytes: &[u8], side: u32) -> Result<Self, ArtworkError> {
+        if encoded_format(bytes).is_none() {
+            return Err(ArtworkError::Undecodable);
+        }
+        let (w, h) = imageio::pixel_size(bytes).ok_or(ArtworkError::Undecodable)?;
+        if w == 0 || h == 0 || w as u64 * h as u64 > ENCODED_PIXELS_MAX {
+            return Err(ArtworkError::Undecodable);
+        }
+        let image = imageio::decode(bytes).ok_or(ArtworkError::Undecodable)?;
+        ArtworkImage::from_premultiplied_fit(image.w, image.h, &image.px, side)
+    }
+
+    /// A square tile of `side` pixels (clamped to 8 to [`WIRE_SIDE_MAX`]) with a row of vertical waveform bars on a
+    /// flat background: the stand-in for an item that has no cover (a recording). `bars` are heights from 0 to 1; each
+    /// is drawn centred, rounded to whole pixels and at least 2 px tall. `background` and `ink` are straight RGB.
+    pub fn waveform(side: u32, bars: &[f32], background: [u8; 3], ink: [u8; 3]) -> ArtworkImage {
+        let side = side.clamp(8, WIRE_SIDE_MAX) as usize;
+        let mut rgba = Vec::with_capacity(side * side * 4);
+        for _ in 0..side * side {
+            rgba.extend_from_slice(&[background[0], background[1], background[2], 255]);
+        }
+        let n = bars.len();
+        let margin = side / 6;
+        let span = side - 2 * margin;
+        for (i, h) in bars.iter().enumerate() {
+            // each bar owns a slot of the span and fills two thirds of it (at least one pixel)
+            let (s0, s1) = (i * span / n, ((i + 1) * span / n).max(i * span / n + 1));
+            let bar_w = ((s1 - s0) * 2 / 3).max(1);
+            let x0 = margin + s0 + (s1 - s0 - bar_w.min(s1 - s0)) / 2;
+            let bar_h = ((h.clamp(0.0, 1.0) * span as f32).round() as usize).clamp(2, span);
+            let y0 = (side - bar_h) / 2;
+            for y in y0..y0 + bar_h {
+                for x in x0..(x0 + bar_w).min(side) {
+                    let at = (y * side + x) * 4;
+                    rgba[at..at + 3].copy_from_slice(&ink);
+                }
+            }
+        }
+        ArtworkImage { width: side as u32, height: side as u32, rgba }
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// The straight RGBA8 bytes, row by row.
+    pub fn rgba(&self) -> &[u8] {
+        &self.rgba
+    }
+
+    /// A cheap fingerprint of the pixels, so an app can tell a new cover from the one it already sent.
+    pub fn fingerprint(&self) -> u64 {
+        let mut h = 0xcbf2_9ce4_8422_2325u64 ^ ((self.width as u64) << 32 | self.height as u64);
+        for b in &self.rgba {
+            h = (h ^ *b as u64).wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        h
+    }
+
+    /// The wire object: `{"w": n, "h": n, "rgba": "<base64>"}`.
+    pub fn to_json(&self) -> Json {
+        Json::Obj(vec![
+            ("w".to_string(), Json::Num(self.width as f64)),
+            ("h".to_string(), Json::Num(self.height as f64)),
+            ("rgba".to_string(), Json::Str(base64_encode(&self.rgba))),
+        ])
+    }
+
+    /// Reads the wire object. Refuses a side that is not a whole number from 1 to [`WIRE_SIDE_MAX`], text that is not
+    /// base64 and pixel data of the wrong length. The size is checked before the text is decoded, so an oversized
+    /// value costs nothing.
+    pub fn from_json(body: &Json) -> Result<ArtworkImage, ArtworkError> {
+        let side = |key: &str| {
+            let v = body.get(key).and_then(Json::number).ok_or(ArtworkError::InvalidSize)?;
+            if v.is_finite() && v >= 1.0 && v <= WIRE_SIDE_MAX as f64 && v.fract() == 0.0 {
+                Ok(v as u32)
+            } else {
+                Err(ArtworkError::InvalidSize)
+            }
+        };
+        let (width, height) = (side("w")?, side("h")?);
+        let text = body.get("rgba").and_then(Json::as_str).ok_or(ArtworkError::BadPixels)?;
+        if text.len() > WIRE_BYTES_MAX / 3 * 4 + 8 {
+            return Err(ArtworkError::BadPixels);
+        }
+        let rgba = base64_decode(text).ok_or(ArtworkError::BadPixels)?;
+        ArtworkImage::new(width, height, rgba)
+    }
+
+    /// The pixels as an image the shell draws: premultiplied, R in the low byte.
+    pub fn to_image(&self) -> Image {
+        let px = self
+            .rgba
+            .chunks_exact(4)
+            .map(|p| {
+                let a = p[3] as u32;
+                let m = |c: u8| (c as u32 * a + 127) / 255;
+                m(p[0]) | m(p[1]) << 8 | m(p[2]) << 16 | a << 24
+            })
+            .collect();
+        Image { w: self.width as usize, h: self.height as usize, px }
+    }
+}
+
+/// The encoded formats an app may pass as a cover, named by their signature: `image/png` or `image/jpeg`.
+pub fn encoded_format(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("image/jpeg")
+    } else {
+        None
+    }
+}
+
+/// What an artwork provider returns for a requested size: ready pixels, or the encoded bytes of a PNG or JPEG.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ArtworkSource {
+    Pixels(ArtworkImage),
+    Encoded(Vec<u8>),
+}
+
+/// The artwork-with-bounds-size request handler: an [`Artwork`] and the closure that supplies it at a requested size.
+pub struct ArtworkProvider {
+    artwork: Artwork,
+    provider: Box<dyn Fn(ArtworkSize) -> Option<ArtworkSource>>,
+}
+
+impl ArtworkProvider {
+    /// A provider for `artwork`. The closure gets the size to supply (square, in pixels) and returns the cover for it,
+    /// or `None` when it has none.
+    pub fn new(artwork: Artwork, provider: impl Fn(ArtworkSize) -> Option<ArtworkSource> + 'static) -> Self {
+        ArtworkProvider { artwork, provider: Box::new(provider) }
+    }
+
+    /// The identifier and the sizes the item can supply.
+    pub fn artwork(&self) -> &Artwork {
+        &self.artwork
+    }
+
+    /// The side to ask for: `points` at `scale_percent` (200 for a 2x display), at most [`WIRE_SIDE_MAX`] since the
+    /// publish carries no more. A zero value or an overflowing request asks for the most the wire carries.
+    pub fn request_side(points: u32, scale_percent: u32) -> u32 {
+        request_pixels(points, scale_percent).unwrap_or(WIRE_SIDE_MAX).clamp(1, WIRE_SIDE_MAX)
+    }
+
+    /// Asks the provider for the cover at the shell's size ([`SHELL_COVER_POINTS`] at `scale_percent`) and returns it
+    /// as wire pixels. Encoded bytes are decoded and averaged down to the requested side.
+    pub fn image_for(&self, scale_percent: u32) -> Result<ArtworkImage, ArtworkError> {
+        let side = ArtworkProvider::request_side(SHELL_COVER_POINTS, scale_percent);
+        match (self.provider)(ArtworkSize { width: side, height: side }).ok_or(ArtworkError::Unavailable)? {
+            ArtworkSource::Pixels(image) => Ok(image),
+            ArtworkSource::Encoded(bytes) => ArtworkImage::from_encoded_fit(&bytes, side),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,5 +468,161 @@ mod tests {
         assert_eq!(request_pixels(0, 200), None);
         assert_eq!(request_pixels(300, 0), None);
         assert_eq!(request_pixels(20_000, 100), None, "above the maximum side");
+    }
+
+    #[test]
+    fn wire_pixels_round_trip_through_json_and_back_to_a_premultiplied_image() {
+        let rgba = vec![255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 0, 10, 20, 30, 255];
+        let art = ArtworkImage::new(2, 2, rgba.clone()).unwrap();
+        let text = art.to_json().encode();
+        let back = ArtworkImage::from_json(&bifrost_core::json::parse(&text).unwrap()).unwrap();
+        assert_eq!(back, art);
+        assert_eq!(back.rgba(), &rgba[..]);
+        let image = back.to_image();
+        assert_eq!((image.w, image.h), (2, 2));
+        assert_eq!(image.px[0], 255 | 255 << 24, "opaque red");
+        assert_eq!(image.px[1], 128 << 8 | 128 << 24, "half-transparent green is premultiplied");
+        assert_eq!(image.px[2], 0, "a transparent pixel has no colour");
+    }
+
+    #[test]
+    fn the_wire_form_is_bounded_and_refuses_bad_data() {
+        assert_eq!(ArtworkImage::new(WIRE_SIDE_MAX + 1, 1, vec![0; 4]), Err(ArtworkError::InvalidSize));
+        assert_eq!(ArtworkImage::new(0, 4, vec![]), Err(ArtworkError::InvalidSize));
+        assert_eq!(ArtworkImage::new(2, 2, vec![0; 15]), Err(ArtworkError::BadPixels));
+        let biggest = ArtworkImage::new(WIRE_SIDE_MAX, WIRE_SIDE_MAX, vec![7; WIRE_BYTES_MAX]).unwrap();
+        assert!(biggest.to_json().encode().len() < 90_000, "a publish stays far under the 256 KB service frame");
+        let parse = |t: &str| bifrost_core::json::parse(t).unwrap();
+        assert_eq!(ArtworkImage::from_json(&parse(r#"{"w":2,"h":2,"rgba":"AAAA"}"#)), Err(ArtworkError::BadPixels), "too few bytes");
+        assert_eq!(ArtworkImage::from_json(&parse(r#"{"w":2,"h":2,"rgba":"!!!!"}"#)), Err(ArtworkError::BadPixels), "not base64");
+        assert_eq!(ArtworkImage::from_json(&parse(r#"{"w":1000,"h":2,"rgba":""}"#)), Err(ArtworkError::InvalidSize));
+        assert_eq!(ArtworkImage::from_json(&parse(r#"{"w":1.5,"h":2,"rgba":""}"#)), Err(ArtworkError::InvalidSize));
+        assert_eq!(ArtworkImage::from_json(&parse(r#"{"w":2,"h":2}"#)), Err(ArtworkError::BadPixels), "no pixels");
+        let huge = format!(r#"{{"w":2,"h":2,"rgba":"{}"}}"#, "A".repeat(200_000));
+        assert_eq!(ArtworkImage::from_json(&parse(&huge)), Err(ArtworkError::BadPixels), "oversized text is refused undecoded");
+    }
+
+    #[test]
+    fn a_large_premultiplied_image_is_averaged_down_to_the_wire_size() {
+        // 256 by 128: the left half opaque white, the right half transparent
+        let px: Vec<u32> = (0..256 * 128).map(|i| if i % 256 < 128 { 0xffff_ffff } else { 0 }).collect();
+        let art = ArtworkImage::from_premultiplied(256, 128, &px).unwrap();
+        assert_eq!((art.width(), art.height()), (WIRE_SIDE_MAX, 64), "the aspect ratio is kept");
+        assert_eq!(&art.rgba()[0..4], &[255, 255, 255, 255]);
+        let last = art.rgba().len() - 4;
+        assert_eq!(&art.rgba()[last..], &[0, 0, 0, 0]);
+        let small = ArtworkImage::from_premultiplied(2, 1, &[0xff00_00ff, 0x8000_0080]).unwrap();
+        assert_eq!(small.rgba(), &[255, 0, 0, 255, 255, 0, 0, 128], "a small image is kept and un-premultiplied");
+        assert_eq!(ArtworkImage::from_premultiplied(2, 2, &[0; 3]), Err(ArtworkError::BadPixels));
+    }
+
+    #[test]
+    fn a_waveform_tile_draws_centred_bars_and_its_fingerprint_follows_the_bars() {
+        let tile = ArtworkImage::waveform(96, &[0.2, 1.0, 0.5], [10, 10, 10], [250, 60, 50]);
+        assert_eq!((tile.width(), tile.height()), (96, 96));
+        let at = |x: usize, y: usize| tile.rgba()[(y * 96 + x) * 4..(y * 96 + x) * 4 + 4].to_vec();
+        assert_eq!(at(0, 0), vec![10, 10, 10, 255], "the corner is background");
+        assert_eq!(at(47, 48), vec![250, 60, 50, 255], "the full-height middle bar crosses the centre row");
+        assert_eq!(at(47, 17), vec![250, 60, 50, 255], "and reaches the top of the span");
+        assert_eq!(at(25, 17), vec![10, 10, 10, 255], "the short first bar does not");
+        let other = ArtworkImage::waveform(96, &[0.9, 0.1, 0.5], [10, 10, 10], [250, 60, 50]);
+        assert_ne!(tile.fingerprint(), other.fingerprint());
+        assert_eq!(tile.fingerprint(), tile.clone().fingerprint());
+        assert_eq!(ArtworkImage::waveform(1000, &[], [0; 3], [255; 3]).width(), WIRE_SIDE_MAX, "the side is clamped");
+    }
+
+    fn solid_png(w: usize, h: usize, color: [u8; 4]) -> Vec<u8> {
+        let px: Vec<u8> = (0..w * h).flat_map(|_| color).collect();
+        imageio::encode::encode_png(w, h, &px, &imageio::encode::PngOptions::default()).expect("a png")
+    }
+
+    fn solid_jpeg(w: usize, h: usize, color: [u8; 3]) -> Vec<u8> {
+        let px: Vec<u8> = (0..w * h).flat_map(|_| [color[0], color[1], color[2], 255]).collect();
+        imageio::encode::encode_jpeg(w, h, &px, &imageio::encode::JpegOptions::default()).expect("a jpeg")
+    }
+
+    #[test]
+    fn an_encoded_png_is_decoded_and_averaged_down_to_the_wire_size() {
+        let bytes = solid_png(512, 256, [200, 40, 30, 255]);
+        assert_eq!(encoded_format(&bytes), Some("image/png"));
+        let art = ArtworkImage::from_encoded(&bytes).expect("a cover");
+        assert_eq!((art.width(), art.height()), (WIRE_SIDE_MAX, 64), "the aspect ratio is kept");
+        assert_eq!(&art.rgba()[0..4], &[200, 40, 30, 255]);
+        let small = ArtworkImage::from_encoded(&solid_png(3, 2, [1, 2, 3, 255])).expect("a cover");
+        assert_eq!((small.width(), small.height()), (3, 2), "a small cover is not enlarged");
+        let fit = ArtworkImage::from_encoded_fit(&bytes, 32).expect("a cover");
+        assert_eq!((fit.width(), fit.height()), (32, 16), "the requested side caps it");
+    }
+
+    #[test]
+    fn an_encoded_jpeg_is_decoded_to_a_cover_of_about_its_colour() {
+        let bytes = solid_jpeg(300, 300, [20, 120, 220]);
+        assert_eq!(encoded_format(&bytes), Some("image/jpeg"));
+        let art = ArtworkImage::from_encoded(&bytes).expect("a cover");
+        assert_eq!((art.width(), art.height()), (WIRE_SIDE_MAX, WIRE_SIDE_MAX));
+        let p = &art.rgba()[0..4];
+        assert!(p[0].abs_diff(20) < 16 && p[1].abs_diff(120) < 16 && p[2].abs_diff(220) < 16 && p[3] == 255, "lossy but close: {p:?}");
+    }
+
+    #[test]
+    fn bytes_that_are_not_a_png_or_jpeg_are_refused() {
+        assert_eq!(ArtworkImage::from_encoded(b""), Err(ArtworkError::Undecodable));
+        assert_eq!(ArtworkImage::from_encoded(b"not a picture at all"), Err(ArtworkError::Undecodable));
+        assert_eq!(ArtworkImage::from_encoded(b"GIF89a\x01\x00\x01\x00"), Err(ArtworkError::Undecodable), "another format");
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="3" height="3"><rect width="3" height="3"/></svg>"#;
+        assert_eq!(ArtworkImage::from_encoded(svg), Err(ArtworkError::Undecodable), "the vector reader is not used");
+        let mut cut = solid_png(64, 64, [9, 9, 9, 255]);
+        cut.truncate(40);
+        assert_eq!(ArtworkImage::from_encoded(&cut), Err(ArtworkError::Undecodable), "a cut-off picture");
+    }
+
+    #[test]
+    fn a_huge_picture_is_refused_from_its_header() {
+        // a small PNG whose header claims 6000 by 6000 (the header check does not read the pixels)
+        let mut bytes = solid_png(4, 4, [0, 0, 0, 255]);
+        bytes[16..20].copy_from_slice(&6000u32.to_be_bytes());
+        bytes[20..24].copy_from_slice(&6000u32.to_be_bytes());
+        assert_eq!(imageio::pixel_size(&bytes), Some((6000, 6000)), "the header says so");
+        assert_eq!(ArtworkImage::from_encoded(&bytes), Err(ArtworkError::Undecodable));
+    }
+
+    #[test]
+    fn the_request_side_follows_points_and_scale_and_never_passes_the_wire_size() {
+        assert_eq!(ArtworkProvider::request_side(44, 100), 44);
+        assert_eq!(ArtworkProvider::request_side(44, 200), 88);
+        assert_eq!(ArtworkProvider::request_side(64, 200), WIRE_SIDE_MAX);
+        assert_eq!(ArtworkProvider::request_side(64, 300), WIRE_SIDE_MAX, "clamped to the wire size");
+        assert_eq!(ArtworkProvider::request_side(0, 200), WIRE_SIDE_MAX, "no valid request asks for the most");
+    }
+
+    #[test]
+    fn a_provider_is_asked_for_the_shell_size_and_its_encoded_answer_is_decoded() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+        let asked = Rc::new(Cell::new(None));
+        let seen = asked.clone();
+        let cover = solid_png(400, 400, [10, 200, 90, 255]);
+        let provider = ArtworkProvider::new(Artwork::new("album-3").unwrap(), move |size| {
+            seen.set(Some(size));
+            Some(ArtworkSource::Encoded(cover.clone()))
+        });
+        assert_eq!(provider.artwork().id(), "album-3");
+        let art = provider.image_for(100).expect("a cover");
+        assert_eq!(asked.get(), Some(size(64, 64)), "SHELL_COVER_POINTS at 1x");
+        assert_eq!((art.width(), art.height()), (64, 64), "decoded down to the requested side");
+        provider.image_for(200).expect("a cover");
+        assert_eq!(asked.get(), Some(size(WIRE_SIDE_MAX, WIRE_SIDE_MAX)), "2x asks for more, up to the wire size");
+    }
+
+    #[test]
+    fn a_provider_may_answer_with_pixels_or_with_nothing() {
+        let tile = ArtworkImage::new(1, 1, vec![1, 2, 3, 255]).unwrap();
+        let sent = tile.clone();
+        let pixels = ArtworkProvider::new(Artwork::new("a").unwrap(), move |_| Some(ArtworkSource::Pixels(sent.clone())));
+        assert_eq!(pixels.image_for(100), Ok(tile));
+        let none = ArtworkProvider::new(Artwork::new("b").unwrap(), |_| None);
+        assert_eq!(none.image_for(100), Err(ArtworkError::Unavailable));
+        let bad = ArtworkProvider::new(Artwork::new("c").unwrap(), |_| Some(ArtworkSource::Encoded(vec![1, 2, 3])));
+        assert_eq!(bad.image_for(100), Err(ArtworkError::Undecodable));
     }
 }

@@ -132,14 +132,15 @@ impl Clock {
         self.add = None;
         self.world.sheet = None;
         self.fit_world(ui);
-        let top = ui.pt(SPACE_M) + (position / 3) as f32 * ui.pt(WORLD_CARD_H_PT + CARD_MARGIN_PT);
+        let top = self.world_map_h(ui) + ui.pt(SPACE_M) + (position / 3) as f32 * ui.pt(WORLD_CARD_H_PT + CARD_MARGIN_PT);
         self.world.scroll.jump_to(top);
         true
     }
 
     pub(super) fn fit_world(&mut self, ui: &Ui) {
         let rows = self.world.selected.len().div_ceil(3);
-        let height = ui.pt(SPACE_M) + rows as f32 * ui.pt(WORLD_CARD_H_PT + CARD_MARGIN_PT);
+        // the map above the cards scrolls with them
+        let height = self.world_map_h(ui) + ui.pt(SPACE_M) + rows as f32 * ui.pt(WORLD_CARD_H_PT + CARD_MARGIN_PT);
         self.world.scroll.set_max(height - (self.tab_top(ui) - Self::content_top(ui)));
     }
 

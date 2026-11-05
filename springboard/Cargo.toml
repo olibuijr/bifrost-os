@@ -1,6 +1,6 @@
 [package]
 name = "springboard"
-version = "0.10.21"
+version = "0.10.45"
 edition = "2021"
 description = "BifrOSt OS shell for Arch Linux"
 
@@ -124,6 +124,22 @@ required-features = ["desktop-wayland"]
 
 [[test]]
 name = "parity_sdk-tests-11"
+required-features = ["desktop-wayland"]
+
+[[test]]
+name = "parity_sdk-complete-09"
+required-features = ["desktop-wayland"]
+
+[[test]]
+name = "parity_sdk-complete-17"
+required-features = ["desktop-wayland"]
+
+[[test]]
+name = "parity_sdk-complete-25"
+required-features = ["desktop-wayland"]
+
+[[test]]
+name = "parity_sdk-complete-46"
 required-features = ["desktop-wayland"]
 
 [[bin]]

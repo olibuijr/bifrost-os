@@ -202,8 +202,8 @@ impl Photos {
             NewestFirst => self.newest_first,
             OldestFirst => !self.newest_first,
             AlbumsByName => self.albums_by_name(),
-            ShowAll => search.is_empty(),
-            FavouritesOnly => search == "is:favorite",
+            ShowAll => search.is_empty() && self.album != Album::Favorites,
+            FavouritesOnly => self.album == Album::Favorites && search.is_empty(),
             EditedOnly => search == "is:edited",
             ScreenshotsOnly => search == "is:screenshot",
             ShowHidden => self.shows_hidden(),
@@ -329,8 +329,18 @@ impl Photos {
                 }
             }
             AlbumsByName => self.activate(ui, Target::AlbumSort, t),
-            ShowAll => self.set_search(ui, ""),
-            FavouritesOnly => self.set_search(ui, "is:favorite"),
+            ShowAll => {
+                self.set_search(ui, "");
+                // View > Favorites moves to the Favorites album, so Show All leaves it
+                if self.album == Album::Favorites {
+                    self.select_album(ui, Album::All);
+                }
+            }
+            // the same view as the sidebar's Favorites row, which also selects that row
+            FavouritesOnly => {
+                self.set_search(ui, "");
+                self.select_album(ui, Album::Favorites);
+            }
             EditedOnly => self.set_search(ui, "is:edited"),
             ScreenshotsOnly => self.set_search(ui, "is:screenshot"),
             ShowHidden => {

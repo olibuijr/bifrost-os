@@ -14,6 +14,8 @@ pub(crate) enum Undo {
     Alias(PathBuf),
     /// Permissions changed in Get Info: (path, the mode bits it had before).
     Mode(Vec<(PathBuf, u32)>),
+    /// Colour tags changed: (path, the tags it had before). Restored in the tag index by `Files::undo_file_op`.
+    Tags(Vec<(PathBuf, Vec<Tag>)>),
 }
 
 impl Undo {
@@ -26,6 +28,17 @@ impl Undo {
             Undo::NewFolder(_) => "New Folder",
             Undo::Alias(_) => "Make Alias",
             Undo::Mode(_) => "Permissions",
+            Undo::Tags(_) => "Tags",
+        }
+    }
+}
+
+/// Sets each path back to the tags it had (`Undo::Tags`): the colours it has now are cleared first.
+pub(crate) fn restore_tags(index: &mut TagIndex, items: &[(PathBuf, Vec<Tag>)]) {
+    for (path, tags) in items {
+        index.clear(path);
+        for tag in tags {
+            index.toggle(path, *tag);
         }
     }
 }
@@ -84,6 +97,8 @@ pub(crate) fn undo_step(step: &Undo, bin: &Path) -> Result<String, String> {
             }
             failed.map_or(Ok("Restored the permissions".into()), Err)
         }
+        // the tag index belongs to `Files`, which restores it (`restore_tags`) before this is reached
+        Undo::Tags(_) => Ok("Restored the tags".into()),
         Undo::NewFolder(path) => std::fs::remove_dir(path).map(|_| "Removed the new folder".into()).map_err(|_| "The new folder is no longer empty".into()),
         Undo::Alias(link) => match link.symlink_metadata() {
             Ok(md) if md.file_type().is_symlink() => std::fs::remove_file(link).map(|_| "Removed the alias".to_string()).map_err(|e| batch::friendly(&e)),
@@ -107,6 +122,12 @@ impl Files {
     /// Edit > Undo for file operations.
     pub(crate) fn undo_file_op(&mut self) {
         let Some(step) = self.undo.pop() else { return };
+        if let Undo::Tags(items) = &step {
+            // only the sidecar changes: the listing stays as it is, with its scroll position and selection
+            self.with_tags(|index| restore_tags(index, items));
+            self.notice = None;
+            return;
+        }
         let bin = self.bin();
         self.notice = undo_step(&step, &bin).err();
         if let Undo::Mode(items) = &step {
@@ -137,6 +158,24 @@ mod tests {
         assert_eq!((rename.name(), moved.name()), ("Rename", "Move"));
         assert_eq!(Undo::Trash(vec![]).name(), "Trash");
         assert_eq!(Undo::NewFolder(PathBuf::from("/d/n")).name(), "New Folder");
+        assert_eq!(Undo::Tags(vec![]).name(), "Tags");
+    }
+
+    #[test]
+    fn restore_tags_puts_back_exactly_the_old_colours() {
+        let (a, b) = (PathBuf::from("/d/a"), PathBuf::from("/d/b"));
+        let mut index = TagIndex::default();
+        index.toggle(&a, Tag::Red);
+        index.toggle(&a, Tag::Blue);
+        let before = vec![(a.clone(), index.tags(&a)), (b.clone(), index.tags(&b))];
+        // a gains a colour and loses one; b, untagged, gains one
+        index.toggle(&a, Tag::Red);
+        index.toggle(&a, Tag::Green);
+        index.toggle(&b, Tag::Purple);
+        restore_tags(&mut index, &before);
+        assert_eq!(index.tags(&a), before[0].1);
+        assert!(index.tags(&b).is_empty(), "an item that had no tags has none again");
+        assert_eq!(index.len(), 1);
     }
 
     #[test]

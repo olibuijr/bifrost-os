@@ -139,17 +139,29 @@ impl WmState {
         }
         self.pending.remove(i);
         let id = self.id_of(&window);
-        // a window the shell brought back maps where it was (`bifrost_window_level_v1` set_origin), not at the cascade
-        let origin = window.wl_surface().and_then(|s| crate::window_level::origin(&s));
+        // a window the shell brought back maps where it was (`bifrost_window_level_v1` set_origin), not at the cascade;
+        // so does one its client destroyed while it was minimized and has now created again (`parked`)
+        let origin = window.wl_surface().and_then(|s| crate::window_level::origin(&s)).or_else(|| {
+            let client = toplevel.wl_surface().client()?.id();
+            let app_id = toplevel_app_id(toplevel.wl_surface());
+            self.parked.take(&client, &app_id).map(|r| (r.x, r.y))
+        });
         let activation_asked = window.user_data().get::<ActivateOnMap>().is_some_and(|a| a.0.get());
         let others_shown = self.wm.stack().into_iter().any(|o| o != id && self.wm.visible(o));
         let takes_front = map_takes_front(self.shell_stacks(&window), activation_asked, others_shown);
         // the level the shell asked for this surface before it mapped (`bifrost_window_level_v1`)
         let level = window.wl_surface().map(|s| crate::window_level::level(&s)).unwrap_or_default();
+        // the rank the shell gave a window it brings back with others (`set_stack_rank`): their order, over other clients
+        let rank = window.wl_surface().and_then(|s| crate::window_level::take_stack_rank(&s));
         let r = if takes_front {
             let r = self.wm.map_at(id, size.w, size.h, origin);
             self.wm.set_level(id, level);
+            if let Some(rank) = rank {
+                self.wm.set_rank(id, rank);
+            }
             r
+        } else if let Some(rank) = rank {
+            self.wm.map_ranked(id, size.w, size.h, origin, level, rank)
         } else {
             self.wm.map_behind(id, size.w, size.h, origin, level)
         };
@@ -379,9 +391,15 @@ impl XdgShellHandler for WmState {
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         self.pending.retain(|w| w.toplevel().is_some_and(|t| t != &surface));
-        // a window closed while minimized is held hidden: free it with what capture kept for it
+        // a window closed while minimized is held hidden: free it with what capture kept for it. Its frame is parked: a
+        // client that destroys the toplevel of a hidden window and creates it again when it is shown gets it back where
+        // it was (Show Desktop's toggle back), not at the cascade
         if let Some(window) = self.hidden_for_surface(surface.wl_surface()) {
             if let Some(id) = WmState::known_id(&window) {
+                if let (Some(rect), Some(client)) = (self.wm.rect(id), surface.wl_surface().client()) {
+                    let app_id = toplevel_app_id(surface.wl_surface());
+                    self.parked.park(client.id(), &app_id, rect);
+                }
                 self.wm.unmap(id);
                 self.forget_window(id, &window);
             }
@@ -477,6 +495,24 @@ impl WmState {
         let Some(id) = self.window_for_surface(surface).as_ref().and_then(WmState::known_id) else { return };
         self.place_window(id, placement);
     }
+
+    /// Moves the mapped toplevel of `surface` to (`x`, `y`) (`bifrost_window_level_v1` `set_position`) without
+    /// restacking or activating anything; its owner hears the new frame. False when the surface has no mapped toplevel
+    /// (it maps there instead, from the origin the request also keeps) or the toplevel is full screen.
+    pub fn move_surface(&mut self, surface: &WlSurface, x: i32, y: i32) -> bool {
+        let Some(window) = self.window_for_surface(surface) else { return false };
+        let Some(id) = WmState::known_id(&window) else { return false };
+        let Some(rect) = self.wm.move_to(id, x, y) else { return false };
+        // a maximized window that left its maximize takes its old size: the client is configured to it
+        let sized = window.geometry().size;
+        if (sized.w, sized.h) != (rect.w, rect.h) {
+            self.configure_frame(&window, id);
+        } else {
+            self.place(&window, (rect.x, rect.y));
+        }
+        self.dirty = true;
+        true
+    }
 }
 
 impl WlrLayerShellHandler for WmState {
@@ -485,6 +521,9 @@ impl WlrLayerShellHandler for WmState {
     fn new_layer_surface(&mut self, surface: WlrLayerSurface, output: Option<WlOutput>, _layer: Layer, namespace: String) {
         let output = output.as_ref().and_then(Output::from_resource).or_else(|| self.output());
         let Some(output) = output else { return };
+        // only the privileged shell names a z rank in its namespace (`scene::layer_namespace`)
+        let privileged = surface.wl_surface().client().is_some_and(|c| crate::privileged::is_privileged(&c));
+        let namespace = crate::scene::layer_namespace(namespace, privileged);
         let mapped = layer_map_for_output(&output).map_layer(&LayerSurface::new(surface, namespace));
         if let Err(e) = mapped {
             eprintln!("bifrost-wm: layer surface refused: {e}");
@@ -513,6 +552,17 @@ impl WlrLayerShellHandler for WmState {
 
 /// Whether `window` committed `committed` while a configure that resizes it is still unacknowledged: one whose size is
 /// neither the size it was last configured to nor the size it just committed (`resize_in_flight`).
+/// The app id an xdg toplevel set, or "" when it set none.
+fn toplevel_app_id(surface: &WlSurface) -> String {
+    with_states(surface, |states| {
+        states
+            .data_map
+            .get::<XdgToplevelSurfaceData>()
+            .and_then(|d| d.lock().unwrap_or_else(|p| p.into_inner()).app_id.clone())
+            .unwrap_or_default()
+    })
+}
+
 fn awaiting_resize(window: &Window, committed: (i32, i32)) -> bool {
     let Some(t) = window.toplevel() else { return false };
     with_states(t.wl_surface(), |states| {

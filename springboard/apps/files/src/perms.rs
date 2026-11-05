@@ -90,9 +90,11 @@ pub(crate) fn set_mode(path: &Path, mode: u32) -> std::io::Result<()> {
 }
 
 /// The grid's geometry in points: a label column, three check columns, and a heading row above three rows.
-pub(crate) const CELL_W: f32 = 76.;
+/// The whole grid (`LABEL_W` + three `CELL_W`) fits the Get Info window between its 20 pt margins (`INFO_WINDOW_W`), so the
+/// last heading, "Execute", is not cut at the window edge.
+pub(crate) const CELL_W: f32 = 72.;
 pub(crate) const CELL_H: f32 = 26.;
-const LABEL_W: f32 = 130.;
+const LABEL_W: f32 = 84.;
 
 /// Total height of the grid (heading plus three rows).
 pub(crate) const GRID_H: f32 = CELL_H * 4.;
@@ -173,7 +175,7 @@ impl Files {
         for (c, access) in Access::ALL.into_iter().enumerate() {
             text(s, ui, access.label(), 12., LABEL_2.now(), gx + LABEL_W + c as f32 * CELL_W, gy + 4., CELL_W);
         }
-        let on = if info.editable { TINT } else { LABEL_2.now() };
+        let on = if info.editable { accent_now() } else { LABEL_2.now() };
         for (r, who) in Who::ALL.into_iter().enumerate() {
             text(s, ui, who.label(), 12., LABEL_2.now(), gx, gy + CELL_H + r as f32 * CELL_H + 4., LABEL_W - 8.);
             for access in Access::ALL {
@@ -193,12 +195,35 @@ impl Files {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const TINT_BLUE: u32 = bifrost_app::kit::ui::TINT;
 
     fn scratch(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("files-perms-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn the_granted_cells_of_the_grid_are_filled_with_the_chosen_accent_not_system_blue() {
+        use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+        use bifrost_app::kit::{Font, Ui};
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let font = Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let ui = Ui::new(font, 1.0);
+        let info = Info { name: "a".into(), rows: Vec::new(), path: PathBuf::from("/tmp/a"), mode: Some(0o777), editable: true };
+        let files = Files::info_view(info, 340., 400., Path::new("/tmp"));
+        let keep = accent();
+        set_accent(Accent::Green);
+        let green = accent_now();
+        let mut px = vec![0u32; 340 * 400];
+        files.paint_perm_grid(&ui, &mut Surface { w: 340, h: 400, stride: 340, px: &mut px, y0: 0 });
+        set_accent(keep);
+        assert!(px.contains(&green), "a granted cell is filled with the accent");
+        assert!(!px.contains(&TINT_BLUE), "no fixed systemBlue left");
     }
 
     #[test]
@@ -242,6 +267,13 @@ mod tests {
         assert_eq!(cell_at(20., 100., 20. + LABEL_W + 5., 100. + 5.), None, "the heading row");
         assert_eq!(cell_at(20., 100., 20. + LABEL_W + 3. * CELL_W + 1., 100. + CELL_H + 1.), None, "right of the grid");
         assert_eq!(cell_at(20., 100., 20. + LABEL_W + 1., 100. + GRID_H + 1.), None, "below the grid");
+    }
+
+    #[test]
+    fn the_grid_fits_the_get_info_window_with_its_margins() {
+        let (x, _, w, _) = cell_rect(20., 0., Who::Others, Access::Execute);
+        assert!(x + w + 20. <= info_window::INFO_WINDOW_W, "the Execute column ends inside the window, with the left margin mirrored");
+        assert!(LABEL_W >= 60., "room for the Owner, Group and Others labels");
     }
 
     #[test]

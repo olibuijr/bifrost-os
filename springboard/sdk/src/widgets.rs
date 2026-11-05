@@ -1,5 +1,5 @@
 //! System-style drawing adapters for renderer-independent BifrOSt controls.
-use crate::kit::ui::{Weight, FOLDER_EMBLEM, FOLDER_EMBLEM_HILITE, CONTROL_PRESSED, CAPSULE_BG, CAPSULE_EDGE, CAPSULE_SHADOW, DETAIL_BG, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, MATERIAL_HUD, MATERIAL_HUD_SOLID, MATERIAL_MENU, MATERIAL_SHEET, MATERIAL_TOOLTIP, MATERIAL_HEADER, MATERIAL_CONTENT, MATERIAL_UNDER_WINDOW, MATERIAL_UNDER_PAGE, MATERIAL_FULLSCREEN, MATERIAL_SELECTION_EMPHASIZED, MATERIAL_SELECTION_INACTIVE, MATERIAL_POPOVER, MATERIAL_SIDEBAR, MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR, MATERIAL_TITLEBAR_SOLID, ROW_PRESSED, SEGMENT_ON, SELECTION, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, TINT, WHITE};
+use crate::kit::ui::{Weight, FOLDER_EMBLEM, FOLDER_EMBLEM_HILITE, CONTROL_PRESSED, CAPSULE_BG, CAPSULE_EDGE, CAPSULE_SHADOW, DETAIL_BG, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, MATERIAL_HUD, MATERIAL_HUD_SOLID, MATERIAL_MENU, MATERIAL_SHEET, MATERIAL_TOOLTIP, MATERIAL_HEADER, MATERIAL_CONTENT, MATERIAL_UNDER_WINDOW, MATERIAL_UNDER_PAGE, MATERIAL_FULLSCREEN, MATERIAL_SELECTION_EMPHASIZED, MATERIAL_SELECTION_INACTIVE, MATERIAL_POPOVER, MATERIAL_SIDEBAR, MATERIAL_SIDEBAR_SOLID, MATERIAL_TITLEBAR, MATERIAL_TITLEBAR_SOLID, ROW_PRESSED, SEGMENT_ON, SELECTION, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, TINT, accent_now, WHITE};
 use crate::kit::{Surface, Ui};
 use crate::kit::rgba;
 use bifrost_render::canvas::{Canvas, ImageRef, MaterialStyle, RectF};
@@ -570,10 +570,28 @@ const SIDEBAR_DOT_PT: f32 = 12.0;
 /// grey semibold text, rows with an accent glyph (`with_symbol`), the selection as a neutral plate under a bold
 /// label (Files, Notes, Reminders), counts on the right. `pressed` is the row id being pressed.
 pub fn source_list(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList, scroll: f32, pressed: Option<u32>) {
+    source_list_in(s, ui, bounds, list, scroll, pressed, None);
+}
+
+/// `source_list` whose rows are drawn only inside `rows` (points), while the column's material still fills all of
+/// `bounds`: a full-size window's sidebar keeps its material under the traffic lights' band but a scrolled row never
+/// draws there (the reference scroll view's content insets under a unified toolbar). One pass, one Sidebar accessibility group.
+pub fn source_list_in(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList, scroll: f32, pressed: Option<u32>, rows: Option<Rect>) {
     let (bx, by, bw, bh) = (ui.pt(bounds.x) as usize, ui.pt(bounds.y) as usize, ui.pt(bounds.w).ceil() as usize, ui.pt(bounds.h).ceil() as usize);
     if !window_material(s, ui, bounds, 0.0, Material::Sidebar, State::default()) {
         s.fill_rect(RectF::new((bx) as f32, (by) as f32, (bw) as f32, (bh) as f32), SIDEBAR_BG.now());
     }
+    if let Some(r) = rows {
+        s.push_clip(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), 0.0);
+    }
+    source_list_rows(s, ui, bounds, list, scroll, pressed);
+    if rows.is_some() {
+        s.pop_clip();
+    }
+}
+
+/// The rows of `source_list` (its Sidebar accessibility group) over the material already drawn.
+fn source_list_rows(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList, scroll: f32, pressed: Option<u32>) {
     // labels on the material blend vibrantly; a selected or pressed row's plate is opaque, so its text is plain
     bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Sidebar", bounds);
     let vibrant = vibrant_text();
@@ -716,7 +734,7 @@ pub fn search_field(s: &mut dyn Canvas, ui: &Ui, field: &TextField, bounds: Rect
             blit(s, &im, left as i32, top as i32);
             if focused {
                 let cx = ui.measure(&value[start..field.caret()], MAC_BODY_PT, Weight::Regular).min(room);
-                s.fill_rrect(RectF::new(left + cx, top, ui.pt(1.0), im_h), 0.0, TINT);
+                s.fill_rrect(RectF::new(left + cx, top, ui.pt(1.0), im_h), 0.0, accent_now());
             }
         }
     }
@@ -794,6 +812,8 @@ pub fn path_bar(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, items: &[(&str, &str)
     let pt = MAC_CALLOUT_PT;
     let widths: Vec<f32> = items.iter().map(|(l, _)| ui.measure(l, pt, Weight::Regular) / ui.pt(1.0)).collect();
     let segs = pathbar::layout(&widths, bounds, PATH_GLYPH_PT + SPACE_XS, PATH_CHEVRON_PT);
+    // the segments are the path bar's children in the accessibility tree
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Path", bounds);
     for (k, seg) in segs.iter().enumerate() {
         let (label, symbol) = items[seg.index];
         let r = seg.rect;
@@ -809,6 +829,7 @@ pub fn path_bar(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, items: &[(&str, &str)
             glyph(s, ui, "chevron.right", Rect { x: r.right() + (PATH_CHEVRON_PT - c) / 2.0, y: r.y + (r.h - c) / 2.0, w: c, h: c }, LABEL_3.now());
         }
     }
+    bifrost_ui::ax::end_group();
     segs
 }
 
@@ -875,7 +896,7 @@ pub fn text_field(
         let cx = ui
             .measure(&value[start..field.caret()], 13., Weight::Regular)
             .min(room);
-        s.fill_rrect(RectF::new(left + cx, top, ui.pt(1.), ui.pt(17.)), 0., TINT);
+        s.fill_rrect(RectF::new(left + cx, top, ui.pt(1.), ui.pt(17.)), 0., accent_now());
     }
 }
 
@@ -925,12 +946,15 @@ pub fn candidate_list(s: &mut dyn Canvas, ui: &Ui, anchor: Rect, items: &[String
     let (row, pad) = (CANDIDATE_ROW_PT, CANDIDATE_PAD_PT);
     let bounds = Rect { x: anchor.x, y: anchor.bottom() + CANDIDATE_GAP_PT, w: CANDIDATE_WIDTH_PT, h: pad * 2.0 + row * items.len() as f32 };
     material(s, ui, bounds, 8.0, Material::Popover);
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Candidates", bounds);
     for (i, item) in items.iter().enumerate() {
+        bifrost_ui::ax::record(bifrost_ui::Role::Row, item, "", Rect { x: bounds.x + pad, y: bounds.y + pad + row * i as f32, w: bounds.w - 2.0 * pad, h: row }, true);
         let img = ui.text(&format!("{}   {}", i + 1, item), MAC_BODY_PT, Weight::Regular, WHITE);
         let x = ui.pt(bounds.x + pad * 2.0);
         let y = ui.pt(bounds.y + pad + row * i as f32) + (ui.pt(row) - img.h as f32) / 2.0;
         image_tinted_at(s, &img, x as i32, y as i32, LABEL.now());
     }
+    bifrost_ui::ax::end_group();
 }
 
 /// An open menu on the Popover material at `origin` (points). The highlighted row is the accent colour with white
@@ -944,15 +968,20 @@ pub fn menu(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), width: f32, menu: &
     let lead = if swatched { MENU_SWATCH_PT + MENU_SWATCH_GAP_PT } else { 0.0 };
     material(s, ui, bounds, 8.0, Material::Popover);
     s.stroke_rrect(RectF::new(ui.pt(bounds.x), ui.pt(bounds.y), ui.pt(width), ui.pt(total)), ui.pt(8.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+    // the rows are the menu's children in the accessibility tree; a separator is not an element
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Menu", bounds);
     for (i, (item, &(top, h))) in menu.items.iter().zip(&rows).enumerate() {
         let y = origin.1 + top;
+        if !item.separator {
+            bifrost_ui::ax::record(bifrost_ui::Role::MenuItem, &item.title, if item.checked { "checked" } else { "" }, Rect { x: origin.0, y, w: width, h }, item.enabled);
+        }
         if item.separator {
             s.fill_rect(RectF::new((ui.pt(origin.0 + MENU_INSET_PT * 2.) as usize) as f32, (ui.pt(y + h / 2.) as usize) as f32, (ui.pt(width - MENU_INSET_PT * 4.) as usize) as f32, (ui.pt(1.0).max(1.0) as usize) as f32), SEPARATOR_C.now());
             continue;
         }
         let hot = menu.highlighted == Some(i) && item.enabled;
         if hot {
-            s.fill_rrect(RectF::new(ui.pt(origin.0 + MENU_INSET_PT), ui.pt(y), ui.pt(width - MENU_INSET_PT * 2.), ui.pt(h)), ui.pt(5.), TINT);
+            s.fill_rrect(RectF::new(ui.pt(origin.0 + MENU_INSET_PT), ui.pt(y), ui.pt(width - MENU_INSET_PT * 2.), ui.pt(h)), ui.pt(5.), accent_now());
         }
         let color = if hot { WHITE } else if !item.enabled { LABEL_3.now() } else if item.destructive { bifrost_render::ui::DESTRUCTIVE } else { LABEL.now() };
         let line = |t: &str, c: u32| ui.text(t, MAC_BODY_PT, Weight::Regular, c);
@@ -973,6 +1002,7 @@ pub fn menu(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), width: f32, menu: &
             blit(s, &t, (ui.pt(origin.0 + width - MENU_INSET_PT - 10.) - t.w as f32) as i32, center(&t));
         }
     }
+    bifrost_ui::ax::end_group();
     bounds
 }
 
@@ -1042,6 +1072,8 @@ impl PlayerLayout {
 pub fn player(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, p: &Player, pressed: Option<Rect>) -> PlayerLayout {
     let l = PlayerLayout::new(bounds, p);
     let c = l.capsule;
+    // the transport buttons are the player's children in the accessibility tree; its value is what is playing
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, "Player", c);
     capsule(s, ui, c);
     outline_if_borders(s, ui, c, c.h / 2.0);
     let a = l.artwork;
@@ -1073,6 +1105,7 @@ pub fn player(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, p: &Player, pressed: Op
         button(s, fr, f, "Forward");
     }
     button(s, l.play, if p.playing { "pause.fill" } else { "play.fill" }, if p.playing { "Pause" } else { "Play" });
+    bifrost_ui::ax::end_group();
     l
 }
 
@@ -1192,61 +1225,107 @@ pub fn focus_ring(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, radius: f32) {
 }
 
 /// A push button of a sheet. The default button is filled with the accent and white text; others are control plates;
-/// destructive titles are red. `pressed` darkens.
-fn sheet_button(s: &mut dyn Canvas, ui: &Ui, r: Rect, b: &bifrost_ui::sheet::SheetButton, pressed: bool) {
+/// destructive titles are red. `pressed` darkens. `radius` is the corner (points): an alert's stacked buttons are
+/// capsules, a free-form sheet's buttons 6 pt.
+fn sheet_button(s: &mut dyn Canvas, ui: &Ui, r: Rect, b: &bifrost_ui::sheet::SheetButton, pressed: bool, radius: f32) {
     use bifrost_ui::sheet::ButtonRole;
     bifrost_ui::ax::record(bifrost_ui::Role::Button, &b.title, if b.role == ButtonRole::Default { "default" } else { "" }, r, true);
     let default = b.role == ButtonRole::Default;
     let fill = if default { crate::kit::appearance::accent_now() } else if pressed { CONTROL_PRESSED.now() } else { FIELD_BG.now() };
-    s.fill_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(6.), fill);
+    s.fill_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(radius), fill);
     if !default {
-        s.stroke_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(6.), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+        s.stroke_rrect(RectF::new(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h)), ui.pt(radius), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
     }
     let color = if default { WHITE } else if b.role == ButtonRole::Destructive { crate::kit::ui::DESTRUCTIVE } else { LABEL.now() };
     let img = ui.text(&ui.fit(&b.title, MAC_BODY_PT, ui.pt(r.w - 8.)), MAC_BODY_PT, Weight::Regular, color);
     blit(s, &img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y) + (ui.pt(r.h) - img.h as f32) / 2.0) as i32);
 }
 
-/// A sheet over `parent` (the window rectangle, points): dims and blocks the parent, then draws the panel hanging from
-/// the title bar (`titlebar_h` tall) at slide `progress` (0..1, from `motion::Kind::SheetSlide`). Alerts draw their
+/// The lines an alert sheet draws at panel width `panel_w_pt`: its title, and each paragraph of its message (an empty
+/// paragraph has no lines and is drawn as a blank line; an empty message has no paragraphs). Wrapped with real glyph
+/// widths (`Ui::wrap_capped`, long words broken); `sheet` draws exactly these and sizes the panel from their count.
+pub fn alert_lines(ui: &Ui, sheet: &bifrost_ui::sheet::Sheet, panel_w_pt: f32) -> (Vec<String>, Vec<Vec<String>>) {
+    let tw = ui.pt(panel_w_pt - bifrost_ui::sheet::SHEET_PAD_PT * 2.0);
+    let title = ui.wrap_capped(&sheet.title, bifrost_render::ui::MAC_HEADLINE_PT, Weight::Semibold, tw, usize::MAX);
+    let message = if sheet.message.is_empty() {
+        Vec::new()
+    } else {
+        sheet.message.split('\n').map(|para| ui.wrap_capped(para, MAC_CALLOUT_PT, Weight::Regular, tw, usize::MAX)).collect()
+    };
+    (title, message)
+}
+
+/// A sheet over `parent` (the window rectangle, points): dims and blocks the parent, then draws the panel attached to
+/// the title bar (`titlebar_h` tall) at slide `progress` (0..1, from `motion::Kind::SheetSlide`): its top edge is the
+/// title bar's bottom edge, square, with no gap, and it slides out from under the title bar
+/// (`bifrost_ui::sheet::attached_body`). An alert stacks its buttons full width (`Sheet::layout`). Alerts draw their
 /// title and message; free-form sheets draw the title and leave the area above the buttons to the caller, who gets the
 /// content rectangle back. Return/Escape and click blocking: `bifrost_ui::sheet::Sheet::key` and `::hit`.
 pub fn sheet(s: &mut dyn Canvas, ui: &Ui, parent: Rect, titlebar_h: f32, sheet: &bifrost_ui::sheet::Sheet, progress: f32, pressed: Option<u32>) -> Rect {
     use bifrost_ui::sheet::SHEET_PAD_PT;
+    // an alert is sized from the wrap it is drawn with: the measured height is recorded before the layout, so the
+    // panel, the text and the button hit areas (`Sheet::hit` reads the same record) agree
+    let alert_text = sheet.alert.then(|| {
+        let (title, message) = alert_lines(ui, sheet, sheet.size.0.min(parent.w));
+        let message_lines = message.iter().map(|lines| lines.len().max(1)).sum::<usize>();
+        let h = bifrost_ui::sheet::alert_sheet_height(title.len().max(1), message_lines, sheet.buttons.len());
+        bifrost_ui::sheet::record_alert_height(&sheet.title, &sheet.message, sheet.size.0, h);
+        (title, message)
+    });
     let l = sheet.layout(parent, titlebar_h, progress);
     // the sheet is a window whose buttons are its children in the accessibility tree (closed on every return below)
     bifrost_ui::ax::begin_group(bifrost_ui::Role::Window, &sheet.title, l.panel);
     let dim = (0.28 * progress.clamp(0.0, 1.0) * 255.0) as u8;
     s.fill_rrect(RectF::new(ui.pt(parent.x), ui.pt(parent.y), ui.pt(parent.w), ui.pt(parent.h)), ui.pt(m::WINDOW_RADIUS), crate::kit::pack(0, 0, 0, dim));
-    // the top edge is square against the title bar: extend the rounded panel upward and keep it inside the parent
+    // attached to the title bar: everything is clipped to below its bottom edge, and the rounded body reaches above
+    // the clip, so its top corners are cut off square and only the bottom corners are rounded
     let r = bifrost_ui::sheet::SHEET_RADIUS_PT;
-    let top = (l.panel.y - r).max(parent.y);
-    let body = Rect { x: l.panel.x, y: top, w: l.panel.w, h: l.panel.bottom() - top };
-    if body.h <= r {
+    let Some((clip, body)) = bifrost_ui::sheet::attached_body(l.panel, parent, titlebar_h) else {
         bifrost_ui::ax::end_group();
         return l.panel;
-    }
+    };
+    s.push_clip(RectF::new(ui.pt(clip.x), ui.pt(clip.y), ui.pt(clip.w), ui.pt(clip.h)), 0.0);
     material(s, ui, body, r, Material::Popover);
     s.stroke_rrect(RectF::new(ui.pt(body.x), ui.pt(body.y), ui.pt(body.w), ui.pt(body.h)), ui.pt(r), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
     let mut y = l.panel.y + SHEET_PAD_PT;
     let tw = ui.pt(l.panel.w - SHEET_PAD_PT * 2.0);
-    let head = ui.text(&ui.fit(&sheet.title, bifrost_render::ui::MAC_HEADLINE_PT, tw), bifrost_render::ui::MAC_HEADLINE_PT, Weight::Semibold, LABEL.now());
+    let head_pt = bifrost_render::ui::MAC_HEADLINE_PT;
     let cx = ui.pt(l.panel.x + l.panel.w / 2.0) as i32;
-    let centred = sheet.alert;
-    let hx = if centred { cx - head.w as i32 / 2 } else { ui.pt(l.panel.x + SHEET_PAD_PT) as i32 };
-    blit(s, &head, hx, ui.pt(y) as i32);
-    y += 26.0;
-    if sheet.alert {
-        for line in sheet.message.split('\n') {
-            let t = ui.text(&ui.fit(line, MAC_CALLOUT_PT, tw), MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now());
-            blit(s, &t, cx - t.w as i32 / 2, ui.pt(y) as i32);
-            y += 15.0;
+    if let Some((title, message)) = &alert_text {
+        use bifrost_ui::sheet::{ALERT_MESSAGE_LINE_PT, ALERT_TITLE_LINE_PT};
+        // an alert's title and message wrap, centred, never cut off: the panel was sized for these very lines
+        for (i, line) in title.iter().enumerate() {
+            let head = ui.text(line, head_pt, Weight::Semibold, LABEL.now());
+            blit(s, &head, cx - head.w as i32 / 2, ui.pt(y + i as f32 * ALERT_TITLE_LINE_PT) as i32);
+        }
+        y += 26.0 + title.len().saturating_sub(1) as f32 * ALERT_TITLE_LINE_PT;
+        for lines in message {
+            for line in lines {
+                let t = ui.text(line, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now());
+                blit(s, &t, cx - t.w as i32 / 2, ui.pt(y) as i32);
+                y += ALERT_MESSAGE_LINE_PT;
+            }
+            // an empty paragraph is a blank line
+            if lines.is_empty() {
+                y += ALERT_MESSAGE_LINE_PT;
+            }
+        }
+    } else {
+        let head = ui.text(&ui.fit(&sheet.title, head_pt, tw), head_pt, Weight::Semibold, LABEL.now());
+        blit(s, &head, ui.pt(l.panel.x + SHEET_PAD_PT) as i32, ui.pt(y) as i32);
+        y += 26.0;
+    }
+    let radius = if sheet.alert { bifrost_ui::sheet::ALERT_BUTTON_H_PT / 2.0 } else { 6.0 };
+    for (id, rect) in &l.buttons {
+        if let Some(b) = sheet.buttons.iter().find(|b| b.id == *id) {
+            sheet_button(s, ui, *rect, b, pressed == Some(*id), radius);
+            if sheet.focus == Some(*id) {
+                focus_ring(s, ui, *rect, radius);
+            }
         }
     }
-    for (b, (id, rect)) in sheet.buttons.iter().zip(&l.buttons) {
-        sheet_button(s, ui, *rect, b, pressed == Some(*id));
-    }
     let btn_top = l.buttons.first().map(|(_, r)| r.y).unwrap_or(l.panel.bottom() - SHEET_PAD_PT);
+    s.pop_clip();
     bifrost_ui::ax::end_group();
     Rect { x: l.panel.x + SHEET_PAD_PT, y, w: l.panel.w - SHEET_PAD_PT * 2.0, h: (btn_top - 12.0 - y).max(0.0) }
 }
@@ -1258,7 +1337,26 @@ pub fn segmented(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, labels: &[&str], sel
     let segs = bifrost_ui::sheet::segments(bounds, labels.len());
     let (Some(first), Some(last)) = (segs.first(), segs.last()) else { return segs };
     let all = Rect { x: first.x, y: first.y, w: last.right() - first.x, h: first.h };
-    bifrost_ui::ax::record(bifrost_ui::Role::SegmentedControl, labels.get(selected).copied().unwrap_or(""), "", all, enabled);
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::SegmentedControl, labels.get(selected).copied().unwrap_or(""), all);
+    for (i, (r, label)) in segs.iter().zip(labels).enumerate() {
+        bifrost_ui::ax::record(bifrost_ui::Role::Button, label, if i == selected { "selected" } else { "" }, *r, enabled);
+    }
+    bifrost_ui::ax::end_group();
+    draw_segments(s, ui, &segs, all, labels, selected, enabled);
+    segs
+}
+
+/// [`segmented`] without recording accessibility elements, for a view that publishes the control itself through its
+/// `ax_node` (`view::TabView`), so the control is not listed twice.
+pub(crate) fn segmented_unrecorded(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, labels: &[&str], selected: usize, enabled: bool) -> Vec<Rect> {
+    let segs = bifrost_ui::sheet::segments(bounds, labels.len());
+    let (Some(first), Some(last)) = (segs.first(), segs.last()) else { return segs };
+    let all = Rect { x: first.x, y: first.y, w: last.right() - first.x, h: first.h };
+    draw_segments(s, ui, &segs, all, labels, selected, enabled);
+    segs
+}
+
+fn draw_segments(s: &mut dyn Canvas, ui: &Ui, segs: &[Rect], all: Rect, labels: &[&str], selected: usize, enabled: bool) {
     s.fill_rrect(RectF::new(ui.pt(all.x), ui.pt(all.y), ui.pt(all.w), ui.pt(all.h)), ui.pt(7.), CAPSULE_BG.now());
     s.stroke_rrect(RectF::new(ui.pt(all.x), ui.pt(all.y), ui.pt(all.w), ui.pt(all.h)), ui.pt(7.), ui.pt(1.0).max(1.0), CAPSULE_EDGE.now());
     for (i, (r, label)) in segs.iter().zip(labels).enumerate() {
@@ -1271,7 +1369,6 @@ pub fn segmented(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, labels: &[&str], sel
         let img = ui.text(&ui.fit(label, MAC_BODY_PT, ui.pt(r.w - 8.)), MAC_BODY_PT, Weight::Regular, color);
         blit(s, &img, (ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y) + (ui.pt(r.h) - img.h as f32) / 2.0) as i32);
     }
-    segs
 }
 
 /// A stepper (`NativeStepper`): a 13 x 22 plate with an up and a down chevron. `pressed` darkens one half.
@@ -1304,6 +1401,7 @@ pub fn stepper(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), pressed: Option<
 #[allow(clippy::too_many_arguments)]
 pub fn mini_month(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, year: i32, month: u32, first_weekday: u32, month_title: &str, today: Option<u32>, selected: Option<u32>, marked: &[u32]) -> bifrost_ui::calendar::MiniMonth {
     let l = bifrost_ui::calendar::MiniMonth::new(bounds, year, month, first_weekday);
+    bifrost_ui::ax::begin_group(bifrost_ui::Role::List, month_title, bounds);
     let mid = |r: &Rect, img: &crate::kit::Image| ((ui.pt(r.x + r.w / 2.0) as i32) - img.w as i32 / 2, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2);
     let t = ui.text(&ui.fit(month_title, MAC_CALLOUT_PT, ui.pt(l.title.w)), MAC_CALLOUT_PT, Weight::Semibold, LABEL.now());
     blit(s, &t, ui.pt(l.title.x + SPACE_XS) as i32, (ui.pt(l.title.y + l.title.h / 2.0) as i32) - t.h as i32 / 2);
@@ -1322,6 +1420,13 @@ pub fn mini_month(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, year: i32, month: u
         let side = r.w.min(r.h) - 4.0;
         let plate = Rect { x: r.x + (r.w - side) / 2.0, y: r.y + (r.h - side) / 2.0, w: side, h: side };
         let is_today = today == Some(*d);
+        let state = match (is_today, selected == Some(*d)) {
+            (true, true) => "today, selected",
+            (true, false) => "today",
+            (false, true) => "selected",
+            _ => "",
+        };
+        bifrost_ui::ax::record(bifrost_ui::Role::Button, &d.to_string(), state, *r, true);
         if is_today {
             s.fill_rrect(RectF::new(ui.pt(plate.x), ui.pt(plate.y), ui.pt(side), ui.pt(side)), ui.pt(side / 2.0), bifrost_render::ui::DESTRUCTIVE);
         } else if selected == Some(*d) {
@@ -1340,6 +1445,7 @@ pub fn mini_month(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, year: i32, month: u
         let (x, y) = mid(r, &img);
         blit(s, &img, x, y);
     }
+    bifrost_ui::ax::end_group();
     l
 }
 
@@ -1506,6 +1612,84 @@ mod tests {
         let tint_a = Material::Sidebar.tint() >> 24;
         assert!(px.iter().all(|p| p >> 24 == tint_a), "text blends into the material instead of covering it");
         assert!(px.iter().any(|p| (p & 255) > (Material::Sidebar.tint() & 255) + 40), "the labels are drawn");
+    }
+
+    #[test]
+    fn a_menu_publishes_its_rows_as_children_and_skips_separators() {
+        use bifrost_ui::menu::{Menu, MenuItem};
+        let ui = test_ui();
+        let (w, h) = (200usize, 120usize);
+        let mut px = vec![0u32; w * h];
+        let m = Menu::new(vec![MenuItem::new(1, "Copy"), MenuItem::separator(), MenuItem::new(2, "Paste").enabled(false).checked(true)]);
+        bifrost_ui::ax::begin_frame();
+        menu(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, (0.0, 0.0), 180.0, &m);
+        let links = bifrost_ui::ax::take_links();
+        let nodes = bifrost_ui::ax::take_frame();
+        let list = nodes.iter().find(|n| n.role == bifrost_ui::Role::List && n.label == "Menu").expect("the menu is an element").id;
+        let rows: Vec<&bifrost_ui::Node> = nodes.iter().filter(|n| bifrost_ui::ax::parent_of(&links, n.id) == Some(list)).collect();
+        assert_eq!(rows.iter().map(|n| n.label.as_str()).collect::<Vec<_>>(), vec!["Copy", "Paste"]);
+        assert!(rows.iter().all(|n| n.role == bifrost_ui::Role::MenuItem));
+        assert!(!rows[1].enabled && rows[1].value == "checked");
+    }
+
+    #[test]
+    fn a_segmented_control_holds_one_button_per_segment() {
+        let ui = test_ui();
+        let (w, h) = (300usize, 40usize);
+        let mut px = vec![0u32; w * h];
+        bifrost_ui::ax::begin_frame();
+        segmented(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, Rect { x: 0.0, y: 0.0, w: 240.0, h: 24.0 }, &["Day", "Week", "Month"], 1, true);
+        let links = bifrost_ui::ax::take_links();
+        let nodes = bifrost_ui::ax::take_frame();
+        let group = nodes.iter().find(|n| n.role == bifrost_ui::Role::SegmentedControl).expect("the control").id;
+        let kids: Vec<(&str, &str)> = nodes.iter().filter(|n| bifrost_ui::ax::parent_of(&links, n.id) == Some(group)).map(|n| (n.label.as_str(), n.value.as_str())).collect();
+        assert_eq!(kids, vec![("Day", ""), ("Week", "selected"), ("Month", "")]);
+    }
+
+    /// E2E10: a sidebar whose rows are clipped below the traffic lights' band is drawn in one pass and is one Sidebar
+    /// element holding its rows (Dictionary drew an empty list for the band first, a second Sidebar element).
+    #[test]
+    fn a_source_list_clipped_below_the_band_is_one_sidebar_element() {
+        use bifrost_ui::sidebar::{SidebarItem, SourceList};
+        let ui = test_ui();
+        let (w, h) = (200usize, 300usize);
+        let mut px = vec![0u32; w * h];
+        let list = SourceList::new(vec![SidebarItem::row(0, "orange"), SidebarItem::row(1, "orbit")], 28.0, 22.0);
+        let bounds = Rect { x: 0.0, y: 0.0, w: 200.0, h: 300.0 };
+        let rows = Rect { y: 52.0, h: 248.0, ..bounds };
+        bifrost_ui::ax::begin_frame();
+        source_list_in(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, bounds, &list, 0.0, None, Some(rows));
+        let links = bifrost_ui::ax::take_links();
+        let nodes = bifrost_ui::ax::take_frame();
+        let sidebars: Vec<u64> = nodes.iter().filter(|n| n.role == bifrost_ui::Role::List && n.label == "Sidebar").map(|n| n.id).collect();
+        assert_eq!(sidebars.len(), 1, "one Sidebar element");
+        let kids: Vec<&str> = nodes.iter().filter(|n| bifrost_ui::ax::parent_of(&links, n.id) == Some(sidebars[0])).map(|n| n.label.as_str()).collect();
+        assert_eq!(kids, vec!["orange", "orbit"]);
+    }
+
+    /// E2E11: under the rows clip an unselected row's vibrant label still has ink (Dictionary 0.6.5 showed only the
+    /// selected row: the keep-alpha blend ran on an empty scratch and vanished).
+    #[test]
+    fn a_vibrant_source_list_draws_its_unselected_rows_inside_the_rows_clip() {
+        let ui = test_ui();
+        let (w, h) = (200usize, 200usize);
+        let mut px = vec![pack(9, 9, 9, 255); w * h];
+        set_vibrancy(true, true);
+        let mut list = SourceList::new(vec![SidebarItem::row(0, "orange"), SidebarItem::row(1, "orbit"), SidebarItem::row(2, "ordeal")], 28.0, 22.0);
+        list.set_selected(Some(0));
+        let bounds = Rect { x: 0.0, y: 0.0, w: 200.0, h: 200.0 };
+        let rows = Rect { y: 52.0, h: 148.0, ..bounds };
+        source_list_in(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, bounds, &list, -60.0, None, Some(rows));
+        let _ = take_frame_materials();
+        set_vibrancy(false, false);
+        let tint = Material::Sidebar.tint();
+        for i in [1usize, 2] {
+            let r = list.item_rect(i, bounds, -60.0);
+            assert!(r.y >= rows.y && r.bottom() <= rows.bottom(), "row {i} is inside the clip: {r:?}");
+            let ink = (r.y as usize..r.bottom() as usize).flat_map(|y| (0..w).map(move |x| y * w + x)).filter(|&k| (px[k] & 255) > (tint & 255) + 40).count();
+            assert!(ink > 10, "row {i} has ink under the clip ({ink} px)");
+            assert!((r.y as usize..r.bottom() as usize).all(|y| (0..w).all(|x| px[y * w + x] >> 24 == tint >> 24)), "row {i} keeps the material alpha");
+        }
     }
 
     fn test_ui() -> Ui {
@@ -1675,7 +1859,7 @@ mod tests {
         let (rows, total) = m.rows(MENU_ROW_PT, MENU_SEPARATOR_PT, MENU_PAD_PT);
         assert_eq!(r.h, total);
         let hot_y = (10.0 + rows[1].0 + 2.0) as usize;
-        assert_eq!(px[hot_y * w + 40], TINT, "the highlighted row is the accent colour");
+        assert_eq!(px[hot_y * w + 40], accent_now(), "the highlighted row is the accent colour");
         let sep_y = (10.0 + rows[2].0 + rows[2].1 / 2.0) as usize;
         assert_eq!(px[sep_y * w + 60], SEPARATOR_C.now(), "separator hairline");
         assert_eq!(px[(r.y + r.h + 4.0) as usize * w + 100], 0, "nothing below the menu");
@@ -1862,6 +2046,32 @@ mod tests {
         let mut b = vec![0u32; w * h];
         sheet(&mut Surface { w, h, stride: w, px: &mut b, y0: 0 }, &ui, parent, 28.0, &sh, 0.0, None);
         assert_eq!(b[(btn.y + 11.0) as usize * w + (btn.x + 3.0) as usize], 0, "at progress 0 nothing is drawn");
+    }
+
+    #[test]
+    fn an_alert_of_wide_text_is_sized_from_the_wrap_it_draws_and_its_buttons_stay_clear() {
+        use bifrost_ui::sheet::{alert_sheet_height, stacked_buttons_h, wrapped_lines, ButtonRole, Hit, Sheet, SheetButton, ALERT_BUTTON_INSET_PT};
+        let ui = test_ui();
+        let (w, h) = (400usize, 600usize);
+        let parent = Rect { x: 0.0, y: 0.0, w: 400.0, h: 600.0 };
+        let (title, message) = ("WWWW MMMM WWWW MMMM WWWW", "WWWW MMMM WWWW MMMM WWWW MMMM WWWW\nMMMM WWWW MMMM WWWW MMMM WWWW MMMM");
+        let buttons = || vec![SheetButton::new(1, "OK", ButtonRole::Default), SheetButton::new(2, "Cancel", ButtonRole::Cancel)];
+        let sh = Sheet::alert(title, message, buttons());
+        let (t, m) = alert_lines(&ui, &sh, sh.size.0);
+        let drawn: usize = m.iter().map(|l| l.len().max(1)).sum();
+        assert!(drawn > wrapped_lines(message, 34), "wide glyphs wrap to more lines ({drawn}) than a character count says");
+        let mut px = vec![0u32; w * h];
+        let content = sheet(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, parent, 28.0, &sh, 1.0, None);
+        let l = sh.layout(parent, 28.0, 1.0);
+        assert_eq!(l.panel.h, alert_sheet_height(t.len(), drawn, 2), "the panel is as tall as the lines drawn and the button stack");
+        let btn_top = l.buttons[0].1.y;
+        assert!(btn_top - content.y >= 12.0, "the last line ends above the buttons: text to {}, buttons at {btn_top}", content.y);
+        assert_eq!(btn_top, l.panel.bottom() - ALERT_BUTTON_INSET_PT - stacked_buttons_h(2));
+        // a sheet built again (as apps do each frame) hits its buttons where they were drawn
+        let again = Sheet::alert(title, message, buttons());
+        let b = l.buttons[0].1;
+        assert_eq!(again.hit(parent, 28.0, 1.0, b.x + 2.0, b.y + 2.0), Hit::Button(1));
+        assert_eq!(px[(b.y + 11.0) as usize * w + (b.x + 3.0) as usize], crate::kit::appearance::accent_now());
     }
 
     #[test]

@@ -278,10 +278,11 @@ impl Calendar {
         }
     }
 
-    /// Records a click on the empty slot `(date, minute)`; true when it is the second click of a double-click there.
-    pub(super) fn slot_double(&mut self, date: Date, minute: u16, t: f64) -> bool {
-        let double = self.last_slot.is_some_and(|(d, m, at)| d == date && m == minute && t - at <= window::DOUBLE_TAP_MS);
-        self.last_slot = if double { None } else { Some((date, minute, t)) };
+    /// Records a click on the empty slot `(date, minute)` with its click count (`ClickCounter`); true when it is the
+    /// second click of a double-click there.
+    pub(super) fn slot_double(&mut self, date: Date, minute: u16, clicks: u8) -> bool {
+        let double = clicks >= 2 && self.last_slot == Some((date, minute));
+        self.last_slot = if double { None } else { Some((date, minute)) };
         double
     }
 
@@ -293,7 +294,7 @@ impl Calendar {
                 let (col, minute) = self.grid_at(ui, x, y)?;
                 Some((*self.view_days().get(col)?, slot_minute(minute)))
             }
-            Target::Day(day) if self.view == View::Month => Some((Date { day, ..self.selected }, 9 * 60)),
+            Target::Day(day) if self.view == View::Month => Some((Date { day, ..self.month_date() }, 9 * 60)),
             Target::Pick(date) if self.view == View::Month => Some((date, 9 * 60)),
             _ => None,
         }

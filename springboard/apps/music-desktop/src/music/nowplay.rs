@@ -8,7 +8,7 @@
 //! events to reach the app (see `docs/parity/wire-app-music.md`).
 
 use crate::music::engine::{Repeat, Snapshot, Track};
-use bifrost_app::now_playing::{CommandState, MediaContent, MediaDuration, MediaSession, MediaType, PlaybackState, QueueEntry, RemoteCommand};
+use bifrost_app::now_playing::{ArtworkImage, CommandState, MediaContent, MediaDuration, MediaSession, MediaType, PlaybackState, QueueEntry, RemoteCommand};
 use springboard::shell::music::nowplaying::Target;
 use std::path::PathBuf;
 
@@ -30,6 +30,13 @@ pub fn up_next_entries(upcoming: &[PathBuf], lookup: impl Fn(&PathBuf) -> Option
             },
         })
         .collect()
+}
+
+/// The Control Center cover for the encoded picture embedded in a song's tags (PNG or JPEG), decoded and averaged down
+/// to the wire size. `None` without a picture, or when it is not a readable PNG or JPEG: the caller then falls back to
+/// the decoded thumbnail, and the tile keeps its glyph when there is none.
+pub fn embedded_cover(encoded: Option<&[u8]>) -> Option<ArtworkImage> {
+    ArtworkImage::from_encoded(encoded?).ok()
 }
 
 /// The session identifier: the app's bundle id.
@@ -129,6 +136,16 @@ pub fn route(session: &MediaSession, cmd: RemoteCommand, playing: bool) -> Optio
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn an_embedded_picture_becomes_the_cover_and_a_missing_or_unreadable_one_gives_none() {
+        // a 1 by 1 PNG
+        let png = bifrost_core::plist::base64_decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==").expect("base64");
+        let art = embedded_cover(Some(&png)).expect("a cover");
+        assert_eq!((art.width(), art.height()), (1, 1));
+        assert!(embedded_cover(None).is_none(), "a song without a picture");
+        assert!(embedded_cover(Some(b"not a picture")).is_none(), "an unreadable picture");
+    }
 
     fn snap(track: Option<Track>, index: Option<usize>, playing: bool, queue_len: usize, repeat: Repeat) -> Snapshot {
         Snapshot {

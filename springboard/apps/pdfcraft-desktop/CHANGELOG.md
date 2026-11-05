@@ -4,6 +4,69 @@
 
 # Changelog
 
+## 0.18.1
+
+- Upstream pdfcraft v0.18.1.
+  ## What's Changed
+  * fix(ui): prevent wheel lockup at edge in non-continuous view (#5713) by @Combiler01 in https://github.com/storytold/pdfcraft/pull/5748
+  * fix(redact): rewritten form XObjects drop /PCAdded by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5868
+  * fix(redact): structure titles go with the descriptions of removed content by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5866
+  * fix(create): write a new document's page tree once by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5865
+
+## 0.18.0
+
+- Upstream pdfcraft v0.18.0.
+  ## What's Changed
+  * M2: a reference in a colour space or array isn't lost: Indexed tables, Pattern spaces, /Decode, /W and functions by @Piohrun in https://github.com/storytold/pdfcraft/pull/5539
+  * fix(render): a JBIG2 page's segments are bounded in what they hold and refer to (hayro-jbig2 patches 5 to 9, hayro-syntax 29) by @Piohrun in https://github.com/storytold/pdfcraft/pull/5491
+  * Reject signed and empty arcs in try_oid by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/5581
+  * Ignore a negative trailer /Size in incremental saves by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/5566
+
+## 0.17.0
+
+- Upstream pdfcraft v0.17.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/pdfcraft/pull/5527
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/pdfcraft/pull/5522
+  * Draft: Add Flatpak OCI image build and GHCR packaging helper by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5526
+  * Rewrite an unsigned file in full when saving after deleting pages by @srt8hellcat2-ui in https://github.com/storytold/pdfcraft/pull/4279
+
+## 0.16.1
+
+- Upstream pdfcraft v0.16.1.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5189
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/pdfcraft/pull/5205
+  * Issue #2368: flattening keeps a NoRotate widget upright on a rotated page by @wstock in https://github.com/storytold/pdfcraft/pull/2402
+  * Export Data as CSV keeps formula-like cells as text, like the merge report by @oracola91 in https://github.com/storytold/pdfcraft/pull/2524
+
+## 0.15.0
+
+- Upstream pdfcraft v0.15.0.
+  ## What's Changed
+  * Reject non-hex characters in XFA image hash parsing by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/4630
+  * Fix AFNumber format printing "inf" for large finite values by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/4592
+  * Reject '+' as a hex digit in FormCalc url Decode escapes by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/4586
+  * Fix FormCalc Round overflowing to infinity for large values by @Silvertree2010 in https://github.com/storytold/pdfcraft/pull/4508
+
+## 0.14.0
+
+- Upstream pdfcraft v0.14.0.
+  ## What's Changed
+  * fix(cos): one decode budget per page walk, so repeated stream references cannot multiply decoding by @aiongg in https://github.com/storytold/pdfcraft/pull/4114
+  * fix(cos, content, filters, crypt, model, render, print, a11y): bound the work that repeated keys, streams and page values multiply by @aiongg in https://github.com/storytold/pdfcraft/pull/4128
+  * fix(limits): bound the decoding and listing work that repeated references and small inputs multiply by @aiongg in https://github.com/storytold/pdfcraft/pull/4117
+  * fix(js, xfa): bound the text and work that form scripts and XFA data can multiply by @aiongg in https://github.com/storytold/pdfcraft/pull/4121
+
+## 0.13.0
+
+- Upstream pdfcraft v0.13.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * M14: recover existing macOS PDF associations after open and save by @skylartaylor in https://github.com/storytold/pdfcraft/pull/3558
+  **Full Changelog**: https://github.com/storytold/pdfcraft/compare/v0.12.0...v0.13.0
+
 ## 0.12.0
 
 - Upstream pdfcraft v0.12.0.

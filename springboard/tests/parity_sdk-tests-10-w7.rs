@@ -102,8 +102,8 @@ fn headless_a_reply_yields_the_dialog_text_or_the_error_message() {
 }
 
 #[test]
-fn headless_an_app_control_socket_lives_under_the_runtime_folder_named_for_the_app() {
-    assert!(socket_path("notes").ends_with("bifrost/apps/notes.sock"));
+fn headless_an_app_control_socket_lives_in_the_data_folder_named_for_the_app() {
+    assert!(socket_path("notes").ends_with("appdata/notes/control.sock"));
 }
 
 // --- transport intents from the Now Playing session --------------------------------------------------------------------

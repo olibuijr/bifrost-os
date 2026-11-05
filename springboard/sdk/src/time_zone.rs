@@ -105,6 +105,12 @@ impl TimeZone {
         self.abbreviation_at(unix(date))
     }
 
+    /// The long specific name in force at `date` ("Greenwich Mean Time", "British Summer Time"), English whatever the
+    /// locale. None when the abbreviation in force has no entry in the built-in table.
+    pub fn long_name(&self, date: Date) -> Option<String> {
+        long_name(&self.abbreviation_at(unix(date))).map(str::to_string)
+    }
+
     /// `isDaylightSavingTime(for:)`.
     pub fn is_daylight_saving_time(&self, date: Date) -> bool {
         self.state(unix(date)).1

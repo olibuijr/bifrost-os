@@ -10,9 +10,9 @@
     {
       "feature": "Task Management (ProcessInfo activities, sudden termination, thermal state, user activities)",
       "apple": "ProcessInfo, NSUserActivity, Progress, ProgressManager",
-      "bifrost": "springboard/sdk/src/process_info.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/runtime.rs; springboard/ui/src/progress.rs; springboard/ui/src/progress_rate.rs",
+      "bifrost": "springboard/sdk/src/process_info.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/runtime.rs; springboard/sdk/src/progress.rs; springboard/ui/src/progress.rs; springboard/ui/src/progress_rate.rs",
       "status": "partial",
-      "note": "Activity tracker, sudden termination and thermal state exist. Progress is a tree of unit counts with child shares, fraction, finish, cancel, pause and resume that reach children with cancellation, pausing and resuming handlers, addChild, and current/becomeCurrent/resignCurrent (bifrost_ui::progress, reached as bifrost_app::controls::progress). Average throughput and seconds remaining come from progress_rate (headless tests in springboard/ui/tests/parity_sdk-complete-36.rs). Gap: no shared ProgressManager, no publishing progress to other processes, and no Handoff.",
+      "note": "Activity tracker, sudden termination and thermal state exist. Progress is a tree of unit counts with child shares, fraction, finish, cancel, pause and resume that reach children with cancellation, pausing and resuming handlers, addChild, and current/becomeCurrent/resignCurrent (bifrost_ui::progress, reached as bifrost_app::progress, which adds the English localized_description). Average throughput and seconds remaining come from progress_rate (headless tests in springboard/ui/tests/parity_sdk-complete-36.rs). Gap: no shared ProgressManager, no publishing progress to other processes, and no Handoff.",
       "rea_evidence": "ev_e2ff5d55d77a4e9024c3fe26224756e2a348cab8ef8b4488a19a55f20b160e51"
     },
     {
@@ -53,7 +53,7 @@
     }
   ],
   "gaps": [
-    "Publishing progress to other processes and value observation for views: ui/src/progress.rs has the ProgressTree model, the SDK does not expose it, and nothing publishes progress across processes.",
+    "Publishing progress to other processes and value observation for views: the SDK exposes the ProgressTree model (bifrost_app::progress), but nothing publishes progress across processes.",
     "Per-domain error user info providers and a recovery attempter: sdk/src/error.rs (AppError) keeps the recovery options, and the caller runs the chosen one; no attempter runs it.",
     "NSUserActivity Handoff between devices",
     "Generic app extension host: sdk/src/item_provider.rs loads typed representations (NSItemProvider style), but there is no extension host to load them from other apps.",

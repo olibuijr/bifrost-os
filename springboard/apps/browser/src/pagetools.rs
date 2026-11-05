@@ -76,8 +76,8 @@ pub fn same_text(engine: &str, page: &str) -> bool {
 /// when removing. The overlay is a fixed, pointer-transparent `div` that follows scroll and resize.
 pub fn js_highlight(path: &str) -> String {
     // the overlay uses the app tint (a named token), written as CSS
-    let edge = crate::tokens::css_rgb(bifrost_app::kit::ui::TINT);
-    let fill = crate::tokens::css_rgba(bifrost_app::kit::ui::TINT, 0.2);
+    let edge = crate::tokens::css_rgb(bifrost_app::kit::ui::accent_now());
+    let fill = crate::tokens::css_rgba(bifrost_app::kit::ui::accent_now(), 0.2);
     format!(
         "(function(p){{var h=document.getElementById('{OVERLAY_ID}');if(h)h.remove();\
          if(window.__bhl){{window.removeEventListener('scroll',window.__bhl,true);window.removeEventListener('resize',window.__bhl);window.__bhl=null}}\
@@ -192,6 +192,14 @@ mod tests {
         assert!(parse_info(r#"{"error":"gone"}"#).is_err());
         assert_eq!(ancestor_keys("0.2.1"), vec!["0".to_string(), "0.2".to_string()]);
         assert!(ancestor_keys("0").is_empty());
+    }
+
+    #[test]
+    fn the_page_highlight_follows_the_accent() {
+        use bifrost_app::kit::appearance::Accent;
+        let (accent, js) = crate::tokens::with_accent(Accent::Green, || (bifrost_app::kit::ui::accent_now(), js_highlight("0.1")));
+        assert!(js.contains(&format!("border:2px solid {}", crate::tokens::css_rgb(accent))));
+        assert!(!js.contains(&crate::tokens::css_rgb(bifrost_app::kit::ui::TINT)));
     }
 
     #[test]

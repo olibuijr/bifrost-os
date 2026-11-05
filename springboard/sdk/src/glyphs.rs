@@ -67,7 +67,7 @@ pub fn polygon_verbs(pts: &[(f32, f32)]) -> Vec<PathVerb> {
 }
 
 /// Every name `glyph` draws, for galleries and tests.
-pub const NAMES: [&str; 76] = [
+pub const NAMES: [&str; 78] = [
     "chevron.left", "chevron.right", "sidebar.left", "square.grid.2x2", "list.bullet", "rectangle.split.3x1",
     "magnifyingglass", "xmark.circle.fill", "folder", "folder.badge.plus", "checkmark.circle", "clock",
     "menubar.dock.rectangle", "doc", "arrow.down.circle", "house", "desktopcomputer", "internaldrive", "trash", "tag",
@@ -79,6 +79,7 @@ pub const NAMES: [&str; 76] = [
     "arrow.clockwise", "xmark", "rectangle.grid.1x2", "chevron.up", "text.alignleft", "square.on.square",
     "bold", "italic", "underline", "strikethrough", "text.aligncenter", "text.alignright", "text.justify", "list.number",
     "tray", "paperplane", "archivebox", "xmark.bin", "arrowshape.turn.up.left", "arrowshape.turn.up.left.2",
+    "building.2", "exclamationmark.circle",
 ];
 
 /// True when `name` has a drawing.
@@ -429,6 +430,23 @@ pub fn glyph(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32) 
             dot(s, 0.5, 0.3, 0.05);
             poly(s, &[(0.5, 0.44), (0.5, 0.72)], false);
         }
+        "exclamationmark.circle" => {
+            circle(s, 0.5, 0.5, 0.42);
+            poly(s, &[(0.5, 0.26), (0.5, 0.56)], false);
+            dot(s, 0.5, 0.72, 0.05);
+        }
+        "building.2" => {
+            rbox(s, 0.1, 0.3, 0.4, 0.62, 0.04);
+            rbox(s, 0.5, 0.12, 0.4, 0.8, 0.04);
+            for v in [0.46, 0.64] {
+                dot(s, 0.24, v, 0.035);
+                dot(s, 0.36, v, 0.035);
+            }
+            for v in [0.3, 0.48, 0.66] {
+                dot(s, 0.64, v, 0.035);
+                dot(s, 0.76, v, 0.035);
+            }
+        }
         "flag" => {
             poly(s, &[(0.2, 0.08), (0.2, 0.92)], false);
             poly(s, &[(0.2, 0.12), (0.84, 0.12), (0.7, 0.32), (0.84, 0.52), (0.2, 0.52)], true);
@@ -704,6 +722,35 @@ mod canvas_tests {
         assert!(glyph(&mut up, &u, "chevron.up", b, 0xffff_ffff));
         assert!(glyph(&mut down, &u, "chevron.down", b, 0xffff_ffff));
         assert_eq!(up.ops.len(), down.ops.len(), "the same two segments");
+    }
+
+    #[test]
+    fn the_building_and_exclamation_glyphs_resolve_and_draw_inside_their_box() {
+        let u = ui();
+        let b = Rect { x: 0.0, y: 0.0, w: 20.0, h: 20.0 };
+        for name in ["building.2", "exclamationmark.circle"] {
+            assert!(has(name), "{name} is a known symbol");
+            let mut r = Rec::default();
+            assert!(glyph(&mut r, &u, name, b, 0xffff_ffff), "{name} resolves");
+            assert!(!r.ops.is_empty(), "{name} draws something");
+            let inside = |x: f32, y: f32| (-0.01..=20.01).contains(&x) && (-0.01..=20.01).contains(&y);
+            for op in &r.ops {
+                match op {
+                    Op::Fill(q, ..) | Op::FillRect(q, _) | Op::Stroke(q, ..) => {
+                        assert!(inside(q.x, q.y) && inside(q.x + q.w, q.y + q.h), "{name} rect {q:?} stays in the box");
+                    }
+                    Op::Path(verbs, ..) => {
+                        assert!(!verbs.is_empty(), "{name} path is not empty");
+                        for v in verbs {
+                            if let PathVerb::Move(x, y) | PathVerb::Line(x, y) = v {
+                                assert!(inside(*x, *y), "{name} point ({x}, {y}) stays in the box");
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
     }
 }
 

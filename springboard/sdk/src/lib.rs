@@ -18,8 +18,10 @@ pub use bifrost_ui::remote_command;
 /// selection rules, library queries, external player content items, and the playback arbiter.
 pub use bifrost_ui::{content_items, media_feedback, media_picker, media_playlist, media_query, playback_arbiter};
 pub use bifrost_proto as proto;
-pub use bifrost_proto::{AppMenu, AppMenuItem, Configure, KeyInput, ModifierFlags, TouchKind};
+pub use bifrost_proto::{AppMenu, AppMenuItem, Configure, KeyInput, ModifierFlags, TouchKind, TouchSource};
 pub use bifrost_ui::touch::{TouchEvent, TouchPhase, TouchType};
+/// Whether a drag pans content: on a desktop only a finger pans, never a mouse (`bifrost_ui::pan`).
+pub use bifrost_ui::pan::{self, pans_now, pans_on_drag};
 
 /// The shell's drawing, text and Settings-style list kit, reused as is so apps
 /// look like stock bifrost apps (see AGENTS.md design rules).
@@ -75,6 +77,8 @@ pub mod quick_actions;
 pub mod cursor_service;
 pub mod text_services;
 pub mod accessibility_display;
+pub mod accessibility_settings;
+pub mod audio_graph;
 pub mod accessibility_rotor;
 pub mod accessibility_audit;
 pub mod av_capture_session;
@@ -84,7 +88,7 @@ pub mod font_descriptor;
 pub mod font_substitution;
 /// App-facing font objects, specs, the font manager, collections and fallback cascade.
 pub use bifrost_render::{fontinfo, fontobj};
-/// The installed font families (`fontprefs::installed`, `NSFontManager.availableFontFamilies`) for font panels.
+/// The installed font families (`fontprefs::installed`, the reference font manager family list) for font panels.
 pub use bifrost_render::fontprefs;
 pub mod screen_saver_defaults;
 pub mod screen_saver;
@@ -110,6 +114,7 @@ pub mod speech;
 pub mod screenshot;
 pub mod locale;
 pub mod time_zone;
+pub mod sun_moon;
 pub mod formatters;
 pub mod pref_domains;
 pub mod calendar_system;
@@ -123,6 +128,7 @@ pub mod package_layout;
 pub mod keychain;
 pub mod folder_actions;
 pub mod keychain_groups;
+pub mod item_sheet;
 pub mod keychain_query;
 pub mod passwords;
 pub mod password_suggest;
@@ -230,7 +236,7 @@ pub mod oauth_credential;
 pub mod workflow;
 pub use bifrost_ui::print;
 pub use bifrost_ui::print_pages;
-/// Plural categories, noun plurals and `^[2 apple](inflect: true)` grammar agreement (`bifrost_ui::inflection`).
+/// Plural categories, noun plurals and `^[2 pear](inflect: true)` grammar agreement (`bifrost_ui::inflection`).
 pub use bifrost_ui::inflection;
 pub use bifrost_ui::print_presets;
 pub use bifrost_ui::print_ranges;
@@ -417,6 +423,7 @@ pub mod save_sync;
 pub mod file_provider;
 pub mod family_controls;
 pub mod file_manager;
+pub mod file_url;
 /// File-manager sync extensions: badges, shortcut-menu items, a toolbar button and folder observation for Files.
 pub mod file_manager_sync;
 /// A model provider for the local inference engine on a loopback port (`LocalModelProvider`).
@@ -513,6 +520,7 @@ pub mod gpu_mesh;
 pub mod gpu_view;
 pub mod gpu_sprites;
 pub mod image_effects;
+pub mod image_distort;
 pub mod image_generate;
 pub mod image_detect;
 pub mod image_stylize;
@@ -575,6 +583,7 @@ pub mod maps;
 pub mod distributed;
 pub mod observable;
 pub mod observable_object;
+pub mod progress;
 /// Values computed from observable properties, recomputed only when something they read changed (`bifrost_ui::attribute_graph`).
 pub mod derived_state;
 /// Main-thread run loop timer queue (`RunLoop`): the non-`Send` scheduler that `debounce` and `throttle` use.
@@ -764,6 +773,14 @@ pub trait App {
     fn ax_text(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxText> {Vec::new()}
     /// `accessibilityTitle` and `accessibilityHelp` of elements (`Node::label` is `accessibilityLabel`). Sent only when they change.
     fn ax_meta(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax::AxMeta> {Vec::new()}
+    /// The named custom actions of the nodes `controls` returns (`accessibilityCustomActions`: "Archive", "Reply"), in the
+    /// order the user should hear them. The runtime adds the ones recorded while drawing (`bifrost_ui::ax_action::record`)
+    /// and sends the union only when it changes. A screen reader lists them after press; choosing one calls
+    /// [`App::ax_custom_action`].
+    fn ax_custom_actions(&self, _ctx: &Ctx) -> Vec<bifrost_ui::ax_action::AxActionSet> {Vec::new()}
+    /// An assistive technology chose the custom action `name` of node `id` (one the app listed, with the app's own
+    /// spelling). True when a frame is needed. The default does nothing.
+    fn ax_custom_action(&mut self, _ctx: &Ctx, _id: u64, _name: &str) -> bool {false}
     /// Guided access started or ended, or the user changed one of the app's restrictions.
     /// True when the app needs a new frame. The default ignores it.
     fn guided_access(&mut self, _ctx: &Ctx, _change: guided_access::GuidedAccessChange) -> bool {
@@ -818,6 +835,54 @@ pub trait App {
     fn window_closed(&mut self, _ctx: &Ctx, _window: app_windows::WindowId) -> bool {
         false
     }
+    /// `applicationShouldHandleReopen:hasVisibleWindows:`: the person activated the app (Dock, the app switcher, Search,
+    /// an open) while its main window was ordered out (`Ctx::close_main_window`) or closed from the desk; the shell has
+    /// put the main window back. A document app with no document opens a new one here. True when the app needs a new
+    /// frame.
+    fn reopen(&mut self, _ctx: &Ctx) -> bool {
+        false
+    }
+    /// Whether the app answers the close control of its main window itself (`windowShouldClose:`). The runtime tells the
+    /// shell once (`ToShell::CloseRequests`); the shell then sends `close_requested` for the red light and Cmd+W instead of
+    /// closing the window at once. The default `false` leaves the answer to the default of
+    /// `terminates_after_last_window_closed`: the window is ordered out and the app keeps running.
+    fn handles_close_request(&self) -> bool {
+        false
+    }
+    /// `applicationShouldTerminateAfterLastWindowClosed:`. The default `false` is how the reference desktop treats most
+    /// apps: the close control of the main window only closes the window (`close_requested`), and the app keeps running
+    /// with no window, in the Dock with its running dot and owning the menu bar, until the person activates it again
+    /// (`reopen`) or quits it. A single-window utility (a calculator, a system report) returns `true`: the close control
+    /// then quits the app, as before. Quit (Cmd+Q) and shutdown are the same either way. An app that also returns `true`
+    /// from `handles_close_request` is always asked, and decides for itself.
+    fn terminates_after_last_window_closed(&self) -> bool {
+        false
+    }
+    /// The person used the close control of the main window and `handles_close_request` is `true`. A document app calls
+    /// `DocumentController::close` for the document the window shows: a clean one closes now, an edited one raises its save
+    /// sheet and closes when it is answered with Save or Don't Save (Cancel keeps it), and with the last document closed
+    /// the app orders the window out (`Ctx::close_main_window`). The default closes the main window at once. True when the
+    /// app needs a new frame.
+    fn close_requested(&mut self, ctx: &Ctx) -> bool {
+        ctx.close_main_window();
+        true
+    }
+    /// `applicationShouldTerminate`: the person quits the app (Cmd+Q, the application menu's or the Dock's Quit) and
+    /// `handles_close_request` is `true`. Return `true` to quit now. A document app with unsaved documents returns `false`,
+    /// raises its save sheet (`DocumentController::request_quit`) and calls `Ctx::terminate` once every sheet is answered
+    /// with Save or Don't Save; Cancel simply does not call it. Logout, shutdown and Force Quit do not ask. The default
+    /// quits at once.
+    fn quit_requested(&mut self, _ctx: &Ctx) -> bool {
+        true
+    }
+    /// The person used the close control (the red light) of the extra window `window` and `handles_close_request` is
+    /// `true` (`ToApp::WindowCloseRequest`): the shell has left the window up, as it does for Cmd+W in it. A document app
+    /// closes the document the window shows as for Cmd+W and closes the window once it may. The default closes the window
+    /// at once and tells `window_closed`, as the shell's own close did. True when the app needs a new frame.
+    fn window_close_requested(&mut self, ctx: &Ctx, window: app_windows::WindowId) -> bool {
+        let closed = !window.is_main() && ctx.close_window(window).is_ok();
+        closed && self.window_closed(ctx, window)
+    }
     /// The person dragged one of the app's windows (`ToApp::WindowMoved`): (x, y) is where it is now, in points relative to
     /// the visible desktop area. Keep it to restore later. True when the app needs a new frame.
     fn window_moved(&mut self, _ctx: &Ctx, _window: app_windows::WindowId, _x: f32, _y: f32) -> bool {
@@ -851,7 +916,22 @@ pub trait App {
     fn text_input(&mut self, _ctx: &Ctx, _ev: crate::proto::ToApp) -> bool {
         false
     }
-    /// IME and keyboard composition for `window`, the key window (`NSTextInputClient` of the window's first
+    /// The reference services requestor's write-selection call: the text selected in the focused view, which Look Up
+    /// (Ctrl+Cmd+D) and the Services menu act on (`ToApp::SelectionRequest`). `None` lets the SDK answer with the
+    /// selection of the focused text field it last reported (`Ctx::text_state`, which `ViewApp` and the text kit send),
+    /// so an app whose text lives in SDK text fields needs nothing here. An app that draws its own text (an editor, a
+    /// reader) returns its selection; `Some("")` says nothing is selected.
+    fn selected_text(&mut self, _ctx: &Ctx) -> Option<String> {
+        None
+    }
+    /// `firstRectForCharacterRange:` of the selection: where the selected text (or the caret) is, in window points
+    /// (x, y, w, h), for an app that draws its own text. The SDK sends it as the caret rectangle before it answers a
+    /// `ToApp::SelectionRequest`, so Look Up (Ctrl+Cmd+D) opens just below the selection rather than under the menu
+    /// bar. `None` sends nothing: SDK text fields report their caret on their own (`ViewApp::sync_text_input`).
+    fn selection_rect(&mut self, _ctx: &Ctx) -> Option<(f32, f32, f32, f32)> {
+        None
+    }
+    /// IME and keyboard composition for `window`, the key window (the reference text input client of the window's first
     /// responder): `SetMarkedText`, `UnmarkText`, `DeleteSurrounding` and `AccentHold`, as `text_input` takes them. The
     /// shell sends them to the window that has the keys, so marked text (an input method's candidate, a held letter's
     /// accent list) lands in the window being typed in. The default sends the main window's to `text_input` and drops
@@ -934,7 +1014,8 @@ pub trait App {
     fn restore_state(&mut self, _ctx: &Ctx, _state: &RestorableState) -> bool {
         false
     }
-    /// Called every loop turn while in the foreground; true when a frame is needed.
+    /// Called every loop turn while in the foreground (and in the background with `ticks_in_background`); true when a
+    /// frame is needed.
     fn tick(&mut self, _ctx: &Ctx, _t: f64) -> bool {
         false
     }
@@ -946,6 +1027,13 @@ pub trait App {
     /// `webview::WebProcessPool::fd`); when it becomes readable, `tick` runs.
     fn wake_fd(&self) -> Option<i32> {
         None
+    }
+    /// True when `wake_fd`, `next_wake` and `tick` keep running while the app is in the background (suspended).
+    /// A background window stays on screen on the desktop, so an app whose window shows outside state (a folder
+    /// listing that follows the disk) opts in: a `tick` that returns true repaints the background window once.
+    /// Off by default, so a background app costs nothing.
+    fn ticks_in_background(&self) -> bool {
+        false
     }
     /// True when `draw` paints every pixel each frame: the runtime then skips bringing the buffer
     /// up to date with the previous frame first (a full-screen copy).

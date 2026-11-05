@@ -17,7 +17,16 @@ use bifrost_app::intents::{self, Intent, IntentResult};
 use bifrost_app::widgets_timeline as wt;
 use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
-use springboard::bare::sys::wall_time;
+use springboard::bare::sys::wall_time as system_wall_time;
+
+/// The wall clock and the local offset; the fixed test time (and UTC) when the process is pinned, so the World
+/// Clock map and faces are the same in every snapshot run.
+fn wall_time() -> (i64, i32) {
+    if bifrost_app::testing::pinned() {
+        return (bifrost_app::testing::PINNED_UNIX_SECS, 0);
+    }
+    system_wall_time()
+}
 
 struct ClockApp {
     clock: Option<clock::Clock>,

@@ -1146,7 +1146,16 @@ impl super::Shell {
         if self.login_backend.is_none() {
             self.login_backend = Privd::from_env().map(|p| Arc::new(p) as Arc<dyn Backend>);
         }
-        let Some(b) = self.login_backend.clone() else { return };
+        let Some(b) = self.login_backend.clone() else {
+            // no login service: the lock screen has no field. Said once per lock (the next tick and every key look the
+            // service up again), so a lock that cannot be opened is in the journal instead of failing silently (E2E N0)
+            if !self.login_missing_logged {
+                self.login_missing_logged = true;
+                eprintln!("springboard: login window not opened: no login service (SPRINGBOARD_PRIVD unset, no privd socket); retrying on the next key");
+            }
+            return;
+        };
+        self.login_missing_logged = false;
         let me = super::account::load();
         let mut l = Login::new(b, &me.full_name, self.w, self.h, t);
         l.lock_message = load_lock_message();
@@ -1301,6 +1310,7 @@ impl super::Shell {
     /// A lock (menu, idle, lid): the session token is dropped and privd forgets the unlock.
     pub(super) fn login_reset(&mut self) {
         self.login_close(self.last_input);
+        self.login_missing_logged = false;
         if self.session_token.take().is_some() {
             Privd::notify("session.lock");
         }

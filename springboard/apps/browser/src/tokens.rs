@@ -21,6 +21,22 @@ pub fn css_rgba(c: u32, alpha: f32) -> String {
     format!("rgba({},{},{},{alpha})", c & 0xff, (c >> 8) & 0xff, (c >> 16) & 0xff)
 }
 
+/// The accent is process-wide: tests that change it hold this lock and restore it.
+#[cfg(test)]
+pub(crate) static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Runs `f` with the accent set to `a`, then restores the previous accent.
+#[cfg(test)]
+pub(crate) fn with_accent<T>(a: bifrost_app::kit::appearance::Accent, f: impl FnOnce() -> T) -> T {
+    use bifrost_app::kit::appearance::{accent, set_accent};
+    let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let keep = accent();
+    set_accent(a);
+    let out = f();
+    set_accent(keep);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

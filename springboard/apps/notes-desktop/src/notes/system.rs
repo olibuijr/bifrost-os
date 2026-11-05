@@ -119,7 +119,7 @@ fn escape(text: &str) -> String {
 pub fn recent_titles(notes: &[(&Note, &str)]) -> Vec<String> {
     let mut sorted: Vec<&Note> = notes.iter().map(|(n, _)| *n).collect();
     sorted.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.id.cmp(&b.id)));
-    sorted.iter().take(RECENT_COUNT).map(|n| n.title().to_string()).collect()
+    sorted.iter().take(RECENT_COUNT).map(|n| n.plain_title()).collect()
 }
 
 /// The widget's timeline: one entry, shown from `now` (Unix seconds).

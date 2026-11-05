@@ -13,7 +13,7 @@
 use bifrost_ui::pointer_event::{from_gesture, PointerEvent};
 use bifrost_ui::wheel::Phase;
 
-use super::desk::Hit;
+use super::desk::{Hit, RevealHit};
 use super::{AppId, Shell};
 
 /// The event as window `window` takes it: the main window (0) in surface pixels as given, an extra window divided by
@@ -26,13 +26,22 @@ impl Shell {
     /// The external app whose window content is at screen point (`x`, `y`): its slot, the window (0 for the main
     /// window, else the extra window's id) and the point relative to the content, in pixels. `None` over the desktop, a
     /// title bar, an edge, another screen or a window that is not an external app's.
-    fn ext_content_at(&self, x: f32, y: f32) -> Option<(u8, u32, f32, f32)> {
+    pub(in crate::shell) fn ext_content_at(&self, x: f32, y: f32) -> Option<(u8, u32, f32, f32)> {
         if !self.desk_active() || self.is_locked() {
             return None;
         }
         let desk = self.desk.as_ref()?;
         let m = self.desk_metrics();
-        let (i, hit) = desk.pick(&m, x, y)?;
+        // the toolbar revealed under the menu bar over a full-screen window is the app's at the row it shows; its traffic
+        // lights and a titled window's strip are the shell's (`desk::reveal_hit`)
+        let (i, hit, y) = match self.desk_reveal_at(x, y) {
+            Some((i, RevealHit::App(ly))) => (i, Hit::Content, ly),
+            Some(_) => return None,
+            None => {
+                let (i, hit) = desk.pick(&m, x, y)?;
+                (i, hit, y)
+            }
+        };
         if hit != Hit::Content {
             return None;
         }
@@ -72,14 +81,59 @@ impl Shell {
         if self.desktop_menu_wheel(x, y, dy) {
             return true;
         }
+        if self.settings_wheel(x, y, dy, t) || self.photos_wheel(x, y, dy, t) {
+            return true;
+        }
         let Some((slot, window, lx, ly)) = self.ext_content_at(x, y) else { return false };
         let event = PointerEvent::Wheel { x: lx, y: ly, dx, dy, precise: false, phase: Phase::None, momentum: Phase::None };
-        if !self.send_pointer(slot, window, event) {
+        let pt = self.ui.pt(1.0) as f32;
+        let Some(Some(host)) = self.ext.get_mut(slot as usize) else { return false };
+        if host.pointer_window(window, for_window(event, window, pt)) {
+            host.swallow_wheel_drag(t);
+            return true;
+        }
+        // the app did not ask for the wheel: the drag emulated for the notch scrolls it, and it is not a mouse drag
+        host.keep_wheel_drag(t);
+        false
+    }
+
+    /// The wheel over the Settings window's content scrolls the list under it (`Settings::wheel`), and the drag emulated
+    /// for it is dropped: as a press it would set the slider under the pointer and save it (N17).
+    fn settings_wheel(&mut self, x: f32, y: f32, dy: f32, t: f64) -> bool {
+        if !self.desk_active() || self.is_locked() {
             return false;
         }
-        if let Some(Some(host)) = self.ext.get_mut(slot as usize) {
-            host.swallow_wheel_drag(t);
+        let Some(desk) = self.desk.as_ref() else { return false };
+        let m = self.desk_metrics();
+        let Some((i, Hit::Content)) = desk.pick(&m, x, y) else { return false };
+        let Some(win) = desk.wins.get(i).filter(|w| w.app == AppId::Settings) else { return false };
+        let body = win.body(&m);
+        if !self.settings.as_mut().is_some_and(|st| st.wheel(x - body.x as f32, dy)) {
+            return false;
         }
+        self.swallow_wheel_drag(t);
+        self.dirty = true;
+        true
+    }
+
+    /// The wheel over the Photos window's source list scrolls the list (`Photos::side_wheel`), and the drag emulated for
+    /// it is dropped, as for Settings, so the notch does not scroll it twice or press a row. Over the pane the emulated
+    /// drag scrolls the grid as before.
+    fn photos_wheel(&mut self, x: f32, y: f32, dy: f32, t: f64) -> bool {
+        if !self.desk_active() || self.is_locked() {
+            return false;
+        }
+        let Some(desk) = self.desk.as_ref() else { return false };
+        let m = self.desk_metrics();
+        let Some((i, Hit::Content)) = desk.pick(&m, x, y) else { return false };
+        let Some(win) = desk.wins.get(i).filter(|w| w.app == AppId::Photos) else { return false };
+        let body = win.body(&m);
+        let ui = &self.ui;
+        if !self.photos.as_mut().is_some_and(|p| p.side_wheel(ui, x - body.x as f32, dy)) {
+            return false;
+        }
+        self.swallow_wheel_drag(t);
+        self.dirty = true;
         true
     }
 

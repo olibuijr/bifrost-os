@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.8.8
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 0.8.7
+
+- Confirmation and form sheets take Return, Cmd+., the Tab focus ring and Space.
+
+## 0.8.6
+
+- The menu and toolbar share one enabled state per disk command, File > Print... is gone, and the layout uses points on scaled displays.
+
+## 0.8.5
+
+- Unmount is disabled for the running system volume, in the toolbar and the menu.
+
+## 0.8.4
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 0.8.3
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
+## 0.8.2
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 0.8.1
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.8.0 — 2026-10-23
 
 - Mount points and usage come from the system, so the system volume shows / and its real usage; Erase and First Aid are disabled for the running system.

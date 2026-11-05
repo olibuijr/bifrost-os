@@ -12,7 +12,7 @@ use super::appgrid::AppGrid;
 use super::control_center::{desk_glass, desk_veil};
 use bifrost_ui::material_request::ShellSurface;
 use super::desk::Metrics;
-use super::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, SELECTION, TINT, WHITE, WINDOW_FRAME_BLURRED};
+use super::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, SELECTION, accent_now, WHITE, WINDOW_FRAME_BLURRED};
 use super::window_shots::{self, Source};
 use super::{apps, AppId, Effect, Event, Shell};
 use crate::gfx::{pack, rgba, Image, Surface, View};
@@ -461,7 +461,8 @@ impl Overview {
         let g = self.geo(sh);
         let Some(d) = sh.desk.as_ref() else { return };
         let cur = self.spaces.current;
-        let wins: Vec<&super::desk::Win> = d.wins.iter().filter(|w| self.spaces.of.get(&w.app).copied().unwrap_or(cur) == cur).collect();
+        // a window the person minimized (or hid) is in the Dock, not in Overview (N16); opening Overview ended Show Desktop
+        let wins: Vec<&super::desk::Win> = d.wins.iter().filter(|w| self.spaces.of.get(&w.app).copied().unwrap_or(cur) == cur && !self.user_minimized(w)).collect();
         // the desk's windows, then the windows of other clients (they belong to every desktop)
         let mut entries: Vec<(TileKey, String, FRect, (f32, f32))> = wins
             .iter()
@@ -508,6 +509,24 @@ impl Overview {
 
     pub(super) fn visible(&self) -> bool {
         self.open || self.slide.is_some() || self.grid.visible()
+    }
+
+    /// While Overview is open, its leave animation included (the windows come back only when it ends, in `finish`): the
+    /// app whose menus the bar keeps, as under the Apps grid (`AppGrid::bar_foreign`). Overview hides the shell's windows
+    /// and the window server then activates another client's window, which must not take the bar (E2E5 5: the bar read
+    /// FilmCraft with App Store in front). `Some(Some(id))` is the other client's window that had the focus when Overview
+    /// opened, `Some(None)` none had (see `bar_front`); `None` when Overview is not up and the bar follows the live windows.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn bar_foreign(&self) -> Option<Option<u32>> {
+        self.open.then_some(self.foreign_before)
+    }
+
+    /// While Overview is open: the shell window that was in front when it opened.
+    pub(super) fn bar_front(&self) -> Option<AppId> {
+        if !self.open {
+            return None;
+        }
+        self.front_before
     }
 
     /// The overlay surface Overview is exported as on the window server (x, y, w, h px): the veil between the menu
@@ -560,6 +579,9 @@ impl Overview {
         let Some(d) = sh.desk.as_mut() else { return };
         self.spaces.sync(&d.wins);
         self.foreign_before = foreign;
+        // entering Overview ends Show Desktop, as the reference window overview does on Golden Gate: the windows put aside are shown
+        // as tiles and are back on the desktop when Overview closes
+        d.bring_back_put_aside();
         self.front_before = d.front().map(|w| w.app);
         self.saved = d.wins.iter().map(|w| (w.app, w.minimized)).collect();
         for w in d.wins.iter_mut() {
@@ -589,7 +611,23 @@ impl Overview {
         }
         self.layout(sh);
         self.request_shots(sh, t, 0.0);
+        self.request_missing_pictures(sh, t);
         sh.dirty = true;
+    }
+
+    /// A built-in window with no retained frame (a window in front covered it, so its cache was dropped) is asked of the
+    /// window server, which still holds the pixels it last presented; asked once, while the window is still mapped, so
+    /// its tile shows the window instead of the app icon (N16).
+    fn request_missing_pictures(&self, sh: &mut Shell, t: f64) {
+        for tile in &self.tiles {
+            let TileKey::App(app) = tile.key else { continue };
+            if self.sources.contains_key(&tile.key) {
+                continue;
+            }
+            if let Some(id) = super::desk::win_id(app) {
+                sh.shots.request_now(Source::Surface(id), window_shots::bound_for_tile(tile.to.w, tile.to.h), t);
+            }
+        }
     }
 
     /// Asks the window server for a fresh picture of every window of another client that has a tile, at most one request
@@ -626,6 +664,7 @@ impl Overview {
     fn finish(&mut self, sh: &mut Shell, t: f64) {
         self.open = false;
         self.closing = None;
+        let mut shown = Vec::new();
         if let Some(d) = sh.desk.as_mut() {
             for (app, min) in std::mem::take(&mut self.saved) {
                 if let Some(w) = d.wins.iter_mut().find(|w| w.app == app) {
@@ -633,15 +672,32 @@ impl Overview {
                 }
             }
             self.spaces.apply(&mut d.wins);
+            shown = d.wins.iter().filter(|w| !w.minimized).map(|w| w.app).collect();
         }
+        // the windows' toplevels map again: when a shell window takes the focus they come back in the shell's order over
+        // the window the window server activated meanwhile, as when the Apps grid closes (E2E5 1)
+        let restack = |sh: &mut Shell| {
+            if let Some(d) = sh.desk.as_mut() {
+                d.note_restack(&shown);
+            }
+        };
         let before = (self.foreign_before.take(), self.front_before.take());
         match (self.chosen_foreign.take(), self.chosen.take()) {
             (Some(id), _) => sh.desk_activate_foreign(id),
-            (None, Some(app)) => sh.desk_open(app, t),
+            (None, Some(app)) => {
+                restack(sh);
+                sh.desk_open(app, t)
+            }
             (None, None) => match leave_focus(before, &sh.mission_foreign_windows(), |app| sh.desk.as_ref().is_some_and(|d| d.index_of(app).is_some_and(|i| !d.wins[i].minimized))) {
                 Focus::Foreign(id) => sh.desk_activate_foreign(id),
-                Focus::App(app) => sh.desk_open(app, t),
-                Focus::Refocus => sh.desk_refocus(),
+                Focus::App(app) => {
+                    restack(sh);
+                    sh.desk_open(app, t)
+                }
+                Focus::Refocus => {
+                    restack(sh);
+                    sh.desk_refocus()
+                }
             },
         }
         self.sources.clear();
@@ -949,7 +1005,7 @@ impl Overview {
                 }
             }
             if i == cur {
-                s.stroke_rrect(r.x - 1.0, y - 1.0, r.w + 2.0, r.h + 2.0, rad + 1.0, ui.pt(2.0), crate::gfx::scale(TINT, alpha));
+                s.stroke_rrect(r.x - 1.0, y - 1.0, r.w + 2.0, r.h + 2.0, rad + 1.0, ui.pt(2.0), crate::gfx::scale(accent_now(), alpha));
             } else if drop_desk == Some(i) {
                 s.stroke_rrect(r.x - 1.0, y - 1.0, r.w + 2.0, r.h + 2.0, rad + 1.0, ui.pt(2.0), crate::gfx::scale(SELECTION.now(), alpha));
             }
@@ -1057,12 +1113,19 @@ impl Overview {
             TileKey::Foreign(id) => {
                 self.draw_foreign_picture(sh, s, id, r, rad, (iw, ih), alpha);
                 if hover || selected {
-                    let c = if selected { TINT } else { SELECTION.now() };
+                    let c = if selected { accent_now() } else { SELECTION.now() };
                     s.stroke_rrect(r.x - 2.0, r.y - 2.0, r.w + 4.0, r.h + 4.0, rad + 2.0, ui.pt(3.0), crate::gfx::scale(c, alpha));
                 }
                 return;
             }
         };
+        // the window server's picture of a window that had no retained frame, taken since Overview opened, becomes its source
+        if !self.sources.contains_key(&key) {
+            let shot = super::desk::win_id(app).and_then(|id| sh.shots.shot(Source::Surface(id))).filter(|p| p.at >= self.start && p.image.w > 0 && p.image.h > 0);
+            if let Some(p) = shot {
+                self.sources.insert(key, p.image.clone());
+            }
+        }
         match self.thumb(key, iw, ih) {
             Some(img) => s.blit(img, r.x.round() as i32, r.y.round() as i32, 255, alpha),
             None => {
@@ -1078,7 +1141,7 @@ impl Overview {
             }
         }
         if hover || selected {
-            let c = if selected { TINT } else { SELECTION.now() };
+            let c = if selected { accent_now() } else { SELECTION.now() };
             s.stroke_rrect(r.x - 2.0, r.y - 2.0, r.w + 4.0, r.h + 4.0, rad + 2.0, ui.pt(3.0), crate::gfx::scale(c, alpha));
         }
     }
@@ -1330,6 +1393,19 @@ impl Shell {
         self.dirty = true;
     }
 
+    /// The shell window whose app keeps the menu bar while the Apps grid or Overview hides the windows (`bar_front` of
+    /// either); None when neither is up and the bar follows the live windows.
+    pub(super) fn bar_held_front(&self) -> Option<AppId> {
+        self.overview.grid.bar_front().or_else(|| self.overview.bar_front())
+    }
+
+    /// The other client's window whose app keeps the menu bar while the Apps grid or Overview hides the windows
+    /// (`bar_foreign` of either): `Some(None)` is none (a shell window keeps it), `None` neither is up.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn bar_held_foreign(&self) -> Option<Option<u32>> {
+        self.overview.grid.bar_foreign().or_else(|| self.overview.bar_foreign())
+    }
+
     /// Opens the launcher when it is closed (the game controller's Home button); unlike `appgrid_toggle` it never closes it.
     pub fn appgrid_show(&mut self, t: f64) {
         if !self.overview.grid.visible() {
@@ -1444,8 +1520,17 @@ impl Shell {
 
     /// Wheel or two-finger scroll while the Apps grid is open pages through it (`dx`, `dy` positive: the next page, so the
     /// wheel turned down or a swipe to the left); while Overview is open the wheel is swallowed (nothing under the
-    /// veil scrolls). True when it was taken.
+    /// veil scrolls). True when it was taken; the drag emulated for a taken wheel notch is then dropped, since as a
+    /// press it would tap the tile, desktop or close control under the pointer (N17).
     pub fn overview_scroll(&mut self, dx: f32, dy: f32, t: f64) -> bool {
+        let taken = self.overview_scroll_inner(dx, dy, t);
+        if taken {
+            self.swallow_wheel_drag(t);
+        }
+        taken
+    }
+
+    fn overview_scroll_inner(&mut self, dx: f32, dy: f32, t: f64) -> bool {
         if !self.desk_active() || self.is_locked() {
             return false;
         }
@@ -1824,6 +1909,27 @@ mod tests {
         assert!(sh.overview_scroll(0.0, 100.0, 3100.0), "nothing under the veil scrolls");
     }
 
+    /// N17: the drag the pointer emulates for a wheel notch tapped what was under it (a desktop's close control saved
+    /// the desktop count); Overview takes the notch, so its Down, Move and Up are dropped.
+    #[test]
+    fn the_drag_emulated_for_a_wheel_notch_taps_nothing_in_overview() {
+        let mut sh = desk_with(2, 1920, 1080, 1.0);
+        sh.overview_toggle(1000.0);
+        settle(&mut sh);
+        let g = sh.overview.geo(&sh);
+        let (ex, ey) = (2.0, g.area.y + g.area.h - 2.0);
+        assert!(matches!(sh.overview.target_at(&g, ex, ey), Target::Back), "a click here would close it");
+        assert!(sh.overview_scroll(0.0, 30.0, 2000.0));
+        for ev in [Event::Down(ex, ey), Event::Move(ex, ey + 30.0), Event::Up(ex, ey + 30.0)] {
+            assert!(sh.event(ev, 2000.0).is_empty());
+        }
+        assert!(sh.overview.open && sh.overview.closing.is_none(), "the notch's drag did not click");
+        // a real click afterwards still works
+        sh.event(Event::Down(ex, ey), 2100.0);
+        sh.event(Event::Up(ex, ey), 2110.0);
+        assert!(sh.overview.closing.is_some() || !sh.overview.open);
+    }
+
     #[test]
     fn clicking_a_window_raises_it_and_closes_mission_control_and_empty_space_just_closes() {
         let mut sh = desk_with(2, 1920, 1080, 1.0);
@@ -1915,7 +2021,7 @@ mod tests {
         sh.shots.set_available(true);
         sh.desk.as_mut().unwrap().native_windows = foreign
             .iter()
-            .map(|(id, title)| crate::bare::wayland::ForeignWindow { id: *id, title: (*title).into(), app_id: format!("x.app{id}"), active: false, maximized: false })
+            .map(|(id, title)| crate::bare::wayland::ForeignWindow { id: *id, title: (*title).into(), app_id: format!("x.app{id}"), active: false, maximized: false, minimized: false })
             .collect();
         sh
     }
@@ -1951,7 +2057,7 @@ mod tests {
     #[test]
     fn a_window_listed_twice_has_one_tile() {
         let mut sh = desk_with_foreign(1, &[(7, "Files")]);
-        sh.desk.as_mut().unwrap().linux_apps.push(crate::shell::desk::LinuxDockApp::for_test("x.app7", vec![crate::bare::wayland::ForeignWindow { id: 7, title: "Files".into(), app_id: "x.app7".into(), active: false, maximized: false }]));
+        sh.desk.as_mut().unwrap().linux_apps.push(crate::shell::desk::LinuxDockApp::for_test("x.app7", vec![crate::bare::wayland::ForeignWindow { id: 7, title: "Files".into(), app_id: "x.app7".into(), active: false, maximized: false, minimized: false }]));
         sh.overview_toggle(1000.0);
         assert_eq!(foreign_tiles(&sh).len(), 1);
     }
@@ -1961,12 +2067,58 @@ mod tests {
     fn opening_asks_for_each_windows_picture_at_the_tile_size() {
         let mut sh = desk_with_foreign(1, &[(7, "Files")]);
         sh.overview_toggle(1000.0);
-        let reqs = sh.take_capture_requests();
+        let all = sh.take_capture_requests();
+        let reqs: Vec<_> = all.iter().filter(|r| matches!(r.source, Source::Foreign(_))).collect();
         assert_eq!(reqs.len(), 1);
         assert_eq!(reqs[0].source, Source::Foreign(7));
         let tile = foreign_tiles(&sh)[0].1;
         assert_eq!(reqs[0].max, window_shots::bound_for_tile(tile.w, tile.h));
         assert_eq!(reqs[0].since, 0, "nothing held yet");
+        // N16: the desk window, which has no retained frame here, is asked of the window server once
+        let id = super::super::desk::win_id(AppId::Settings).unwrap();
+        assert_eq!(all.iter().filter(|r| r.source == Source::Surface(id)).count(), 1);
+    }
+
+    /// N16: a desk window with no retained frame gets the window server's picture as its tile, not the app icon.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn a_desk_window_without_a_retained_frame_shows_the_window_servers_picture() {
+        let mut sh = desk_with_foreign(1, &[]);
+        sh.overview_toggle(1000.0);
+        let id = super::super::desk::win_id(AppId::Settings).unwrap();
+        let req = sh.take_capture_requests().into_iter().find(|r| r.source == Source::Surface(id)).expect("the window is asked for");
+        sh.window_capture_results(vec![(req.token, window_shots::Outcome::Ready { image: Image { w: 120, h: 80, px: vec![0xff12_3456; 120 * 80] }, serial: 1 })], 1050.0);
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut px = vec![0u32; w * h];
+        sh.draw_overview(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1e9 / 2.0);
+        assert!(sh.overview.sources.contains_key(&TileKey::App(AppId::Settings)), "the picture is the tile's source");
+    }
+
+    /// N16: a minimized window is in the Dock, not a tile in Overview.
+    #[test]
+    fn a_minimized_window_has_no_tile() {
+        let mut sh = desk_with(3, 1920, 1080, 1.0);
+        let d = sh.desk.as_mut().unwrap();
+        let i = d.index_of(AppId::AppStore).unwrap();
+        d.wins[i].minimized = true;
+        sh.overview_toggle(1000.0);
+        let tiles: Vec<AppId> = sh.overview.tile_rects().into_iter().map(|(a, _)| a).collect();
+        assert_eq!(tiles, vec![AppId::Settings, AppId::Terminal]);
+    }
+
+    /// Overview right after Show Desktop shows the windows put aside (the reference overview ends Show Desktop), while a
+    /// window the person minimized stays in the Dock.
+    #[test]
+    fn overview_after_show_desktop_shows_the_windows_put_aside() {
+        let mut sh = desk_with(3, 1920, 1080, 1.0);
+        let d = sh.desk.as_mut().unwrap();
+        let i = d.index_of(AppId::AppStore).unwrap();
+        d.wins[i].minimized = true;
+        assert!(d.put_windows_aside());
+        sh.overview_toggle(1000.0);
+        let tiles: Vec<AppId> = sh.overview.tile_rects().into_iter().map(|(a, _)| a).collect();
+        assert_eq!(tiles, vec![AppId::Settings, AppId::Terminal]);
+        assert!(sh.desk.as_ref().unwrap().put_aside.is_empty(), "Show Desktop has ended");
     }
 
     #[cfg(feature = "desktop-wayland")]

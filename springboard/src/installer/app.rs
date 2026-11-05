@@ -243,7 +243,7 @@ impl App {
                     self.typed(t);
                 }
             }
-            Event::Switch { .. } | Event::Hover{..} | Event::Wheel{..} | Event::Context{..} | Event::Contact { .. } => {}
+            Event::Switch { .. } | Event::Modifiers { .. } | Event::Hover{..} | Event::Wheel{..} | Event::Context{..} | Event::Contact { .. } => {}
         }
     }
 

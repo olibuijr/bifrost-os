@@ -79,7 +79,7 @@ impl Browser {
             s.blit(&img, left + lead + (tw - img.w as i32) / 2, cy - img.h as i32 / 2, 255, 255);
             // the page menu icon is tinted while Reader shows, which the menu also toggles
             let reader_on = self.view().is_some_and(|v| self.reader.is_active(v));
-            glyphs::glyph(s, ui, "text.alignleft", Self::glyph_box(Self::page_menu_rect(field), 0.28), if reader_on { TINT } else { LABEL_2.now() });
+            glyphs::glyph(s, ui, "text.alignleft", Self::glyph_box(Self::page_menu_rect(field), 0.28), if reader_on { accent_now() } else { LABEL_2.now() });
             let reload = if self.page_loading() { "xmark" } else { "arrow.clockwise" };
             glyphs::glyph(s, ui, reload, Self::glyph_box(Self::reload_rect(field), 0.3), LABEL_2.now());
         }
@@ -88,7 +88,7 @@ impl Browser {
             if st.loading {
                 let (x, y) = (ui.pt(field.x + field.h / 2.0), ui.pt(field.y + field.h) - ui.pt(SPACE_XXS));
                 let len = (ui.pt(field.w - field.h) * st.progress.clamp(0.0, 1.0)) as usize;
-                s.fill_rect(x as usize, y as usize, len, ui.pt(SPACE_XXS).max(1.0) as usize, TINT);
+                s.fill_rect(x as usize, y as usize, len, ui.pt(SPACE_XXS).max(1.0) as usize, accent_now());
             }
         }
 

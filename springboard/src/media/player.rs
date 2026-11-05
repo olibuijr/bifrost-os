@@ -55,8 +55,13 @@ struct Clock {
 
 impl Clock {
     fn now(&self) -> f64 {
+        self.at(Instant::now())
+    }
+
+    /// The media time at the wall-clock instant `now` (tests pass a fixed instant, so a descheduled thread cannot move it).
+    fn at(&self, now: Instant) -> f64 {
         if self.running {
-            self.media_ms + self.anchor.elapsed().as_secs_f64() * 1000.0 * self.rate
+            self.media_ms + now.saturating_duration_since(self.anchor).as_secs_f64() * 1000.0 * self.rate
         } else {
             self.media_ms
         }
@@ -64,8 +69,13 @@ impl Clock {
 
     /// Changes the rate without moving the clock: the time so far is kept and counted from now on at the new rate.
     fn set_rate(&mut self, rate: f64) {
-        self.media_ms = self.now();
-        self.anchor = Instant::now();
+        self.set_rate_at(rate, Instant::now());
+    }
+
+    /// `set_rate` as of the wall-clock instant `now`.
+    fn set_rate_at(&mut self, rate: f64, now: Instant) {
+        self.media_ms = self.at(now);
+        self.anchor = now;
         self.rate = rate;
     }
 
@@ -874,8 +884,13 @@ mod tests {
 
     #[test]
     fn default_viewport_is_full_hd() {
-        let mut p = Player::open_parts(Box::new(MemSource::new(BASELINE.to_vec())), StubDecoder::new(), Box::new(NullOut::new())).unwrap();
-        let frames = pump(&mut p, 2000, |_| false);
+        // strict: a frame is never dropped as late, so a loaded run (the thread starved for a while) still shows one
+        let mut p = Player::open_parts_strict(Box::new(MemSource::new(BASELINE.to_vec())), StubDecoder::new(), Box::new(NullOut::new())).unwrap();
+        let mut frames = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while frames.is_empty() && Instant::now() < deadline {
+            frames = pump(&mut p, 100, |_| false);
+        }
         assert!(!frames.is_empty());
         assert!(frames.iter().all(|f| (f.w, f.h) == (1620, 1080)), "96x64 fitted into 1920x1080");
     }
@@ -1008,16 +1023,19 @@ mod tests {
 
     #[test]
     fn the_clock_runs_at_the_playback_rate_and_keeps_its_place_when_the_rate_changes() {
-        let back = Instant::now().checked_sub(Duration::from_millis(200)).unwrap();
-        let mut c = Clock { media_ms: 100.0, anchor: back, running: true, rate: 2.0 };
-        let at_double = c.now();
-        // 100 ms already counted plus 200 ms of wall time at 2x (generous bounds: the test thread may be descheduled)
-        assert!((500.0..600.0).contains(&at_double), "{at_double}");
-        c.set_rate(1.0);
-        let after = c.now();
-        assert!(after >= at_double && after < at_double + 100.0, "the clock does not jump when the rate changes: {after}");
-        let stopped = Clock { media_ms: 10.0, anchor: back, running: false, rate: 3.0 };
-        assert_eq!(stopped.now(), 10.0, "a stopped clock does not move at any rate");
+        // fixed instants, not the wall clock: a test thread descheduled for a while must not move the readings
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+        let start = Instant::now();
+        let mut c = Clock { media_ms: 100.0, anchor: start, running: true, rate: 2.0 };
+        let later = start + Duration::from_millis(200);
+        // 100 ms already counted plus 200 ms of wall time at 2x
+        assert!(near(c.at(later), 500.0));
+        c.set_rate_at(1.0, later);
+        assert!(near(c.at(later), 500.0), "the clock does not jump when the rate changes");
+        assert!(near(c.at(later + Duration::from_millis(100)), 600.0), "and runs at the new rate from there");
+        let stopped = Clock { media_ms: 10.0, anchor: start, running: false, rate: 3.0 };
+        assert_eq!(stopped.at(later), 10.0, "a stopped clock does not move at any rate");
+        assert!(near(c.at(start), 500.0), "an instant before the anchor counts as no time");
     }
 
     #[test]
@@ -1036,8 +1054,17 @@ mod tests {
     fn a_faster_rate_moves_the_playhead_faster() {
         let mut p = player(BASELINE);
         p.set_rate(3.0);
-        pump(&mut p, 400, |_| false);
-        // 400 ms of wall time at 3x is the whole one-second movie; at 1x the playhead would be under 400 ms
-        assert!(p.position_ms() > 600.0, "{} ms", p.position_ms());
+        // The clock starts once the worker thread has opened the file; a loaded run can start it late, so measure the
+        // rate from there and not from the moment the player was made.
+        pump(&mut p, 10_000, |p| p.position_ms() > 0.0);
+        let (from, started) = (p.position_ms(), Instant::now());
+        pump(&mut p, 150, |_| false);
+        let wall_ms = started.elapsed().as_secs_f64() * 1000.0;
+        let to = p.position_ms();
+        // at 3x the movie advances three media milliseconds per wall millisecond; at 1x it could not exceed one. Once
+        // the one-second movie has ended the playhead is held at its end: then it covered the rest faster than 1x would.
+        let ended = to >= p.duration_ms().unwrap_or(f64::MAX) - 0.5;
+        let covered = to - from;
+        assert!(covered > 1.5 * wall_ms || (ended && covered > wall_ms), "{covered} ms of media in {wall_ms} ms of wall time");
     }
 }

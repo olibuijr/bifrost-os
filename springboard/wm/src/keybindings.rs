@@ -1,5 +1,5 @@
 //! Compositor key bindings: Super+Space opens the search panel, Ctrl+Up and F3 Overview, F4 the Apps grid,
-//! Alt+Tab cycles the focus, Alt+F4 closes the focused window, Ctrl+Super+arrows tile it and Ctrl+Super+F toggles full
+//! Alt+Tab cycles the focus, Alt+F4 closes the focused window, Ctrl+Super+arrows ask the shell to tile its front window and Ctrl+Super+F toggles full
 //! screen, Alt+Super+Esc the Force Quit window and Shift+Super+Q the Log Out card. The shell only gets keys while one of its surfaces has focus, so the compositor takes these chords before any
 //! client sees them. Super+A is deliberately not bound: Cmd+A is Select All and belongs to the app (the app list
 //! launcher it used to start was a leftover of the old window manager).
@@ -42,6 +42,18 @@ pub const APPGRID_LINE: &[u8] = b"appgrid\n";
 pub const FORCEQUIT_LINE: &[u8] = b"forcequit\n";
 /// The line sent to the shell for the Log Out card.
 pub const LOGOUT_LINE: &[u8] = b"logout\n";
+
+/// The line sent to the shell for a Ctrl+Super arrow. The shell arranges the window it shows as front (the one its
+/// Window menu's Left Half, Right Half, Fill and Center act on), which is not always the window the keyboard focus is
+/// on here: a native app the shell launched can hold the focus while the shell's window is in front (E2E N2).
+pub fn tile_line(arrow: Arrow) -> &'static [u8] {
+    match arrow {
+        Arrow::Left => b"tile left\n",
+        Arrow::Right => b"tile right\n",
+        Arrow::Up => b"tile fill\n",
+        Arrow::Down => b"tile center\n",
+    }
+}
 
 /// The modifier keys held with a chord.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -132,8 +144,17 @@ fn send_line(socket: &Path, line: &[u8]) -> std::io::Result<()> {
 }
 
 fn tell_shell(line: &[u8]) {
-    if let Err(e) = send_line(&control_socket(), line) {
-        eprintln!("bifrost-wm: shell control socket: {e}");
+    let _ = try_tell_shell(line);
+}
+
+/// `tell_shell` that says whether the shell got the line.
+fn try_tell_shell(line: &[u8]) -> bool {
+    match send_line(&control_socket(), line) {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!("bifrost-wm: shell control socket: {e}");
+            false
+        }
     }
 }
 
@@ -166,6 +187,11 @@ impl WmState {
                 }
             }
             Action::Tile(arrow) => {
+                // the shell decides which window is front and asks back (`tile` or `tile_toplevel`); only without a
+                // shell does the chord fall back to the focused window
+                if try_tell_shell(tile_line(arrow)) {
+                    return;
+                }
                 let Some(id) = self.wm.focused() else { return };
                 // the same placement the shell's green-button menu asks for, and the client is resized to match
                 self.place_window(id, crate::tiling::placement_for_arrow(arrow));
@@ -229,6 +255,14 @@ mod tests {
         assert_eq!(action(keysym::RIGHT, CTRL_SUPER), Some(Action::Tile(Arrow::Right)));
         assert_eq!(action(keysym::UP, CTRL_SUPER), Some(Action::Tile(Arrow::Up)));
         assert_eq!(action(keysym::DOWN, CTRL_SUPER), Some(Action::Tile(Arrow::Down)));
+    }
+
+    #[test]
+    fn ctrl_super_arrows_are_the_shells_tile_lines() {
+        assert_eq!(tile_line(Arrow::Left), b"tile left\n");
+        assert_eq!(tile_line(Arrow::Right), b"tile right\n");
+        assert_eq!(tile_line(Arrow::Up), b"tile fill\n", "Ctrl+Cmd+Up is the Window menu's Fill");
+        assert_eq!(tile_line(Arrow::Down), b"tile center\n", "Ctrl+Cmd+Down is the Window menu's Center");
     }
 
     #[test]

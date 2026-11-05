@@ -16,15 +16,59 @@ use wayland_protocols::ext::session_lock::v1::client::{ext_session_lock_manager_
 use wayland_protocols_wlr::foreign_toplevel::v1::client::{zwlr_foreign_toplevel_manager_v1 as foreign_manager, zwlr_foreign_toplevel_handle_v1 as foreign_handle};
 use wayland_protocols::ext::background_effect::v1::client::{ext_background_effect_manager_v1 as bg_manager, ext_background_effect_surface_v1 as bg_surface};
 #[derive(Clone, PartialEq, Eq)]
-pub struct ForeignWindow { pub id:u32, pub title:String, pub app_id:String, pub active:bool,pub maximized:bool }
+/// `minimized`: the window server reports the toplevel minimized (Show Desktop leaves such a window where it is).
+pub struct ForeignWindow { pub id:u32, pub title:String, pub app_id:String, pub active:bool,pub maximized:bool,pub minimized:bool }
 struct Foreign { handle:foreign_handle::ZwlrForeignToplevelHandleV1, info:ForeignWindow }
 struct Lock { obj:lock::ExtSessionLockV1, surface:wl_surface::WlSurface, role:lock_surface::ExtSessionLockSurfaceV1, configured:bool, locked:bool }
 
 
+/// The chrome surface of the accessibility announcement caption (live captions): above every window and every other
+/// chrome surface (`chrome_z`). Every chrome id is in `shell::chrome_ids`, which keeps them apart from the submenus' range.
+pub const CAPTION_CHROME_ID:u32=crate::shell::chrome_ids::CAPTION;
+/// The chrome surface of the screen reader's focus ring: over everything, an open menu included (`chrome_z`).
+pub const FOCUS_RING_CHROME_ID:u32=crate::shell::chrome_ids::FOCUS_RING;
+/// The shell's z policy for its chrome surfaces on the Overlay layer, lowest first. The window server draws and
+/// hit-tests the surfaces of a layer by this rank, then in the order they mapped (newest on top) within a rank
+/// (bifrost-wm `scene::layer_surfaces_bottom_first`), so persistent chrome created early keeps its place under or over
+/// overlays mapped later. The rank goes in the layer surface's namespace (`chrome_namespace`).
+pub mod chrome_rank {
+    /// The system sheets and alerts (id 15, the whole screen): under the Dock, as a modal panel is under the Dock in
+    /// Golden Gate, so a sheet no longer covers it.
+    pub const MODAL:u32=5;
+    /// The Dock: under the full-screen veils that open over it (the Apps grid, Overview) and every menu and panel.
+    pub const DOCK:u32=10;
+    /// The full-screen veils: the Apps grid (8), Overview (9) and a desktop switch's sweep (10).
+    pub const VEIL:u32=20;
+    /// Menus, popups and panels (the window server's default rank, `LAYER_Z_DEFAULT`): everything not named here.
+    pub const PANEL:u32=100;
+    /// The notification banner.
+    pub const BANNER:u32=200;
+    /// The accessibility caption and the screen reader's focus ring, over everything.
+    pub const ACCESSIBILITY:u32=300;
+}
+/// The z rank of chrome surface `id` (`chrome_rank`).
+pub fn chrome_z(id:u32)->u32 {
+    use crate::shell::chrome_ids as c;
+    match id {
+        c::MODAL=>chrome_rank::MODAL,
+        c::DOCK=>chrome_rank::DOCK,
+        c::APP_GRID|c::OVERVIEW|c::SWEEP=>chrome_rank::VEIL,
+        c::BANNER=>chrome_rank::BANNER,
+        c::CAPTION|c::FOCUS_RING=>chrome_rank::ACCESSIBILITY,
+        _=>chrome_rank::PANEL,
+    }
+}
+/// The layer-shell namespace of chrome surface `id`: its z rank after `.z` (bifrost-wm `scene::LAYER_Z_SUFFIX`).
+fn chrome_namespace(id:u32)->String {format!("bifrost-desktop-chrome.z{}",chrome_z(id))}
 /// A chrome surface's pixels at screen (x, y). `input` limits the pointer to a part of the surface (x, y, w, h in
 /// surface px) when the surface is larger than what takes input: a popup is exported with room for its shadow, and a
-/// click on the shadow must reach what is below. `None` takes the whole surface.
-pub struct ChromeFrame {pub id:u32,pub x:i32,pub y:i32,pub width:usize,pub height:usize,pub pixels:Vec<u32>,pub input:Option<[i32;4]>}
+/// click on the shadow must reach what is below. `None` takes the whole surface. `shape`, when not empty, replaces
+/// `input` with several rects (surface px): the open Dock stack's fan takes the pointer on its icons and name capsules
+/// only, so a click in the clear room between them reaches what is below.
+pub struct ChromeFrame {pub id:u32,pub x:i32,pub y:i32,pub width:usize,pub height:usize,pub pixels:Vec<u32>,pub input:Option<[i32;4]>,pub shape:Vec<[i32;4]>,pub dock:Option<DockPlacement>}
+/// The Dock's edge and reserved depth, independent of the transparent room for its icons, labels and shadow.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub struct DockPlacement {pub edge:DockEdge,pub reserve:i32}
 struct ChromeWindow {surface:wl_surface::WlSurface,layer:surface::ZwlrLayerSurfaceV1,slots:Vec<Slot>,configured:bool,frame:ChromeFrame,pending:Damage}
 #[derive(Clone)]
 pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i32, pub width:usize, pub height:usize, pub pixels:Option<std::sync::Arc<[u32]>>, pub damage:Damage, pub maximized:bool, pub floating:bool, pub title_height:i32,
@@ -34,6 +78,10 @@ pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i3
     /// window server placed before and whose toplevel was destroyed while it was hidden. None lets the window server
     /// place it (cascade). Used only when the toplevel is created.
     pub origin:Option<(i32,i32)>,
+    /// Where the window server moves the toplevel now (`bifrost_window_level_v1` `set_position`), once: the app asked
+    /// its window to go there (`WindowMove`) while the toplevel was mapped, which `origin` cannot do (E2E11 3). None
+    /// leaves the toplevel where the window server has it.
+    pub position:Option<(i32,i32)>,
     /// A press above `drag_height` (window px) moves the window, unless it lands in one of `no_drag` (x, y, w, h):
     /// the traffic lights and an app's toolbar controls in a full-size-content window.
     pub drag_height:i32, pub no_drag:Vec<[i32;4]>,
@@ -54,10 +102,25 @@ pub struct WindowFrame { pub id:u32, pub title:&'static str, pub x:i32, pub y:i3
 const DEFAULT_MIN_SIZE:(i32,i32)=(320,220);
 /// The `set_min_size` a toplevel sends for `min`: the frame's own minimum, or the default when it has none.
 fn min_size_of(min:(i32,i32)) -> (i32,i32) { if min.0>0 && min.1>0 { min } else { DEFAULT_MIN_SIZE } }
+/// A frame that brings no pixels keeps the size of the pixels the window holds (`old`, the size of its last frame): the
+/// presenter keeps those pixels, and taking a new width or height without new pixels sliced past their end in the shm
+/// copy (a panic) and destroyed the GPU buffers of a covered window the shell sent at a smaller size. Its damage, sized
+/// for the size it asked, is dropped with that size (there is nothing new to show).
+fn hold_size_without_pixels(old:(usize,usize), frame:&mut WindowFrame) {
+    if frame.pixels.is_none() && (frame.width,frame.height)!=old {
+        (frame.width,frame.height)=old;
+        frame.damage=Damage::new(old.0,old.1);
+    }
+}
 /// What a shell window's toplevel reported. `Frame` is the window server's own frame of the toplevel (x, y, width,
 /// height in desktop px, `bifrost_window_level_v1` version 2): the window server places and moves toplevels, so this
 /// is where the window really is.
-pub enum WindowEvent { Focus(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool), Frame(u32,i32,i32,i32,i32),
+/// `Focus` is a press on the window (the person chose it); `ServerFocus` is a focus the window server gave the window on
+/// its own (a keyboard enter or an activating configure no press came with); `HandBack` is such a focus read within
+/// `HAND_BACK_MS` of a keyboard-taking chrome layer (Search, the Apps grid) closing: the window server handing the
+/// keyboard back to the window it knows in front (E2E6 1). The shell follows a `ServerFocus` or a `HandBack` only when
+/// it is not bringing another app to the front itself (`Shell::wayland_window_event`, the front intent).
+pub enum WindowEvent { Focus(u32), ServerFocus(u32), HandBack(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool), Frame(u32,i32,i32,i32,i32),
     /// The window server's full-screen state of the toplevel, when it differs from what the shell last asked for (the
     /// window server's own keys, or a refusal).
     Fullscreen(u32,bool) }
@@ -144,7 +207,22 @@ struct State {
     lock_manager:Option<lock_manager::ExtSessionLockManagerV1>, output:Option<wl_output::WlOutput>, lock:Option<Lock>, lock_wanted:bool, redraw:bool, refresh:u32,
     idle_notifier:Option<idle_notifier::ExtIdleNotifierV1>, idle:bool, resumed:bool, keys:HashSet<u16>, power_manager:Option<power_manager::ZwlrOutputPowerManagerV1>, output_power:Option<output_power::ZwlrOutputPowerV1>,
     activation:Option<activation::XdgActivationV1>, focused:Option<u32>, serial:u32, raise_front:bool, z:Vec<u32>,
+    /// a fresh toplevel the window server gave the keyboard while another window is the shell's front one: (front,
+    /// entered). The front window takes the keyboard back once the events read with it are handled, unless a press on
+    /// the entered window came with them (the person clicked it: E2E N2)
+    refocus:Option<(u32,u32)>,
+    /// When (`sys::now_ms`) the last chrome layer that takes the keyboard (`takes_keyboard`) closed: a focus without a
+    /// press read shortly after it is a hand-back (`unpressed_focus`)
+    exclusive_closed:Option<f64>,
+    /// windows the shell brought forward together (`restack`), ranked in the window server with the next `windows` call
+    /// that lists them, each with the number of `windows` calls it has waited (`unsent_restack`), and the last rank sent
+    /// (`set_stack_rank` ranks only grow)
+    restack:Vec<(u32,u16)>, stack_rank:u32,
     wm:Option<xdg_wm_base::XdgWmBase>, seat:Option<wl_seat::WlSeat>, windows:HashMap<u32,Window>, materials:HashMap<u32,Vec<Glass>>, scale:f32, window_events:Vec<WindowEvent>, target:Option<u32>,
+    /// the look (`material_look`) the windows' material plates were last drawn in: a Light/Dark step repaints every
+    /// window that has materials in full, since the plate under an unchanged translucent sidebar is drawn only where
+    /// the window has damage (E2E13 finding 3)
+    mat_look:Option<u64>,
     compositor: Option<wl_compositor::WlCompositor>, shm: Option<wl_shm::WlShm>,
     layer: Option<layer::ZwlrLayerShellV1>, surface: Option<wl_surface::WlSurface>,
     chrome:HashMap<u32,ChromeWindow>, chrome_target:Option<u32>, chrome_configured:bool,
@@ -376,10 +454,20 @@ impl Display {
     /// The answers to window captures since the last call: (token, outcome).
     pub fn capture_results(&mut self) -> Vec<(u64,ShotOutcome)> { std::mem::take(&mut self.state.cap_results) }
     pub fn activate_foreign(&mut self,id:u32) -> io::Result<()> {
-        if let (Some(w),Some(seat))=(self.state.foreign.iter().find(|w|w.info.id==id),self.state.seat.as_ref()) { w.handle.unset_minimized(); w.handle.activate(seat); transient(self.conn.flush())?; }
+        if let (Some(w),Some(seat))=(self.state.foreign.iter().find(|w|w.info.id==id),self.state.seat.as_ref()) { super::focus_trace::log(format_args!("foreign activate toplevel={id} app={}",w.info.app_id)); w.handle.unset_minimized(); w.handle.activate(seat); transient(self.conn.flush())?; }
         Ok(())
     }
-    pub fn window_events(&mut self) -> Vec<WindowEvent> { std::mem::take(&mut self.state.window_events) }
+    pub fn window_events(&mut self) -> Vec<WindowEvent> {
+        // a fresh window took the keyboard from the front one and no press on it came with it: the front one gets it back
+        if let Some((front,_))=self.state.refocus.take() {
+            if self.state.focused==Some(front) && self.state.windows.contains_key(&front) {
+                super::focus_trace::log(format_args!("activate window={front}: the keyboard back from a fresh window"));
+                request_activation(&self.state,&self.queue.handle(),front);
+                let _=self.conn.flush();
+            }
+        }
+        std::mem::take(&mut self.state.window_events)
+    }
     /// The input method batches received since the last call; each one ended with its `done`.
     pub fn input_method_batches(&mut self) -> Vec<ImBatch> { std::mem::take(&mut self.state.im_batches) }
     /// Sends the keyboard's output for the focused client's field: text, preedit and deletions go to the input method
@@ -414,11 +502,15 @@ impl Display {
         // to another window since (a window it mapped), and the raise must not be lost (W4-1, W4-5)
         let raise=std::mem::take(&mut self.state.raise_front);
         let activate=front.filter(|id|raise||Some(*id)!=self.state.focused);
+        let was_focused=self.state.focused;
         self.state.focused=front;
         let removed:Vec<u32> = self.state.windows.keys().filter(|id|!ids.contains(id)).copied().collect();
         for id in removed {
             let w = self.state.windows.remove(&id).unwrap();
             self.state.materials.remove(&id);
+            // the window server's per-surface objects go first, so none outlives the surface it was made for
+            if let Some(m)=w.mat {m.destroy();}
+            if let Some(b)=w.bg {b.destroy();}
             w.top.destroy(); w.xdg.destroy(); w.surface.destroy();
             for slot in w.slots { slot.buffer.destroy(); }
             if let Some(slots)=self.state.gpu_slots.remove(&(GPU_WINDOW+id)) {for s in slots {s.buffer.destroy();}}
@@ -427,6 +519,7 @@ impl Display {
         let qh = self.queue.handle();
         for mut frame in frames {
             if let Some(w) = self.state.windows.get_mut(&frame.id) {
+                hold_size_without_pixels((w.frame.width,w.frame.height),&mut frame);
                 // full screen first: the window server keeps what a window held (a zoom, a tile) while it is full screen and
                 // gives it back, so the zoom flag changing around full screen is not a maximize request
                 let fs_changed = w.frame.fullscreen != frame.fullscreen;
@@ -438,6 +531,11 @@ impl Display {
                 if (w.frame.x,w.frame.y)!=(frame.x,frame.y) && self.state.materials.contains_key(&frame.id) { w.pending=Damage::new(frame.width,frame.height); w.pending.all(); }
                 // the app's minimum can change with the scale or the screen (a minimum never exceeds the screen)
                 if min_size_of(w.frame.min_size)!=min_size_of(frame.min_size) { let (mw,mh)=min_size_of(frame.min_size); w.top.set_min_size(mw,mh); }
+                // the app moved its mapped window (`WindowMove`): the window server moves the toplevel and reports the
+                // frame back, so the shell's rectangle and the pixels on screen agree (E2E11 3)
+                if let (Some((px,py)),Some(mgr))=(frame.position,self.state.level_mgr.as_ref()) {
+                    if mgr.version()>=super::window_level_client::POSITION_SINCE { mgr.set_position(&w.surface,px,py); }
+                }
                 let pixels = frame.pixels.take().or_else(||w.frame.pixels.take());
                 let shape_changed = w.frame.input != frame.input;
                 w.frame = frame;
@@ -449,7 +547,7 @@ impl Display {
                 let top = xdg.get_toplevel(&qh,frame.id); top.set_title(frame.title.to_string()); top.set_app_id(format!("is.olibuijr.bifrost.{}",frame.id));
                 let (mw,mh)=min_size_of(frame.min_size); top.set_min_size(mw,mh);
                 // a window coming back from Overview or a minimize maps where it was, not at the cascade
-                if let (Some((ox,oy)),Some(mgr))=(frame.origin,self.state.level_mgr.as_ref()) {
+                if let (Some((ox,oy)),Some(mgr))=(frame.origin.or(frame.position),self.state.level_mgr.as_ref()) {
                     if mgr.version()>=super::window_level_client::ORIGIN_SINCE { mgr.set_origin(&surface,ox,oy); }
                 }
                 if frame.input.is_some() { Self::set_window_input(self.state.compositor.as_ref(),&surface,0,frame.width,frame.height,frame.input.as_deref(),&qh); }
@@ -469,13 +567,27 @@ impl Display {
                 }
             }
         }
-        if let Some(id)=activate { request_activation(&self.state,&qh,id); }
+        // bifrost_window_level_v1 set_stack_rank: windows the shell brought forward together stack in its order over other
+        // clients' windows, the ones mapped already at once and the new ones when they map, in whatever order (E2E5 1, 3).
+        // Sent before the new toplevels' first buffers, so the rank is there when they map. A window this call does not
+        // list (its toplevel does not exist yet) keeps its rank request for a later call (`unsent_restack`).
+        if !ids.is_empty() && !self.state.restack.is_empty() {
+            let pending=std::mem::take(&mut self.state.restack);
+            if let Some(mgr)=self.state.level_mgr.as_ref().filter(|m|m.version()>=super::window_level_client::STACK_RANK_SINCE) {
+                let want:Vec<u32>=pending.iter().map(|&(id,_)|id).collect();
+                for (id,rank) in stack_ranks(&ids,&want,&mut self.state.stack_rank) {
+                    if let Some(w)=self.state.windows.get(&id) { mgr.set_stack_rank(&w.surface,rank); }
+                }
+                self.state.restack=unsent_restack(&ids,pending);
+            }
+        }
+        if let Some(id)=activate { super::focus_trace::log(format_args!("activate window={id} front raise={raise} was={:?}",was_focused)); request_activation(&self.state,&qh,id); }
         // an explicit open or focus: xdg-activation needs a fresh input serial that control-socket and dock opens
         // lack, and a native client may hold focus; wlroots compositors always obey a foreign-toplevel activate
         if raise {
             if let (Some(id),Some(seat))=(front,self.state.seat.as_ref()) {
                 let app_id=format!("is.olibuijr.bifrost.{id}");
-                if let Some(f)=self.state.foreign.iter().find(|f|f.info.app_id==app_id) {f.handle.unset_minimized();f.handle.activate(seat);}
+                if let Some(f)=self.state.foreign.iter().find(|f|f.info.app_id==app_id) {super::focus_trace::log(format_args!("foreign activate window={id} (toplevel {})",f.info.id));f.handle.unset_minimized();f.handle.activate(seat);}
             }
         }
         self.render_windows()?;
@@ -484,6 +596,14 @@ impl Display {
     }
     /// Raises the front window over every client with the next `windows` call.
     pub fn raise_front(&mut self) {self.state.raise_front=true;}
+    /// The shell brought windows `ids` forward together (the Apps grid closing, a hidden app shown, Bring All to Front):
+    /// with the next `windows` call that lists them they are ranked in the window server, in the shell's order. Asking
+    /// again for a window still waiting starts its wait over.
+    pub fn restack(&mut self, ids:Vec<u32>) {
+        for id in ids {
+            match self.state.restack.iter_mut().find(|(w,_)|*w==id) {Some(w)=>w.1=0,None=>self.state.restack.push((id,0))}
+        }
+    }
     /// The UI scale (px per pt) for window shadows and corner radii; until set it is derived from the title height.
     pub fn set_scale(&mut self, s:f32) {self.state.scale=s;}
     /// Golden Gate vibrancy: the window-local rects (px, with corner radius) of a window's translucent sidebar
@@ -498,6 +618,12 @@ impl Display {
     fn render_windows(&mut self) -> io::Result<()> {
         let qh = self.queue.handle();
         if let Some(g)=&mut self.gpu {
+            let look=material_look();
+            if self.state.mat_look.replace(look)!=Some(look) {
+                for (id,w) in self.state.windows.iter_mut() {
+                    if self.state.materials.contains_key(id) {w.pending.all();}
+                }
+            }
             // occlusion: a window that no visible pixel can show is not drawn; its pending damage waits for it
             let order:Vec<u32>=self.state.z.iter().copied().filter(|id|self.state.windows.get(id).is_some_and(|w|w.configured)).collect();
             let state_scale=self.state.scale;
@@ -650,13 +776,13 @@ impl Display {
 /// the bottom edge, each with an exclusive zone, so the compositor keeps maximized and snapped windows clear of them
 /// (an exclusive zone only counts for a surface anchored to one edge or to three). Everything else is placed from
 /// the top-left corner, reserves nothing and ignores the others' zones.
-fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u32)) {
+fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u32),top_reserved:i32) {
     match frame.id {
         0 => {l.set_anchor(surface::Anchor::Top|surface::Anchor::Left|surface::Anchor::Right);l.set_margin(frame.y,0,0,0);l.set_exclusive_zone(frame.height as i32+frame.y.max(0));}
-        2 if screen.0>0&&screen.1>0 => {
-            let (edge,m,zone)=dock_placement(frame.x,frame.y,frame.width,frame.height,screen);
+        2 if screen.0>0&&screen.1>0&&frame.dock.is_some() => {
+            let (edge,m,zone)=dock_placement(frame.x,frame.y,frame.width,frame.height,screen,frame.dock.unwrap(),top_reserved);
             l.set_anchor(match edge {
-                DockEdge::Bottom=>surface::Anchor::Bottom,
+                DockEdge::Bottom=>surface::Anchor::Bottom|surface::Anchor::Left|surface::Anchor::Right,
                 DockEdge::Left=>surface::Anchor::Left|surface::Anchor::Top|surface::Anchor::Bottom,
                 DockEdge::Right=>surface::Anchor::Right|surface::Anchor::Top|surface::Anchor::Bottom,
             });
@@ -681,27 +807,34 @@ fn input_rects(margin:i32,width:usize,height:usize,shape:Option<&[[i32;4]]>)->Ve
         None=>vec![[margin,margin,width as i32,height as i32]],
     }
 }
-/// Limits the pointer input of a chrome surface to `input` (x, y, w, h in surface px); `None` gives the whole surface
-/// back. Applies on the next commit.
-fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_surface::WlSurface,input:Option<[i32;4]>,qh:&QueueHandle<State>) {
-    match (input,compositor) {
-        (Some([x,y,w,h]),Some(compositor))=>{let region=compositor.create_region(qh,());region.add(x,y,w,h);surface.set_input_region(Some(&region));region.destroy();}
+/// Limits the pointer input of a chrome surface to `input` (x, y, w, h in surface px), or to the `shape` rects when
+/// there are any (`chrome_input_rects`); neither gives the whole surface back. Applies on the next commit.
+fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_surface::WlSurface,input:Option<[i32;4]>,shape:&[[i32;4]],qh:&QueueHandle<State>) {
+    match (Self::chrome_input_rects(input,shape),compositor) {
+        (Some(rects),Some(compositor))=>{let region=compositor.create_region(qh,());for [x,y,w,h] in rects {region.add(x,y,w,h);}surface.set_input_region(Some(&region));region.destroy();}
         _=>surface.set_input_region(None),
     }
 }
+/// The input region of a chrome surface (`set_chrome_input`): the `shape` rects without the empty ones when there are
+/// any, else the `input` rect; None for the whole surface.
+fn chrome_input_rects(input:Option<[i32;4]>,shape:&[[i32;4]])->Option<Vec<[i32;4]>> {
+    if shape.is_empty() {input.map(|r|vec![r])} else {Some(shape.iter().filter(|r|r[2]>0&&r[3]>0).copied().collect())}
+}
 
     pub fn chrome(&mut self, frames:Vec<ChromeFrame>) -> io::Result<()> {
+        let top_reserved=frames.iter().find(|f|f.id==0).map_or(0,|f|f.height as i32+f.y.max(0));
         let ids:Vec<_>=frames.iter().map(|f|f.id).collect();
         let removed:Vec<_>=self.state.chrome.keys().filter(|id|!ids.contains(id)).copied().collect();
-        for id in removed {let w=self.state.chrome.remove(&id).unwrap();w.layer.destroy();w.surface.destroy();for slot in w.slots {slot.buffer.destroy();}
+        for id in removed {if takes_keyboard(id) {self.state.exclusive_closed=Some(super::sys::now_ms());super::focus_trace::log(format_args!("layer={id} closed: keyboard hand-back window open, focused={:?}",self.state.focused));}
+            let w=self.state.chrome.remove(&id).unwrap();w.layer.destroy();w.surface.destroy();for slot in w.slots {slot.buffer.destroy();}
             if let Some(slots)=self.state.gpu_slots.remove(&id) {for s in slots {s.buffer.destroy();}}
             if let Some(g)=&mut self.gpu {g.p.destroy_surface(id);}}
         let qh=self.queue.handle();
         for frame in frames {
             let screen=self.state.size;
             if let Some(w)=self.state.chrome.get_mut(&frame.id) {
-                Self::place_chrome(&w.layer,&frame,screen);
-                if w.frame.input!=frame.input {Self::set_chrome_input(self.state.compositor.as_ref(),&w.surface,frame.input,&qh);}
+                Self::place_chrome(&w.layer,&frame,screen,top_reserved);
+                if w.frame.input!=frame.input||w.frame.shape!=frame.shape {Self::set_chrome_input(self.state.compositor.as_ref(),&w.surface,frame.input,&frame.shape,&qh);}
                 if (w.frame.width,w.frame.height)!=(frame.width,frame.height) {
                     for slot in w.slots.drain(..) {slot.buffer.destroy();}
                     if let Some(slots)=self.state.gpu_slots.remove(&frame.id) {for s in slots {s.buffer.destroy();}}
@@ -715,14 +848,10 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
                 w.surface.commit();
             } else {
                 let s=self.state.compositor.as_ref().unwrap().create_surface(&qh,());
-                let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},"bifrost-desktop-chrome".into(),&qh,frame.id);
-                l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen);
-                if frame.input.is_some() {Self::set_chrome_input(self.state.compositor.as_ref(),&s,frame.input,&qh);}
-                // id 3 is Search, id 6 the assistant panel, id 8 the Apps grid, id 9 Overview and id 11 the screenshot session
-                // (Space and Escape are its keys), id 15 the system sheets and alerts, id 14 the Force Quit, About and Log Out card (Esc, Return and the arrows are its
-                // keys; without this they would reach the app in front, which is the hung one): they take the keyboard from the
-                // window in front while open; id 13, the Cmd+Tab strip, never does
-                l.set_keyboard_interactivity(if frame.id==3 || frame.id==6 || frame.id==8 || frame.id==9 || frame.id==11 || frame.id==14 || frame.id==15 {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
+                let l=self.state.layer.as_ref().unwrap().get_layer_surface(&s,None,if frame.id==0 {layer::Layer::Top}else{layer::Layer::Overlay},chrome_namespace(frame.id),&qh,frame.id);
+                l.set_size(frame.width as u32,frame.height as u32);Self::place_chrome(&l,&frame,screen,top_reserved);
+                if frame.input.is_some()||!frame.shape.is_empty() {Self::set_chrome_input(self.state.compositor.as_ref(),&s,frame.input,&frame.shape,&qh);}
+                l.set_keyboard_interactivity(if takes_keyboard(frame.id) {surface::KeyboardInteractivity::Exclusive} else {surface::KeyboardInteractivity::None});s.commit();
                 let mut pending=Damage::new(frame.width,frame.height);pending.all();
                 self.state.chrome.insert(frame.id,ChromeWindow{surface:s,layer:l,slots:vec![],configured:false,frame,pending});
             }
@@ -794,6 +923,15 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         }
         transient(self.conn.flush())
     }
+    /// Asks the window server to place another client's window `id` (a foreign toplevel this shell listed;
+    /// `bifrost_window_level_v1` version 7 `tile_toplevel`): the Window menu and the Ctrl+Cmd arrows on a native app's
+    /// window. Without the request the window stays where it is.
+    pub fn tile_foreign(&mut self,id:u32,placement:super::window_level_client::Placement)->io::Result<()> {
+        if let (Some(mgr),Some(w))=(self.state.level_mgr.as_ref(),self.state.foreign.iter().find(|w|w.info.id==id)) {
+            if mgr.version()>=super::window_level_client::TILE_TOPLEVEL_SINCE { mgr.tile_toplevel(&w.handle,super::window_level_client::placement_wire(placement)); }
+        }
+        transient(self.conn.flush())
+    }
     pub fn foreign_maximize(&mut self,id:u32,maximized:bool)->io::Result<()> {if let Some(w)=self.state.foreign.iter().find(|w|w.info.id==id) {if maximized {w.handle.set_maximized();}else{w.handle.unset_maximized();}}transient(self.conn.flush())}
     pub fn inputs(&mut self, out: &mut Vec<Event>) {
         self.trim_idle();
@@ -809,9 +947,9 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
         out.append(&mut self.state.inputs);
     }
     /// The wallpaper the GPU draws under the desktop (uploaded and blurred once per change), always covering the output
-    /// whatever the picture's size. `live` marks a frame of an animated look (its blur is rebuilt less often).
+    /// whatever the picture's size. `live` is the animated look a frame belongs to (its blur is built once per look and size).
     /// Returns false when there is no GPU presenter or the blur did not land (the shell asks again).
-    pub fn wallpaper(&mut self, wp: crate::gfx::View, x: i32, live: bool) -> bool {
+    pub fn wallpaper(&mut self, wp: crate::gfx::View, x: i32, live: Option<u8>) -> bool {
         let screen = (self.state.size.0 as usize, self.state.size.1 as usize);
         if let Some(g) = &mut self.gpu { g.p.set_wallpaper(wp, x, 0, screen, live) } else { false }
     }
@@ -935,6 +1073,9 @@ fn set_chrome_input(compositor:Option<&wl_compositor::WlCompositor>,surface:&wl_
             }
             // a shape that came or went changes the backdrop under its bounds, so those bounds are drawn again
             let moved = bifrost_render::glass::changed_shapes(&before, &g.glass);
+            // the chrome surfaces (the Apps grid, Overview, Search...) blur under the same shapes: a shape that came or went
+            // is owed to each of them too, or the shapes of earlier frames stay on a surface whose pixels did not change (N11)
+            for c in self.state.chrome.values_mut() { owe_glass(&mut c.pending, (c.frame.x, c.frame.y), &moved); }
             let grown;
             let damage = if moved.is_empty() || damage.is_all() { damage } else {
                 let mut d = damage.clone();
@@ -1027,6 +1168,13 @@ fn mark_first_frame() {
     if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR") {
         let _ = std::fs::write(std::path::Path::new(&dir).join("shell-ready"), b"1\n");
     }
+}
+/// Adds the bounds of the glass shapes that came or went this frame (`moved`, screen px) to the damage of a chrome
+/// surface placed at `origin`: its backdrop changes there whatever its pixels did. A surface masked clear around its
+/// panel (the Apps grid) has no pixel damage outside it, so without this the blur of every shape it was first drawn
+/// with stayed on it, a band of stale plates under the grid (N11).
+fn owe_glass(pending:&mut Damage, origin:(i32,i32), moved:&[(f32,f32,f32,f32)]) {
+    for &(x,y,w,h) in moved { pending.add(x.floor() as i32-origin.0, y.floor() as i32-origin.1, w.ceil() as i32+1, h.ceil() as i32+1); }
 }
 impl Dispatch<wl_registry::WlRegistry, ()> for State {
     fn event(s: &mut Self, reg: &wl_registry::WlRegistry, e: wl_registry::Event, _: &(), _: &Connection, q: &QueueHandle<Self>) {
@@ -1180,7 +1328,7 @@ fn show_pointer(s: &State, serial: u32, edge: cursor_device::Shape) {
 impl Dispatch<wl_pointer::WlPointer, ()> for State {
     fn event(s: &mut Self, _: &wl_pointer::WlPointer, e: wl_pointer::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
         let t = super::sys::now_ms();
-        let offset = s.target.and_then(|id| s.windows.get(&id)).map(|w| (w.frame.x as f32,w.frame.y as f32)).or_else(||s.chrome_target.and_then(|id|s.chrome.get(&id)).map(|w|(w.frame.x as f32,w.frame.y as f32))).unwrap_or((0.0,0.0));
+        let offset = target_offset(s);
         if let wl_pointer::Event::Leave{..}=e {crate::shell::services::screen_sample::pointer_left();}
         match e {
             wl_pointer::Event::Enter { surface,surface_x,surface_y,serial,.. } => {
@@ -1190,6 +1338,9 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 s.target = s.windows.iter().find(|(_,w)| w.surface == surface).map(|(&id,_)| id);
                 let m = s.target.and_then(|id| s.windows.get(&id)).map_or(0.0, |w| w.margin as f32);
                 s.xy = (surface_x as f32 - m,surface_y as f32 - m);
+                // an absolute pointer (a tablet, VNC, absolute uinput) jumps onto a surface with an Enter and no Motion:
+                // the Enter is a hover where it lands, or the Dock under a resting pointer never magnifies (E2E6 4)
+                if let Some(ev)=enter_hover(s.pressed,s.xy,target_offset(s),t) { s.inputs.push(ev); }
             },
             wl_pointer::Event::Motion { surface_x,surface_y,.. } => {
                 crate::shell::services::cursor_service::pointer_moved();
@@ -1211,12 +1362,12 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 }
                 if s.pressed { s.inputs.push(Event::Move { x:s.xy.0+offset.0,y:s.xy.1+offset.1,t }); }else{s.inputs.push(Event::Hover{x:s.xy.0+offset.0,y:s.xy.1+offset.1,t});}
             },
-            wl_pointer::Event::Button {button:273,state:WEnum::Value(wl_pointer::ButtonState::Pressed),..}=>{if let Some(id)=s.target{s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));}s.inputs.push(Event::Context{x:s.xy.0+offset.0,y:s.xy.1+offset.1,t});},
+            wl_pointer::Event::Button {button:273,state:WEnum::Value(wl_pointer::ButtonState::Pressed),..}=>{if let Some(id)=s.target{s.refocus=keep_refocus(s.refocus,id);s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));}s.inputs.push(Event::Context{x:s.xy.0+offset.0,y:s.xy.1+offset.1,t});},
             wl_pointer::Event::Leave {..} if !s.pressed=>s.inputs.push(Event::Hover{x:-100.,y:-100.,t}),
             wl_pointer::Event::Button { button:272,state:WEnum::Value(v),serial,.. } => {
                 s.serial=serial;
                 s.pressed = v == wl_pointer::ButtonState::Pressed;
-                if s.pressed {if let Some(id)=s.target {s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));}}
+                if s.pressed {if let Some(id)=s.target {s.refocus=keep_refocus(s.refocus,id);s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));}}
                 let drags=s.target.and_then(|id|s.windows.get(&id)).is_some_and(|w|{let (x,y)=(s.xy.0 as i32,s.xy.1 as i32);
                     s.xy.1<w.frame.drag_height as f32 && !w.frame.no_drag.iter().any(|r|x>=r[0]&&x<r[0]+r[2]&&y>=r[1]&&y<r[1]+r[3])});
                 // the traffic lights are in `no_drag` (the shell lists them for every window), so a press on one still reaches
@@ -1253,7 +1404,7 @@ impl Dispatch<wl_touch::WlTouch, ()> for State {
             wl_touch::Event::Down { serial,surface,id,x,y,.. } => {
                 s.serial = serial;
                 let (place, window) = touch_surface(s, &surface);
-                if let Some(wid) = window { s.focused = Some(wid); s.window_events.push(WindowEvent::Focus(wid)); }
+                if let Some(wid) = window { s.refocus = keep_refocus(s.refocus, wid); s.focused = Some(wid); s.window_events.push(WindowEvent::Focus(wid)); }
                 // the first finger on a window's title area moves the window, as a pointer press there does
                 let drags = s.fingers.is_idle() && window.and_then(|wid| s.windows.get(&wid)).is_some_and(|w| touch_model::starts_window_drag(place.local(x, y), w.frame.drag_height, &w.frame.no_drag));
                 if drags {
@@ -1270,17 +1421,25 @@ impl Dispatch<wl_touch::WlTouch, ()> for State {
     }
 }
 impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
-    fn event(s: &mut Self, _: &wl_keyboard::WlKeyboard, e: wl_keyboard::Event, _: &(), _: &Connection, qh: &QueueHandle<Self>) {
+    fn event(s: &mut Self, _: &wl_keyboard::WlKeyboard, e: wl_keyboard::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
         match e {
-            wl_keyboard::Event::Enter {surface,..}=>{
+            wl_keyboard::Event::Enter {surface,keys,..}=>{
+                // the keys already down as the shell gets the keyboard: a modifier held across the focus change counts
+                // (the modifiers event that follows also carries the Caps Lock state)
+                let held=super::input::mods_of_codes(keys.chunks_exact(4).map(|b|u32::from_ne_bytes([b[0],b[1],b[2],b[3]]) as u16));
+                s.inputs.push(Event::Modifiers {held,caps:None});
                 if let Some(id)=s.windows.iter().find(|(_,w)|w.surface==surface).map(|(&id,_)|id) {
                     let fresh=s.windows.get_mut(&id).is_some_and(|w|std::mem::take(&mut w.fresh));
                     if follows_keyboard_enter(fresh,id,s.focused) {
-                        s.focused=Some(id);s.window_events.push(WindowEvent::Focus(id));
+                        super::focus_trace::log(format_args!("enter window={id} fresh={fresh} was={:?}: reported",s.focused));
+                        s.focused=Some(id);s.window_events.push(unpressed_focus(id,s.exclusive_closed,super::sys::now_ms()));
                     } else if let Some(front)=s.focused.filter(|f|s.windows.contains_key(f)) {
+                        super::focus_trace::log(format_args!("enter window={id} fresh while front={front}: keyboard owed back to {front}"));
                         // the window server focused a window it just mapped (one that came back from Overview or a
-                        // minimize behind the front): the front window the shell raised gets the keyboard back
-                        request_activation(s,qh,front);
+                        // minimize behind the front): the front window the shell raised gets the keyboard back, after the
+                        // events read with this one (`window_events`): the window server focuses a window on a press
+                        // before the press reaches the client, and a press on the entered window keeps it (E2E N2)
+                        s.refocus=Some((front,id));
                     }
                 }
             },
@@ -1289,7 +1448,12 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for State {
                 if down {s.keys.insert(key as u16);} else {s.keys.remove(&(key as u16));}
                 s.inputs.push(Event::Key {code:key as u16,down});
             },
-            wl_keyboard::Event::Leave {..}=>{for code in s.keys.drain(){s.inputs.push(Event::Key {code,down:false});}},
+            // the keyboard went to another client: its releases no longer reach the shell, so nothing counts as held (E2E3 F1)
+            wl_keyboard::Event::Leave {..}=>{for code in s.keys.drain(){s.inputs.push(Event::Key {code,down:false});} s.inputs.push(Event::Modifiers {held:0,caps:None});},
+            // the window server's modifier state is the authority: it corrects a counter whose press or release the shell missed
+            wl_keyboard::Event::Modifiers {mods_depressed,mods_latched,mods_locked,..}=>{
+                s.inputs.push(Event::Modifiers {held:super::input::mods_of_xkb(mods_depressed|mods_latched),caps:Some(super::input::xkb_caps(mods_locked))});
+            },
             _=>{}
         }
     }
@@ -1322,7 +1486,7 @@ impl Dispatch<xdg_surface::XdgSurface,u32> for State {
         // Overview or a minimize) and that the window server activated as it mapped must not lift itself over the
         // front one (W4-1, W4-5)
         let front=s.focused;
-        if let xdg_surface::Event::Configure {serial} = e {obj.ack_configure(serial); if let Some(w)=s.windows.get_mut(id) {let focus=follows_keyboard_enter(w.fresh,*id,front)&&focus_on_configure(!w.configured,w.act,w.act_seen);w.configured=true;w.act_seen=w.act;if focus {s.window_events.push(WindowEvent::Focus(*id));}} }
+        if let xdg_surface::Event::Configure {serial} = e {obj.ack_configure(serial); if let Some(w)=s.windows.get_mut(id) {let focus=follows_keyboard_enter(w.fresh,*id,front)&&focus_on_configure(!w.configured,w.act,w.act_seen);w.configured=true;w.act_seen=w.act;if focus {super::focus_trace::log(format_args!("configure window={id} activated={}: reported",w.act));s.window_events.push(unpressed_focus(*id,s.exclusive_closed,super::sys::now_ms()));}} }
     }
 }
 impl Dispatch<xdg_toplevel::XdgToplevel,u32> for State {
@@ -1430,27 +1594,24 @@ fn gpu_pool_step(busy: &[bool], need_frame: bool, idle_secs: f32, max: usize) ->
 fn pool_trim_in_ms(n: usize, spare_busy: bool, idle_secs: f32) -> Option<i32> {
     (n > GPU_POOL_MIN && !spare_busy).then(|| ((GPU_POOL_IDLE_SECS - idle_secs).max(0.0) * 1000.0).ceil() as i32 + 1)
 }
-/// The screen edge the Dock (chrome id 2) sits on, read from its rectangle: a tall narrow capsule is a side Dock.
+/// The screen edge the Dock (chrome id 2) sits on; padding does not change its edge.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum DockEdge {Bottom,Left,Right}
+pub enum DockEdge {Bottom,Left,Right}
 /// Where the Dock goes: its edge, the layer-surface margins (top, right, bottom, left) and the exclusive zone. A side Dock
 /// is anchored to three edges (the side plus top and bottom) so its zone counts, and the margins put it at its own y:
 /// with both opposite edges anchored and a fixed size the surface is centred in what the margins leave, so the margins
-/// are the gap above and below it. The zone is the Dock's own width plus its gap to the edge.
-fn dock_placement(x:i32,y:i32,width:usize,height:usize,screen:(u32,u32))->(DockEdge,[i32;4],i32) {
+/// are the gap above and below it. The explicit work-area reserve excludes transparent surface padding; anchored margins are counted separately.
+fn dock_placement(x:i32,y:i32,width:usize,height:usize,screen:(u32,u32),dock:DockPlacement,top_reserved:i32)->(DockEdge,[i32;4],i32) {
     let (w,h)=(width as i32,height as i32);let (sw,sh)=(screen.0 as i32,screen.1 as i32);
-    if h>w {
-        let (top,bottom)=(y.max(0),(sh-y-h).max(0));
-        if x+w/2<sw/2 {
-            let left=x.max(0);
-            (DockEdge::Left,[top,0,bottom,left],w+left)
-        } else {
-            let right=(sw-x-w).max(0);
-            (DockEdge::Right,[top,right,bottom,0],w+right)
-        }
-    } else {
-        let bottom=(sh-y-h).max(0);
-        (DockEdge::Bottom,[0,0,bottom,0],h+bottom)
+    // Positive exclusive zones are arranged below the menu bar. A non-reserving overlay uses the full output.
+    let top=(y-if dock.reserve>0{top_reserved}else{0}).max(0);
+    let bottom=(sh-y-h).max(0);let left=x.max(0);let right=(sw-x-w).max(0);
+    // The layer protocol adds the anchored margin to its zone; count the edge gap exactly once.
+    let zone=|margin:i32|if dock.reserve>0{(dock.reserve-margin).max(1)}else{-1};
+    match dock.edge{
+        DockEdge::Left=>(dock.edge,[top,0,bottom,left],zone(left)),
+        DockEdge::Right=>(dock.edge,[top,right,bottom,0],zone(right)),
+        DockEdge::Bottom=>(dock.edge,[0,right,bottom,left],zone(bottom)),
     }
 }
 /// Whether a configure of a toplevel tells the shell it has the focus: the first one (a new window is focused as it
@@ -1463,6 +1624,56 @@ fn focus_on_configure(first:bool,activated:bool,was_activated:bool)->bool { firs
 /// (Overview, a minimize, a window covered until now), not a choice of the person: following it lifted that window over
 /// the one the Dock, Overview or the Window menu had just brought forward (W4-1, W4-5).
 fn follows_keyboard_enter(fresh:bool,id:u32,front:Option<u32>)->bool { !fresh || front.map_or(true,|f|f==id) }
+/// Where the surface the pointer is on sits on the screen: a window's frame origin or a chrome surface's, else 0,0.
+fn target_offset(s:&State)->(f32,f32) {
+    s.target.and_then(|id| s.windows.get(&id)).map(|w| (w.frame.x as f32,w.frame.y as f32)).or_else(||s.chrome_target.and_then(|id|s.chrome.get(&id)).map(|w|(w.frame.x as f32,w.frame.y as f32))).unwrap_or((0.0,0.0))
+}
+/// The shell event for a pointer entering a surface at `xy` (surface px) of a surface at `offset`: a hover there, as a
+/// motion would give, unless a button is down (a drag goes on with its moves).
+fn enter_hover(pressed:bool,xy:(f32,f32),offset:(f32,f32),t:f64)->Option<Event> {
+    (!pressed).then(||Event::Hover{x:xy.0+offset.0,y:xy.1+offset.1,t})
+}
+/// The keyboard hand-back still owed after a press on window `pressed`: none when the press is on the fresh window that
+/// just took the keyboard (the person chose it), else the one owed before.
+fn keep_refocus(refocus:Option<(u32,u32)>,pressed:u32)->Option<(u32,u32)> { refocus.filter(|(_,entered)|*entered!=pressed) }
+/// Whether chrome surface `id` takes the keyboard from the window in front while it is open: id 3 is Search, id 6 the
+/// assistant panel, id 8 the Apps grid, id 9 Overview and id 11 the screenshot session (Space and Escape are its keys),
+/// id 15 the system sheets and alerts, id 5 Notification Center (Esc closes it), id 14 the Force Quit, About and Log Out card (Esc, Return and the arrows are its
+/// keys; without this they would reach the app in front, which is the hung one); id 13, the Cmd+Tab strip, never does.
+fn takes_keyboard(id:u32)->bool {
+    use crate::shell::chrome_ids as c;
+    matches!(id,c::SEARCH|c::ASSISTANT|c::APP_GRID|c::OVERVIEW|c::CAPTURE|c::UTILITY|c::MODAL|c::NOTIFICATION_CENTER)
+}
+/// How long after a keyboard-taking chrome layer closed a focus without a press counts as the window server's hand-back
+/// of the keyboard (ms): the hand-back arrives within a round trip of the layer's destruction; a later focus is the
+/// window server's own (a window mapped, a menu closed) and is followed as before.
+const HAND_BACK_MS:f64=1000.0;
+/// The event for a focus of window `id` that no press on it came with (a keyboard enter, an activating configure), read
+/// at `now`, the last keyboard-taking layer having closed at `closed`: a `HandBack` within `HAND_BACK_MS` of it, else a
+/// `ServerFocus`. A press on a window always reports `Focus` (the person chose it).
+fn unpressed_focus(id:u32,closed:Option<f64>,now:f64)->WindowEvent {
+    if closed.is_some_and(|c|now>=c && now-c<=HAND_BACK_MS) { WindowEvent::HandBack(id) } else { WindowEvent::ServerFocus(id) }
+}
+/// The `set_stack_rank` requests for the windows `want` the shell brought forward: each of them that `ids` (the shell's
+/// windows, bottom first) lists gets the next rank in that order, so the bottom one has the lowest. `last` is the last
+/// rank sent and grows with each; 0 is never sent (it means no rank).
+fn stack_ranks(ids:&[u32],want:&[u32],last:&mut u32)->Vec<(u32,u32)> {
+    ids.iter().filter(|id|want.contains(id)).map(|&id|{*last=last.wrapping_add(1).max(1);(id,*last)}).collect()
+}
+/// How many `windows` calls a rank request waits for its window's toplevel (`unsent_restack`).
+const RESTACK_WAIT_CALLS:u16=120;
+/// How many rank requests wait at most; the oldest go first.
+const RESTACK_WAITING_MAX:usize=32;
+/// The rank requests `pending` (window, calls waited) that `windows` call listing `ids` could not send, because their
+/// window has no toplevel yet: they wait for a later call, one call older each, until `RESTACK_WAIT_CALLS` and at most
+/// `RESTACK_WAITING_MAX` of them (the newest kept). Taking the whole list on the first call dropped them, so a window
+/// that came back one frame after the others never got its rank and stayed under another client's window.
+fn unsent_restack(ids:&[u32],pending:Vec<(u32,u16)>)->Vec<(u32,u16)> {
+    let mut keep:Vec<(u32,u16)>=pending.into_iter().filter(|(id,_)|!ids.contains(id)).map(|(id,n)|(id,n.saturating_add(1))).filter(|&(_,n)|n<RESTACK_WAIT_CALLS).collect();
+    let extra=keep.len().saturating_sub(RESTACK_WAITING_MAX);
+    keep.drain(..extra);
+    keep
+}
 /// Asks the window server to activate (raise and focus) the shell's window `id`, with the shell's last input serial.
 fn request_activation(s:&State,qh:&QueueHandle<State>,id:u32) {
     if let (Some(activation),Some(seat),Some(surface))=(s.activation.as_ref(),s.seat.as_ref(),s.surface.as_ref()) {
@@ -1479,7 +1690,112 @@ fn window_buffer_count(count:usize, available:bool, dirty:bool) -> usize {
 }
 #[cfg(test)]
 mod tests {
-    use super::{dock_placement,DockEdge,focus_on_configure,min_size_of,DEFAULT_MIN_SIZE};
+    use super::{dock_placement,DockEdge,DockPlacement,enter_hover,focus_on_configure,keep_refocus,min_size_of,takes_keyboard,unpressed_focus,WindowEvent,DEFAULT_MIN_SIZE,HAND_BACK_MS};
+    /// A frame without pixels never changes a window's size: the presenter keeps the old pixels, and a covered window
+    /// the shell sent at a smaller size made the shm copy slice past their end (a panic) and the GPU path drop its buffers.
+    #[test]
+    fn a_frame_without_pixels_keeps_the_size_of_the_pixels_held() {
+        let frame=|w:usize,h:usize,pixels:Option<std::sync::Arc<[u32]>>| super::WindowFrame {
+            id:1, title:"", x:0, y:0, width:w, height:h, pixels, damage:crate::gfx::Damage::new(w,h), maximized:false, floating:false,
+            title_height:30, fullscreen:false, origin:None, position:None, drag_height:30, no_drag:Vec::new(),
+            fx:bifrost_render::glass::Fx::IDENTITY, opaque:true, min_size:(0,0), input:None,
+        };
+        let mut f=frame(1200,890,None);
+        super::hold_size_without_pixels((1920,952),&mut f);
+        assert_eq!((f.width,f.height),(1920,952), "no pixels: the size of the pixels held");
+        assert_eq!(f.damage,crate::gfx::Damage::new(1920,952), "its damage is sized for the pixels held");
+        let mut f=frame(1920,952,None);
+        super::hold_size_without_pixels((1920,952),&mut f);
+        assert_eq!((f.width,f.height),(1920,952), "the same size: unchanged");
+        let px:std::sync::Arc<[u32]>=vec![0u32;1200*890].into();
+        let mut f=frame(1200,890,Some(px));
+        super::hold_size_without_pixels((1920,952),&mut f);
+        assert_eq!((f.width,f.height),(1200,890), "new pixels bring their own size");
+    }
+    /// E2E13 3: a Light/Dark switch changes the look the material plates were drawn in, so every window with materials
+    /// is repainted in full instead of keeping the old plate under its unchanged translucent sidebar.
+    #[test]
+    fn a_scheme_switch_changes_the_material_look() {
+        let _lock=crate::test_support::global_lock();
+        bifrost_render::appearance::jump_to(false);
+        let dark=super::material_look();
+        bifrost_render::appearance::jump_to(true);
+        let light=super::material_look();
+        bifrost_render::appearance::jump_to(false);
+        assert_ne!(dark,light);
+        assert_eq!(super::material_look(),dark);
+    }
+    /// E2E6 4: an absolute pointer arrives on a surface with an Enter alone; it is a hover at the screen point it landed
+    /// on (the Dock magnifies and labels the icon under it), and nothing while a button is held.
+    #[test]
+    fn a_pointer_entering_a_surface_hovers_where_it_landed() {
+        match enter_hover(false,(10.0,20.0),(100.0,1300.0),5.0) {
+            Some(crate::bare::input::Event::Hover{x,y,t}) => assert_eq!((x,y,t),(110.0,1320.0,5.0)),
+            other => panic!("expected a hover, got {other:?}"),
+        }
+        assert!(enter_hover(true,(10.0,20.0),(0.0,0.0),5.0).is_none(),"a drag keeps going with its moves");
+    }
+    /// E2E5 1, 3: the windows the shell brought forward are ranked in its stacking order (bottom first), whatever order
+    /// it named them in; windows it did not name get none, and the ranks keep growing from one set to the next.
+    #[test]
+    fn windows_brought_forward_are_ranked_bottom_first_and_ranks_grow() {
+        let mut last=0;
+        assert_eq!(super::stack_ranks(&[4,7,2,9],&[9,2,4],&mut last),vec![(4,1),(2,2),(9,3)]);
+        assert_eq!(super::stack_ranks(&[4,7],&[7],&mut last),vec![(7,4)],"a later set outranks the earlier one");
+        assert!(super::stack_ranks(&[4],&[5],&mut last).is_empty(),"a window not listed now gets nothing");
+        let mut wrap=u32::MAX;
+        assert_eq!(super::stack_ranks(&[1],&[1],&mut wrap),vec![(1,1)],"0 is no rank and is never sent");
+    }
+    /// E2E6: a window brought forward with the others whose toplevel does not exist yet keeps its rank request until a
+    /// `windows` call lists it, and the waiting list is bounded in time and length.
+    #[test]
+    fn a_restacked_window_not_listed_yet_keeps_its_rank_until_its_toplevel_exists() {
+        let mut last=0;
+        let pending=vec![(4,0),(9,0)];
+        let want:Vec<u32>=pending.iter().map(|&(id,_)|id).collect();
+        assert_eq!(super::stack_ranks(&[4,7],&want,&mut last),vec![(4,1)],"only the listed window is ranked now");
+        let pending=super::unsent_restack(&[4,7],pending);
+        assert_eq!(pending,vec![(9,1)],"window 9 waits for its toplevel");
+        let want:Vec<u32>=pending.iter().map(|&(id,_)|id).collect();
+        assert_eq!(super::stack_ranks(&[4,7,9],&want,&mut last),vec![(9,2)],"ranked once it is listed, over the earlier one");
+        assert!(super::unsent_restack(&[4,7,9],pending).is_empty(),"sent: nothing waits");
+        assert!(super::unsent_restack(&[1],vec![(9,super::RESTACK_WAIT_CALLS-1)]).is_empty(),"a window that never comes is dropped");
+        let many:Vec<(u32,u16)>=(100..100+super::RESTACK_WAITING_MAX as u32+5).map(|id|(id,0)).collect();
+        let kept=super::unsent_restack(&[1],many);
+        assert_eq!(kept.len(),super::RESTACK_WAITING_MAX);
+        assert_eq!(kept.last().map(|w|w.0),Some(100+super::RESTACK_WAITING_MAX as u32+4),"the newest requests are kept");
+    }
+    /// E2E6: the shell's chrome z policy: the Dock under the Apps grid, the grid under the menus, the menus under the
+    /// banner and the accessibility caption and focus ring over everything; the namespace carries the rank.
+    #[test]
+    fn chrome_surfaces_rank_dock_under_grid_under_menus_under_focus_ring() {
+        use super::{chrome_z,chrome_namespace,CAPTION_CHROME_ID,FOCUS_RING_CHROME_ID};
+        use crate::shell::chrome_ids as c;
+        let (dock,grid,menu,flyout)=(chrome_z(c::DOCK),chrome_z(c::APP_GRID),chrome_z(c::POPUP),chrome_z(c::FLYOUT_FIRST));
+        assert!(dock<grid,"the Dock is under the grid");
+        assert!(grid<menu&&grid<flyout,"a menu and its submenus are over the grid");
+        assert!(chrome_z(c::MODAL)<dock,"a full-screen sheet does not cover the Dock");
+        assert_eq!(chrome_z(c::FLYOUT_END-1),chrome_z(c::POPUP),"the deepest submenu ranks with the menus");
+        let banner=chrome_z(crate::shell::notify::desk_banner::BANNER_CHROME_ID);
+        assert!(menu<banner&&banner<chrome_z(FOCUS_RING_CHROME_ID));
+        assert_eq!(chrome_z(CAPTION_CHROME_ID),chrome_z(FOCUS_RING_CHROME_ID));
+        assert!(chrome_z(FOCUS_RING_CHROME_ID)>menu,"the focus ring is over an open menu");
+        assert_eq!(chrome_namespace(FOCUS_RING_CHROME_ID),format!("bifrost-desktop-chrome.z{}",super::chrome_rank::ACCESSIBILITY));
+        assert_eq!(super::chrome_rank::PANEL,100,"the window server's default rank (LAYER_Z_DEFAULT)");
+    }
+    /// N11: a glass shape that went away is owed to a chrome surface under it, in the surface's own pixels and clipped
+    /// to it; a shape elsewhere owes it nothing.
+    #[test]
+    fn a_glass_shape_that_changes_is_owed_to_the_chrome_surface_under_it() {
+        let mut pending = crate::gfx::Damage::new(2560, 1300);
+        super::owe_glass(&mut pending, (0, 35), &[(450.0, 1190.0, 1650.0, 150.0), (0.0, 0.0, 100.0, 30.0)]);
+        let a = pending.areas();
+        assert_eq!(a.len(), 1, "the shape above the surface owes it nothing: {a:?}");
+        assert_eq!((a[0].x0, a[0].y0, a[0].x1, a[0].y1), (450, 1155, 2101, 1300), "moved to the surface and clipped to it");
+        let mut none = crate::gfx::Damage::new(100, 100);
+        super::owe_glass(&mut none, (0, 0), &[]);
+        assert!(none.is_empty());
+    }
     #[test]
     fn a_toplevel_advertises_the_frames_minimum_or_the_default() {
         assert_eq!(min_size_of((940,600)),(940,600), "the app's own minimum, e.g. Settings' split width");
@@ -1492,6 +1808,27 @@ mod tests {
         assert!(focus_on_configure(false,true,false), "a window that became active is focused");
         assert!(!focus_on_configure(false,false,false), "a resize of a background window");
         assert!(!focus_on_configure(false,true,true), "a resize of the active window raises nothing again");
+    }
+    /// E2E N2: a window that came back from Hide is fresh; a press on it gets the keyboard from the window server before
+    /// the press reaches the shell, and that keyboard must stay with it. A press elsewhere still owes the front window.
+    #[test]
+    fn a_press_on_the_fresh_window_that_took_the_keyboard_keeps_it() {
+        let (front, viewer, other) = (1, 0x0100_2002, 7);
+        assert_eq!(keep_refocus(Some((front, viewer)), viewer), None, "the person clicked the window: no hand-back");
+        assert_eq!(keep_refocus(Some((front, viewer)), other), Some((front, viewer)), "a press on another window keeps it owed");
+        assert_eq!(keep_refocus(None, viewer), None);
+    }
+    /// E2E6 1 follow-up: a focus without a press shortly after Search or the Apps grid closed is the keyboard hand-back;
+    /// before any such layer closed, or once the hand-back window is over, it is a plain focus.
+    #[test]
+    fn a_focus_without_a_press_just_after_a_keyboard_layer_closed_is_a_hand_back() {
+        assert!(takes_keyboard(3) && takes_keyboard(8), "Search and the Apps grid take the keyboard");
+        assert!(takes_keyboard(5), "Notification Center takes the keyboard so Esc closes it");
+        assert!(!takes_keyboard(13) && !takes_keyboard(0), "the Cmd+Tab strip and the menu bar do not");
+        assert!(matches!(unpressed_focus(5, Some(1000.0), 1040.0), WindowEvent::HandBack(5)));
+        assert!(matches!(unpressed_focus(5, Some(1000.0), 1000.0 + HAND_BACK_MS + 1.0), WindowEvent::ServerFocus(5)), "too late: the window server's own focus");
+        assert!(matches!(unpressed_focus(5, None, 1040.0), WindowEvent::ServerFocus(5)), "no layer closed");
+        assert!(matches!(unpressed_focus(5, Some(2000.0), 1040.0), WindowEvent::ServerFocus(5)), "a layer closed after it was read");
     }
     /// W4-1/W4-5: the window server focuses every window it maps; a window that maps behind the front one (back from
     /// Overview or a minimize) must not take the front from the window the shell just raised.
@@ -1510,18 +1847,35 @@ mod tests {
         assert_eq!(super::Display::input_rects(4,300,200,Some(&shape)),vec![[14,24,100,50]]);
         assert!(super::Display::input_rects(0,300,200,Some(&[])).is_empty(),"nothing drawn: no input at all");
     }
+    /// The open Dock stack's fan takes the pointer on its parts only (`ChromeFrame::shape`); a plain popup keeps its rect.
+    #[test]
+    fn a_chrome_shape_replaces_its_input_rect() {
+        assert_eq!(super::Display::chrome_input_rects(None,&[]),None,"the whole surface");
+        assert_eq!(super::Display::chrome_input_rects(Some([4,4,100,50]),&[]),Some(vec![[4,4,100,50]]));
+        let shape=[[10,20,30,30],[0,0,0,9],[50,60,70,22]];
+        assert_eq!(super::Display::chrome_input_rects(Some([4,4,100,50]),&shape),Some(vec![[10,20,30,30],[50,60,70,22]]),"the shape wins, empty rects dropped");
+    }
     #[test]
     fn the_dock_is_anchored_to_its_own_edge() {
         let screen=(1920,1080);
-        // bottom: a wide capsule a margin above the edge
-        assert_eq!(dock_placement(500,1000,900,70,screen),(DockEdge::Bottom,[0,0,10,0],80));
-        // left: a tall capsule at x=12, centred below the menu bar
-        assert_eq!(dock_placement(12,200,70,600,screen),(DockEdge::Left,[200,0,280,12],82));
-        // right: the zone is the width plus the gap to the right edge
-        assert_eq!(dock_placement(1838,200,70,600,screen),(DockEdge::Right,[200,12,280,0],82));
-        // a hidden side Dock (a thin strip) keeps its side
-        assert_eq!(dock_placement(0,30,3,1050,screen).0,DockEdge::Left);
-        assert_eq!(dock_placement(1917,30,3,1050,screen).0,DockEdge::Right);
+        let at=|x,y,w,h,edge,reserve|dock_placement(x,y,w,h,screen,DockPlacement{edge,reserve},30);
+        assert_eq!(at(500,1000,900,70,DockEdge::Bottom,80),(DockEdge::Bottom,[0,520,10,500],70));
+        assert_eq!(at(12,200,70,600,DockEdge::Left,82),(DockEdge::Left,[170,0,280,12],70));
+        assert_eq!(at(1838,200,70,600,DockEdge::Right,82),(DockEdge::Right,[170,12,280,0],70));
+        assert_eq!(at(0,30,3,1050,DockEdge::Left,0),(DockEdge::Left,[30,0,0,0],-1));
+        assert_eq!(at(1917,30,3,1050,DockEdge::Right,0),(DockEdge::Right,[30,0,0,0],-1));
+    }
+    #[test]
+    fn transparent_dock_room_never_changes_its_edge_or_reserved_depth() {
+        let screen=(1920,1080);
+        let side=DockPlacement{edge:DockEdge::Left,reserve:82};
+        // A label makes a side surface wider than it is tall: its edge still comes from the preference.
+        assert_eq!(dock_placement(0,400,600,300,screen,side,30),(DockEdge::Left,[370,0,380,0],82));
+        let bottom=DockPlacement{edge:DockEdge::Bottom,reserve:82};
+        for height in [80,160,320] {
+            assert_eq!(dock_placement(500,1080-height as i32,900,height,screen,bottom,30).2,82,
+                "transparent room for labels or bounce reserves no extra space");
+        }
     }
     #[test]
     fn a_frame_dropped_for_want_of_a_buffer_is_redrawn_on_the_next_release() {
@@ -1661,7 +2015,7 @@ impl Dispatch<foreign_manager::ZwlrForeignToplevelManagerV1, ()> for State {
     fn event(s:&mut Self,_:&foreign_manager::ZwlrForeignToplevelManagerV1,e:foreign_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
         if let foreign_manager::Event::Toplevel { toplevel }=e {
             let id=toplevel.id().protocol_id();
-            s.foreign.push(Foreign {handle:toplevel,info:ForeignWindow {id,title:String::new(),app_id:String::new(),active:false,maximized:false}});
+            s.foreign.push(Foreign {handle:toplevel,info:ForeignWindow {id,title:String::new(),app_id:String::new(),active:false,maximized:false,minimized:false}});
         }
     }
     wayland_client::event_created_child!(State, foreign_manager::ZwlrForeignToplevelManagerV1, [0 => (foreign_handle::ZwlrForeignToplevelHandleV1, ())]);
@@ -1674,11 +2028,19 @@ impl Dispatch<foreign_handle::ZwlrForeignToplevelHandleV1, ()> for State {
         if let Some(w)=s.foreign.iter_mut().find(|w|w.handle==*obj) { match e {
             foreign_handle::Event::Title {title} => w.info.title=title,
             foreign_handle::Event::AppId {app_id} => w.info.app_id=app_id,
-            foreign_handle::Event::State {state} => {w.info.active=state.chunks_exact(4).any(|v|u32::from_ne_bytes(v.try_into().unwrap())==2);w.info.maximized=state.chunks_exact(4).any(|v|u32::from_ne_bytes(v.try_into().unwrap())==0);},
+            foreign_handle::Event::State {state} => {w.info.active=state.chunks_exact(4).any(|v|u32::from_ne_bytes(v.try_into().unwrap())==2);w.info.maximized=state.chunks_exact(4).any(|v|u32::from_ne_bytes(v.try_into().unwrap())==0);w.info.minimized=state.chunks_exact(4).any(|v|u32::from_ne_bytes(v.try_into().unwrap())==1);},
             foreign_handle::Event::Done => s.foreign_dirty=true,
             _ => {}
         }}
     }
+}
+
+/// What the presenter's material plates and blur looks depend on beyond the window's pixels: the scheme position
+/// (`Kind::style`, `Kind::inactive`) and Reduce Transparency. The position is quantised (`appearance::scheme_step`):
+/// keyed on the raw value every window with materials was repainted in full on every frame of the fade; now a quiet
+/// window's plate steps a few times through the fade and lands on the end scheme.
+fn material_look() -> u64 {
+    ((bifrost_render::appearance::scheme_step() as u64) << 1) | bifrost_render::appearance::reduce_transparency() as u64
 }
 
 /// A window's material rects as blur-region rectangles in surface pixels (x, y, w, h): the materials are
@@ -1739,7 +2101,6 @@ impl Dispatch<cap_frame::BifrostWindowCaptureFrameV1,u64> for State {
             }
             cap_frame::Event::Unchanged{serial}=>ShotOutcome::Unchanged{serial},
             cap_frame::Event::Failed{..}=>ShotOutcome::Failed,
-            _=>return,
         };
         if let Some(job)=s.cap_jobs.remove(token) { job.buffer.destroy(); job.frame.destroy(); }
         s.cap_results.push((*token,outcome));

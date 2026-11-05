@@ -230,9 +230,76 @@ impl TiledPicture {
     }
 }
 
+/// A picture file served in tiles without holding the decoded picture: each tile is decoded from the file when it is
+/// first asked for (`cg::imageio::decode_region`) and only the cached tiles are held. A still, non-interlaced PNG is
+/// read row by row, so one row besides the tile is in memory, and it may be larger than the whole-picture limit
+/// (`cg::imageio::MAX_SIDE`); other formats are decoded whole for each tile and cut, which bounds what is held between
+/// calls but not the decode itself.
+pub struct StreamingPicture {
+    bytes: Vec<u8>,
+    grid: TileGrid,
+    cache: TileCache<crate::gfx::Image>,
+    loads: usize,
+}
+
+impl StreamingPicture {
+    /// Reads the size from the header and lays the grid out; nothing is decoded yet. None for data that is not a
+    /// picture, a zero edge or a zero capacity.
+    pub fn new(bytes: Vec<u8>, tile_edge: usize, capacity: usize) -> Option<StreamingPicture> {
+        let (w, h) = crate::cg::imageio::pixel_size(&bytes)?;
+        let grid = TileGrid::new(w, h, tile_edge, tile_edge)?;
+        Some(StreamingPicture { bytes, grid, cache: TileCache::new(capacity)?, loads: 0 })
+    }
+
+    pub fn grid(&self) -> &TileGrid {
+        &self.grid
+    }
+
+    /// How many tiles were decoded from the file so far.
+    pub fn loads(&self) -> usize {
+        self.loads
+    }
+
+    /// The tile at `col`, `row`, from the cache or decoded from the file. None outside the grid or when it does not
+    /// decode.
+    pub fn tile(&mut self, col: usize, row: usize) -> Option<&crate::gfx::Image> {
+        let t = self.grid.tile(col, row)?;
+        let (bytes, loads) = (&self.bytes, &mut self.loads);
+        self.cache.get_or_load(t, |t| {
+            *loads += 1;
+            crate::cg::imageio::decode_region(bytes, t.x, t.y, t.w, t.h)
+        })
+    }
+
+    /// The tiles that cover the region `x`, `y`, `w`, `h` of the picture, each with its pixels, row by row.
+    pub fn region(&mut self, x: usize, y: usize, w: usize, h: usize) -> Vec<(Tile, crate::gfx::Image)> {
+        let wanted = self.grid.covering(x, y, w, h);
+        wanted.into_iter().filter_map(|t| self.tile(t.col, t.row).cloned().map(|img| (t, img))).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_streamed_png_gives_the_same_tiles_as_the_whole_picture() {
+        let (w, h) = (70, 45);
+        let px: Vec<u8> = (0..w * h).flat_map(|i| [(i % 256) as u8, (i / 256) as u8, 7, 255]).collect();
+        let png = crate::cg::imageio::encode::encode_png(w, h, &px, &Default::default()).unwrap();
+        let whole = crate::cg::imageio::decode(&png).unwrap();
+        let mut s = StreamingPicture::new(png.clone(), 32, 2).unwrap();
+        assert_eq!((s.grid().columns(), s.grid().rows()), (3, 2));
+        for (col, row) in [(0, 0), (2, 1), (1, 1)] {
+            let t = s.grid().tile(col, row).unwrap();
+            assert_eq!(s.tile(col, row).cloned(), crop_tile(&whole, t), "tile {col},{row}");
+        }
+        assert_eq!(s.loads(), 3);
+        s.tile(1, 1);
+        assert_eq!(s.loads(), 3, "a cached tile is not decoded again");
+        assert_eq!(crate::cg::imageio::decode_region(&png, 60, 40, 20, 5), None, "outside the picture");
+        assert!(StreamingPicture::new(b"not a picture".to_vec(), 32, 2).is_none());
+    }
 
     fn numbered(w: usize, h: usize) -> crate::gfx::Image {
         let mut im = crate::gfx::Image::new(w, h);

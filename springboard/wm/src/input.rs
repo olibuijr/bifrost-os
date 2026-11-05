@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use smithay::{
     backend::input::{
-        Axis, AxisSource, ButtonState, Event, GestureBeginEvent, GestureEndEvent, GesturePinchUpdateEvent,
+        Axis, AxisSource, ButtonState, Device as _, Event, GestureBeginEvent, GestureEndEvent, GesturePinchUpdateEvent,
         GestureSwipeUpdateEvent, InputBackend, InputEvent, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
         PointerMotionEvent,
     },
@@ -343,7 +343,10 @@ impl WmState {
         let seat = self.seat.clone();
         self.idle_notifier_state.notify_activity(&seat);
         match event {
-            InputEvent::Keyboard { event } => self.key(event.key_code(), event.state(), event.time_msec()),
+            InputEvent::Keyboard { event } => {
+                let device = event.device().id();
+                self.device_key(&device, event.key_code(), event.state(), event.time_msec())
+            }
             InputEvent::PointerMotion { event } => {
                 // real pointer motion shows the pointer image again after a touch (touch.rs)
                 self.last_input_touch = false;
@@ -353,12 +356,8 @@ impl WmState {
                 self.pointer_motion(pos, event.time_msec());
             }
             InputEvent::PointerMotionAbsolute { event } => {
-                self.last_input_touch = false;
-                // the device range goes through the output transform, as a touch does (touch_position)
                 let norm = crate::touch::normalized::<I, _>(&event);
-                if let Some(pos) = self.touch_position(norm) {
-                    self.pointer_motion(pos, event.time_msec());
-                }
+                self.pointer_motion_absolute(norm, event.time_msec());
             }
             InputEvent::PointerButton { event } => {
                 self.pointer_button(event.button_code(), event.state() == ButtonState::Pressed, event.time_msec())
@@ -421,6 +420,18 @@ impl WmState {
     }
 
     /// Moves the pointer to `pos`, kept on the output. A pointer locked by the focused surface does not move.
+    /// An absolute pointer (a tablet, VNC, an absolute uinput device) at `norm`, 0..1 of the device's range: the device
+    /// range goes through the output transform, as a touch does (`touch_position`), and the move is the same
+    /// `pointer_motion` a relative move makes, so a move inside a surface reaches it as `wl_pointer.motion` and a move
+    /// onto another surface as a leave and an enter (hover follows the pointer; E2E7 d01-d04).
+    pub fn pointer_motion_absolute(&mut self, norm: crate::touch::Norm, time: u32) {
+        // real pointer motion shows the pointer image again after a touch (touch.rs)
+        self.last_input_touch = false;
+        if let Some(pos) = self.touch_position(norm) {
+            self.pointer_motion(pos, time);
+        }
+    }
+
     pub fn pointer_motion(&mut self, pos: Point<f64, Logical>, time: u32) {
         let pointer = self.seat.get_pointer().expect("pointer");
         if pointer.current_focus().is_some_and(|s| motion_locked(constraint_state(&s, &pointer))) {
@@ -467,6 +478,11 @@ impl WmState {
                 return;
             }
         }
+        // a press on the shell's chrome above the windows (a menu, the menu bar, the Dock) is the chrome's: the window
+        // whose frame lies under it keeps its place and the keyboard (E2E R1, a pop-up past its window's edge)
+        if self.layer_above_windows_at(pos) {
+            return;
+        }
         let hit = self.wm.at(pos.x as i32, pos.y as i32);
         if hit.is_some() || self.surface_under(pos).is_none() {
             self.focus(hit, serial);
@@ -479,6 +495,24 @@ impl WmState {
         update_constraint_focus(&pointer, None);
         pointer.motion(self, None, &MotionEvent { location: pos, serial: SERIAL_COUNTER.next_serial(), time });
         pointer.frame(self);
+    }
+
+    /// A key from one keyboard device. The devices are one seat keyboard: a press of a key another device already
+    /// holds (a keyboard that sends each key on its boot and NKRO interfaces) is not delivered again, and the release
+    /// goes out when the last device holding the key lets go. Clients repeat from the single press.
+    pub fn device_key(&mut self, device: &str, code: Keycode, state: KeyState, time: u32) {
+        if self.seat_keys.feed(device, code.raw(), state == KeyState::Pressed) {
+            self.key(code, state, time);
+        }
+    }
+
+    /// A keyboard device went away (unplugged, or the session paused): the keys only it held are released, so no key
+    /// or modifier stays stuck down on the seat.
+    pub fn keyboard_device_removed(&mut self, device: &str) {
+        let time = self.start.elapsed().as_millis() as u32;
+        for code in self.seat_keys.remove_device(device) {
+            self.key(Keycode::new(code), KeyState::Released, time);
+        }
     }
 
     pub fn key(&mut self, code: Keycode, state: KeyState, time: u32) {

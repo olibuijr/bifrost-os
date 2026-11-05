@@ -141,6 +141,24 @@ pub(super) fn build_list(installed: &[apphost::Installed]) -> Vec<AppDef> {
     v
 }
 
+/// Other names an app is found by in Search, keyed by its icon key (the manifest id of an installed app): the common
+/// name of a built-in whose Dock name is short ("Term") or of an app whose name differs from the one people type
+/// ("Viewer" is searched as "preview"). Empty for an app found by its name alone.
+pub fn search_aliases(icon: &str) -> &'static str {
+    match icon {
+        "is.olibuijr.term" => "terminal shell command line",
+        "is.olibuijr.preview.desktop" => "preview image pdf",
+        "is.olibuijr.textedit.desktop" => "textedit",
+        "bifrost.settings" => "system settings preferences",
+        "is.olibuijr.browser" | "is.olibuijr.browser.desktop" => "web internet",
+        "is.olibuijr.fontbook.desktop" => "font book",
+        "is.olibuijr.printers.desktop" => "printers",
+        "is.olibuijr.colour-utility.desktop" => "color colour",
+        "is.olibuijr.videoplayer.desktop" => "movie video",
+        _ => "",
+    }
+}
+
 /// Returns a `'static` copy of `s`, reusing the same allocation for equal strings.
 fn intern(s: &str) -> &'static str {
     static STRINGS: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
@@ -216,6 +234,15 @@ mod tests {
             assert!(APPS.iter().any(|a| a.icon == id && a.icon_image.is_none()), "{id} ships as an asset");
         }
         assert!(builtin_icon("is.example.nothing", 32).is_none());
+    }
+
+    /// E2E9 1: Search finds Terminal and the viewer by the names people type, not only their short names.
+    #[test]
+    fn the_terminal_and_the_viewer_have_search_aliases() {
+        let term = APPS.iter().find(|a| a.id == AppId::Terminal).unwrap();
+        assert!(search_aliases(term.icon).split(' ').any(|w| w == "terminal"));
+        assert!(search_aliases("is.olibuijr.preview.desktop").split(' ').any(|w| w == "preview"));
+        assert_eq!(search_aliases("is.example.nothing"), "");
     }
 
     #[test]

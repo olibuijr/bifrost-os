@@ -1,4 +1,4 @@
-//! The text model of Text Editor: styled characters, the selection, undo and redo, formatting, counts and the find and
+//! The text model of TextEdit: styled characters, the selection, undo and redo, formatting, counts and the find and
 //! replace rules. Pure Rust with no shell types, so the rules are tested without the shell or a window.
 //!
 //! A paragraph ends with a `'\n'` cell. Alignment is a paragraph property, stored on every cell of the paragraph
@@ -12,7 +12,7 @@ pub const FAMILIES: [&str; 3] = ["Helvetica", "Times", "Courier"];
 pub const FAMILY_NAMES: [&str; 3] = ["Arial", "Times New Roman", "Courier New"];
 
 /// Every family a document can use, by `Style::font` index: the three base families (`FAMILIES`), then the font families
-/// installed on the system and in the user's fonts folder, by name (`NSFontManager.availableFontFamilies`). At most 256.
+/// installed on the system and in the user's fonts folder, by name (the reference font manager's family list). At most 256.
 /// Tests see the base families only, so they do not depend on the machine's fonts.
 pub fn families() -> &'static [String] {
     &catalogue().0
@@ -148,6 +148,10 @@ pub const PAGE_BREAK: char = '\u{c}';
 pub fn is_break(ch: char) -> bool {
     ch == LINE_BREAK || ch == PAGE_BREAK
 }
+
+/// The family Format > Make Plain Text sets: Courier, the fixed-pitch base family (drawn by an installed fixed-pitch
+/// family, `stand_in`), as the reference's plain text font is a fixed-pitch one.
+pub const PLAIN_FONT: u8 = 2;
 
 /// The point size of new text.
 pub const DEFAULT_SIZE: f32 = 12.0;
@@ -370,6 +374,11 @@ struct Snapshot {
     anchor: usize,
     head: usize,
     kind: Kind,
+    /// The font new text takes (`Text::default_font`): Make Plain Text changes it, so Undo puts the rich one back.
+    default_font: u8,
+    /// The entry is Make Plain Text: undoing it makes the document rich text again and redoing it plain again (the
+    /// document mode lives in `TextDocument::rich`, which asks `undo_makes_rich` / `redo_makes_plain`).
+    plain_switch: bool,
 }
 
 /// Where the document is in its edit history. `position` is the undo depth, `epoch` changes when a new edit
@@ -419,6 +428,16 @@ impl Text {
         if self.cells.is_empty() {
             self.typing.font = self.default_font;
         }
+    }
+
+    /// A plain text document read from disk takes the plain text font throughout, as Make Plain Text leaves one, so
+    /// every plain document uses one font. Makes no undo entry (a load just started the history over).
+    pub fn use_plain_font(&mut self) {
+        for c in &mut self.cells {
+            c.style.font = PLAIN_FONT;
+        }
+        self.typing.font = PLAIN_FONT;
+        self.default_font = PLAIN_FONT;
     }
 
     /// Replaces the content (a file was read). Undo, redo and the selection start over.
@@ -617,7 +636,7 @@ impl Text {
             self.epoch += 1;
             self.redo.clear();
         }
-        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind });
+        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind, default_font: self.default_font, plain_switch: false });
         if self.undo.len() > UNDO_LIMIT {
             self.undo.remove(0);
         }
@@ -830,15 +849,22 @@ impl Text {
         f(&mut self.typing);
     }
 
-    /// Makes the document plain text: every character and paragraph loses its formatting. One undo entry.
-    /// Attachments are dropped (the caller asks first when `has_attachments`).
+    /// Makes the document plain text: every character and paragraph loses its formatting and takes the plain text
+    /// font (`PLAIN_FONT`), as the reference switches a converted document to its fixed-pitch plain text font. One
+    /// undo entry. Attachments are dropped (the caller asks first).
     pub fn make_plain(&mut self) {
         self.record(Kind::Formatting);
-        self.cells.retain(|c| c.ch != OBJECT);
-        for c in &mut self.cells {
-            c.style = Style::default();
+        if let Some(entry) = self.undo.last_mut() {
+            entry.plain_switch = true;
         }
-        self.typing = Style::default();
+        self.cells.retain(|c| c.ch != OBJECT);
+        let plain = Style { font: PLAIN_FONT, ..Style::default() };
+        for c in &mut self.cells {
+            c.style = plain;
+        }
+        self.typing = plain;
+        // text typed into the emptied document later takes the plain font too, not the rich text default
+        self.default_font = PLAIN_FONT;
         self.anchor = self.anchor.min(self.cells.len());
         self.head = self.head.min(self.cells.len());
     }
@@ -1113,7 +1139,9 @@ impl Text {
             let new: Vec<Cell> = replacement.chars().map(|ch| Cell { ch, style }).collect();
             self.cells.splice(start..start + needle.len(), new);
         }
-        self.select(0, 0);
+        // the caret goes after the last replacement, so typing after Done continues there, not at the top
+        let after = starts[starts.len() - 1] + replacement.chars().count() * starts.len() - needle.len() * (starts.len() - 1);
+        self.select(after, after);
         starts.len()
     }
 
@@ -1134,22 +1162,33 @@ impl Text {
         self.redo.last().map(|s| s.kind.name())
     }
 
+    /// Whether Undo would take back Make Plain Text (so the document becomes rich text again).
+    pub fn undo_makes_rich(&self) -> bool {
+        self.undo.last().is_some_and(|s| s.plain_switch)
+    }
+
+    /// Whether Redo would apply Make Plain Text again (so the document becomes plain text again).
+    pub fn redo_makes_plain(&self) -> bool {
+        self.redo.last().is_some_and(|s| s.plain_switch)
+    }
+
     pub fn undo(&mut self) -> bool {
         let Some(snap) = self.undo.pop() else { return false };
-        self.redo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind });
+        self.redo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind, default_font: self.default_font, plain_switch: snap.plain_switch });
         self.restore(snap);
         true
     }
 
     pub fn redo(&mut self) -> bool {
         let Some(snap) = self.redo.pop() else { return false };
-        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind });
+        self.undo.push(Snapshot { cells: self.cells.clone(), anchor: self.anchor, head: self.head, kind: snap.kind, default_font: self.default_font, plain_switch: snap.plain_switch });
         self.restore(snap);
         true
     }
 
     fn restore(&mut self, snap: Snapshot) {
         self.cells = snap.cells;
+        self.default_font = snap.default_font;
         self.anchor = snap.anchor.min(self.len());
         self.head = snap.head.min(self.len());
         self.last_kind = None;
@@ -1510,6 +1549,7 @@ mod tests {
         let mut t = plain("a-a-a");
         assert_eq!(t.replace_all("a", "bb", true), 3);
         assert_eq!(t.text(), "bb-bb-bb");
+        assert_eq!(t.selection(), 8..8, "the caret is after the last replacement");
         assert_eq!(t.undo_name(), Some("Replacing"));
         assert!(t.undo());
         assert_eq!(t.text(), "a-a-a");
@@ -1833,6 +1873,18 @@ mod attachment_tests {
         assert!(!t.has_attachments());
         assert!(t.undo(), "one undo entry brings the picture back");
         assert!(t.has_attachments());
+    }
+
+    #[test]
+    fn undo_of_make_plain_restores_the_rich_default_font() {
+        let mut t = Text::new();
+        t.set_default_font(0);
+        t.make_plain();
+        assert_eq!(t.default_font, PLAIN_FONT);
+        assert!(t.undo());
+        assert_eq!(t.default_font, 0, "Undo brings the rich text default back");
+        assert!(t.redo());
+        assert_eq!(t.default_font, PLAIN_FONT, "Redo makes it plain again");
     }
 
     #[test]

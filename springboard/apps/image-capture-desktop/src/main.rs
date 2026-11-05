@@ -14,6 +14,10 @@ use bifrost_app::{App, Ctx, Input};
 use window::{ImageCapture, Target};
 
 impl App for ImageCapture {
+    /// A single-window utility: the red light quits it (`applicationShouldTerminateAfterLastWindowClosed:`).
+    fn terminates_after_last_window_closed(&self) -> bool {
+        true
+    }
     fn id(&self) -> &str {
         "is.olibuijr.imagecapture.desktop"
     }

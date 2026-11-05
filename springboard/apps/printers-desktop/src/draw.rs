@@ -8,7 +8,7 @@ use crate::model::{
 };
 use crate::window::{Field, PrintCenter, B_TITLE, COLS_PT, JOB_ROW_PT, PAD_PT, ROW_PT, SIDE_PT, TITLE};
 use bifrost_app::controls::{Node, Rect, Role};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_TITLE2_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, SYSTEM_ORANGE, SYSTEM_RED, TINT, WHITE};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_TITLE2_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, SYSTEM_ORANGE, SYSTEM_RED, WHITE, accent_now};
 use bifrost_app::kit::{pack, Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
 
@@ -144,7 +144,7 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
         let mid = d.y + d.h / 2.0;
         centred(&mut p.labels, s, ui, "No Printers", MAC_TITLE2_PT, Weight::Semibold, LABEL_2.now(), d.x + d.w / 2.0, mid - 30.0, w);
         centred(&mut p.labels, s, ui, "Add a printer on this network, or one by its address.", MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), d.x + d.w / 2.0, mid - 4.0, w);
-        fill(s, ui, button, button.h / 2.0, TINT);
+        fill(s, ui, button, button.h / 2.0, accent_now());
         centred(&mut p.labels, s, ui, ADD_FIRST, MAC_BODY_PT, Weight::Semibold, WHITE, button.x + button.w / 2.0, button.y + button.h / 2.0, button.w - 24.0);
         return;
     }
@@ -201,7 +201,7 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
         if let Some(done) = job_progress(job) {
             let width = column_width(&cols, 6, x0 + w).min(110.0);
             let bar = Rect { x: cols[6], y: r.y + JOB_ROW_PT - 7.0, w: width, h: 3.0 };
-            let (track, fill_color) = if on { (CARD_BG.now(), WHITE) } else { (SEPARATOR_C.now(), TINT) };
+            let (track, fill_color) = if on { (CARD_BG.now(), WHITE) } else { (SEPARATOR_C.now(), accent_now()) };
             fill(s, ui, bar, 0.0, track);
             fill(s, ui, Rect { w: bar.w * done, ..bar }, 0.0, fill_color);
         }
@@ -225,7 +225,7 @@ fn paint_discover(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
     text_mid(&mut p.labels, s, ui, "Add a Printer", MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x0, d.y + 24.0, w);
     text_mid(&mut p.labels, s, ui, "Printers on this network that announce themselves", MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x0, d.y + 50.0, w);
     let button = p.clipboard_rect();
-    fill(s, ui, button, 6.0, TINT);
+    fill(s, ui, button, 6.0, accent_now());
     text_mid(&mut p.labels, s, ui, "Use Address from Clipboard", MAC_BODY_PT, Weight::Semibold, WHITE, button.x + 14.0, button.y + button.h / 2.0, button.w - 28.0);
     let found = p.discover.found.clone();
     if found.is_empty() {
@@ -288,7 +288,7 @@ fn paint_info(p: &mut PrintCenter, s: &mut Surface, ui: &Ui, printer: &bifrost_a
             widgets::text_field(s, ui, if field == Field::Description { &p.description } else { &p.location }, r, label, p.focus == Some(field));
         }
         let save = p.save_rect();
-        fill(s, ui, save, 6.0, TINT);
+        fill(s, ui, save, 6.0, accent_now());
         text_mid(&mut p.labels, s, ui, "Save", MAC_BODY_PT, Weight::Semibold, WHITE, save.x + 26.0, save.y + save.h / 2.0, save.w - 30.0);
         if p.share_shown() {
             let share = p.share_rect();
@@ -319,7 +319,7 @@ fn paint_info(p: &mut PrintCenter, s: &mut Surface, ui: &Ui, printer: &bifrost_a
         let bar = Rect { x: x0 + 220.0, y: y + 5.0, w: (w - 220.0).clamp(0.0, 220.0), h: 8.0 };
         fill(s, ui, bar, 3.0, SEPARATOR_C.now());
         if let Some(level) = supply.level {
-            let color = supply_rgb(&supply.color).map_or(TINT, |(r, g, b)| pack(r, g, b, 255));
+            let color = supply_fill(&supply.color);
             fill(s, ui, Rect { w: bar.w * f32::from(level) / 100.0, ..bar }, 3.0, color);
         }
         y += 22.0;
@@ -350,4 +350,30 @@ pub fn controls(p: &PrintCenter, ui: &Ui) -> Vec<Node> {
         nodes.push(Node { id: crate::window::B_ADD as u64, role: Role::Button, label: ADD_FIRST.into(), value: String::new(), bounds: r, enabled: true });
     }
     nodes
+}
+
+/// The fill of a supply-level bar: the ink's own colour when the printer reports one, else the user's accent.
+fn supply_fill(color: &str) -> u32 {
+    supply_rgb(color).map_or_else(accent_now, |(r, g, b)| pack(r, g, b, 255))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn a_supply_without_a_reported_colour_is_filled_with_the_chosen_accent_not_system_blue() {
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let (unknown, green) = (supply_fill(""), accent_now());
+        set_accent(keep);
+        assert_eq!(unknown, green);
+        assert_ne!(unknown, bifrost_app::kit::ui::TINT);
+        assert_eq!(supply_fill("#FF0000"), pack(255, 0, 0, 255), "a reported ink colour is kept");
+    }
 }

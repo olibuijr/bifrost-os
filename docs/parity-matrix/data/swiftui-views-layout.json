@@ -4,7 +4,7 @@
  "macos_since": "10.15",
  "status": "partial",
  "bifrost": "springboard/sdk/src/view/ (retained views, Stack, Form, ScrollView), springboard/ui/src/ (stack, table, collection, sidebar, constraint)",
- "summary": "BifrOSt has an imperative, retained-view toolkit with stacks, grids, forms, scroll views, source lists, tables and animation, plus Auto Layout style constraints. It has no declarative View protocol, modifier chain, state-driven body, shapes or custom Layout protocol.",
+ "summary": "BifrOSt has an imperative, retained-view toolkit with stacks (including first and last text baseline alignment), grids, forms, group boxes, control groups, tab views, scroll views with a bound scroll position, source lists, tables, a button style protocol and animation, plus Auto Layout style constraints with baseline anchors. It has no declarative View protocol, modifier chain or state-driven body.",
  "rea_evidence": "ev_1a882830e38c95f440f0bd336bd00c74fb8bc2a84fc97d1342e354040edb662e",
  "features": [
   {
@@ -24,9 +24,9 @@
   {
    "feature": "View styles",
    "apple": "https://developer.apple.com/documentation/swiftui/view-styles",
-   "bifrost": "springboard/sdk/src/view/forms.rs (ProgressStyle)",
+   "bifrost": "springboard/sdk/src/view/button_style.rs (ButtonStyle, ButtonConfiguration, ButtonRole, Bordered, BorderedProminent, Borderless, Plain, LinkStyle), springboard/sdk/src/view/controls.rs (Button::styled, with_role), springboard/sdk/src/view/forms.rs (ProgressStyle)",
    "status": "partial",
-   "note": "a few fixed styles per control, no style protocols"
+   "note": "Built 2026-10-24: a button style protocol. ButtonStyle draws and sizes a Button from its ButtonConfiguration (label, isPressed, role, enabled, focus, frame), so apps restyle buttons or write their own style; built-ins Bordered (default, unchanged look), BorderedProminent, Borderless, Plain and LinkStyle, and ButtonRole Destructive/Cancel (destructive draws in DESTRUCTIVE). Host tests in springboard/sdk/src/view/tests_groupings.rs (a_custom_style_sizes_and_draws_the_button_from_its_configuration, the_built_in_styles_ask_for_less_room_as_their_bezel_shrinks). Gap: only buttons have a style protocol (no ToggleStyle, LabelStyle, PickerStyle, GroupBoxStyle or custom ControlGroupStyle bodies), no glass or accessory-bar button styles, not yet verified on Midget. REA ev_ed0948f3d1cbfc813ba01d8632df27a86ec8079573d60b20e31314657d0c2be9."
   },
   {
    "feature": "Animations",
@@ -87,9 +87,9 @@
   {
    "feature": "Layout adjustments (alignment, spacing, padding, safe area)",
    "apple": "https://developer.apple.com/documentation/swiftui/layout-adjustments",
-   "bifrost": "springboard/sdk/src/layout.rs, springboard/ui/src/geometry.rs (EdgeInsets), springboard/sdk/src/view/autolayout.rs (Spec::priority, Constraints::guide)",
+   "bifrost": "springboard/sdk/src/layout.rs, springboard/ui/src/geometry.rs (EdgeInsets), springboard/sdk/src/view/autolayout.rs (Spec::priority, Constraints::guide, Anchor::FirstBaseline/LastBaseline), springboard/sdk/src/view/controls.rs (Align::FirstBaseline/LastBaseline, View::baselines), springboard/render/src/ui.rs (Ui::centred_baseline, image_baseline)",
    "status": "partial",
-   "note": "Insets, alignment, distribution, constraints with priorities, layout guides and hugging and compression priorities are solved headless (sdk/tests/parity_sdk-complete-31.rs). Gap: there are no baseline alignment anchors."
+   "note": "Insets, alignment, distribution, constraints with priorities, layout guides and hugging and compression priorities are solved headless (sdk/tests/parity_sdk-complete-31.rs). Built 2026-10-24: first and last text baseline alignment. View::baselines is reported by Label, Button, Switch, Segmented, Checkbox, PopUpButton, TextField and Stack; a horizontal Stack with Align::FirstBaseline or LastBaseline lines the baselines up and aligns a view without text by its bottom edge, and Auto Layout gains first_baseline()/last_baseline() anchors. Host tests: springboard/sdk/src/view/tests_controls.rs (first_baseline_alignment_lines_up_text_of_different_sizes_and_images_by_their_bottom, last_baseline_alignment_uses_the_last_line_and_a_vertical_stack_ignores_baselines), autolayout.rs (baseline_anchors_line_up_text_of_different_heights, a_view_without_text_offers_its_bottom_as_its_baseline). Gap: no custom alignment guides (alignmentGuide), multi-line text reports one line, not yet verified on Midget. REA ev_b93a5d6115e46cd5d057bd6f1baba6f5bab80712a0302d4e2fd8db9ed91a5c91."
   },
   {
    "feature": "Custom layout (Layout protocol)",
@@ -115,16 +115,16 @@
   {
    "feature": "View groupings (Form, Group, ControlGroup, split)",
    "apple": "https://developer.apple.com/documentation/swiftui/view-groupings",
-   "bifrost": "springboard/sdk/src/view/forms.rs (Form, Section), springboard/ui/src/split.rs",
+   "bifrost": "springboard/sdk/src/view/groupings.rs (GroupBox, ControlGroup, ControlGroupStyle, TabView), springboard/sdk/src/view/forms.rs (Form, Section), springboard/ui/src/split.rs, springboard/ui/src/tab_selection.rs",
    "status": "partial",
-   "note": "forms with sections, split view; no TabView, GroupBox, ControlGroup views Built 2026-10-17: TabView selection model (ui tab_selection::TabSelection: select, remove with successor selection, duplicate ids dropped); tests tab_selection::tests in springboard/ui/src/tab_selection.rs. Not yet a TabView view, not wired into the shell or apps."
+   "note": "Forms with sections and split view. Built 2026-10-24: GroupBox (titled card around content), ControlGroup (automatic and navigation styles join borderless buttons on one capsule plate with dividers and equal shares, palette packs them) and a TabView view over the TabSelection model (centred tab row on a card, one page visible, click or Left/Right selects and sends the action, select/selected_id bind it to app state). Host tests in springboard/sdk/src/view/tests_groupings.rs (a_group_box_insets_its_content_below_the_title, a_control_group_joins_borderless_buttons_in_equal_shares, a_palette_group_packs_its_controls_and_a_narrow_group_shrinks_them_together, a_tab_view_shows_only_the_selected_tab_and_drops_repeated_ids, clicking_a_tab_or_arrow_keys_select_it_and_send_the_action). Gap: no ControlGroup menu or compact-menu styles, no TabSection, sidebar-adaptable or page TabView styles, no group or tab-group accessibility roles, not wired into an app and not yet verified on Midget. REA ev_82d999d9ca35bf7c060d40b88c1ea62d8270a37a9072e3299303d6f8c0aefd65 (GroupBox), ev_9abf836f62e12e7ecab6b3d336a9f72862b59ddd808a0024f73147708e31470e (ControlGroup), ev_dd0e19f2411dc509513a1656094075b4f70b1983a8ea321a107c53d698b1a8c4 (TabView)."
   },
   {
    "feature": "Scroll views",
    "apple": "https://developer.apple.com/documentation/swiftui/scroll-views",
-   "bifrost": "springboard/ui/src/scroll.rs (Scroller), springboard/sdk/src/view/scroll.rs",
+   "bifrost": "springboard/ui/src/scroll.rs (Scroller, offset_for_rect), springboard/ui/src/scroll_position.rs (ScrollPosition, ScrollTarget, Edge), springboard/sdk/src/view/scroll.rs (ScrollView::reveal, set_scroll_targets, position, set_position)",
    "status": "partial",
-   "note": "scrolling with model; scroll targets work headless: offset_for_rect places a row at the leading, centre or trailing edge of the viewport, clamped to the scrollable range, and ScrollView::reveal applies it (ui/tests/parity_sdk-complete-05.rs). Still missing: a scroll position binding to app state and per-item scroll identity, and the reveal path has not run on Midget. Headless tests: ui/tests/parity_sdk-tests-01a.rs (a_short_drag_does_not_scroll_and_a_tap_is_reported_as_a_tap, a_drag_follows_the_finger_past_the_slop, pulling_past_the_end_rubber_bands_beyond_the_maximum, jumps_and_range_changes_clamp_the_offset, a_released_bounce_springs_back_to_the_edge, a_fling_decelerates_and_stops_below_the_threshold). Refreshed 2026-10-17: reveal to a row is covered by ScrollView::reveal (springboard/sdk/src/view/scroll.rs) over ui scroll::offset_for_rect; tests in ui scroll::tests."
+   "note": "Scrolling with model; scroll targets work headless: offset_for_rect places a row at the leading, centre or trailing edge of the viewport, clamped to the scrollable range, and ScrollView::reveal applies it (ui/tests/parity_sdk-complete-05.rs). Built 2026-10-24: a scroll position binding with per-item scroll identity. ui scroll_position::ScrollPosition models automatic, edge, point and identity positions (scrollTo id/edge/y, viewID, isPositionedByUser, minimal scroll without an anchor, top-most or bottom-most visible target after user scrolling, stable edges and rows across relayouts); ScrollView takes scroll targets, applies set_position and reports wheel, drag and fling scrolling back. Host tests: springboard/ui/src/scroll_position.rs tests, springboard/sdk/src/view/scroll.rs (the_bound_position_scrolls_to_an_identity_and_an_edge, a_position_set_before_the_first_layout_is_applied_by_it, user_scrolling_updates_the_bound_position, a_relayout_keeps_the_bottom_edge_of_a_growing_document_in_view). Physics tests: ui/tests/parity_sdk-tests-01a.rs. Gap: vertical only, targets come from the app rather than the view tree, programmatic scrolls jump without animation, not yet verified on Midget. REA ev_c3f2fc904288ef066a11d9985a43fb1422ee185f8672869a681b629037434f56."
   },
   {
    "feature": "Shader effects (Shader, ShaderLibrary, colorEffect, distortionEffect, layerEffect, visualEffect)",
@@ -150,10 +150,11 @@
  ],
  "gaps": [
   "Declarative View protocol with body, modifiers and state/binding updates",
-  "Style protocols",
+  "Style protocols beyond buttons (ToggleStyle, LabelStyle, PickerStyle, GroupBoxStyle, custom ControlGroupStyle bodies); ButtonStyle is built in sdk view/button_style.rs",
   "Layout protocol (custom Layout types). Lazy grid views (LazyVGrid) have no SDK view: the window model is in ui lazy_stack only",
   "Declarative Shape and Canvas views: the drawing API exists imperatively (sdk graphics_context Path and GraphicsContext, ShapeView, ui shape), but no Shape protocol or Canvas view builder in the view tree",
-  "Generic List with swipe actions, GroupBox, ControlGroup and a TabView view (the selection model is built in ui tab_selection)",
-  "Scroll position binding to app state and per-item scroll identity (scroll-to-row reveal exists: ScrollView::reveal, ui scroll::offset_for_rect)"
+  "Generic List with swipe actions; ControlGroup menu styles and TabView sidebar/page styles and TabSection (GroupBox, ControlGroup and TabView views are built in sdk view/groupings.rs)",
+  "Custom alignment guides (alignmentGuide); first and last text baseline alignment is built",
+  "Horizontal scroll position and animated programmatic scrolls (the vertical ScrollPosition binding with per-item identity is built in ui scroll_position)"
  ]
 }

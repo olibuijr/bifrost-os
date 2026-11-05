@@ -23,7 +23,7 @@
 use super::controls::node as ax_node;
 use super::{View, ViewBase, ViewEvent};
 use crate::kit::gfx::Image;
-use crate::kit::ui::{Weight, DETAIL_BG, LABEL, TINT};
+use crate::kit::ui::{Weight, DETAIL_BG, LABEL, accent_now};
 use crate::kit::{Event, Ui};
 use bifrost_render::canvas::{Canvas, ImageRef, RectF, Transform2D};
 use bifrost_ui::scene2d::{Scene2d, ScaleMode};
@@ -249,7 +249,7 @@ impl SpriteWidget {
     }
 
     fn shape_color(&self, node: NodeId, label: bool) -> u32 {
-        self.colors.get(&node).copied().unwrap_or(if label { LABEL.now() } else { TINT })
+        self.colors.get(&node).copied().unwrap_or(if label { LABEL.now() } else { accent_now() })
     }
 }
 

@@ -94,6 +94,13 @@ pub fn document(s: &mut Surface, (x, y, w, h): (f32, f32, f32, f32), kind: Kind)
                 s.fill_rrect(zx + dx - t, zy, 2.0 * t, h * 0.06, 0.0, INK);
             }
         }
+        Kind::Application => {
+            // an app tile: the rounded square every app icon is, in the accent, with a lighter inner mark
+            let side = mw;
+            let (tx, ty) = (x + (w - side) / 2.0, my - h * 0.08);
+            s.fill_rrect(tx, ty, side, side, side * 0.22, BLUE);
+            s.fill_rrect(tx + side * 0.3, ty + side * 0.3, side * 0.4, side * 0.4, side * 0.1, WHITE);
+        }
         Kind::Folder | Kind::Other => {}
     }
 }
@@ -325,7 +332,7 @@ mod tests {
 
     #[test]
     fn every_icon_draws_something() {
-        for kind in [Kind::Folder, Kind::Text, Kind::Image, Kind::Video, Kind::Audio, Kind::Archive, Kind::Other] {
+        for kind in [Kind::Folder, Kind::Text, Kind::Image, Kind::Video, Kind::Audio, Kind::Archive, Kind::Application, Kind::Other] {
             let mut img = canvas();
             entry(&mut Surface { w: 120, h: 120, stride: 120, px: &mut img.px, y0: 0 }, (10.0, 10.0, 100.0, 80.0), kind);
             assert!(painted(&img) > 500, "{kind:?}");
@@ -392,7 +399,7 @@ mod tests {
                 assert!(!img.px.contains(&black), "no black pixel in {rect:?}");
             }
             // every kind of entry icon, whole: nothing black anywhere
-            for kind in [Kind::Text, Kind::Image, Kind::Video, Kind::Audio, Kind::Archive, Kind::Other] {
+            for kind in [Kind::Text, Kind::Image, Kind::Video, Kind::Audio, Kind::Archive, Kind::Application, Kind::Other] {
                 let mut img = canvas();
                 img.px.fill(plate);
                 entry(&mut Surface { w: 120, h: 120, stride: 120, px: &mut img.px, y0: 0 }, (10.0, 10.0, 100.0, 80.0), kind);

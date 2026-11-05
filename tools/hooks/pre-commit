@@ -1,0 +1,8 @@
+#!/bin/sh
+# Blocks a commit that adds a reference platform or product name: runs the names scanner on the staged files only.
+root=$(git rev-parse --show-toplevel) || exit 1
+files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^(springboard|tools|packaging)/.*\.(rs|py|sh|js|toml|html|css)$')
+[ -z "$files" ] && exit 0
+cd "$root" || exit 1
+# shellcheck disable=SC2086
+python3 tools/check-names.py $files || { echo "pre-commit: names hits above; fix them before committing" >&2; exit 1; }

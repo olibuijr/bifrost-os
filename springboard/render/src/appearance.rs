@@ -290,6 +290,28 @@ pub fn scheme() -> f32 {
     getf(&SCHEME_POS)
 }
 
+/// Steps a fade is cut into for caches keyed on the scheme (`scheme_step`).
+pub const SCHEME_STEPS: u32 = 4;
+
+/// The scheme position as a cache key: Dark (0) and Light (`SCHEME_STEPS + 1`) exactly, and between them one of
+/// `SCHEME_STEPS` buckets. A cache keyed on the raw position redraws every window on every frame of the 280 ms fade; on
+/// this key a quiet window redraws at most `SCHEME_STEPS` times during it and once more on the end value, so it still
+/// shows the new scheme when the fade ends.
+pub fn scheme_step_of(pos: f32) -> u32 {
+    if pos <= 0.0 {
+        0
+    } else if pos >= 1.0 {
+        SCHEME_STEPS + 1
+    } else {
+        1 + ((pos * SCHEME_STEPS as f32) as u32).min(SCHEME_STEPS - 1)
+    }
+}
+
+/// `scheme_step_of` the current scheme position.
+pub fn scheme_step() -> u32 {
+    scheme_step_of(scheme())
+}
+
 /// The scheme the fade is heading for.
 pub fn target_is_light() -> bool {
     getf(&SCHEME_TO) >= 0.5
@@ -301,6 +323,35 @@ pub fn jump_to(light: bool) {
     for a in [&SCHEME_FROM, &SCHEME_TO, &SCHEME_POS] {
         a.store(v.to_bits(), Relaxed);
     }
+}
+
+/// The window server's copy of `DISPLAY_FILE`: the display options and `dark=0|1`, the scheme the fade is heading for.
+/// The window server draws the plates and tints of every window's materials (sidebars, title bars) itself, so without
+/// this line a Light/Dark switch reached the apps' own pixels but left their materials in the old scheme (E2E13
+/// finding 3).
+pub fn display_file_text() -> String {
+    format!("{}dark={}\n", display_options().to_text(), !target_is_light() as u8)
+}
+
+/// The scheme last written by `write_display_file`: 0 never, 1 dark, 2 light.
+static FILE_SCHEME: AtomicU32 = AtomicU32::new(0);
+
+/// Writes `display_file_text` to `path` atomically (temp file, rename). A missing directory (off the device) is an error.
+pub fn write_display_file(path: &str) -> std::io::Result<()> {
+    FILE_SCHEME.store(1 + target_is_light() as u32, Relaxed);
+    let tmp = format!("{path}.tmp");
+    std::fs::write(&tmp, display_file_text())?;
+    std::fs::rename(&tmp, path)
+}
+
+/// Writes the file when the scheme heads somewhere other than what was last written (the shell calls it every tick);
+/// false when nothing needed writing. A failed write is not retried until the scheme changes again.
+pub fn sync_display_file(path: &str) -> bool {
+    if FILE_SCHEME.load(Relaxed) == 1 + target_is_light() as u32 {
+        return false;
+    }
+    let _ = write_display_file(path);
+    true
 }
 
 /// Linear mix of two premultiplied ARGB colours (`pack` order) at `p` (0 = `dark`, 1 = `light`).
@@ -583,6 +634,18 @@ mod scheme_tests {
     use super::*;
 
     #[test]
+    fn the_scheme_step_keeps_the_ends_apart_from_the_fade_buckets() {
+        assert_eq!(scheme_step_of(0.0), 0);
+        assert_eq!(scheme_step_of(1.0), SCHEME_STEPS + 1);
+        let mut steps: Vec<u32> = (1..1000).map(|i| scheme_step_of(i as f32 / 1000.0)).collect();
+        assert!(steps.iter().all(|s| (1..=SCHEME_STEPS).contains(s)), "inside the fade: never an end value");
+        steps.dedup();
+        assert_eq!(steps.len() as u32, SCHEME_STEPS, "a bounded number of redraws per fade, either way");
+        assert_eq!(scheme_step_of(0.999), SCHEME_STEPS, "just before the end is not the end: the end redraws once more");
+        assert_eq!(scheme_step_of(0.001), 1);
+    }
+
+    #[test]
     fn accent_keys_round_trip_and_default_to_blue() {
         for a in Accent::ALL {
             assert_eq!(Accent::parse(a.key()), a);
@@ -614,6 +677,23 @@ mod scheme_tests {
         set_accent(keep);
     }
 
+    #[test]
+    fn selections_and_menu_highlights_follow_the_accent_while_tint_and_link_stay_system_blue() {
+        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        jump_to(false);
+        assert_eq!(crate::ui::accent_now(), Accent::Green.colours().0);
+        assert_eq!(crate::ui::menu_highlight(), Accent::Green.colours().0, "the menu highlight is the accent");
+        // TINT and LINK are the literal systemBlue (text links and bar buttons), whatever the accent
+        assert_eq!(crate::ui::TINT, pack(10, 132, 255, 255));
+        assert_eq!(crate::ui::LINK, crate::ui::TINT);
+        assert_ne!(crate::ui::menu_highlight(), crate::ui::TINT);
+        set_accent(Accent::Blue);
+        assert_eq!(crate::ui::menu_highlight(), crate::ui::TINT, "Blue is the default accent in Dark");
+        set_accent(keep);
+    }
+
     use crate::gfx::pack;
     use std::sync::Mutex;
 
@@ -638,6 +718,25 @@ mod scheme_tests {
         assert!(tick(2140.0));
         assert!(scheme() > 0.0 && scheme() < 1.0);
         jump_to(false);
+    }
+
+    #[test]
+    fn the_window_server_file_carries_the_scheme_and_is_rewritten_when_it_changes() {
+        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join(format!("bifrost-appearance-file-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("accessibility");
+        let path = path.to_str().unwrap();
+        jump_to(true);
+        assert!(display_file_text().ends_with("dark=0\n"), "light heads the file to dark=0");
+        write_display_file(path).unwrap();
+        assert!(!sync_display_file(path), "unchanged: not written again");
+        jump_to(false);
+        assert!(sync_display_file(path), "a switch to dark is written at once");
+        let text = std::fs::read_to_string(path).unwrap();
+        assert!(text.contains("dark=1\n") && text.contains("reduce_transparency="), "{text}");
+        assert!(!sync_display_file(path));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -12,16 +12,18 @@ Lets a pi agent see and drive running BifrOSt PC apps over their JSON-RPC contro
 
 `host` is an ssh alias such as `midget`. Omit it for this machine.
 
-Local sockets live in `$XDG_RUNTIME_DIR/bifrost/apps/<app-id>.sock` and accept only the owning user.
+Sockets live in each app's data directory, `<root>/appdata/<app-id>/control.sock` (root is
+`$BIFROST_SHELL_DIR`, default `/var/lib/springboard`; `$BIFROST_CONTROL` names one socket explicitly),
+the same rule as `bifrost_core::app_control_socket` and `tools/app-control.py`. They accept only the
+app's user and root.
 `app` must be a reverse-DNS id such as `is.olibuijr.notes.desktop`; paths are refused.
 
 ## Remote hosts (Midget)
 
-Remote apps are reached over ssh. The apps' sockets accept only the installed account's UID,
-and root is rejected. So the extension sends one request to a small stdlib-only relay on the
-remote host, which runs as the account read from `/var/lib/springboard/account`. Sandboxed
-SDK apps have no `XDG_RUNTIME_DIR`, so the relay looks for `control.sock` in each app's data
-directory (`/var/lib/springboard/appdata/<id>/`) as well as in the runtime directory.
+Remote apps are reached over ssh. The extension sends one request to a small stdlib-only relay
+on the remote host, which runs as the account read from `/var/lib/springboard/account` (the
+apps' sockets admit that account and root) and looks for `control.sock` in each app's data
+directory (`<$BIFROST_SHELL_DIR or /var/lib/springboard>/appdata/<id>/`).
 
 Environment:
 

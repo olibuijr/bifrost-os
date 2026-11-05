@@ -670,6 +670,8 @@ pub(crate) mod tag {
     pub const SERVICE_CALL: u32 = 0x1d2;
     pub const SERVICE_REPLY: u32 = 0x1d2;
     pub const SERVICE_EVENT: u32 = 0x1d3;
+    pub const SELECTION_REQUEST: u32 = 0x1d4;
+    pub const SELECTION_REPLY: u32 = 0x1d4;
 }
 
 /// Encodes the variants of `ToApp` that belong to this module (anything else writes nothing).
@@ -745,6 +747,10 @@ pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
             b.push(*allowed);
             put_items(b, items);
         }
+        ToApp::SelectionRequest { request } => {
+            u32_(b, tag::SELECTION_REQUEST);
+            u32_(b, *request);
+        }
         ToApp::DragEnded { session, op } => {
             u32_(b, tag::DRAG_ENDED);
             u32_(b, *session);
@@ -786,6 +792,7 @@ pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
             event: get(r, MAX_SERVICE_NAME)?,
             body: get(r, MAX_SERVICE_BODY)?,
         },
+        tag::SELECTION_REQUEST => ToApp::SelectionRequest { request: r.u32()? },
         tag::SHARE_DONE => ToApp::ShareDone { request: r.u32()?, target: get(r, MAX_NOTIF_ID)? },
         tag::DRAG_DEST => {
             let session = r.u32()?;
@@ -866,6 +873,11 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
             put(b, method, MAX_SERVICE_NAME);
             put(b, fit_body(body, "null"), MAX_SERVICE_BODY);
         }
+        ToShell::SelectionReply { request, text } => {
+            u32_(b, tag::SELECTION_REPLY);
+            u32_(b, *request);
+            put(b, text, crate::MAX_SURROUNDING);
+        }
         ToShell::Share { request, items, anchor } => {
             u32_(b, tag::SHARE);
             u32_(b, *request);
@@ -945,6 +957,7 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
             method: get(r, MAX_SERVICE_NAME)?,
             body: get(r, MAX_SERVICE_BODY)?,
         },
+        tag::SELECTION_REPLY => ToShell::SelectionReply { request: r.u32()?, text: get(r, crate::MAX_SURROUNDING)? },
         tag::SHARE => {
             let request = r.u32()?;
             let anchor = UiRect { x: finite(r.f32()?)?, y: finite(r.f32()?)?, w: finite(r.f32()?)?, h: finite(r.f32()?)? };

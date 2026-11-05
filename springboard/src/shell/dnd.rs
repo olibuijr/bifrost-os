@@ -334,6 +334,11 @@ impl super::Shell {
         let mut outs = sess.moved(target, &takes);
         sess.pos = Some((x, y));
         if up {
+            // the release is the session's, not the window's: the press that began the drag is over, and the moves that
+            // follow (no button held) are not a drag in the window it started in
+            if let Some(d) = self.desk.as_mut() {
+                d.end_grab();
+            }
             if sess.over().is_none() {
                 if let Some(zone) = self.dnd_zone(x, y) {
                     // the Dock or the desktop takes the files; the session ends here
@@ -528,9 +533,28 @@ impl super::Shell {
     pub(super) fn dnd_draw(&self, s: &mut bifrost_render::gfx::Surface) {
         let Some(sess) = &self.dnd.session else { return };
         let (Some((x, y)), Some(img)) = (sess.pos, preview_image(&sess.preview)) else { return };
-        let k = self.layout.s.max(1.0);
-        s.blit(&img, (x - img.w as f32 * k / 2.0) as i32, (y - img.h as f32 * k / 2.0) as i32, 255, 200);
+        let (ix, iy) = drag_image_origin(&sess.preview, (x, y), self.layout.s);
+        s.blit(&img, ix, iy, 255, 200);
     }
+
+    /// Where the drag image sits (with a margin), for the desktop's cleared regions: the GPU path owns the wallpaper, so
+    /// this surface keeps whatever it was last drawn on unless the region is cleared. None without a live drag image.
+    pub(super) fn dnd_rect(&self) -> Option<(i32, i32, i32, i32)> {
+        let sess = self.dnd.session.as_ref()?;
+        let pos = sess.pos?;
+        if !sess.preview.valid() || sess.preview.w == 0 || sess.preview.h == 0 {
+            return None;
+        }
+        let (x, y) = drag_image_origin(&sess.preview, pos, self.layout.s);
+        let m = 2;
+        Some((x - m, y - m, sess.preview.w as i32 + 2 * m, sess.preview.h as i32 + 2 * m))
+    }
+}
+
+/// The top left of the drag image: centred on the pointer `(x, y)` at UI scale `k`.
+fn drag_image_origin(p: &DragPreview, (x, y): (f32, f32), k: f32) -> (i32, i32) {
+    let k = k.max(1.0);
+    ((x - p.w as f32 * k / 2.0) as i32, (y - p.h as f32 * k / 2.0) as i32)
 }
 
 /// Replaces each file's grant by the one made for the destination; a file that could not be handed over is dropped (and an
@@ -719,6 +743,14 @@ mod tests {
         assert_eq!(out.len(), 2, "the file with no new grant is dropped");
         assert_eq!(out[0], url);
         assert!(matches!(&out[1].payload, Payload::File { grant, name } if *grant == [9; 16] && name == "a.png"));
+    }
+
+    #[test]
+    fn the_drag_image_is_centred_on_the_pointer() {
+        let p = DragPreview { w: 32, h: 20, rgba: vec![0; 32 * 20 * 4] };
+        assert_eq!(drag_image_origin(&p, (100.0, 50.0), 1.0), (84, 40));
+        assert_eq!(drag_image_origin(&p, (100.0, 50.0), 0.5), (84, 40), "the scale never shrinks below 1");
+        assert_eq!(drag_image_origin(&p, (100.0, 50.0), 2.0), (68, 30));
     }
 
     #[test]

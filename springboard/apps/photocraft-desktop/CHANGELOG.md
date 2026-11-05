@@ -4,6 +4,60 @@
 
 # Changelog
 
+## 0.20.1
+
+- Upstream photocraft v0.20.1.
+  ## What's Changed
+  * Add editable arrowheads to Line tool (#6408) by @superplay2021 in https://github.com/storytold/photocraft/pull/9259
+  * Integration batch 11: 9 ATN PRs on main by @davidmann4 in https://github.com/storytold/photocraft/pull/10535
+  * Prefer an installed pattern ID over a colliding name in ATN import by @Silvertree2010 in https://github.com/storytold/photocraft/pull/7642
+  * Actions: read .atn step names in the code page Photoshop wrote them in (#6743) by @regexer in https://github.com/storytold/photocraft/pull/8327
+
+## 0.19.0
+
+- Upstream photocraft v0.19.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/photocraft/pull/10421
+  * docs: tidy agent, contributor and release docs by @aiongg in https://github.com/storytold/photocraft/pull/10420
+  * Keep brush state intact when a preset tip fails to load by @wanikhawar in https://github.com/storytold/photocraft/pull/10288
+  * Integration batch: 18 PRs on main by @davidmann4 in https://github.com/storytold/photocraft/pull/10145
+
+## 0.18.0
+
+- Upstream photocraft v0.18.0.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/photocraft/pull/9982
+  * Correct update_transport comment: Flatpak sandbox now has network by @dylanmtaylor in https://github.com/storytold/photocraft/pull/9983
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/photocraft/pull/9989
+  * Engine: a pixel change damages only the tiles that changed (#9329) by @brennanMKE in https://github.com/storytold/photocraft/pull/9942
+
+## 0.17.0
+
+- Upstream photocraft v0.17.0.
+  ## What's Changed
+  * Package: never overwrite one link's copy with another, list a missing link once by @softwaregames1 in https://github.com/storytold/photocraft/pull/9185
+  * Fix CPU pixel grid stroke width on HiDPI displays by @ssh-den in https://github.com/storytold/photocraft/pull/9199
+  * Image Rotation › Arbitrary turns unlinked layer masks (#9201) by @davidmann4 in https://github.com/storytold/photocraft/pull/9203
+  * fix(cms): ignore tags inside .look XML comments (#9109) by @DuBearte in https://github.com/storytold/photocraft/pull/9210
+
+## 0.16.0
+
+- Upstream photocraft v0.16.0.
+  ## What's Changed
+  * Reuse filled-shape effect maps while moving styled groups by @kotulsky in https://github.com/storytold/photocraft/pull/8993
+  * fix(ui-egui): a click on the bottom layer's Smart Filters selects them again (#8764) by @drunkeninja42 in https://github.com/storytold/photocraft/pull/8974
+  * security(paint): cap spaced steps and procedural primitives by @dylanmtaylor in https://github.com/storytold/photocraft/pull/8957
+  * i18n(zh-hans): translate status messages and preview labels by @IgnatAi401 in https://github.com/storytold/photocraft/pull/8872
+
+## 0.15.1
+
+- Upstream photocraft v0.15.1.
+  ## What's Changed
+  * fix(psd): keep pattern budget charges on parse failure by @dylanmtaylor in https://github.com/storytold/photocraft/pull/8767
+  * fix(algo): avoid repeated copies of duplicate EXIF text by @dylanmtaylor in https://github.com/storytold/photocraft/pull/8771
+  * fix(paint): validate gray tile dimensions safely by @dylanmtaylor in https://github.com/storytold/photocraft/pull/8772
+  * fix(text): bound untrusted font and PSD text processing by @dylanmtaylor in https://github.com/storytold/photocraft/pull/8768
+
 ## 0.13.0
 
 - Upstream photocraft v0.13.0.

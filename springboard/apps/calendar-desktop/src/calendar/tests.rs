@@ -280,6 +280,74 @@ fn grid_and_home_chrome_hit_regions_are_bounded() {
 }
 
 #[test]
+fn picking_a_neighbouring_month_day_keeps_the_month() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    let (_, _, top, rh) = c.grid_geom(&ui);
+    // October 2026 starts on a Thursday: the first cell of the grid is September 27
+    let start = c.grid_start();
+    assert_eq!(start, date(2026, 9, 27));
+    c.activate(&ui, Target::Pick(date(2026, 9, 27)), 0.0);
+    assert_eq!(c.selected, date(2026, 9, 27));
+    assert_eq!(c.month_date().month, 10, "the page does not turn");
+    assert_eq!(c.grid_start(), start);
+    // the other days of October still select as days of the shown month
+    assert_eq!(c.hit(&ui, ui.pt(70.0), top + rh + ui.pt(10.0)), Some(Target::Day(4)));
+    // Next steps from the shown month, not from the picked day's
+    c.activate(&ui, Target::Next, 0.0);
+    assert_eq!(c.selected, date(2026, 11, 27));
+    // a change of the selected day by any other route follows that day again
+    c.activate(&ui, Target::Pick(date(2026, 12, 30)), 0.0);
+    c.selected = date(2026, 9, 3);
+    assert_eq!(c.month_date().month, 9);
+}
+
+#[test]
+fn a_day_of_the_shown_month_after_a_neighbouring_pick_selects_that_day() {
+    let ui = crate::test_ui();
+    let temp = Temp::new();
+    let mut c = new(&ui, temp.file());
+    let (_, _, top, rh) = c.grid_geom(&ui);
+    // October 2026: the greyed 1 Nov of the last row is picked, the grid stays on October
+    c.activate(&ui, Target::Pick(date(2026, 11, 1)), 0.0);
+    assert_eq!(c.month_date().month, 10);
+    // the 28th is in the last row but one (row 4, column 3 of the grid starting on 27 Sep)
+    let (left, cell, ..) = c.grid_geom(&ui);
+    let (x, y) = (left + 3.5 * cell, top + 4.0 * rh + ui.pt(10.0));
+    assert_eq!(c.grid_start().shift_days(4 * 7 + 3), date(2026, 10, 28));
+    assert_eq!(c.hit(&ui, x, y), Some(Target::Day(28)));
+    assert_eq!(c.slot_of(&ui, Target::Day(28), x, y), Some((date(2026, 10, 28), 9 * 60)), "a double-click slot is in the shown month");
+    c.activate(&ui, Target::Day(28), 1.0);
+    assert_eq!(c.selected, date(2026, 10, 28), "the click selects the date drawn in the cell");
+    assert_eq!(c.month_date(), date(2026, 10, 28));
+    assert_eq!(c.grid_start(), date(2026, 9, 27), "the grid still shows October");
+    // a new event starts on the selected day
+    c.open(&ui, None);
+    assert_eq!(c.editor.as_ref().map(|d| d.event.date), Some(date(2026, 10, 28)));
+}
+
+#[test]
+fn cmd_z_as_a_key_restores_a_deleted_event_too() {
+    use bifrost_app::proto::{CHORD_META, CHORD_SHIFT};
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(7, "Dentist")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.chord(&ui, 44, CHORD_META, 0.0), "nothing to undo yet");
+    c.picked = Some(7);
+    c.key(&ui, Out::Backspace, 1.0);
+    assert!(c.events.is_empty() && c.undo.is_some(), "deleted with the Undo bar up");
+    assert!(!c.chord(&ui, 44, CHORD_META | CHORD_SHIFT, 1.5), "Shift+Cmd+Z is Redo, not Undo");
+    assert!(c.undo.is_some());
+    // the shell sends the chord when it has not yet heard that the app takes the Undo command
+    assert!(c.chord(&ui, 44, CHORD_META, 2.0));
+    assert_eq!(c.events.len(), 1, "restored");
+    assert_eq!(store::load(&temp.file()).unwrap().len(), 1, "restored on disk");
+    assert!(c.undo.is_none());
+}
+
+#[test]
 fn all_day_order_and_event_id_wrap() {
     let mut events = vec![event(u64::MAX, "Last"), event(1, "First")];
     events[0].all_day = true;
@@ -553,7 +621,28 @@ fn deleting_shows_an_undo_bar_that_restores_the_event() {
 }
 
 #[test]
-fn the_undo_bar_lapses_after_five_seconds() {
+fn edit_menu_undo_restores_a_deleted_event() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(7, "Dentist")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.edit_commands(None).supports(Edit::Undo), "nothing to undo yet");
+    c.open(&ui, Some(7));
+    c.activate(&ui, Target::Delete, 1.0);
+    assert!(c.events.is_empty());
+    assert!(c.edit_commands(None).supports(Edit::Undo), "Cmd+Z is offered while the Undo bar is up");
+    assert!(c.edit_command(&ui, Edit::Undo, None, 2.0));
+    assert_eq!(c.events.len(), 1, "restored");
+    assert_eq!(store::load(&temp.file()).unwrap().len(), 1, "restored on disk");
+    assert!(c.undo.is_none());
+    assert!(!c.edit_commands(None).supports(Edit::Undo));
+    assert!(!c.edit_command(&ui, Edit::Undo, None, 3.0), "nothing left to undo");
+}
+
+#[test]
+fn the_undo_bar_lapses_after_five_seconds_but_cmd_z_keeps_working() {
+    use bifrost_app::Command as Edit;
     let temp = Temp::new();
     let ui = crate::test_ui();
     store::save(&temp.file(), &[event(8, "Gone")]).unwrap();
@@ -561,10 +650,93 @@ fn the_undo_bar_lapses_after_five_seconds() {
     c.open(&ui, Some(8));
     c.activate(&ui, Target::Delete, 1000.0);
     c.tick(&ui, 5999.0);
-    assert!(c.undo.is_some());
+    assert!(c.undo_bar_up());
     c.tick(&ui, 6000.0);
-    assert!(c.undo.is_none(), "gone after five seconds");
+    assert!(!c.undo_bar_up(), "the bar is gone after five seconds");
     assert!(c.events.is_empty(), "the delete stands");
+    assert_ne!(c.hit(&ui, ui.pt(60.0), c.undo_rect(&ui).1 + ui.pt(10.0)), Some(Target::UndoDelete), "no button under the faded bar");
+    assert!(c.edit_commands(None).supports(Edit::Undo), "but Edit > Undo still has the event");
+    assert!(c.edit_command(&ui, Edit::Undo, None, 9000.0));
+    assert_eq!(c.events.len(), 1, "restored");
+    assert!(c.undo.is_none());
+}
+
+#[test]
+fn undo_is_dropped_after_the_keep_time() {
+    use bifrost_app::proto::CHORD_META;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(8, "Gone")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    c.open(&ui, Some(8));
+    c.activate(&ui, Target::Delete, 1000.0);
+    c.tick(&ui, 1000.0 + UNDO_KEEP_MS - 1.0);
+    assert!(c.undo.is_some());
+    c.tick(&ui, 1000.0 + UNDO_KEEP_MS);
+    assert!(c.undo.is_none() && c.undo_extra.is_none(), "forgotten after the keep time");
+    assert!(!c.chord(&ui, 44, CHORD_META, 1000.0 + UNDO_KEEP_MS + 1.0));
+    assert!(c.events.is_empty());
+}
+
+#[test]
+fn a_deleted_event_whose_id_was_reused_comes_back_under_a_new_id() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "First"), event(2, "Second")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    c.picked = Some(2);
+    c.key(&ui, Out::Backspace, 1000.0);
+    // the store hands out the highest id plus one, which is the deleted event's id again
+    let mut reused = event(2, "Third");
+    reused.date = date(2026, 10, 5);
+    c.events.push(reused);
+    c.undo_delete(&ui, 2000.0);
+    assert_eq!(c.events.len(), 3, "both events are there");
+    let mut ids: Vec<u64> = c.events.iter().map(|e| e.id).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!(ids.len(), 3, "with their own ids");
+    assert_eq!(store::load(&temp.file()).unwrap().len(), 3, "saved");
+    assert!(c.undo.is_none());
+}
+
+/// E2E on Midget: a click selects the event, Backspace deletes it, and Cmd+Z comes a little later, as Edit > Undo and as the
+/// chord the shell falls back to. The app's clock is CLOCK_MONOTONIC in ms (days of uptime), and `tick` runs in between.
+#[test]
+fn cmd_z_restores_a_clicked_and_deleted_event_on_the_runtime_clock() {
+    use bifrost_app::proto::CHORD_META;
+    use bifrost_app::Command as Edit;
+    let ui = crate::test_ui();
+    let up = 301_234_567.0;
+    for lag in [800.0, 6000.0] {
+        for via_chord in [false, true] {
+            let temp = Temp::new();
+            store::save(&temp.file(), &[event(7, "Dentist"), event(8, "Lunch")]).unwrap();
+            let mut c = new(&ui, temp.file());
+            tap_event(&mut c, &ui, 7, up);
+            assert_eq!(c.picked, Some(7), "the click selects the event");
+            assert!(!c.edit_commands(None).supports(Edit::Undo), "nothing to undo yet");
+            c.key(&ui, Out::Backspace, up + 400.0);
+            assert!(c.events.iter().all(|e| e.id != 7), "Backspace deleted it");
+            assert!(c.undo_bar_up());
+            // the runtime wakes and ticks on its own clock until the key comes
+            let mut t = up + 400.0;
+            while t < up + 400.0 + lag {
+                t += 250.0;
+                c.tick(&ui, t);
+            }
+            assert!(c.edit_commands(None).supports(Edit::Undo), "Cmd+Z is on offer after {lag} ms");
+            assert_eq!(c.undo_bar_up(), lag < 5000.0, "the bar follows the five seconds");
+            if via_chord {
+                assert!(c.chord(&ui, 44, CHORD_META, t), "the chord restores it ({lag} ms)");
+            } else {
+                assert!(c.edit_command(&ui, Edit::Undo, None, t), "the command restores it ({lag} ms)");
+            }
+            assert!(c.events.iter().any(|e| e.id == 7), "restored ({lag} ms, chord {via_chord})");
+            assert_eq!(store::load(&temp.file()).unwrap().len(), 2, "restored on disk");
+            assert!(c.undo.is_none() && !c.undo_bar_up());
+        }
+    }
 }
 
 #[test]
@@ -690,10 +862,11 @@ fn zooming_keeps_the_same_hour_at_the_top() {
     let mut c = new(&ui, temp.file());
     c.set_size(1200, 780);
     c.activate(&ui, Target::View(View::Day), 0.0);
-    // the day opens at 8 AM
-    assert!((c.scroll.offset() - ui.pt(8.0 * prefs::HOUR_H_DEFAULT)).abs() < 1.0);
+    // the day opens at 8 AM, its label a small space clear of the all-day band
+    let top_hour = 8.0 - SPACE_S / prefs::HOUR_H_DEFAULT;
+    assert!((c.scroll.offset() - ui.pt(top_hour * prefs::HOUR_H_DEFAULT)).abs() < 1.0);
     c.zoom_hours(&ui, 1);
-    assert!((c.scroll.offset() - ui.pt(8.0 * (prefs::HOUR_H_DEFAULT + prefs::HOUR_H_STEP))).abs() < 1.0);
+    assert!((c.scroll.offset() - ui.pt(top_hour * (prefs::HOUR_H_DEFAULT + prefs::HOUR_H_STEP))).abs() < 1.0);
     assert!(c.time_scroll_max(&ui) > 0.0);
 }
 
@@ -840,6 +1013,22 @@ fn copy_in_the_editor_takes_the_open_event_and_text_commands_go_to_the_field() {
     assert!(c.edit_command(&ui, Edit::Cut, None, 0.0));
     assert_eq!(c.fields[2].text(), "");
     assert!(c.take_copied().is_none(), "the field's text is not an event");
+}
+
+#[test]
+fn cmd_a_in_the_editor_selects_the_title_so_typing_replaces_it() {
+    use bifrost_app::proto::CHORD_META;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.events = vec![event(1, "BTest meeting")];
+    c.open(&ui, Some(1));
+    c.activate(&ui, Target::Title, 0.0);
+    // the shell sends Cmd+A as the chord when the app reports no selectable field (the main window's commands)
+    assert!(c.chord(&ui, 30, CHORD_META, 0.0), "Cmd+A selects the focused field's text");
+    assert_eq!(c.fields[0].selection(), (0, 13));
+    c.key(&ui, Out::Text("BTest renamed".into()), 1.0);
+    assert_eq!(c.fields[0].text(), "BTest renamed", "typing replaces the selected title");
 }
 
 #[test]
@@ -2479,15 +2668,15 @@ fn a_selected_event_is_deleted_with_backspace_delete_and_the_event_menu() {
     store::save(&temp.file(), &[a, b, d]).unwrap();
     let mut c = week_calendar(&ui, temp.file());
     assert!(!c.enabled(Command::Delete), "nothing selected");
-    c.tap_event(1, 0.0);
+    c.tap_event(1, 1);
     assert!(c.enabled(Command::Delete), "Event > Delete Event is on for the selected event");
     c.key(&ui, Out::Backspace, 1000.0);
     assert!(!c.events.iter().any(|e| e.id == 1), "Backspace deleted it");
     assert!(c.undo.is_some(), "with the Undo bar");
-    c.tap_event(2, 2000.0);
+    c.tap_event(2, 1);
     c.key(&ui, Out::Named("Delete"), 2100.0);
     assert!(!c.events.iter().any(|e| e.id == 2), "the Delete key too");
-    c.tap_event(3, 3000.0);
+    c.tap_event(3, 1);
     assert!(c.perform(&ui, Command::Delete, 3100.0));
     assert!(c.events.is_empty(), "and the menu");
     assert_eq!(store::load(&temp.file()).unwrap(), vec![]);
@@ -2496,13 +2685,33 @@ fn a_selected_event_is_deleted_with_backspace_delete_and_the_event_menu() {
 }
 
 #[test]
+fn a_secondary_click_on_an_event_selects_it_and_offers_open_and_delete() {
+    // a right click had no menu: the event under it is selected, and its menu opens its window or deletes it
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = new(&ui, temp.file()); // the month grid, where event_point finds the event
+    c.layout_columns(&ui);
+    let (x, y) = event_point(&c, &ui, 1);
+    assert!(c.context_items(&ui, x + c.x0, ui.pt(2.0)).is_empty(), "no menu off the events");
+    let items = c.context_items(&ui, x + c.x0, y);
+    assert_eq!(items.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(), ["Open", "Delete Event"]);
+    assert_eq!(c.picked_event(), Some(1), "the menu selects its event");
+    assert!(c.context_action(&ui, items[0].id, 1.0));
+    assert_eq!(c.take_open_request(), Some(1), "Open asks the app for the event's window");
+    assert!(c.context_action(&ui, items[1].id, 2.0));
+    assert!(c.events.is_empty(), "Delete Event deletes the selected event, with the Undo bar");
+    assert!(c.undo.is_some());
+}
+
+#[test]
 fn deleting_the_event_of_an_editor_window_closes_that_window() {
     let temp = Temp::new();
     let ui = crate::test_ui();
     store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
     let mut c = week_calendar(&ui, temp.file());
-    c.tap_event(1, 0.0);
-    c.tap_event(1, 100.0);
+    c.tap_event(1, 1);
+    c.tap_event(1, 2);
     assert_eq!(c.take_open_request(), Some(1), "a double-click asks for the window");
     assert!(c.open_pane(&ui, 7, 1));
     assert!(c.editor.is_none(), "the main window has no form");
@@ -2548,6 +2757,55 @@ fn the_hour_grid_keeps_its_scroll_when_a_form_closes() {
 }
 
 #[test]
+fn the_hour_grid_keeps_its_scroll_when_the_quick_event_popover_closes() {
+    // E2E R7 / W2-18: 8 AM was at the top before "+" and 1 AM after Return (ending the empty search scrolled to the top)
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.set_size(1200, 780);
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    let morning = c.scroll.offset();
+    assert!(morning > 0.0);
+    tap_bar(&mut c, &ui, chrome::B_ADD, 10.0);
+    assert!(c.event_pop_open());
+    assert!((c.scroll.offset() - morning).abs() < 1.0, "\"+\" keeps the grid where it was");
+    type_text(&mut c, &ui, "Gym");
+    c.key(&ui, Out::Enter, 20.0);
+    assert!(!c.event_pop_open() && c.events.len() == 1);
+    assert!((c.scroll.offset() - morning).abs() < 1.0, "Return");
+    tap_bar(&mut c, &ui, chrome::B_ADD, 30.0);
+    assert!(c.escape(&ui, 40.0));
+    assert!((c.scroll.offset() - morning).abs() < 1.0, "Escape");
+}
+
+#[test]
+fn two_quick_mouse_clicks_on_a_timed_event_open_its_window() {
+    // E2E R7: two clicks about 100 ms apart, as the harness sends them, did not count as a double-click
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    c.set_size(1200, 780);
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    c.set_pointer(true);
+    c.layout_columns(&ui);
+    let r = c.time_rects(&ui).into_iter().find(|r| r.0 == 1).expect("the event's block");
+    let (x, y) = (c.x0 + r.1 + r.3 / 2.0, r.2 + r.4 / 2.0);
+    c.touch(&ui, Event::Down(x, y), 1000.0);
+    c.touch(&ui, Event::Up(x, y), 1010.0);
+    assert_eq!(c.take_open_request(), None, "one click selects");
+    c.touch(&ui, Event::Down(x + 1.0, y), 1100.0);
+    c.touch(&ui, Event::Up(x + 1.0, y), 1110.0);
+    assert_eq!(c.take_open_request(), Some(1), "the second click in time opens the editor window");
+    // a slow second click is two single clicks
+    c.touch(&ui, Event::Down(x, y), 3000.0);
+    c.touch(&ui, Event::Up(x, y), 3010.0);
+    c.touch(&ui, Event::Down(x, y), 4000.0);
+    c.touch(&ui, Event::Up(x, y), 4010.0);
+    assert_eq!(c.take_open_request(), None);
+}
+
+#[test]
 fn the_time_zone_button_is_a_glyph_and_the_all_day_band_stays_put() {
     let temp = Temp::new();
     let ui = crate::test_ui();
@@ -2568,6 +2826,22 @@ fn the_time_zone_button_is_a_glyph_and_the_all_day_band_stays_put() {
     c.scroll_to_morning(&ui);
     assert!(c.scroll.offset() > 0.0);
     assert_eq!(band_y(&c), top, "the all-day event does not scroll away with the hours");
+    draw_once(&mut c, &ui);
+}
+
+#[test]
+fn the_first_hour_label_clears_the_all_day_band_when_the_grid_opens() {
+    use super::timeview::{ALLDAY_H, GRID0};
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.set_size(1200, 780);
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    c.scroll_to_morning(&ui);
+    // the day start's hour line, below the grid's header and the all-day band, and the bottom of that band (px)
+    let line = ui.pt(GRID0) - c.scroll.offset() + ui.pt(ALLDAY_H) + ui.pt(c.prefs.hour_h) * f32::from(c.prefs.day_start);
+    let band_bottom = ui.pt(GRID0 + ALLDAY_H);
+    assert!(line - band_bottom >= ui.pt(bifrost_app::kit::ui::SPACE_S) - 0.5, "the 8 AM label is centred on its line: its top half hides under the band");
     draw_once(&mut c, &ui);
 }
 

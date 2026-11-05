@@ -5,7 +5,7 @@
 //! state says now; a model is broadcast to every client at once and stored so a new client gets it on its `Hello`.
 //! `ShowPanel` is a command, not state, so it is broadcast and not stored.
 //!
-//! The menu bar and the Dock are produced here; the Appearance and Panels models have no producer yet (IPC-8).
+//! The menu bar, the Dock and the Appearance (scheme and accent) are produced here; the Panels model has no producer yet (IPC-8).
 //! Owner: wave G2 agent `chrome-core`. The shell loop calls `start_if_requested`, adds `fds()` to its poll set and calls
 //! `service()` after each wait.
 
@@ -18,6 +18,18 @@ use std::os::fd::RawFd;
 /// Whether a model is kept for clients that connect later (state), or only broadcast (a command).
 pub fn is_state(m: &ToChrome) -> bool {
     !matches!(m, ToChrome::ShowPanel(_))
+}
+
+/// The `Appearance` model of the shell's scheme (the one it is heading for), accent and accessibility options now.
+#[cfg(any(test, feature = "desktop-wayland"))]
+fn appearance_model() -> ToChrome {
+    use bifrost_render::appearance as ap;
+    ToChrome::Appearance {
+        dark: !ap::target_is_light(),
+        accent: ap::accent().to_wire(),
+        reduce_motion: ap::reduce_motion(),
+        reduce_transparency: ap::reduce_transparency(),
+    }
 }
 
 /// The latest model of each kind: at most one entry per variant, in the order each kind first arrived.
@@ -40,7 +52,7 @@ impl Snapshot {
     }
 
     /// Whether `m` is not the model of its kind that is kept now: a model is sent again only when it changed.
-    #[cfg(feature = "desktop-wayland")]
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub fn changed(&self, m: &ToChrome) -> bool {
         !self.models.contains(m)
     }
@@ -113,6 +125,18 @@ impl ChromeServer {
         self.snapshot.record(&m);
     }
 
+    /// Publishes the scheme and accent the shell has now when they differ from what the clients have, so the menu
+    /// highlight and the Dock's progress fill follow Settings > Appearance. True when it published.
+    #[cfg(any(test, feature = "desktop-wayland"))]
+    fn publish_appearance_now(&mut self) -> bool {
+        let m = appearance_model();
+        if !self.snapshot.changed(&m) {
+            return false;
+        }
+        self.publish(m);
+        true
+    }
+
     /// Whether the bar is due for a rebuild at `t` (ms); true at most once per `BAR_CHECK_MS`.
     #[cfg(any(test, feature = "desktop-wayland"))]
     fn bar_due(&mut self, t: f64) -> bool {
@@ -177,6 +201,7 @@ impl ChromeServer {
                 _ => {}
             }
         }
+        self.publish_appearance_now();
         if self.bar_due(t) {
             self.publish_menu_bar_now(shell);
             self.publish_dock_now(shell);
@@ -293,6 +318,45 @@ mod tests {
         let due = (0..100).filter(|i| server.bar_due(1000.0 + f64::from(*i) * 0.5)).count();
         assert_eq!(due, 1, "100 idle passes within 50 ms rebuild the bar once");
         assert!(server.bar_due(1000.0 + BAR_CHECK_MS));
+    }
+
+    #[test]
+    fn the_accent_goes_to_the_clients_and_is_sent_again_when_it_changes() {
+        use bifrost_render::appearance::{accent, set_accent, Accent};
+        let keep = accent();
+        let (host, dir) = test_host("accent");
+        let mut server = ChromeServer::from_host(host);
+        let mut client = bifrost_chrome::link::Link::connect_to(&dir.join("bifrost-chrome.sock"), "chrome-dock").expect("connect");
+        let wait = |client: &mut bifrost_chrome::link::Link, server: &mut ChromeServer| {
+            let mut got = Vec::new();
+            for _ in 0..200 {
+                server.service();
+                got.extend(client.recv().expect("the host is up"));
+                if !got.is_empty() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            got
+        };
+        let accent_of = |m: &ToChrome| match m {
+            ToChrome::Appearance { accent, .. } => Accent::from_wire(*accent),
+            _ => None,
+        };
+
+        set_accent(Accent::Green);
+        assert!(server.publish_appearance_now(), "the first pass publishes");
+        assert!(!server.publish_appearance_now(), "an unchanged appearance is not sent again");
+        let got = wait(&mut client, &mut server);
+        assert_eq!(got.len(), 1);
+        assert_eq!(accent_of(&got[0]), Some(Accent::Green), "the real accent, not a fixed blue");
+
+        set_accent(Accent::Purple);
+        assert!(server.publish_appearance_now(), "a changed accent is sent again");
+        let got = wait(&mut client, &mut server);
+        assert_eq!(got.len(), 1);
+        assert_eq!(accent_of(&got[0]), Some(Accent::Purple));
+        set_accent(keep);
     }
 
     #[test]

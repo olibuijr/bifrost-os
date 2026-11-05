@@ -12,6 +12,7 @@ use bifrost_render::gfx::Image;
 pub use bifrost_render::color_curve::ToneCurve;
 pub use bifrost_render::feature_detect::{Feature, Rect};
 pub use bifrost_render::photo_effects::PhotoLook;
+pub use bifrost_render::white_balance::{WhiteBalance, DEFAULT_NEUTRAL};
 
 /// Raises the saturation of the less saturated colours of `img` more than the saturated ones. `amount`
 /// 0 is the identity; negative values reduce saturation.
@@ -33,6 +34,15 @@ pub fn photo_look(img: &Image, look: PhotoLook) -> Image {
 /// mixed by luma.
 pub fn false_colour(img: &Image, dark: Rgb, light: Rgb) -> Image {
     map_colours(img, |c| bifrost_render::photo_effects::false_colour(c, dark, light))
+}
+
+/// White balance as a white-point conversion (`CITemperatureAndTint`): `neutral` is the (kelvin, tint)
+/// of the light the picture was taken under and `target` the light it should look taken under; both
+/// default to `DEFAULT_NEUTRAL` (6500 K, tint 0). A neutral above the target warms the picture; positive
+/// tint is magenta. Alpha is kept.
+pub fn temperature_and_tint(img: &Image, neutral: (f32, f32), target: (f32, f32)) -> Image {
+    let wb = WhiteBalance::new(neutral, target);
+    map_colours(img, |c| wb.apply(c))
 }
 
 /// Darkens the highlights (`highlights` 0 to 1, default 1) and lifts or darkens the shadows
@@ -79,6 +89,16 @@ mod tests {
 
     fn solid(w: usize, h: usize, px: u32) -> Image {
         Image { w, h, px: vec![px; w * h] }
+    }
+
+    #[test]
+    fn temperature_and_tint_keeps_alpha_and_warms_with_a_bluer_neutral() {
+        let img = solid(1, 1, 0xff80_8080);
+        let warm = temperature_and_tint(&img, (9000.0, 0.0), DEFAULT_NEUTRAL);
+        assert_eq!(warm.px[0] >> 24, 0xff);
+        assert!((warm.px[0] & 0xff) > (warm.px[0] >> 16 & 0xff), "red above blue");
+        let same = temperature_and_tint(&img, DEFAULT_NEUTRAL, DEFAULT_NEUTRAL);
+        assert!(((same.px[0] & 0xff) as i32 - 0x80).abs() <= 1);
     }
 
     #[test]

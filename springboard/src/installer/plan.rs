@@ -24,9 +24,12 @@ fn lab_link() -> Option<(String, String)> {
     Some((mac, cidr))
 }
 
-/// A NetworkManager keyfile that pins the lab address on the NIC with this MAC (gateway titan, 10.99.0.1).
+/// A NetworkManager keyfile that pins the lab address on the NIC with this MAC (gateway titan, 10.99.0.1). The keyfile
+/// stores wake-on-lan as the flag integer (64 = magic packet); the name `magic` is rejected at every boot. TSO and GSO
+/// are off (`[ethtool]`, booleans as `false`): the lab NIC is often an Intel e1000e, which hangs under heavy transmit
+/// with them on, and the keyfile needs no ethtool binary.
 fn lab_nmconnection(mac: &str, cidr: &str) -> String {
-    format!("[connection]\nid=lab\ntype=ethernet\nautoconnect=true\n\n[ethernet]\nmac-address={mac}\nwake-on-lan=magic\n\n[ipv4]\nmethod=manual\naddress1={cidr},10.99.0.1\ndns=1.1.1.1;\n\n[ipv6]\nmethod=ignore\n")
+    format!("[connection]\nid=lab\ntype=ethernet\nautoconnect=true\n\n[ethernet]\nmac-address={mac}\nwake-on-lan=64\n\n[ethtool]\nfeature-tso=false\nfeature-gso=false\n\n[ipv4]\nmethod=manual\naddress1={cidr},10.99.0.1\ndns=1.1.1.1;\n\n[ipv6]\nmethod=ignore\n")
 }
 
 /// Everything the user chose.
@@ -322,6 +325,10 @@ const REPO_KEY_TARGET: &str = "/usr/share/bifrost/keys/bifrost-repo.gpg";
 /// Imports the key file `$1` into pacman's keyring and signs it locally (the same steps as the package scriptlet).
 const IMPORT_REPO_KEY_SH: &str = "pacman-key --add \"$1\" && fpr=$(gpg --batch --with-colons --import-options show-only --import \"$1\" | awk -F: '$1==\"fpr\"{print $10; exit}') && [ -n \"$fpr\" ] && pacman-key --lsign-key \"$fpr\"";
 
+fn repo_key_missing_message() -> String {
+    format!("{REPO_KEY_LIVE} is not on the installer medium; the update repository is signed and the installed system requires its signature (rebuild the medium with tools/build-iso.sh)")
+}
+
 fn bifrost_repo_section(server: &str) -> String {
     format!("[bifrost]\nSigLevel = {BIFROST_REPO_SIG_LEVEL}\nServer = {server}\n")
 }
@@ -553,9 +560,10 @@ pub fn audio_modprobe() -> &'static str {
 }
 
 /// Boot-time raise of the sound card and xHCI interrupt threads (B1): SCHED_FIFO 50, so an audio or input
-/// interrupt is not queued behind the shell's own work. Needs threadirqs on the command line.
+/// interrupt is not queued behind the shell's own work. Needs threadirqs on the command line. systemd expands `$VAR`
+/// in `ExecStart`, so every shell `$` is written `$$` (otherwise the journal shows "Invalid environment variable name").
 pub fn irq_priority_unit() -> &'static str {
-    "[Unit]\nDescription=Raise the audio and USB interrupt threads\nAfter=systemd-modules-load.service\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/bin/sh -c 'for d in /proc/[0-9]*; do c=$(cat $d/comm 2>/dev/null) || continue; case \"$c\" in irq/*xhci*|irq/*snd*|irq/*hda*|irq/*HDA*) chrt -f -p 50 ${d#/proc/} 2>/dev/null;; esac; done'\n\n[Install]\nWantedBy=multi-user.target\n"
+    "[Unit]\nDescription=Raise the audio and USB interrupt threads\nAfter=systemd-modules-load.service\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/bin/sh -c 'for d in /proc/[0-9]*; do c=$$(cat $$d/comm 2>/dev/null) || continue; case \"$$c\" in irq/*xhci*|irq/*snd*|irq/*hda*|irq/*HDA*) chrt -f -p 50 $${d#/proc/} 2>/dev/null;; esac; done'\n\n[Install]\nWantedBy=multi-user.target\n"
 }
 
 /// sshd on the installed system: key or password logins for the user, never for root.
@@ -932,16 +940,15 @@ pub fn install(cfg: &Config, progress: &Shared) {
             r.write(&sys("/etc/pacman.conf"), &format!("{conf}\n{}", bifrost_repo_section(server)))?;
             // the public key that signs the repository: into the target's keyring before the first `pacman -Sy` below
             // (the package ships the same key and its scriptlet keeps it imported afterwards)
-            if std::path::Path::new(REPO_KEY_LIVE).exists() {
-                let imported = r.cmd(&["install", "-Dm644", REPO_KEY_LIVE, &sys(REPO_KEY_TARGET)])
-                    .and_then(|_| r.chroot(&["sh", "-c", IMPORT_REPO_KEY_SH, "sh", REPO_KEY_TARGET]));
-                match imported {
-                    Ok(_) => r.log("update repository key imported into the installed keyring".to_string()),
-                    Err(e) => r.log(format!("WARNING: update repository key not imported ({e}); a signed repository will be refused")),
-                }
-            } else {
-                r.log(format!("WARNING: {REPO_KEY_LIVE} is not on the installer medium; a signed update repository is refused until the package brings the key"));
+            // The section above requires signatures, so an install without the key could never update: stop here, loudly,
+            // instead of finishing a system that refuses its own update channel.
+            if !std::path::Path::new(REPO_KEY_LIVE).exists() {
+                return Err(repo_key_missing_message());
             }
+            r.cmd(&["install", "-Dm644", REPO_KEY_LIVE, &sys(REPO_KEY_TARGET)])
+                .and_then(|_| r.chroot(&["sh", "-c", IMPORT_REPO_KEY_SH, "sh", REPO_KEY_TARGET]))
+                .map_err(|e| format!("the update repository key could not be imported into the installed keyring: {e}"))?;
+            r.log("update repository key imported into the installed keyring".to_string());
         }
 
         r.set(2, 86, "Installing the desktop");
@@ -1312,7 +1319,8 @@ mod tests {
         assert!(k.contains("mac-address=00:23:24:dc:c8:40\n"));
         assert!(k.contains("method=manual\naddress1=10.99.0.200/24,10.99.0.1\n"));
         assert!(k.contains("[ipv6]\nmethod=ignore"));
-        assert!(k.contains("[ethernet]\nmac-address=00:23:24:dc:c8:40\nwake-on-lan=magic\n"), "the lab NIC wakes on a magic packet");
+        assert!(k.contains("[ethernet]\nmac-address=00:23:24:dc:c8:40\nwake-on-lan=64\n"), "the lab NIC wakes on a magic packet");
+        assert!(k.contains("[ethtool]\nfeature-tso=false\nfeature-gso=false\n"), "TSO and GSO are off for e1000e");
     }
 
     #[test]
@@ -1395,6 +1403,7 @@ mod tests {
         assert!(iso.contains(" threadirqs isolcpus=7 nohz_full=7 rcu_nocbs=7\n"));
         assert_eq!(audio_modprobe(), "options snd_hda_intel power_save=0\n");
         assert!(irq_priority_unit().contains("chrt -f -p 50") && irq_priority_unit().contains("irq/*xhci*"));
+        assert!(!irq_priority_unit().replace("$$", "").contains('$'), "a single $ is expanded by systemd in ExecStart");
     }
 
     #[test]
@@ -1449,6 +1458,8 @@ mod tests {
         assert_eq!(s, "[bifrost]\nSigLevel = Required DatabaseRequired\nServer = https://repo.example/arch/$arch\n");
         assert!(!s.contains("TrustAll"), "no unknown signing key is trusted");
         assert!(IMPORT_REPO_KEY_SH.contains("pacman-key --add") && IMPORT_REPO_KEY_SH.contains("--lsign-key"));
+        assert!(repo_key_missing_message().contains(REPO_KEY_LIVE), "a medium without the key says where it belongs");
+        assert_eq!(REPO_KEY_LIVE, REPO_KEY_TARGET, "the scriptlet and the installer read the same path");
     }
 
     #[test]

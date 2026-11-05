@@ -128,6 +128,45 @@ pub fn word_from_url(url: &str) -> Option<String> {
     (!word.is_empty()).then(|| word.to_string())
 }
 
+/// A count with thousands separators: 151378 is "151,378".
+pub fn grouped(n: usize) -> String {
+    let digits = n.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// The top bar's subtitle while nothing is searched: how many words the installed dictionaries have ("151,378 words").
+/// Short, so it fits the title column of a narrow window; how many dictionaries there are is in Settings.
+pub fn idle_subtitle(words: usize) -> String {
+    format!("{} word{}", grouped(words), if words == 1 { "" } else { "s" })
+}
+
+/// What the sidebar says while it lists no headwords: a hint before anything is typed, "No Matches" after a search
+/// that found none. Not an empty column.
+pub fn sidebar_hint(query: &str) -> &'static str {
+    if query.trim().is_empty() {
+        "Matching words appear here."
+    } else {
+        "No Matches"
+    }
+}
+
+/// The word the app was started with: the first argument that is not a flag, either a `dict:` or `x-dictionary:` URL
+/// or the word itself. Another app or the shell can start Dictionary on a word this way.
+pub fn launch_word<I: IntoIterator<Item = String>>(args: I) -> Option<String> {
+    let arg = args.into_iter().find(|a| !a.starts_with('-'))?;
+    word_from_url(&arg).or_else(|| {
+        let w = arg.trim();
+        (!w.is_empty() && !w.contains(':') && !w.contains('/')).then(|| w.to_string())
+    })
+}
+
 /// The most characters of a selection the Services menu looks up.
 pub const SERVICE_WORD_MAX: usize = 80;
 
@@ -460,9 +499,316 @@ pub fn step_match(matches: &[usize], current: Option<usize>, delta: i32) -> Opti
     })
 }
 
+/// Labels that open a cross-reference list in a definition: WordNet's "Synonyms:" line and the "See also:" and
+/// "Compare:" lines other StarDict dictionaries use. Only the terms such a line names are links; the rest of a definition
+/// is plain text.
+pub const XREF_LABELS: &[&str] = &["Synonyms:", "Synonym:", "Antonyms:", "Antonym:", "See also:", "See:", "Compare:", "Also:"];
+
+/// The terms a cross-reference line names, as byte ranges of `paragraph`: the comma- or semicolon-separated entries after
+/// one of `XREF_LABELS` (ignoring case), without the spaces and the final full stop around them. A phrase stays one term
+/// ("ice cream"). Any other line names none.
+pub fn cross_references(paragraph: &str) -> Vec<(usize, usize)> {
+    let lead = paragraph.len() - paragraph.trim_start().len();
+    let rest = &paragraph[lead..];
+    let starts = |l: &&&str| rest.len() >= l.len() && rest.is_char_boundary(l.len()) && rest[..l.len()].eq_ignore_ascii_case(l);
+    let Some(label) = XREF_LABELS.iter().find(starts) else { return Vec::new() };
+    let mut out = Vec::new();
+    let mut at = lead + label.len();
+    for piece in paragraph[at..].split([',', ';']) {
+        let start = at + (piece.len() - piece.trim_start().len());
+        let core = piece.trim().trim_end_matches('.').trim_end();
+        if !core.is_empty() {
+            out.push((start, start + core.len()));
+        }
+        // the separators are one byte each
+        at += piece.len() + 1;
+    }
+    out
+}
+
+/// `paragraph` with its runs of white space collapsed to single spaces and trimmed: the text `Ui::wrap` breaks into
+/// lines. Every wrapped line is a piece of it, which `line_starts` finds again.
+pub fn normalize(paragraph: &str) -> String {
+    paragraph.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Where each wrapped line of the normalized `paragraph` starts in it, in bytes. The wrap breaks after spaces, after
+/// hyphens, between CJK characters and inside overlong runs, so lines are not rejoined with spaces: each line is found
+/// in the paragraph from where the previous one ended. A line that cannot be found (not a piece of the paragraph)
+/// starts where the previous one ended, past one separating space when there is one.
+pub fn line_starts(paragraph: &str, lines: &[String]) -> Vec<usize> {
+    let mut at = 0;
+    lines
+        .iter()
+        .map(|l| {
+            let start = match paragraph.get(at..).and_then(|rest| rest.find(l.as_str())) {
+                Some(off) => at + off,
+                None if paragraph.get(at..).is_some_and(|rest| rest.starts_with(' ')) => at + 1,
+                None => at,
+            };
+            at = (start + l.len()).min(paragraph.len());
+            start
+        })
+        .collect()
+}
+
+/// The parts of the `links` (byte ranges of a paragraph) that fall on the line from `line_start`, `line_len` bytes long:
+/// each as a range of the line and the index of its link. A term wrapped over two lines is a link on both.
+pub fn clip_links(line_start: usize, line_len: usize, links: &[(usize, usize)]) -> Vec<(usize, usize, usize)> {
+    let line_end = line_start + line_len;
+    links
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &(s, e))| {
+            let (s, e) = (s.max(line_start), e.min(line_end));
+            (s < e).then(|| (s - line_start, e - line_start, i))
+        })
+        .collect()
+}
+
+/// Splits a line of `len` bytes into runs covering all of it, in order; `links` (line ranges, in order, not
+/// overlapping) are the link runs.
+pub fn runs(len: usize, links: &[(usize, usize)]) -> Vec<Run> {
+    let mut out = Vec::new();
+    let mut at = 0;
+    for &(s, e) in links {
+        if s < at || e > len || s >= e {
+            continue;
+        }
+        if s > at {
+            out.push(Run { start: at, end: s, link: false });
+        }
+        out.push(Run { start: s, end: e, link: true });
+        at = e;
+    }
+    if at < len {
+        out.push(Run { start: at, end: len, link: false });
+    }
+    out
+}
+
+/// A pronunciation on the first line of a definition (`/kəmˈpjuːtə/` or `[kəm'pjuːtə]`, as StarDict dictionaries
+/// write it): the pronunciation without its marks, and the definition after that line. WordNet has none.
+pub fn pronunciation(text: &str) -> (Option<String>, &str) {
+    let lead = text.len() - text.trim_start().len();
+    let first = text[lead..].lines().next().unwrap_or("");
+    let line = first.trim();
+    let inner = line.strip_prefix('/').and_then(|l| l.strip_suffix('/')).or_else(|| line.strip_prefix('[').and_then(|l| l.strip_suffix(']')));
+    match inner.map(str::trim) {
+        Some(p) if !p.is_empty() => {
+            let rest = &text[lead + first.len()..];
+            (Some(p.to_string()), rest.strip_prefix("\r\n").or_else(|| rest.strip_prefix('\n')).unwrap_or(rest))
+        }
+        _ => (None, text),
+    }
+}
+
+/// True for a line that only names a part of speech ("noun", "verb"): it is drawn as a grey label over its senses.
+pub fn is_part_of_speech(line: &str) -> bool {
+    const NAMES: &[&str] = &["noun", "verb", "adjective", "adverb", "pronoun", "preposition", "conjunction", "interjection", "determiner", "adj.", "adv.", "n.", "v."];
+    let l = line.trim();
+    NAMES.iter().any(|n| l.eq_ignore_ascii_case(n))
+}
+
+/// Layout in points of the main window (Golden Gate Dictionary reference): a sidebar of matching headwords under the
+/// traffic lights, and a content column whose top bar holds the title, the toolbar and the search field.
+pub mod layout {
+    use bifrost_ui::Rect;
+
+    /// A window narrower than this has no sidebar; the matches are listed in the content column instead.
+    pub const SIDEBAR_MIN_WINDOW_PT: f32 = 560.0;
+    pub const SIDEBAR_MIN_PT: f32 = 170.0;
+    pub const SIDEBAR_MAX_PT: f32 = 240.0;
+    pub const PAD: f32 = 12.0;
+    pub const GAP: f32 = 8.0;
+    pub const SEARCH_H: f32 = 28.0;
+    pub const SEARCH_MIN_PT: f32 = 120.0;
+    pub const SEARCH_MAX_PT: f32 = 280.0;
+    /// Room for the "Dictionary" title and its "N found" line.
+    pub const TITLE_W: f32 = 110.0;
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct Regions {
+        /// Full height from the window's top; the shell draws the traffic lights over its top band. Zero wide when hidden.
+        pub sidebar: Rect,
+        pub title: Rect,
+        /// The toolbar's bounds, between the title and the search field.
+        pub tools: Rect,
+        pub search: Rect,
+        /// Under the top bar, right of the sidebar.
+        pub content: Rect,
+    }
+
+    /// The regions of a `w` by `h` window whose top bar is `bar_h` tall; `lead` is where a bar may start right of the
+    /// traffic lights when there is no sidebar under them (`widgets::toolbar_lead_pt`).
+    pub fn regions(w: f32, h: f32, bar_h: f32, lead: f32) -> Regions {
+        let w = w.max(0.0);
+        let h = h.max(0.0);
+        let side = if w >= SIDEBAR_MIN_WINDOW_PT { (w * 0.22).clamp(SIDEBAR_MIN_PT, SIDEBAR_MAX_PT) } else { 0.0 };
+        let content_w = w - side;
+        let title_x = if side > 0.0 { side + PAD } else { lead.max(PAD) };
+        let room = (w - PAD - title_x).max(0.0);
+        let search_w = (content_w * 0.4).clamp(SEARCH_MIN_PT, SEARCH_MAX_PT).min((room - TITLE_W - GAP).max(room * 0.5));
+        let search = Rect { x: w - PAD - search_w, y: ((bar_h - SEARCH_H) / 2.0).max(0.0), w: search_w, h: SEARCH_H.min(bar_h) };
+        let title = Rect { x: title_x, y: 0.0, w: TITLE_W.min((search.x - GAP - title_x).max(0.0)), h: bar_h };
+        let tools_x = title.x + title.w + GAP;
+        let tools = Rect { x: tools_x, y: 0.0, w: (search.x - GAP - tools_x).max(0.0), h: bar_h };
+        Regions {
+            sidebar: Rect { x: 0.0, y: 0.0, w: side, h },
+            title,
+            tools,
+            search,
+            content: Rect { x: side, y: bar_h.min(h), w: content_w, h: (h - bar_h).max(0.0) },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn counts_are_grouped_by_thousands_and_the_idle_subtitle_is_short() {
+        assert_eq!(grouped(0), "0");
+        assert_eq!(grouped(999), "999");
+        assert_eq!(grouped(1000), "1,000");
+        assert_eq!(grouped(151378), "151,378");
+        assert_eq!(grouped(1234567), "1,234,567");
+        assert_eq!(idle_subtitle(151378), "151,378 words");
+        assert_eq!(idle_subtitle(1), "1 word");
+    }
+
+    #[test]
+    fn the_launch_word_is_the_first_argument_that_is_not_a_flag() {
+        let args = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(launch_word(args(&[])), None);
+        assert_eq!(launch_word(args(&["terminal"])), Some("terminal".to_string()));
+        assert_eq!(launch_word(args(&["--verbose", "dict://serendipity"])), Some("serendipity".to_string()));
+        assert_eq!(launch_word(args(&["x-dictionary:r:orange"])), Some("orange".to_string()));
+        assert_eq!(launch_word(args(&["  "])), None, "a blank argument is no word");
+        assert_eq!(launch_word(args(&["/home/me/file.txt"])), None, "a path is not a word");
+        assert_eq!(launch_word(args(&["https://example.org"])), None, "another scheme is not a word");
+    }
+
+    fn inside(inner: bifrost_ui::Rect, outer: bifrost_ui::Rect) -> bool {
+        inner.x >= outer.x - 0.01 && inner.y >= outer.y - 0.01 && inner.x + inner.w <= outer.x + outer.w + 0.01 && inner.y + inner.h <= outer.y + outer.h + 0.01
+    }
+
+    #[test]
+    fn an_empty_sidebar_says_what_it_is_for_or_that_nothing_matched() {
+        assert_eq!(sidebar_hint(""), "Matching words appear here.");
+        assert_eq!(sidebar_hint("  "), "Matching words appear here.");
+        assert_eq!(sidebar_hint("zzq"), "No Matches");
+    }
+
+    #[test]
+    fn the_window_is_a_sidebar_and_a_content_column_with_the_search_field_at_the_top_right() {
+        let r = layout::regions(1200.0, 780.0, 52.0, 97.0);
+        assert_eq!((r.sidebar.x, r.sidebar.y, r.sidebar.h), (0.0, 0.0, 780.0));
+        assert!(r.sidebar.w >= layout::SIDEBAR_MIN_PT && r.sidebar.w <= layout::SIDEBAR_MAX_PT);
+        assert_eq!(r.content.x, r.sidebar.w, "the content starts at the sidebar's edge");
+        assert_eq!((r.content.y, r.content.x + r.content.w, r.content.y + r.content.h), (52.0, 1200.0, 780.0));
+        let bar = bifrost_ui::Rect { x: r.sidebar.w, y: 0.0, w: 1200.0 - r.sidebar.w, h: 52.0 };
+        for part in [r.title, r.tools, r.search] {
+            assert!(inside(part, bar), "{part:?} is in the top bar of the content column, not over the traffic lights");
+        }
+        assert!((r.search.x + r.search.w - (1200.0 - layout::PAD)).abs() < 0.01, "the search field ends at the right edge");
+        assert!(r.title.x + r.title.w <= r.tools.x && r.tools.x + r.tools.w <= r.search.x, "title, toolbar, search in order");
+        assert!(r.tools.w > 0.0);
+    }
+
+    #[test]
+    fn a_narrow_window_drops_the_sidebar_and_keeps_the_bar_clear_of_the_traffic_lights() {
+        let r = layout::regions(480.0, 560.0, 52.0, 97.0);
+        assert_eq!(r.sidebar.w, 0.0);
+        assert_eq!((r.content.x, r.content.w), (0.0, 480.0));
+        assert!(r.title.x >= 97.0, "the title starts right of the traffic lights");
+        assert!(r.search.w > 0.0 && r.search.x >= r.title.x + r.title.w);
+        let tiny = layout::regions(10.0, 10.0, 52.0, 97.0);
+        assert!(tiny.content.h == 0.0 && tiny.tools.w >= 0.0 && tiny.title.w >= 0.0);
+    }
+
+    #[test]
+    fn only_the_terms_of_a_cross_reference_line_are_links() {
+        let t = "   Synonyms: ice cream, frozen dessert; sherbet.";
+        let refs: Vec<&str> = cross_references(t).iter().map(|&(s, e)| &t[s..e]).collect();
+        assert_eq!(refs, ["ice cream", "frozen dessert", "sherbet"]);
+        let t = "see also: Computer";
+        assert_eq!(cross_references(t).iter().map(|&(s, e)| &t[s..e]).collect::<Vec<_>>(), ["Computer"]);
+        assert!(cross_references("1. a machine for performing calculations automatically; \"see the computer\"").is_empty());
+        assert!(cross_references("noun").is_empty());
+        assert!(cross_references("Synonyms:").is_empty());
+        assert!(cross_references("").is_empty());
+        assert!(cross_references("Seen: no").is_empty(), "a label is matched whole");
+    }
+
+    #[test]
+    fn a_wrapped_cross_reference_stays_a_link_on_each_line() {
+        let para = normalize("  Synonyms:   computing machine,  data processor ");
+        assert_eq!(para, "Synonyms: computing machine, data processor");
+        let links = cross_references(&para);
+        let lines = vec!["Synonyms: computing".to_string(), "machine, data processor".to_string()];
+        assert_eq!(lines.join(" "), para);
+        let starts = line_starts(&para, &lines);
+        assert_eq!(starts, [0, 20]);
+        let first = clip_links(starts[0], lines[0].len(), &links);
+        assert_eq!(first, [(10, 19, 0)]);
+        let second = clip_links(starts[1], lines[1].len(), &links);
+        assert_eq!(second, [(0, 7, 0), (9, 23, 1)]);
+        assert_eq!(&lines[1][9..23], "data processor");
+        let r = runs(lines[1].len(), &[(0, 7), (9, 23)]);
+        assert_eq!(r, [Run { start: 0, end: 7, link: true }, Run { start: 7, end: 9, link: false }, Run { start: 9, end: 23, link: true }]);
+        assert_eq!(runs(5, &[]), [Run { start: 0, end: 5, link: false }]);
+        assert!(runs(0, &[]).is_empty());
+    }
+
+    #[test]
+    fn line_starts_follow_a_wrap_at_hyphens_and_between_cjk_characters() {
+        // a break after a hyphen leaves no space between the lines
+        let para = normalize("see also: well-known word, other");
+        let lines = vec!["see also: well-".to_string(), "known word,".to_string(), "other".to_string()];
+        let starts = line_starts(&para, &lines);
+        assert_eq!(starts, [0, 15, 27]);
+        for (l, s) in lines.iter().zip(&starts) {
+            assert_eq!(&para[*s..*s + l.len()], l);
+        }
+        let links = cross_references(&para);
+        let terms: Vec<&str> = links.iter().map(|&(s, e)| &para[s..e]).collect();
+        assert_eq!(terms, ["well-known word", "other"]);
+        let second = clip_links(starts[1], lines[1].len(), &links);
+        assert_eq!(second, [(0, 10, 0)]);
+        assert_eq!(&lines[1][0..10], "known word");
+        let third = clip_links(starts[2], lines[2].len(), &links);
+        assert_eq!(third, [(0, 5, 1)]);
+
+        // CJK lines break between characters, with no space at all
+        let para = normalize("See also: 計算機科学, 電子計算機");
+        let lines = vec!["See also: 計算".to_string(), "機科学, 電子".to_string(), "計算機".to_string()];
+        let starts = line_starts(&para, &lines);
+        for (l, s) in lines.iter().zip(&starts) {
+            assert_eq!(&para[*s..*s + l.len()], l);
+        }
+        assert_eq!(starts, [0, "See also: 計算".len(), "See also: 計算機科学, 電子".len()]);
+        let links = cross_references(&para);
+        let terms: Vec<&str> = links.iter().map(|&(s, e)| &para[s..e]).collect();
+        assert_eq!(terms, ["計算機科学", "電子計算機"]);
+        let second = clip_links(starts[1], lines[1].len(), &links);
+        assert_eq!(second, [(0, "機科学".len(), 0), ("機科学, ".len(), lines[1].len(), 1)]);
+        assert_eq!(&lines[1][second[1].0..second[1].1], "電子");
+        assert_eq!(clip_links(starts[2], lines[2].len(), &links), [(0, "計算機".len(), 1)]);
+        // the old join-with-spaces placement would have put the third line one byte per break too far
+        assert_ne!(starts[2], "See also: 計算".len() + 1 + "機科学, 電子".len() + 1);
+    }
+
+    #[test]
+    fn a_pronunciation_line_is_split_from_the_definition() {
+        assert_eq!(pronunciation("/kəmˈpjuːtə/\nnoun\n1. a machine"), (Some("kəmˈpjuːtə".to_string()), "noun\n1. a machine"));
+        assert_eq!(pronunciation("[kəm'pjuːtə]\r\nx"), (Some("kəm'pjuːtə".to_string()), "x"));
+        assert_eq!(pronunciation("noun\n1. a machine"), (None, "noun\n1. a machine"));
+        assert_eq!(pronunciation("//\nx"), (None, "//\nx"));
+        assert_eq!(pronunciation(""), (None, ""));
+        assert!(is_part_of_speech(" noun ") && is_part_of_speech("Adjective") && !is_part_of_speech("1. noun"));
+    }
 
     fn hit(d: &str, t: &str) -> Hit {
         Hit { dictionary: d.into(), text: t.into() }

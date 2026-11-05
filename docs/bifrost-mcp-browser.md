@@ -2,7 +2,7 @@
 
 One MCP tool (`springboard/mcp/src/browser.rs`) for web development and daily-driver checks in the BifrOSt
 Browser. It maps each `action` to a `browser.*` method on the Browser's app control socket
-(`$XDG_RUNTIME_DIR/bifrost/apps/is.olibuijr.browser.desktop.sock`, found by `sys::app_sockets`; JSON-RPC 2.0, same uid) through
+(`/var/lib/springboard/appdata/is.olibuijr.browser.desktop/control.sock`, found by `sys::app_sockets`; JSON-RPC 2.0, same uid) through
 `sys::app_rpc`. It launches the Browser (`open-app`) and waits up to 15 s for the socket if it is not running.
 The method contract lives with the devtools-browser track; this tool consumes it exactly.
 

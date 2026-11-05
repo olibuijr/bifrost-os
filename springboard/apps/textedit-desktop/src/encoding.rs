@@ -4,7 +4,7 @@
 
 use crate::rtf::cp1252;
 
-/// The encodings Text Editor reads and writes for plain text.
+/// The encodings TextEdit reads and writes for plain text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Encoding {
     #[default]

@@ -1462,7 +1462,7 @@ impl Calculator {
                     self.moved = true;
                     self.hold = None;
                 }
-                if self.history_open && self.moved {
+                if self.history_open && self.moved && bifrost_app::pans_now() {
                     let delta = ((self.down.1 - y) / self.row_height(ui)).round() as isize;
                     let max = self.store.len().saturating_sub(self.rows_visible(ui)) as isize;
                     self.hist_offset = (self.hist_start as isize + delta).clamp(0, max) as usize;

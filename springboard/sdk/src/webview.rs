@@ -175,7 +175,7 @@ pub enum WebViewEvent {
     /// (`NavigationResponsePolicy::Download`, see `web_download`). Build a `WebDownload` from `url` and ask the
     /// `WebDownloadDelegate` for a destination.
     DownloadStarted { id: WebViewId, url: String, suggested_filename: String },
-    /// `WKScriptMessageHandler`: a page posted a message (`window.bifrost.messageHandlers.<name>.postMessage`).
+    /// The reference script message handler: a page posted a message (`window.bifrost.messageHandlers.<name>.postMessage`).
     /// Route it with `web_bridge::route_script_messages`.
     ScriptMessage { id: WebViewId, message: crate::web_config::ScriptMessage },
     /// `decidePolicyFor navigationAction`: a navigation is about to start and the engine waits for the app's answer

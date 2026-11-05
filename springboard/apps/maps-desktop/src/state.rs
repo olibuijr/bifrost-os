@@ -304,10 +304,25 @@ pub struct Maps {
     dirty_settings: bool,
 }
 
-/// True unless the language setting names a region that measures in miles.
+/// True unless the region measures in miles. The region is the one chosen in Settings > Language & Region
+/// (what `Locale::current` reads, so an Icelandic region is metric whatever the environment says); an
+/// `LC_MEASUREMENT` in the environment decides first.
 pub fn region_is_metric() -> bool {
-    let lang = ["LC_MEASUREMENT", "LC_ALL", "LANG"].iter().find_map(|k| std::env::var(k).ok().filter(|v| !v.is_empty())).unwrap_or_default();
-    !["_US", "_LR", "_MM"].iter().any(|r| lang.contains(r)) && !lang.contains("_GB")
+    let measurement = std::env::var("LC_MEASUREMENT").ok().filter(|v| !v.is_empty());
+    match measurement {
+        Some(m) => metric_for_identifier(&m),
+        None => metric_for_region(bifrost_app::locale::Locale::current().region_code()),
+    }
+}
+
+/// Regions that show miles and feet: the US, Liberia, Myanmar and the UK.
+fn metric_for_region(region: Option<&str>) -> bool {
+    !matches!(region, Some("US" | "LR" | "MM" | "GB"))
+}
+
+/// A locale identifier such as `en_US.UTF-8` (`LC_MEASUREMENT`).
+fn metric_for_identifier(id: &str) -> bool {
+    metric_for_region(bifrost_app::locale::Locale::new(id).region_code())
 }
 
 impl Maps {
@@ -1787,6 +1802,16 @@ mod tests {
         m.act(Act::ClosePanel, 0);
         assert_eq!(m.panel, Panel::Place);
         assert!(m.routes.is_empty());
+    }
+
+    #[test]
+    fn iceland_and_unset_regions_are_metric_and_the_us_is_not() {
+        assert!(metric_for_region(Some("IS")));
+        assert!(metric_for_region(None));
+        assert!(!metric_for_region(Some("US")));
+        assert!(!metric_for_region(Some("GB")));
+        assert!(metric_for_identifier("is_IS.UTF-8"));
+        assert!(!metric_for_identifier("en_US.UTF-8"));
     }
 
     #[test]

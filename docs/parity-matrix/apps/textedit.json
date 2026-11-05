@@ -348,8 +348,8 @@
    "area": "menu",
    "apple": "Edit.nib: Format > Allow Hyphenation",
    "status": "partial",
-   "bifrost": "springboard/ui/src/textbreak.rs",
-   "note": "Audit 2026-10-13: kit model ui/src/textbreak.rs (host tests) already provides this; the app does not use it yet.",
+   "bifrost": "springboard/render/src/textbreak.rs",
+   "note": "Audit 2026-10-13: kit model render/src/textbreak.rs (host tests) already provides this; the app does not use it yet.",
    "wire": "Use bifrost_ui::textbreak line-break opportunities plus soft hyphens in layout.rs."
   },
   {

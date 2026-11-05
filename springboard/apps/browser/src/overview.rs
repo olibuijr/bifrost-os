@@ -4,7 +4,7 @@
 //! The layout is in points, so it follows the window size and the UI scale.
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::Rect;
-use bifrost_app::kit::ui::{Weight, CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, TINT};
+use bifrost_app::kit::ui::{Weight, CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, accent_now};
 use bifrost_app::kit::{Surface, Ui};
 
 pub const CARD_W_PT: f32 = 220.0;
@@ -78,7 +78,7 @@ impl Overview {
             let r = card_rect(i, cols, top_pt);
             let selected = i == current;
             if selected {
-                s.fill_rrect(ui.pt(r.x - RING_PT), ui.pt(r.y - RING_PT), ui.pt(r.w + 2.0 * RING_PT), ui.pt(r.h + 2.0 * RING_PT), rad + ui.pt(RING_PT), TINT);
+                s.fill_rrect(ui.pt(r.x - RING_PT), ui.pt(r.y - RING_PT), ui.pt(r.w + 2.0 * RING_PT), ui.pt(r.h + 2.0 * RING_PT), rad + ui.pt(RING_PT), accent_now());
             }
             s.fill_rrect(ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h), rad, CARD_BG.now());
             let (first, second) = label(title, url);

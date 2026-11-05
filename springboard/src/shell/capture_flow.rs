@@ -43,10 +43,29 @@ pub const WINDOW_SHOT_TIMEOUT_MS: f64 = 2_000.0;
 /// A surface of the shell's own that sits above the windows: its place on the screen and its pixels (premultiplied), and
 /// the part of it that takes the pointer (None: all of it; an empty rectangle: none of it).
 pub(super) struct Layer {
+    // Only the desktop (`desktop_chrome_frames`) and the tests read the fields.
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub x: i32,
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub y: i32,
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub image: Image,
+    #[cfg(any(test, feature = "desktop-wayland"))]
     pub input: Option<[i32; 4]>,
+}
+
+impl Layer {
+    /// A surface at (x, y) with its pixels and the part that takes the pointer. Without the desktop and the tests nothing
+    /// reads the fields, so the layer keeps none of them and the pixels are dropped at once.
+    pub(super) fn new(x: i32, y: i32, image: Image, input: Option<[i32; 4]>) -> Layer {
+        #[cfg(any(test, feature = "desktop-wayland"))]
+        return Layer { x, y, image, input };
+        #[cfg(not(any(test, feature = "desktop-wayland")))]
+        {
+            let _ = (x, y, image, input);
+            Layer {}
+        }
+    }
 }
 
 /// A capture waiting for the composed screen.
@@ -130,7 +149,7 @@ pub(super) fn shot_layer(o: &Overlay, t: f64) -> Option<Layer> {
     o.draw_at(&mut Surface { w: image.w, h: image.h, stride: image.w, px: &mut image.px, y0: 0 }, t, (b.x, b.y));
     // only the resting thumbnail takes the pointer: the flash and the slide away let it through
     let input = if o.interactive(t) { None } else { Some([0, 0, 0, 0]) };
-    Some(Layer { x: b.x, y: b.y, image, input })
+    Some(Layer::new(b.x, b.y, image, input))
 }
 
 /// The capture session (dim, selection, countdown, toolbar) as a screen-sized surface of its own.
@@ -140,7 +159,7 @@ pub(super) fn capture_layer(c: &Session, ui: &super::ui::Ui, frames: &[Rect], w:
     }
     let mut image = Image::new(w as usize, h as usize);
     c.draw(&mut Surface { w: image.w, h: image.h, stride: image.w, px: &mut image.px, y0: 0 }, ui, frames, w, h, t);
-    Some(Layer { x: 0, y: 0, image, input: None })
+    Some(Layer::new(0, 0, image, None))
 }
 
 impl Shell {
@@ -485,11 +504,18 @@ mod tests {
         let frame = Image { w: 1200, h: 1920, px: vec![crate::gfx::pack(1, 2, 3, 255); 1200 * 1920] };
         let o = Overlay::new(frame, PathBuf::from("/x.png"), 1200.0 / 768.0, 1000.0);
         let flash = shot_layer(&o, 1000.0).unwrap();
-        assert_eq!((flash.image.w, flash.image.h), (1200, 1920));
+        assert_eq!((flash.x, flash.y, flash.image.w, flash.image.h), (0, 0, 1200, 1920), "the flash covers the screen");
         assert_eq!(flash.input, Some([0, 0, 0, 0]), "the flash does not take the pointer");
         let rest = 1000.0 + screenshot::FLASH_MS + screenshot::SHRINK_MS + 100.0;
         let thumb = shot_layer(&o, rest).unwrap();
-        assert!(thumb.image.w < 400 && thumb.x > 600, "the thumbnail at the bottom right: {}x{} at {}", thumb.image.w, thumb.image.h, thumb.x);
+        assert!(
+            thumb.image.w < 400 && thumb.x > 600 && thumb.y > 960,
+            "the thumbnail at the bottom right: {}x{} at {},{}",
+            thumb.image.w,
+            thumb.image.h,
+            thumb.x,
+            thumb.y
+        );
         assert_eq!(thumb.input, None, "the resting thumbnail takes the pointer");
         assert!(thumb.image.px.iter().any(|&p| p >> 24 != 0), "it shows the picture");
         assert!(shot_layer(&o, 1000.0 + screenshot::HOLD_MS + screenshot::OUT_MS + 1.0).is_none(), "nothing is left once it has slid away");

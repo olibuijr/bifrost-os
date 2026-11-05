@@ -66,8 +66,10 @@ No new REA capture this round. The reference behaviour is the one recorded for t
 
 ## Remaining gaps
 
-- No artwork. The service track carries no artwork, so the menu has no image. Needs an artwork field on the service
-  publish and a size model from `bifrost_ui::media_artwork` (not wired).
+- Artwork is wired but not checked on Midget. The publish carries an optional `artwork` (`{w, h, rgba}`, straight RGBA8
+  as base64, at most 128 px a side, see `bifrost_ui::media_artwork::ArtworkImage`); the menu's title row then grows to a
+  cover row (`Panel::artwork`, `MENU_ART_ROW_PT`) and without one stays the plain text row. Encoded images (PNG, JPEG) and
+  animated artwork are not carried: the app decodes its cover and sends pixels.
 - No separate panel with a progress bar and a seek target. The menu shows the position as text; seek by dragging is
   still only on the Control Center tile (wire 5).
 - No skip-interval rows (`skip_forward`, `skip_backward` need `bifrost_ui::skip_interval`) and no playback-rate row.

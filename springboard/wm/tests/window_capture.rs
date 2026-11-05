@@ -9,7 +9,7 @@
 //!
 //! One test function: the privileged socket is named by the environment when the window server starts.
 
-use std::{io::Write, os::fd::AsFd, os::unix::fs::{FileExt, MetadataExt}, os::unix::net::UnixStream, path::PathBuf, time::Duration};
+use std::{io::Write, os::fd::AsFd, os::unix::fs::FileExt, os::unix::net::UnixStream, path::PathBuf, time::Duration};
 
 use bifrost_wm::headless::Compositor;
 use wayland_client::{
@@ -74,7 +74,6 @@ impl Dispatch<frame_mod::BifrostWindowCaptureFrameV1, ()> for Client {
             frame_mod::Event::Ready { width, height, serial } => Answer::Ready { width, height, serial },
             frame_mod::Event::Unchanged { serial } => Answer::Unchanged { serial },
             frame_mod::Event::Failed { reason } => Answer::Failed { reason },
-            _ => return,
         });
     }
 }

@@ -18,6 +18,7 @@ use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT};
 use crate::feed::{self, Item};
 use crate::reader_size;
+use crate::services;
 use crate::wire;
 use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTENT_BG, LABEL, LABEL_2, SEPARATOR_C};
 use bifrost_app::kit::{Event, Surface, TextCache, Ui, Weight};
@@ -205,7 +206,7 @@ impl News {
             bar: None,
             reading,
             facts: String::new(),
-            online: true,
+            online: effective_online(true, bifrost_app::testing::pinned()),
             top_changed: true,
             notice: None,
             text_step: reader_size::DEFAULT_STEP,
@@ -233,6 +234,7 @@ impl News {
     /// Records the shell's network path. Going online refetches every feed at once; going offline stops fetches
     /// and picture loads, and the cached headlines and saved pages stay readable.
     pub fn set_online(&mut self, online: bool) {
+        let online = effective_online(online, bifrost_app::testing::pinned());
         if self.online == online {
             return;
         }
@@ -249,14 +251,12 @@ impl News {
         std::mem::take(&mut self.top_changed)
     }
 
-    /// Rebuilds the visible list: the chosen feed, or all feeds interleaved.
+    /// Rebuilds the visible list: the chosen feed, or today's items from all feeds.
     fn rebuild(&mut self) {
         self.rows.clear();
         self.list = match self.tab {
-            0 => {
-                let longest = self.items.iter().map(Vec::len).max().unwrap_or(0);
-                (0..longest).flat_map(|i| self.items.iter().filter_map(move |f| f.get(i).cloned())).collect()
-            }
+            // Today: the day's headlines from every feed, newest first
+            0 => feed::today_list(&self.items, (services::now_secs() / 86_400.0).floor() as i64),
             READING_TAB => wire::rows(&self.reading),
             tab => self.items.get(tab - FEED_TAB).cloned().unwrap_or_default(),
         };
@@ -933,9 +933,23 @@ impl News {
     }
 }
 
+/// Whether feeds may be fetched: the shell's network path, except under the testing kit (`BIFROST_TEST_PIN=1`), where the
+/// app stays offline so a snapshot shows the "You are offline" state and never live headlines.
+fn effective_online(path_online: bool, pinned: bool) -> bool {
+    path_online && !pinned
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_testing_pin_keeps_the_app_offline() {
+        assert!(effective_online(true, false));
+        assert!(!effective_online(false, false));
+        assert!(!effective_online(true, true), "pinned: no feed is fetched");
+        assert!(!effective_online(false, true));
+    }
 
     #[test]
     fn default_feeds_are_icelandic() {

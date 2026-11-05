@@ -242,6 +242,33 @@ pub enum Shortcut {
 }
 
 impl Shortcut {
+    /// The Ctrl+Cmd arrow shortcut a `tile` control line stands for (the window server takes the chord and sends the line,
+    /// so the shell's front window is the one arranged).
+    /// Whether the shortcut still runs while the Terminal in front has Secure Keyboard Entry on: the Terminal's own keys,
+    /// Paste, the lock, Force Quit, and Ctrl+Cmd+arrow tiling, which the window server takes before any app reads the
+    /// keys (as on Golden Gate, where Secure Input never stops window management) and relays to the shell.
+    pub fn runs_under_secure_entry(&self) -> bool {
+        matches!(self, Shortcut::Term(_) | Shortcut::Paste | Shortcut::Lock | Shortcut::ForceQuit | Shortcut::Tile(_))
+    }
+
+    /// Whether the shortcut opens another surface that takes the keyboard (Search, the app switcher, the assistant,
+    /// Look Up, the Help search, an app's settings, the Force Quit and Log Out cards): an open menu or the Dock's
+    /// Downloads stack closes before it runs (`Shell::desktop_menu_dismiss`). The screenshot shortcuts leave menus
+    /// open, so a menu can be captured, as in the reference.
+    pub fn opens_surface(&self) -> bool {
+        matches!(self, Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Assistant | Shortcut::LookUp | Shortcut::HelpSearch | Shortcut::Settings | Shortcut::ForceQuit | Shortcut::LogOut)
+    }
+
+    pub fn tile(key: crate::bare::control::TileKey) -> Self {
+        use crate::bare::control::TileKey;
+        Shortcut::Tile(match key {
+            TileKey::Left => Tile::Left,
+            TileKey::Right => Tile::Right,
+            TileKey::Fill => Tile::Fill,
+            TileKey::Center => Tile::Center,
+        })
+    }
+
     /// The key a text control receives for an editing shortcut.
     pub fn out(self) -> Option<Out> {
         Some(Out::Named(match self {
@@ -278,6 +305,10 @@ pub struct HwKeys {
     sticky: StickyKeys,
     /// The non-modifier key that holds sticky modifiers, and those modifiers; they count as held until it is released
     sticky_held: Option<(u16, Vec<Modifier>)>,
+    /// Modifier codes (after the Settings remap) whose press a session event tap or Switch Control consumed or replaced,
+    /// still physically down: the window server reports them held, but they were never counted here, so
+    /// `sync_modifiers` treats them as unsure until their release instead of pressing them over the tap
+    tapped: Vec<u16>,
 }
 
 impl HwKeys {
@@ -293,6 +324,66 @@ impl HwKeys {
         sticky.set_enabled(on);
         let desktop = self.desktop;
         *self = Self { text: Keyboard::new(layout), sticky, desktop, ..Self::default() };
+    }
+
+    /// Brings the modifier counters in line with the window server, which knows which keys are down (E2E3 F1: a Shift
+    /// press counted here whose release went to another client, or was lost on a focus change, made every later click a
+    /// Shift-click until the screen went off). `held` are the modifier key codes it says are down, after the Settings
+    /// remap; `unsure` the codes it cannot tell about (a remapped Caps Lock, which the window server sees as a lock, not a
+    /// held key); `caps` the Caps Lock state when it is known. A counted modifier that is neither held nor unsure, and
+    /// not held by a sticky key, is released; a held one that is not counted is pressed. Returns true when anything
+    /// changed.
+    pub fn sync_modifiers(&mut self, held: &[u16], unsure: &[u16], caps: Option<bool>) -> bool {
+        let before = (self.shift, self.ctrl, self.alt, self.altgr, self.meta, self.caps);
+        // a modifier a tap took is down for the window server but was never counted here: it is unsure until released.
+        // The mask cannot tell the left key of a pair from the right one, so a held code of the same class is unsure too
+        let tapped_class = |c: u16| self.tapped.iter().any(|&t| Modifier::of_code(t) == Modifier::of_code(c));
+        let (held, held_tapped): (Vec<u16>, Vec<u16>) = held.iter().copied().partition(|&c| !tapped_class(c));
+        let unsure: Vec<u16> = unsure.iter().copied().chain(held_tapped).chain(self.tapped.iter().copied()).collect();
+        let (held, unsure) = (held.as_slice(), unsure.as_slice());
+        for m in [Modifier::Shift, Modifier::Ctrl, Modifier::Alt, Modifier::Super] {
+            let is = |codes: &[u16]| codes.iter().any(|&c| Modifier::of_code(c) == Some(m));
+            let sticky = self.sticky_held.as_ref().is_some_and(|(_, mods)| mods.contains(&m));
+            let n = self.counter(m);
+            if is(held) {
+                if *n == 0 {
+                    *n = 1;
+                }
+            } else if !is(unsure) && !sticky {
+                *n = 0;
+            }
+        }
+        // AltGr is the right Alt key alone: it follows that code, and never outlives the Alt count. The window server's
+        // keymap may differ from the shell's typing layout and map right Alt as plain Alt (Mod1), so its mask cannot tell
+        // AltGr from Alt: while any Alt-class modifier is held (or unsure), right Alt is unsure and AltGr is kept; it is
+        // cleared only when the window server reports no Alt at all
+        let alt_class = |codes: &[u16]| codes.iter().any(|&c| Modifier::of_code(c) == Some(Modifier::Alt));
+        if held.contains(&KEY_RIGHTALT) {
+            self.altgr = self.altgr.max(1);
+        } else if !alt_class(held) && !alt_class(unsure) {
+            self.altgr = 0;
+        }
+        self.altgr = self.altgr.min(self.alt);
+        if let Some(on) = caps {
+            self.caps = on;
+        }
+        let changed = before != (self.shift, self.ctrl, self.alt, self.altgr, self.meta, self.caps);
+        if changed {
+            self.meta_alone = false;
+        }
+        changed
+    }
+
+    /// Notes a key that a session event tap or Switch Control saw before `key`: `code` as the Settings remap sends it,
+    /// `taken` when its press was consumed or replaced (so `key` never counted it). A taken modifier press stays unsure
+    /// for `sync_modifiers` until its release, so the window server's mask, which still reports the key down, does not
+    /// press it over the tap. Every release clears the code, whatever the tap did with it.
+    pub fn note_tap(&mut self, code: u16, down: bool, taken: bool) {
+        if !down {
+            self.tapped.retain(|&c| c != code);
+        } else if taken && Modifier::of_code(code).is_some() && !self.tapped.contains(&code) {
+            self.tapped.push(code);
+        }
     }
 
     /// Chooses the form factor behaviour of a lone Cmd (Super) press. On a tablet it is the Home key (the default here, so the
@@ -407,7 +498,7 @@ impl HwKeys {
         self.alt > 0
     }
 
-    /// The modifier keys held now, as `NSEvent.modifierFlags`: every press the shell forwards to an app carries them, so a
+    /// The modifier keys held now, as the reference event modifier flags: every press the shell forwards to an app carries them, so a
     /// click can be a Shift-click or a Cmd-click. AltGr types characters and is not Option; Caps Lock counts while it is on.
     pub fn modifier_flags(&self) -> bifrost_proto::ModifierFlags {
         bifrost_proto::ModifierFlags::from_held(self.shift > 0, self.ctrl > 0, self.alt > self.altgr, self.meta > 0, self.caps)
@@ -663,7 +754,9 @@ impl HwKeys {
             Typed::Char(c) => Out::Text(c.to_string()),
             Typed::Backspace => Out::Backspace,
             Typed::Enter => Out::Enter,
-            Typed::Tab | Typed::BackTab => Out::Named("Tab"),
+            Typed::Tab => Out::Named("Tab"),
+            // Shift+Tab: `hw_type` gives it to the places that step backwards, and treats it as Tab elsewhere
+            Typed::BackTab => Out::Named("BackTab"),
             Typed::Escape => Out::Named("Escape"),
             Typed::Up => Out::Named("Up"),
             Typed::Down => Out::Named("Down"),
@@ -830,7 +923,8 @@ impl Shell {
     /// Power, volume and wake stay with the shell.
     pub fn hw_key(&mut self, code: u16, down: bool, t: f64) -> bool {
         const KEEP: [u16; 4] = [114, 115, 116, 143];
-        if !down || !self.screen_on || self.anim.is_some() || KEEP.contains(&code) || self.card_alert_up() {
+        // the Apps grid keeps the screen of the app in front (its menus stay in the bar), but the typing is the grid's
+        if !down || !self.screen_on || self.anim.is_some() || KEEP.contains(&code) || self.card_alert_up() || self.overview.grid.visible() {
             return false;
         }
         // Space in an open capture session turns the selection into a window pick and back
@@ -859,11 +953,17 @@ impl Shell {
     /// volume and brightness keys always pass.
     pub fn hw_overview_key(&mut self, code: u16, down: bool, mods: super::overview::KeyMods, alt: bool, t: f64) -> bool {
         const PASS: [u16; 14] = [29, 42, 54, 56, 97, 100, 125, 126, 114, 115, 116, 143, 224, 225];
-        if !down || !self.screen_on || alt || PASS.contains(&code) {
+        // nothing of Overview's runs over the lock screen: its keys are the login window's
+        if !down || !self.screen_on || alt || PASS.contains(&code) || self.is_locked() {
             return false;
         }
         // an alert holds the keyboard and Secure Keyboard Entry keeps the shell's keys out of the Terminal: neither is for Overview
         if self.card_alert_up() || self.secure_entry_up() {
+            return false;
+        }
+        // a menu-bar menu open over Overview or the grid is in front of them: Esc, Return and the arrows are the menu's
+        // (`hw_menu_key`), so the first Esc closes the menu and the grid stays (Lead (a))
+        if self.desktop_menu.is_some() && matches!(code, KEY_ESC | KEY_ENTER | KEY_UP | KEY_LEFT | KEY_RIGHT | KEY_DOWN) {
             return false;
         }
         // the Apps grid takes only its navigation keys: letters go on to `hw_type`, which types them into its search field
@@ -974,8 +1074,13 @@ impl Shell {
     pub fn hw_builtin_chord(&mut self, code: u16, mods: u32, t: f64) -> bool {
         const KEY_LEFTBRACE: u16 = 26;
         const KEY_RIGHTBRACE: u16 = 27;
-        // Cmd+Return in Search shows the selected file in its folder (Show in Finder on the reference platform)
+        // Cmd+Return in Search shows the selected file in its folder (Show in the file manager on the reference platform)
         if code == KEY_ENTER && mods == CHORD_META && self.screen_on && !self.card_alert_up() && self.quicksearch_reveal(t) {
+            self.last_input = t;
+            return true;
+        }
+        // Cmd+Down and Cmd+Up in Search jump between the result categories
+        if matches!(code, KEY_UP | KEY_DOWN) && mods == CHORD_META && self.screen_on && !self.card_alert_up() && self.quicksearch_jump(if code == KEY_DOWN { 1 } else { -1 }) {
             self.last_input = t;
             return true;
         }
@@ -1001,6 +1106,25 @@ impl Shell {
             return stepped;
         }
         false
+    }
+
+    /// A key on the lock screen with a login backend: every key, Return included, belongs to the login window (only
+    /// privd's token unlocks). The window opens for this key when the shell has not drawn since the lock, and is looked
+    /// up again when an earlier open found no login service (`login_open_window` logs that and retries on every key).
+    /// `None` without a login backend (host previews): the old unlock in `hw_type` handles the key.
+    fn lock_type(&mut self, out: &Out, t: f64) -> Option<Vec<Effect>> {
+        // a Search opened over the lock screen (the Today view's field) keeps its typing; the lock closed any earlier one
+        if self.quicksearch.is_shown() || self.assistant.is_shown() {
+            return None;
+        }
+        self.login_show(t);
+        if !self.login_open() && self.login_backend.is_none() {
+            return None;
+        }
+        let fx = self.login_key(out, t);
+        self.last_input = t;
+        self.dirty = true;
+        Some(fx)
     }
 
     pub fn hw_chord(&mut self, code: u16, mods: u32) -> bool {
@@ -1029,8 +1153,31 @@ impl Shell {
     }
 
     pub fn hw_type(&mut self, out: Out, t: f64) -> Vec<Effect> {
+        // Shift+Tab is Tab to every sheet, panel and field below; only an SDK app (as the Shift+Tab chord) and Settings (focus
+        // steps back) hear the difference, where the screen match at the end restores it
+        let back_tab = out == Out::Named("BackTab");
+        let out = if back_tab { Out::Named("Tab") } else { out };
+        let mut woke = vec![];
         if !self.screen_on {
-            return vec![];
+            // a locked desktop whose display went dark (idle) wakes on a key, as the reference Mac does, and the key goes to
+            // the login window; elsewhere a key with the screen off is dropped as before
+            if !(self.is_locked() && self.form() == bifrost_ui::form_factor::FormFactor::Desktop) {
+                return vec![];
+            }
+            self.screen_on = true;
+            self.screen_woke(t);
+            woke.push(Effect::ScreenOn);
+        }
+        // the lock screen owns the keyboard before any sheet, panel, viewer or alert an app or the shell left open under
+        // it (E2E N0: a layer that holds the keys returned below before the lock arm, so no key reached the login window)
+        if self.is_locked() {
+            if let Some(fx) = self.lock_type(&out, t) {
+                woke.extend(fx);
+                return woke;
+            }
+        }
+        if !woke.is_empty() {
+            return woke;
         }
         // the password sheet of an app's local authentication takes the typing before anything else
         if self.auth_showing() {
@@ -1095,28 +1242,34 @@ impl Shell {
         if self.modal_layer.is_some() {
             return vec![];
         }
-        // the login window opens on a tick; the shell may not have drawn since the lock, so open it for this key
-        if self.screen == Screen::Lock {
-            self.login_ensure(t);
-        }
         let fx = match self.screen {
             // an open Search takes the typing, over whatever screen it was opened on
             // an open assistant panel takes the typing too, as Search does
             _ if self.assistant.is_shown() => self.assistant_key(out, t),
             _ if self.quicksearch.is_shown() => self.compose_search_key(out, t),
             Screen::App(AppId::Terminal | AppId::External(_)) => {
+                // an SDK app gets Shift+Tab with its Shift (the chord on Tab), which steps focus back; the built-in Terminal gets
+                // the back-tab sequence (ESC [ Z); a Wayland client behind the input method and the Help viewer keep Tab
+                let panel_open = self.screen == Screen::App(AppId::Terminal) && self.terminal_panel_open();
+                let out = if back_tab && !panel_open && !self.im.active && self.help_viewer.is_none() {
+                    Out::Named("BackTab")
+                } else {
+                    out
+                };
                 self.type_out(out, t);
                 vec![]
             }
-            Screen::Lock if self.login_open() || self.login_backend.is_some() => {
-                self.login_show(t);
-                self.login_key(&out, t)
-            }
-            Screen::Lock if matches!(out, Out::Enter) && self.lock_pad.is_none() && self.anim.is_none() => {
+            // (a login backend's keys never get here: `lock_type` took them first)
+            // the old unlock (no login backend: host previews): Return lifts the lock screen or asks for the passcode
+            Screen::Lock if self.login_backend.is_none() && matches!(out, Out::Enter) && self.lock_pad.is_none() && self.anim.is_none() => {
                 self.begin_unlock(0.0, t);
                 vec![]
             }
-            Screen::App(app) if self.anim.is_none() => self.hw_type_app(app, out, t),
+            Screen::App(app) if self.anim.is_none() => {
+                // Settings steps its focus back on Shift+Tab; no other built-in app tells it from Tab
+                let out = if back_tab && app == AppId::Settings { Out::Named("BackTab") } else { out };
+                self.hw_type_app(app, out, t)
+            }
             _ => return vec![],
         };
         self.last_input = t;
@@ -1128,7 +1281,7 @@ impl Shell {
         match app {
             AppId::Settings => {
                 if let Some(s) = self.settings.as_mut() {
-                    return s.key(&self.ui, out, t);
+                    return s.key_with_prefs(&self.ui, &mut self.prefs, out, t);
                 }
             }
             AppId::Browser => {
@@ -1164,7 +1317,7 @@ impl Shell {
     /// Esc: closes the topmost thing (Control Center, Search, the switcher), else steps back in
     /// the app on screen, else leaves it. The terminal and hosted apps get the Escape key itself.
     fn hw_back(&mut self, t: f64) -> Vec<Effect> {
-        // the open Quick Look panel is the topmost thing: Escape closes it (and tells the app that opened it) before
+        // the open Preview panel is the topmost thing: Escape closes it (and tells the app that opened it) before
         // anything under it hears the key
         if self.quick_look_key(1, true).is_some() {
             return vec![];
@@ -1254,6 +1407,21 @@ impl Shell {
         self.key_mods = mods;
         self.login_caps(mods.caps_lock());
     }
+    /// True once after the session was restored: the input loop then forgets every held modifier (`HwKeys::reset`); the
+    /// window server's next modifier state counts the keys still down.
+    pub fn take_key_reset(&mut self) -> bool {
+        std::mem::take(&mut self.key_reset)
+    }
+    /// The modifier keys held now, as the `key_mods=` state line names them: `shift,ctrl,alt,cmd,caps`, or `none`.
+    pub fn key_mods_describe(&self) -> String {
+        let m = self.key_mods;
+        let names: Vec<&str> = [(m.shift(), "shift"), (m.control(), "ctrl"), (m.option(), "alt"), (m.command(), "cmd"), (m.caps_lock(), "caps")]
+            .into_iter()
+            .filter(|(on, _)| *on)
+            .map(|(_, n)| n)
+            .collect();
+        if names.is_empty() { "none".to_string() } else { names.join(",") }
+    }
     /// Tells Photos whether Shift is held, so a tap on the grid extends the selection. The shell calls it on every key event.
     pub fn set_photos_shift(&mut self, held: bool) {
         if let Some(p) = self.photos.as_mut() {
@@ -1282,6 +1450,11 @@ impl Shell {
     }
     /// Keys while a desktop menu is open (arrows, Return); None when no menu is open or on release.
     pub fn hw_menu_key(&mut self, code: u16, down: bool, t: f64) -> Option<Vec<Effect>> {
+        // never over the lock screen: an app's open or save panel, the preview panel or a menu left under it must not
+        // swallow the keys the login window needs (`hw_type` gives them to it)
+        if self.is_locked() {
+            return None;
+        }
         // the open or save panel takes its own keys; the rest fall through to `hw_type`, which types the file name
         #[cfg(feature = "desktop-wayland")]
         if self.doc_panel.is_some() {
@@ -1297,8 +1470,17 @@ impl Shell {
             return Some(fx);
         }
         #[cfg(feature = "desktop-wayland")]
-        if self.desktop_menu.is_some() {
-            return Some(if down { self.desktop_menu_key(code, t).unwrap_or_default() } else { vec![] });
+        if let Some(menu) = self.desktop_menu {
+            if !down {
+                return Some(vec![]);
+            }
+            return match self.desktop_menu_key(code, t) {
+                Some(fx) => Some(fx),
+                // the open Dock stack lets the keys it does not use through (a shortcut, a key for the app in front);
+                // a menu swallows them
+                None if menu == super::desktop_bar::Menu::Stack => None,
+                None => Some(vec![]),
+            };
         }
         let _ = (code, down, t);
         None
@@ -1310,14 +1492,21 @@ impl Shell {
         }
         let in_terminal = matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_)));
         // a card alert holds the keyboard: every shortcut but Escape (which answers it) and the lock is used up, not run on
-        // the app that raised the alert or sent to the app behind it
+        // the app that raised the alert or sent to the app behind it; Ctrl+Cmd+arrow tiling too, which the window server
+        // relays here, so the window behind the alert does not move while the alert waits for its answer
         if self.card_alert_up() && !matches!(sc, Shortcut::Back | Shortcut::Lock) {
             return vec![];
         }
         // Secure Keyboard Entry: while the Terminal is in front, only its own keys run; the shell's shortcuts
         // (switcher, search, input source, Home, Back, window keys) never see them. Escape still answers a card alert.
-        if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !(matches!(sc, Shortcut::Back) && self.card_alert_up()) && !matches!(sc, Shortcut::Term(_) | Shortcut::Paste | Shortcut::Lock | Shortcut::ForceQuit) {
+        if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !(matches!(sc, Shortcut::Back) && self.card_alert_up()) && !sc.runs_under_secure_entry() {
             return vec![];
+        }
+        // the shortcut runs before the open menu or Dock stack sees the key (`hw_menu_key` comes after it): one that
+        // opens another surface closes them first, or Search would open under the stack and the stack keep its keys
+        #[cfg(feature = "desktop-wayland")]
+        if sc.opens_surface() {
+            self.desktop_menu_dismiss();
         }
         let fx = match sc {
             Shortcut::QuickSearch => {
@@ -1369,10 +1558,7 @@ impl Shell {
             },
             #[cfg(feature = "desktop-wayland")]
             #[cfg(feature = "desktop-wayland")]
-            Shortcut::Tile(tile) if self.desk_active() && !self.is_locked() => {
-                self.desk_tile_front(tile);
-                vec![]
-            }
+            Shortcut::Tile(tile) if self.desk_active() && !self.is_locked() => self.desk_tile_front(tile),
             #[cfg(feature = "desktop-wayland")]
             // every app's windows cycle, an installed app's extra windows (Mail's compose) included (W2-25): the
             // terminal guard kept Cmd+` from every installed app; only the built-in Terminal keeps it
@@ -1440,7 +1626,8 @@ impl Shell {
                 self.capture = None;
                 vec![]
             }
-            Shortcut::LookUp if self.desk_active() && !self.is_locked() => self.run_service(bifrost_ui::services_menu::Service::LookUp, t),
+            // Ctrl+Cmd+D shows the in-place popover; the Services item opens the Dictionary app instead
+            Shortcut::LookUp if self.desk_active() && !self.is_locked() => self.look_up_selection(t),
             // Escape closes the Look Up popover first, then the Accessibility Shortcut panel, then the character viewer, before it goes Back
             Shortcut::Back if self.visual_search_escape() => vec![],
             Shortcut::Back if self.look_up_escape() => vec![],
@@ -1472,6 +1659,20 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// E2E2: Ctrl+Cmd+arrow tiling reaches the shell from the window server and was dropped while the Terminal had
+    /// Secure Keyboard Entry on; window management still runs then, the shell's other shortcuts do not.
+    #[test]
+    fn tiling_runs_under_secure_keyboard_entry() {
+        for tile in [Tile::Left, Tile::Right, Tile::Fill, Tile::Center] {
+            assert!(Shortcut::Tile(tile).runs_under_secure_entry());
+        }
+        assert!(Shortcut::Paste.runs_under_secure_entry());
+        assert!(Shortcut::ForceQuit.runs_under_secure_entry());
+        for sc in [Shortcut::QuickSearch, Shortcut::AppSwitch, Shortcut::InputSource, Shortcut::Home, Shortcut::Back, Shortcut::Minimize, Shortcut::FullScreen] {
+            assert!(!sc.runs_under_secure_entry(), "{sc:?} waits for Secure Keyboard Entry to end");
+        }
+    }
 
     /// QA 0.10.20: Cmd+[ did nothing in Settings; it goes Back like the back control, and only Cmd+[ does.
     #[test]
@@ -1697,6 +1898,9 @@ mod tests {
         assert_eq!(k.typed(57), Some(Out::Text(" ".into())));
         assert_eq!(k.typed(103), Some(Out::Named("Up")));
         assert_eq!(k.typed(15), Some(Out::Named("Tab")));
+        k.key(KEY_LEFTSHIFT, true);
+        assert_eq!(k.typed(15), Some(Out::Named("BackTab")), "Shift+Tab is its own key, not Tab");
+        k.key(KEY_LEFTSHIFT, false);
         assert_eq!(k.typed(116), None, "power is not text");
     }
 
@@ -2105,6 +2309,140 @@ mod tests {
         k.key(KEY_A, true);
         assert!(!k.mods_held());
         k.key(KEY_A, false);
+    }
+
+    /// Feeds the window server's modifier state as the input loop does (no remap, Slow Keys off).
+    fn server_mods(k: &mut HwKeys, held: u8, caps: Option<bool>) -> bool {
+        let (held, unsure, caps) = crate::shell::kb_input::Remap::default().modifier_sync(held, caps, false);
+        k.sync_modifiers(&held, &unsure, caps)
+    }
+
+    /// E2E3 F1: a Shift press counted while the shell had the keyboard, whose release went to another client, made every
+    /// later click a Shift-click; the focus leave (no modifier held for the shell) releases it.
+    #[test]
+    fn a_release_lost_after_focus_leave_does_not_stick() {
+        let mut k = HwKeys::default();
+        k.key(KEY_LEFTSHIFT, true);
+        k.key(KEY_LEFTMETA, true);
+        assert!(k.modifier_flags().shift() && k.modifier_flags().command());
+        // wl_keyboard leave: `Event::Modifiers { held: 0, caps: None }`; the releases go to the other client
+        assert!(server_mods(&mut k, 0, None));
+        assert_eq!(k.modifier_flags(), bifrost_proto::ModifierFlags::EMPTY, "nothing stays held after the leave");
+        assert!(!k.mods_held() && !k.shift_held());
+        // a release that still comes later does not wrap the counter
+        k.key(KEY_LEFTSHIFT, false);
+        assert!(!k.shift_held());
+        // a plain key is a plain key again
+        assert_eq!(k.chord_mods(KEY_A), None);
+    }
+
+    /// wl_keyboard enter lists the keys already down: a Shift held as the shell gets the keyboard counts, and its release
+    /// (which now reaches the shell) clears it.
+    #[test]
+    fn enter_with_shift_held_counts_shift() {
+        let mut k = HwKeys::default();
+        let held = crate::bare::input::mods_of_codes([KEY_RIGHTSHIFT, KEY_A]);
+        assert_eq!(held, crate::bare::input::MOD_SHIFT, "only the modifier among the enter keys counts");
+        assert!(server_mods(&mut k, held, None));
+        assert!(k.shift_held());
+        assert!(k.modifier_flags().shift() && !k.modifier_flags().caps_lock());
+        k.key(KEY_RIGHTSHIFT, false);
+        assert!(!k.shift_held(), "the release after the enter clears it");
+        assert!(!server_mods(&mut k, 0, None), "the same state again changes nothing");
+    }
+
+    /// wl_keyboard modifiers is the authority: it corrects a counter that disagrees, and leaves one that agrees alone.
+    #[test]
+    fn modifiers_event_corrects_a_stale_counter() {
+        use crate::bare::input::{mods_of_xkb, xkb_caps};
+        let mut k = HwKeys::default();
+        k.key(KEY_LEFTCTRL, true);
+        k.key(KEY_LEFTMETA, true);
+        // the Cmd release was lost; the window server says only Control (XKB bit 2) is down, Caps Lock off
+        assert!(server_mods(&mut k, mods_of_xkb(1 << 2), Some(xkb_caps(0))));
+        assert!(k.ctrl_held() && !k.meta_held());
+        // both Shift keys counted and one release lost: the window server says no Shift, so the counter goes to zero
+        k.key(KEY_LEFTSHIFT, true);
+        k.key(KEY_RIGHTSHIFT, true);
+        k.key(KEY_RIGHTSHIFT, false);
+        assert!(server_mods(&mut k, mods_of_xkb(1 << 2), Some(false)));
+        assert!(!k.shift_held());
+        // a missed press is counted, and the locked Caps Lock comes over
+        assert!(server_mods(&mut k, mods_of_xkb((1 << 2) | (1 << 3)), Some(xkb_caps(1 << 1))));
+        assert!(k.alt_held() && k.modifier_flags().option() && k.modifier_flags().caps_lock());
+        // AltGr (Mod5) counts as Alt for typing, not as Option
+        assert!(server_mods(&mut k, mods_of_xkb((1 << 2) | (1 << 7)), Some(true)));
+        assert!(k.alt_held() && !k.modifier_flags().option());
+        assert!(!server_mods(&mut k, mods_of_xkb((1 << 2) | (1 << 7)), Some(true)), "an agreeing state changes nothing");
+    }
+
+    /// A modifier a sticky key latched counts as held though no physical key is down: the window server's word keeps it.
+    #[test]
+    fn modifiers_event_keeps_sticky_modifiers() {
+        let mut k = HwKeys::default();
+        k.set_sticky_keys(true);
+        k.key(KEY_LEFTSHIFT, true);
+        k.key(KEY_LEFTSHIFT, false);
+        k.key(KEY_A, true);
+        let held = k.shift_held();
+        server_mods(&mut k, 0, None);
+        assert_eq!(k.shift_held(), held, "the sticky Shift lasts until the key that took it is released");
+        k.key(KEY_A, false);
+    }
+    /// The window server's keymap may map right Alt as plain Alt (Mod1) while the shell's typing layout uses it as AltGr:
+    /// its modifiers event must not clear AltGr while any Alt-class modifier is down, only once no Alt is reported.
+    #[test]
+    fn modifiers_event_keeps_altgr_when_the_server_sees_plain_alt() {
+        use crate::bare::input::mods_of_xkb;
+        let mut k = HwKeys::default();
+        k.key(KEY_RIGHTALT, true);
+        assert!(k.alt_held() && !k.modifier_flags().option(), "right Alt is AltGr, not Option");
+        // the window server reports Mod1 (Alt_R), not Mod5
+        assert!(!server_mods(&mut k, mods_of_xkb(1 << 3), Some(false)), "AltGr survives a plain Alt report");
+        assert!(k.alt_held() && !k.modifier_flags().option());
+        assert!(!server_mods(&mut k, mods_of_xkb(1 << 3), Some(false)), "and every one after it");
+        assert!(!k.modifier_flags().option());
+        // no Alt-class modifier at all: the lost release is corrected
+        assert!(server_mods(&mut k, 0, Some(false)));
+        assert!(!k.alt_held() && !k.modifier_flags().option());
+        // a left Alt reported as Mod1 is still Option
+        k.key(KEY_LEFTALT, true);
+        assert!(!server_mods(&mut k, mods_of_xkb(1 << 3), Some(false)));
+        assert!(k.modifier_flags().option());
+    }
+
+    /// A modifier press a session event tap (or Switch Control) consumed or replaced was never counted: the window server
+    /// still reports the key down, but the sync must not press it over the tap until the key is released.
+    #[test]
+    fn modifiers_event_respects_a_modifier_a_tap_consumed() {
+        use crate::bare::input::{MOD_META, MOD_SHIFT};
+        let mut k = HwKeys::default();
+        // a tap drops the left Shift press: `key` never sees it
+        k.note_tap(KEY_LEFTSHIFT, true, true);
+        assert!(!server_mods(&mut k, MOD_SHIFT, Some(false)), "the consumed Shift is not pressed by the sync");
+        assert!(!k.shift_held() && !k.modifier_flags().shift());
+        // its release clears the note; the release itself is consumed too
+        k.note_tap(KEY_LEFTSHIFT, false, true);
+        assert!(!server_mods(&mut k, 0, Some(false)));
+        // the next real Shift press counts and the sync agrees with it
+        k.note_tap(KEY_LEFTSHIFT, true, false);
+        k.key(KEY_LEFTSHIFT, true);
+        assert!(!server_mods(&mut k, MOD_SHIFT, Some(false)));
+        assert!(k.shift_held());
+        k.note_tap(KEY_LEFTSHIFT, false, false);
+        k.key(KEY_LEFTSHIFT, false);
+        // a tap replaced the right Cmd press with another key: Cmd is not counted, though the window server sees it down
+        k.note_tap(KEY_RIGHTMETA, true, true);
+        assert!(!server_mods(&mut k, MOD_META, Some(false)));
+        assert!(!k.meta_held());
+        // a missed press of a key no tap touched is still counted
+        assert!(server_mods(&mut k, MOD_META | MOD_SHIFT, Some(false)));
+        assert!(k.shift_held() && !k.meta_held());
+        // a plain key is no modifier to remember
+        k.note_tap(KEY_A, true, true);
+        k.note_tap(KEY_RIGHTMETA, false, true);
+        assert!(server_mods(&mut k, MOD_META | MOD_SHIFT, Some(false)), "after the release the window server is believed again");
+        assert!(k.meta_held());
     }
 }
 

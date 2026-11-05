@@ -22,6 +22,7 @@ mod suggest;
 
 mod browser_ctl;
 mod webbridge;
+mod maskfallback;
 mod control;
 mod devtools;
 mod elements;
@@ -37,7 +38,7 @@ use std::{fs, io};
 
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::{Node, Rect, Role, TextField};
-use bifrost_app::kit::ui::{Weight, CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SPACE_S, SPACE_XXS, TINT};
+use bifrost_app::kit::ui::{Weight, CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEGMENT_ON, SEPARATOR_C, SPACE_S, SPACE_XXS, accent_now};
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -88,7 +89,7 @@ const KEY_K: u32 = 37;
 const KEY_T: u32 = 20;
 const KEY_W: u32 = 17;
 const KEY_R: u32 = 19;
-/// Main-menu item ids (`App::menu_action`): File > Share and Downloads, View > Show Reader, Zoom and Find.
+/// Main-menu item ids (`App::menu_action`): File > Share and Downloads, View > Show Reader, Reload and Zoom; Edit > Find.
 const MENU_READER: u32 = 1;
 const MENU_SHARE: u32 = 2;
 const MENU_ZOOM_IN: u32 = 3;
@@ -101,6 +102,7 @@ const MENU_DOWNLOADS: u32 = 9;
 const MENU_CLEAR_DOWNLOADS: u32 = 10;
 const MENU_AUTOFILL: u32 = 11;
 const MENU_OVERVIEW: u32 = 12;
+const MENU_RELOAD: u32 = 13;
 const KEY_D: u32 = 32;
 const KEY_Y: u32 = 21;
 const KEY_B: u32 = 48;
@@ -136,9 +138,6 @@ mod starttab;
 const KEY_F: u32 = 33;
 const KEY_BACKSLASH: u32 = 43;
 const KEY_G: u32 = 34;
-const KEY_0: u32 = 11;
-const KEY_MINUS: u32 = 12;
-const KEY_EQUAL: u32 = 13;
 
 struct Tab {
     view: WebViewId,

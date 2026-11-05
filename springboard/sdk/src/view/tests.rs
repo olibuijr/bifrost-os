@@ -837,6 +837,45 @@ fn hit_tests_and_clicks_inside_scrolled_content_reach_the_right_child() {
     assert_eq!(w.view::<Button>(fid).unwrap().frame().y, 300.0);
 }
 
+/// Drags the scroll view of `scroll_window` upwards as `source` on a machine of form `form`; returns the offset it ends at.
+fn drag_offset(form: bifrost_ui::form_factor::FormFactor, source: crate::proto::TouchSource) -> f32 {
+    bifrost_ui::pan::with_touch(form, source, || {
+        let (mut w, sid, ..) = scroll_window();
+        let mut m = Model::default();
+        w.event(&ViewEvent::Pointer(Event::Down(150.0, 10.0)), &mut m);
+        w.event(&ViewEvent::Pointer(Event::Move(150.0, -40.0)), &mut m);
+        w.event(&ViewEvent::Pointer(Event::Move(150.0, -90.0)), &mut m);
+        w.event(&ViewEvent::Pointer(Event::Up(150.0, -90.0)), &mut m);
+        w.view::<ScrollView>(sid).unwrap().content_offset()
+    })
+}
+
+#[test]
+fn a_pointer_drag_does_not_pan_a_scroll_view_on_a_desktop_but_a_finger_does() {
+    use bifrost_ui::form_factor::FormFactor::{Desktop, Tablet};
+    use crate::proto::TouchSource::{Finger, Pointer};
+    assert_eq!(drag_offset(Desktop, Pointer), 0.0);
+    assert!(drag_offset(Desktop, Finger) > 50.0);
+    assert!(drag_offset(Tablet, Finger) > 50.0);
+    assert!(drag_offset(Tablet, Pointer) > 50.0, "on a tablet every drag pans, as before");
+}
+
+#[test]
+fn a_pointer_drag_does_not_fling_a_scroll_view_after_the_release() {
+    use bifrost_ui::form_factor::FormFactor::Desktop;
+    use crate::proto::TouchSource::Pointer;
+    bifrost_ui::pan::with_touch(Desktop, Pointer, || {
+        let (mut w, sid, ..) = scroll_window();
+        let mut m = Model::default();
+        w.event(&ViewEvent::Pointer(Event::Down(150.0, 90.0)), &mut m);
+        w.event(&ViewEvent::Pointer(Event::Move(150.0, 40.0)), &mut m);
+        w.event(&ViewEvent::Pointer(Event::Up(150.0, 10.0)), &mut m);
+        w.tick(1.0);
+        assert_eq!(w.view::<ScrollView>(sid).unwrap().content_offset(), 0.0);
+        assert!(!w.view::<ScrollView>(sid).unwrap().wants_tick());
+    });
+}
+
 #[test]
 fn dragging_a_scroll_view_pans_it() {
     let (mut w, sid, ..) = scroll_window();

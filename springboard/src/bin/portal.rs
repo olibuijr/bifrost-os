@@ -3,7 +3,8 @@
 //! BifrOSt's Light/Dark appearance and accent without the GNOME portal stack.
 //!
 //! Source of truth: `$XDG_RUNTIME_DIR/bifrost-appearance`, written by the shell (see
-//! `springboard::appearance_portal`). Watched with inotify (500 ms poll only if inotify is unavailable); a change emits `SettingChanged`.
+//! `springboard::appearance_portal`). Watched with inotify (500 ms poll only if inotify is unavailable); a change emits
+//! `SettingChanged` for `color-scheme`, `accent-color` and `contrast`, and mirrors the scheme into GTK 3's settings.ini.
 //! D-Bus activated through `/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service`.
 use springboard::appearance_portal::{self as ap, State, Value as V, NAMESPACE};
 use std::collections::HashMap;
@@ -154,8 +155,21 @@ fn load() -> State {
         .unwrap_or_default()
 }
 
+/// GTK 3 ignores the portal outside a sandbox: mirror the scheme into its settings.ini (read at app start).
+/// Skipped while the shell has published nothing yet (no preference), so a user's own choice is not overwritten.
+fn gtk3(state: &State) {
+    if state.color_scheme == 0 {
+        return;
+    }
+    if let Err(e) = ap::mirror_gtk3(state) {
+        eprintln!("bifrost-portal: gtk-3.0/settings.ini: {e}");
+    }
+}
+
 fn main() -> zbus::Result<()> {
-    let shared = Arc::new(Mutex::new(load()));
+    let first = load();
+    gtk3(&first);
+    let shared = Arc::new(Mutex::new(first));
     let conn = zbus::blocking::connection::Builder::session()?
         .name("org.freedesktop.portal.Desktop")?
         .serve_at(PATH, Settings(shared.clone()))?
@@ -166,12 +180,13 @@ fn main() -> zbus::Result<()> {
         wait_change(watch);
         let new = load();
         let old = std::mem::replace(&mut *shared.lock().unwrap_or_else(|e| e.into_inner()), new);
-        for key in State::KEYS {
-            let (Some(a), Some(b)) = (old.read_one(NAMESPACE, key), new.read_one(NAMESPACE, key)) else { continue };
-            if a != b {
-                let v = Value::from(owned(b));
-                let _ = zbus::block_on(Settings::setting_changed(iface.signal_emitter(), NAMESPACE, key, v));
-            }
+        let changes = old.changes(&new);
+        if changes.iter().any(|(k, _)| *k == "color-scheme") {
+            gtk3(&new);
+        }
+        for (key, value) in changes {
+            let v = Value::from(owned(value));
+            let _ = zbus::block_on(Settings::setting_changed(iface.signal_emitter(), NAMESPACE, key, v));
         }
     }
 }

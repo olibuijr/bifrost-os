@@ -65,6 +65,7 @@ pub mod pedometer;
 pub mod permission_request;
 pub mod background_tasks;
 pub mod launch_prefetch;
+pub mod app_control_socket;
 pub mod startup_disk;
 pub mod dhcp6_server;
 pub mod endpoint_security;

@@ -1,4 +1,4 @@
-//! `purge`: flushes file buffers to disk and then drops the kernel's page cache, dentries and inodes, the way macOS
+//! `purge`: flushes file buffers to disk and then drops the kernel's page cache, dentries and inodes, the way the reference desktop
 //! `purge` empties the disk and memory caches. Linux does this by writing `3` to `drop_caches`, which needs root; the
 //! write is refused with a message when the process is not allowed to make it.
 

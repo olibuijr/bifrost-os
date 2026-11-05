@@ -1,4 +1,4 @@
-//! Drag and drop in the retained view kit (`NSDraggingSource`, `NSDraggingDestination`, `registerForDraggedTypes`).
+//! Drag and drop in the retained view kit (the reference dragging source and destination, and registering for dragged types).
 //!
 //! A view is a drag source when [`View::dnd_source`] returns a [`DragSpec`]. The window watches presses: a press on (or
 //! inside) a source that moves past [`DRAG_SLOP`] points is a drag, the control that held the press is cancelled, and

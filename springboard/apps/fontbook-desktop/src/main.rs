@@ -15,6 +15,8 @@ mod validate;
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{Damage, Font, Surface};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::controls::{ax, Rect, Role, TextField};
+use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
 use bifrost_app::print::{PrintError, PrintOperation};
 use bifrost_app::proto::DocErrorCode;
@@ -34,6 +36,12 @@ const SIDEBAR_PT: f32 = 200.0;
 const LIST_PT: f32 = 260.0;
 const ROW_PT: f32 = 28.0;
 const HEADER_PT: f32 = 56.0;
+/// The family list starts under its count line.
+const LIST_TOP_PT: f32 = HEADER_PT + 22.0;
+/// Height of the toolbar's buttons and of the search capsule, and the preview buttons' top: both centred in the
+/// unified bar (`UNIFIED_BAR_PT`), so the bar's controls keep an equal inset above and below.
+const BAR_BUTTON_H_PT: f32 = 28.0;
+const BAR_BUTTON_Y_PT: f32 = (UNIFIED_BAR_PT - BAR_BUTTON_H_PT) / 2.0;
 const PAD_PT: f32 = 12.0;
 /// Width of the preview's buttons (On/Off, Remove Font), and the gap from the switch to the remove button.
 const BUTTON_PT: f32 = 120.0;
@@ -128,6 +136,8 @@ struct FontBookApp {
     user_dir: PathBuf,
     source: Source,
     query: String,
+    /// the toolbar's search field was the last thing pressed
+    search_focused: bool,
     selected: Option<String>,
     mode: Mode,
     prefs: Prefs,
@@ -559,6 +569,7 @@ impl FontBookApp {
     /// A press in the sidebar, the list or the preview column (window points, scaled by the caller).
     fn touch_down(&mut self, ctx: &Ctx, x: f32, y: f32) -> bool {
         self.commit_edit(&ctx.data_dir);
+        self.search_focused = false;
         if self.library.is_none() {
             return false;
         }
@@ -587,8 +598,17 @@ impl FontBookApp {
             return false;
         }
         if x < SIDEBAR_PT + LIST_PT {
-            let index = ((y - HEADER_PT) / ROW_PT).floor();
-            if y >= HEADER_PT && index >= 0.0 {
+            self.search_focused = y < UNIFIED_BAR_PT;
+            if self.search_focused {
+                // the search field in the toolbar: its clear button empties the query
+                if bifrost_app::controls::search::hits_clear(search_bounds(), !self.query.is_empty(), x, y) {
+                    self.query.clear();
+                    self.search_focused = false;
+                }
+                return true;
+            }
+            let index = ((y - LIST_TOP_PT) / ROW_PT).floor();
+            if y >= LIST_TOP_PT && index >= 0.0 {
                 if let Some(name) = self.shown().get(index as usize).cloned() {
                     self.selected = Some(name);
                     return true;
@@ -599,7 +619,7 @@ impl FontBookApp {
         let Some(name) = self.selected.clone() else { return false };
         let remove_x = preview_x + BUTTON_GAP_PT;
         // the on/off switch and Remove Font sit at the top of the preview column
-        if (PAD_PT..PAD_PT + 28.0).contains(&y) {
+        if (BAR_BUTTON_Y_PT..BAR_BUTTON_Y_PT + BAR_BUTTON_H_PT).contains(&y) {
             if (preview_x..preview_x + BUTTON_PT).contains(&x) {
                 self.toggle_enabled(&ctx.data_dir, &name);
                 return true;
@@ -660,7 +680,7 @@ impl FontBookApp {
 
     /// A press while the install preview is up: Install or Cancel.
     fn pending_touch(&mut self, ctx: &Ctx, x: f32, y: f32, preview_x: f32) -> bool {
-        if !(PAD_PT..PAD_PT + 28.0).contains(&y) {
+        if !(BAR_BUTTON_Y_PT..BAR_BUTTON_Y_PT + BAR_BUTTON_H_PT).contains(&y) {
             return false;
         }
         if (preview_x..preview_x + BUTTON_PT).contains(&x) {
@@ -712,6 +732,11 @@ fn sidebar_sources(lib: &Library) -> Vec<(String, Source)> {
     rows
 }
 
+/// The toolbar's search capsule in window points: the list column's width less its padding, centred in the unified bar.
+fn search_bounds() -> Rect {
+    Rect { x: SIDEBAR_PT + PAD_PT, y: BAR_BUTTON_Y_PT, w: LIST_PT - 2.0 * PAD_PT, h: BAR_BUTTON_H_PT }
+}
+
 /// Draws `text` at (`x`, `y`) points, cut to `max_w` points.
 fn put(s: &mut Surface, ui: &Ui, text: &str, pt: f32, colour: u32, x: f32, y: f32, max_w: f32) {
     let img = ui.text(&ui.fit(text, pt, ui.pt(max_w)), pt, Weight::Regular, colour);
@@ -721,6 +746,8 @@ fn put(s: &mut Surface, ui: &Ui, text: &str, pt: f32, colour: u32, x: f32, y: f3
 /// A filled button of `w` points with its label.
 fn button(s: &mut Surface, ui: &Ui, label: &str, fill: u32, x: f32, y: f32, w: f32, h: f32) {
     let p = |v: f32| (v * ui.s) as usize;
+    // published as a control: in a full-size window the unified bar is a drag zone that only controls take presses in
+    ax::record(Role::Button, label, "", Rect { x, y, w, h }, true);
     s.fill_rect(p(x), p(y), p(w), p(h), fill);
     let colour = ui::LABEL.now();
     let img = ui.text(&ui.fit(label, ui::MAC_BODY_PT, ui.pt(w - 16.0)), ui::MAC_BODY_PT, Weight::Regular, colour);
@@ -1043,22 +1070,28 @@ impl App for FontBookApp {
             let symbol = match i { 0 => "textformat", 1 => "eye.slash", _ => "folder" };
             SidebarItem::row(i as u32 + 1, shown).with_symbol(symbol)
         }).collect();
+        let mut entries: Vec<SidebarItem> = entries;
+        entries.push(SidebarItem::row(rows.len() as u32 + 1, "New Collection").with_symbol("plus"));
         let mut sidebar = SourceList::new(entries, ROW_PT, ROW_PT);
         sidebar.set_selected(rows.iter().position(|(_, source)| *source == self.source).map(|i| i as u32 + 1));
         widgets::source_list(s, ui, bifrost_app::controls::Rect { x: 0.0, y: HEADER_PT, w: SIDEBAR_PT, h: (hp - HEADER_PT).max(0.0) }, &sidebar, 0.0, None);
-        put(s, ui, "New Collection", ui::MAC_BODY_PT, ui::LINK, PAD_PT, HEADER_PT + rows.len() as f32 * ROW_PT + 6.0, SIDEBAR_PT - 2.0 * PAD_PT);
         // list column
         let x0 = SIDEBAR_PT;
-        s.fill_rect(p(x0 + LIST_PT - 1.0), 0, 1, h, ui::SEPARATOR_C.now());
+        // the unified toolbar over the list and the preview, with the family search in its list half
+        widgets::toolbar_band(s, ui, Rect { x: x0, y: 0.0, w: (wp - x0).max(0.0), h: UNIFIED_BAR_PT });
+        let mut query = TextField::new();
+        query.set_text(&self.query);
+        widgets::search_field(s, ui, &query, search_bounds(), "Search", self.search_focused || !self.query.is_empty());
+        s.fill_rect(p(x0 + LIST_PT - 1.0), p(UNIFIED_BAR_PT), 1, h.saturating_sub(p(UNIFIED_BAR_PT)), ui::SEPARATOR_C.now());
         let shown = self.shown();
         let heading = match (self.query.is_empty(), self.prefs.library.eq_ignore_ascii_case(model::LIBRARY_COMPUTER)) {
             (true, true) => format!("{} families", shown.len()),
             (true, false) => format!("{} families in {}", shown.len(), self.prefs.library),
             (false, _) => format!("{} families matching \"{}\"", shown.len(), self.query),
         };
-        put(s, ui, &heading, ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), x0 + PAD_PT, HEADER_PT - 20.0, LIST_PT - 2.0 * PAD_PT);
+        put(s, ui, &heading, ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), x0 + PAD_PT, HEADER_PT + 2.0, LIST_PT - 2.0 * PAD_PT);
         for (i, name) in shown.iter().enumerate() {
-            let y = HEADER_PT + i as f32 * ROW_PT;
+            let y = LIST_TOP_PT + i as f32 * ROW_PT;
             if y > hp {
                 break;
             }
@@ -1097,8 +1130,8 @@ impl FontBookApp {
     fn draw_pending(&self, ui: &Ui, s: &mut Surface, px: f32, avail: f32) {
         let Some(pending) = &self.pending else { return };
         let can = pending.family.is_some() && (!self.prefs.validate_before_install || pending.report.is_valid());
-        button(s, ui, "Install", if can { ui::LINK } else { ui::SEPARATOR_C.now() }, px, PAD_PT, BUTTON_PT, 28.0);
-        button(s, ui, "Cancel", ui::SEPARATOR_C.now(), px + BUTTON_GAP_PT, PAD_PT, BUTTON_PT, 28.0);
+        button(s, ui, "Install", if can { ui::LINK } else { ui::SEPARATOR_C.now() }, px, BAR_BUTTON_Y_PT, BUTTON_PT, BAR_BUTTON_H_PT);
+        button(s, ui, "Cancel", ui::SEPARATOR_C.now(), px + BUTTON_GAP_PT, BAR_BUTTON_Y_PT, BUTTON_PT, BAR_BUTTON_H_PT);
         let title = pending.family.clone().unwrap_or_else(|| pending.name.clone());
         put(s, ui, &title, ui::MAC_TITLE2_PT, ui::LABEL.now(), px, HEADER_PT + PAD_PT, avail);
         let verdict = match pending.report.verdict() {
@@ -1130,9 +1163,9 @@ impl FontBookApp {
     /// The selected family: switch and Remove Font, the name, the mode tabs and the mode's content.
     fn draw_selected(&self, ui: &Ui, s: &mut Surface, name: &str, px: f32, avail: f32, hp: f32) {
         let on = self.library.as_ref().is_none_or(|l| l.is_enabled(name));
-        button(s, ui, if on { "Turn Off" } else { "Turn On" }, if on { ui::LINK } else { ui::SEPARATOR_C.now() }, px, PAD_PT, BUTTON_PT, 28.0);
+        button(s, ui, if on { "Turn Off" } else { "Turn On" }, if on { ui::LINK } else { ui::SEPARATOR_C.now() }, px, BAR_BUTTON_Y_PT, BUTTON_PT, BAR_BUTTON_H_PT);
         if self.is_user_font(name) {
-            button(s, ui, "Remove Font", ui::DESTRUCTIVE, px + BUTTON_GAP_PT, PAD_PT, BUTTON_PT, 28.0);
+            button(s, ui, "Remove Font", ui::DESTRUCTIVE, px + BUTTON_GAP_PT, BAR_BUTTON_Y_PT, BUTTON_PT, BAR_BUTTON_H_PT);
         }
         put(s, ui, name, ui::MAC_TITLE2_PT, ui::LABEL.now(), px, HEADER_PT + PAD_PT, avail);
         for (i, (label, mode)) in [("Sample", Mode::Sample), ("Repertoire", Mode::Repertoire), ("Info", Mode::Info)].iter().enumerate() {
@@ -1269,6 +1302,18 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
     #[test]
+    fn toolbar_controls_are_centred_in_the_unified_bar_and_the_search_sits_over_the_list() {
+        // the Turn On/Off and Remove Font buttons and the search capsule keep the same inset above and below
+        assert_eq!(BAR_BUTTON_Y_PT, UNIFIED_BAR_PT - BAR_BUTTON_Y_PT - BAR_BUTTON_H_PT);
+        assert!(BAR_BUTTON_Y_PT > 0.0);
+        let r = search_bounds();
+        assert!(r.x >= SIDEBAR_PT && r.right() <= SIDEBAR_PT + LIST_PT, "the field stays over the list column");
+        assert!(r.bottom() < UNIFIED_BAR_PT);
+        // the rows and the preview start below the bar
+        assert!(LIST_TOP_PT > UNIFIED_BAR_PT && HEADER_PT >= UNIFIED_BAR_PT);
+    }
+
+    #[test]
     fn sidebar_lists_all_off_collections_then_smart_collections() {
         let mut cols = BTreeMap::new();
         cols.insert("Work".to_string(), Vec::new());
@@ -1289,6 +1334,7 @@ fn main() {
         user_dir: PathBuf::new(),
         source: Source::All,
         query: String::new(),
+        search_focused: false,
         selected: None,
         mode: Mode::Sample,
         prefs: Prefs::default(),

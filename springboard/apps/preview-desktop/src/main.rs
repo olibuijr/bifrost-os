@@ -29,7 +29,7 @@ mod signature;
 use bifrost_app::controls::{Node, Role};
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
-use bifrost_app::proto::DocMode;
+use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::services::{is_viewable_path, ServiceCall};
 use bifrost_app::pasteboard::{NativePasteboard, PNG};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
@@ -40,12 +40,12 @@ use document::Document;
 use export::Raster;
 use model::{Adjust, History, Mark, MarkKind, Norm, Pixels, Snapshot, Trail, View, Zoom, HIGHLIGHT, MARK_BLUE, MARK_RED};
 use password::Ask;
-use pdfjob::{Inbox, Jobs, Reply};
+use pdfjob::{Inbox, Job, Jobs, Reply};
 use prefs::Prefs;
 use recents::Recents;
 use signature::Signature;
 use springboard::shell::books::engine;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -90,6 +90,26 @@ enum Gesture {
     Sheet { last: f32, start: (f32, f32) },
     /// Dragging an Adjust Color slider. `before` is the document as it was when the drag began, for Undo.
     Slider { which: usize, before: Option<Snapshot> },
+}
+
+/// An export that goes to a file the user picks in the save panel (`NativeSavePanel`), so the user chooses the folder and
+/// the name. The panel is asked for on the next frame; what is written goes into the file it answers with.
+struct PendingExport {
+    /// The name the panel suggests: `<name>-markup.<ext>`.
+    name: String,
+    ext: &'static str,
+    /// The panel's request, once it is shown.
+    request: Option<u32>,
+    what: Export,
+}
+
+/// What an export writes into the chosen file.
+enum Export {
+    /// A picture, already encoded.
+    Picture(Vec<u8>),
+    /// A PDF, or a PDF page as a picture: the worker draws it into `temp` (in the data folder) and the copy goes into the
+    /// chosen file. `job` is sent once the panel has answered with `file`.
+    Worker { job: Option<Job>, temp: PathBuf, file: Option<std::fs::File> },
 }
 
 /// A PDF on its way from its utility queue: submitted jobs and the inbox its replies come back in.
@@ -155,6 +175,8 @@ struct Viewer {
     signatures: Vec<Signature>,
     /// The file a save is written for, until the worker has written the copy that replaces it.
     pending_save: Option<PathBuf>,
+    /// The export waiting for the save panel's file (Export As, File > Export), until it is written or cancelled.
+    pending_export: Option<PendingExport>,
     /// The source page to show once the document is open, from the last time it was shown.
     restore_page: Option<usize>,
     /// The author's name being typed after Settings > Annotation Author.
@@ -219,6 +241,7 @@ impl Viewer {
             prefs: Prefs::default(),
             signatures: Vec::new(),
             pending_save: None,
+            pending_export: None,
             restore_page: None,
             authoring: None,
             after_open: None,
@@ -313,6 +336,8 @@ impl Viewer {
         self.asking = None;
         self.authoring = None;
         self.pending_save = None;
+        // an export's job belongs to the document it was asked for; the panel's answer then finds nothing to write
+        self.pending_export = None;
         self.after_open = None;
         self.doc = None;
         self.loading = None;
@@ -814,8 +839,16 @@ impl Viewer {
                 }
             }
         }
+        // an export asks for its file once: the save panel answers with `DocumentEvent::SaveTo`
+        if let Some(pending) = self.pending_export.as_mut() {
+            if pending.request.is_none() {
+                let request = ctx.save_document(&pending.name, &[pending.ext]);
+                pending.request = Some(request);
+            }
+        }
         let mut results = None;
         let mut saved = None;
+        let mut exported = None;
         let mut inserted = None;
         let mut copied = None;
         let mut spoken = None;
@@ -827,6 +860,7 @@ impl Viewer {
                     // the copy File > Save made is the one that replaces the document's file
                     Reply::Written(result) if self.inserted.is_some() => inserted = Some(result),
                     Reply::Written(result) if self.pending_save.is_some() => saved = Some(result),
+                    Reply::Written(result) if self.export_is_drawn() => exported = Some(result),
                     Reply::Written(result) => {
                         self.status = match result {
                             Ok(path) if path.extension().is_some_and(|e| e == "pdf") => format!("Saved {}", path.display()),
@@ -847,6 +881,10 @@ impl Viewer {
         }
         if let (Some(result), Some(original)) = (saved, self.pending_save.take()) {
             self.finish_save(original, result);
+        }
+        if let Some(result) = exported {
+            changed = true;
+            self.finish_drawn_export(ctx, result);
         }
         if let Some(text) = copied {
             self.finish_copy(ctx, text);
@@ -1756,7 +1794,8 @@ impl Viewer {
         };
     }
 
-    /// Writes the shown page as a PNG or JPEG at the export size. A PDF page is drawn by its worker first.
+    /// Export PNG or JPEG: the shown page at the export size goes into a file the user picks in the save panel. A PDF
+    /// page is drawn by its worker first.
     fn export_raster(&mut self, raster: Raster) {
         let Some(doc) = &self.doc else { return };
         let page = self.view.page;
@@ -1764,27 +1803,89 @@ impl Viewer {
         let turns = doc.turn_of(page);
         let target = export::target(&doc.path, raster.ext());
         if doc.is_pdf {
-            let job = export::pdf_page_job(src, turns, doc.marks.clone(), self.adjust, self.export_scale, raster, target);
-            self.status = if doc.send(job) { "Exporting".into() } else { "The document is not open.".into() };
+            let temp = self.saving_file(&doc.path, raster.ext());
+            let job = export::pdf_page_job(src, turns, doc.marks.clone(), self.adjust, self.export_scale, raster, temp.clone());
+            self.ask_export(&target, raster.ext(), Export::Worker { job: Some(job), temp, file: None });
             return;
         }
         let Some(img) = doc.picture(page) else { return };
         let out = export::finish(&img, &doc.marks, src, turns, &self.adjust, self.export_scale);
-        self.status = match export::write_image(&out, raster, &target) {
-            Ok(()) => format!("Exported {}", target.display()),
-            Err(e) => format!("Export failed: {e}"),
-        };
+        match export::encode(&out, raster) {
+            Ok(bytes) => self.ask_export(&target, raster.ext(), Export::Picture(bytes)),
+            Err(e) => self.status = format!("Export failed: {e}"),
+        }
     }
 
-    /// Saves the PDF with its markup, page order and turns as `<name>-markup.pdf`. The worker writes it.
+    /// Export PDF: the PDF with its markup, page order and turns goes into a file the user picks in the save panel. The
+    /// worker draws it first.
     fn export_pdf(&mut self) {
         let Some(doc) = &self.doc else { return };
         if !doc.is_pdf {
             return;
         }
         let target = export::target(&doc.path, "pdf");
-        let job = pdfmarks::save_job(doc.path.clone(), target, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author(), pdfmarks::Insertion::None, doc.field_edits());
-        self.status = if doc.send(job) { "Saving the PDF".into() } else { "The document is not open.".into() };
+        let temp = self.saving_file(&doc.path, "pdf");
+        let job = pdfmarks::save_job(doc.path.clone(), temp.clone(), doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author(), pdfmarks::Insertion::None, doc.field_edits());
+        self.ask_export(&target, "pdf", Export::Worker { job: Some(job), temp, file: None });
+    }
+
+    /// Holds `what` until the save panel answers. The panel is asked for on the next frame, suggesting `target`'s name.
+    fn ask_export(&mut self, target: &Path, ext: &'static str, what: Export) {
+        self.pending_export = Some(PendingExport { name: name_of(target), ext, request: None, what });
+    }
+
+    /// Whether the export waiting for its file is drawn by the PDF worker, so the worker's reply is its result.
+    fn export_is_drawn(&self) -> bool {
+        self.pending_export.as_ref().is_some_and(|p| matches!(p.what, Export::Worker { file: Some(_), .. }))
+    }
+
+    /// The save panel answered with the file to write (`SaveTo`). A picture goes into it at once; a PDF is sent to the
+    /// worker, and the copy goes into the file when the worker has written it. Either way the save is then committed.
+    fn write_export(&mut self, ctx: &Ctx, mut doc: bifrost_app::Document) -> bool {
+        let request = doc.request;
+        if !self.pending_export.as_ref().is_some_and(|p| p.request == Some(request)) {
+            ctx.abort_document(request);
+            return false;
+        }
+        let Some(PendingExport { name, ext, what, .. }) = self.pending_export.take() else { return false };
+        match what {
+            Export::Picture(bytes) => match doc.file.write_all(&bytes) {
+                Ok(()) => ctx.commit_document(request),
+                Err(e) => {
+                    self.status = format!("Export failed: {e}");
+                    ctx.abort_document(request);
+                }
+            },
+            Export::Worker { job, temp, .. } => {
+                let sent = job.is_some_and(|job| self.doc.as_ref().is_some_and(|d| d.send(job)));
+                if sent {
+                    let what = Export::Worker { job: None, temp, file: Some(doc.file) };
+                    self.pending_export = Some(PendingExport { name, ext, request: Some(request), what });
+                } else {
+                    self.status = "The document is not open.".into();
+                    ctx.abort_document(request);
+                }
+            }
+        }
+        false
+    }
+
+    /// The worker has drawn the export into its temporary file: the copy goes into the chosen file and the save commits.
+    fn finish_drawn_export(&mut self, ctx: &Ctx, result: Result<PathBuf, String>) {
+        let Some(PendingExport { request: Some(request), what: Export::Worker { file: Some(mut file), .. }, .. }) = self.pending_export.take() else {
+            return;
+        };
+        let copied = result.and_then(|drawn| {
+            let mut from = std::fs::File::open(&drawn).map_err(|e| e.to_string())?;
+            std::io::copy(&mut from, &mut file).map(|_| ()).map_err(|e| e.to_string())
+        });
+        match copied {
+            Ok(()) => ctx.commit_document(request),
+            Err(e) => {
+                self.status = format!("Export failed: {e}");
+                ctx.abort_document(request);
+            }
+        }
     }
 
     fn touch(&mut self, ui: &Ui, width: i32, height: i32, kind: TouchKind, x: f32, y: f32) -> bool {
@@ -1957,7 +2058,9 @@ impl Viewer {
                 let delta = y - *last;
                 *last = y;
                 let max = self.scroll_max(ui, lay);
-                self.view.sidebar_scroll = (self.view.sidebar_scroll - delta).clamp(0.0, max);
+                if bifrost_app::pans_now() {
+                    self.view.sidebar_scroll = (self.view.sidebar_scroll - delta).clamp(0.0, max);
+                }
                 true
             }
             Some(Gesture::Drag { now, .. }) => {
@@ -1980,7 +2083,9 @@ impl Viewer {
                 let delta = y - *last;
                 *last = y;
                 let most = self.contact_max(ui, lay);
-                self.contact_scroll = (self.contact_scroll - delta).clamp(0.0, most);
+                if bifrost_app::pans_now() {
+                    self.contact_scroll = (self.contact_scroll - delta).clamp(0.0, most);
+                }
                 true
             }
             Some(Gesture::Slider { which, .. }) => {
@@ -2379,7 +2484,7 @@ impl App for Viewer {
             file_items.push(AppMenuItem::separator().depth(1));
         }
         file_items.push(AppMenuItem::new(MENU_CLEAR_RECENTS, "Clear Menu").enabled(!self.recents.is_empty()).depth(1));
-        file_items.extend([AppMenuItem::separator(), item(Action::Print, open, false), AppMenuItem::separator()]);
+        file_items.extend([AppMenuItem::separator(), AppMenuItem::print(Action::Print.id()).enabled(open), AppMenuItem::separator()]);
         file_items.extend([item(Action::ExportPng, open, false), item(Action::ExportJpeg, open, false)]);
         file_items.push(AppMenuItem::separator());
         file_items.extend(scale_items);
@@ -2402,18 +2507,13 @@ impl App for Viewer {
         let sidebar_label = if self.sidebar { "Hide Sidebar" } else { "Show Sidebar" };
         vec![
             AppMenu { title: "File".into(), items: file_items },
+            // Edit merges into the shell's Edit, which already has Undo, Redo, Copy and Select All: only the app's own items here
             AppMenu {
-                title: "Preview".into(),
+                title: "Edit".into(),
                 items: vec![
-                    item(Action::Undo, self.history.can_undo(), false),
-                    item(Action::Redo, self.history.can_redo(), false),
-                    AppMenuItem::separator(),
                     item(Action::Find, pdf, false),
                     item(Action::FindNext, pdf, false),
                     item(Action::FindPrevious, pdf, false),
-                    AppMenuItem::separator(),
-                    item(Action::CopyText, open, false),
-                    item(Action::SelectAll, open, false),
                     AppMenuItem::separator(),
                     AppMenuItem::submenu("Speech"),
                     AppMenuItem::new(MENU_SPEAK_START, "Start Speaking").enabled(open).depth(1),
@@ -2576,14 +2676,29 @@ impl App for Viewer {
     }
 
     /// The answer to the open panel: the chosen file is copied into the app's data folder and opened from there.
-    fn document(&mut self, _ctx: &Ctx, ev: DocumentEvent) -> bool {
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
         let doc = match ev {
             DocumentEvent::Opened(doc) => doc,
             DocumentEvent::OpenedMany { docs, .. } => match docs.into_iter().next() {
                 Some(doc) => doc,
                 None => return false,
             },
-            _ => return false,
+            DocumentEvent::SaveTo(doc) => return self.write_export(ctx, doc),
+            DocumentEvent::Saved(doc) => {
+                ctx.release_document(doc.grant);
+                self.status = format!("Exported {}", doc.name);
+                return true;
+            }
+            DocumentEvent::Failed { request, code } => {
+                let ours = self.pending_export.as_ref().is_some_and(|p| p.request == Some(request));
+                if ours {
+                    self.pending_export = None;
+                    if code != DocErrorCode::Cancelled {
+                        self.status = "The export could not be saved.".into();
+                    }
+                }
+                return ours;
+            }
         };
         let mut bytes = Vec::new();
         if let Err(e) = (&doc.file).read_to_end(&mut bytes) {
@@ -2610,8 +2725,9 @@ impl App for Viewer {
             return false;
         }
         self.shot_request = None;
+        // the shell's refusal is already a sentence for the person (screen recording is off, the sheet was asked)
         if let Err(e) = screenshot::started_from_reply(result) {
-            self.status = format!("Could not take a screenshot: {e}");
+            self.status = e;
         }
         true
     }
@@ -2955,11 +3071,44 @@ mod tests {
     }
 
     #[test]
+    fn export_as_holds_the_picture_for_the_save_panel_instead_of_writing_beside_the_document() {
+        let mut v = viewer_with(Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] });
+        v.export_raster(Raster::Jpeg(export::JPEG_QUALITY));
+        // the save panel names the file, so nothing is written beside the document (/a/b-markup.jpg)
+        assert!(!Path::new("/a/b-markup.jpg").exists());
+        let pending = v.pending_export.as_ref().expect("the export waits for the panel");
+        assert_eq!((pending.name.as_str(), pending.ext, pending.request), ("b-markup.jpg", "jpg", None));
+        assert!(matches!(pending.what, Export::Picture(ref bytes) if bytes.starts_with(&[0xff, 0xd8])));
+        cleanup(&v);
+    }
+
+    #[test]
     fn a_stroke_is_boxed_by_its_points() {
         let m = stroke(3, vec![(0.25, 0.5), (0.75, 0.25)]);
         assert_eq!(m.kind, MarkKind::Ink);
         assert_eq!(m.page, 3);
         assert_eq!(m.rect, Norm { x: 0.25, y: 0.25, w: 0.5, h: 0.25 });
         assert_eq!(m.ink.len(), 2);
+    }
+
+    fn menu_ctx() -> Ctx {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = bifrost_app::proto::Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    #[test]
+    fn print_is_the_apps_one_item_and_there_is_no_second_menu_titled_preview() {
+        let menus = Viewer::new().main_menu(&menu_ctx());
+        let prints: Vec<&AppMenuItem> = menus.iter().flat_map(|m| m.items.iter()).filter(|i| i.prints).collect();
+        assert_eq!(prints.len(), 1, "one Print… that replaces the shell's File > Print…");
+        assert_eq!(prints[0].id, Action::Print.id());
+        assert!(!prints[0].enabled, "no document open, so Print… is greyed");
+        let file = menus.iter().find(|m| m.title == "File").expect("File menu");
+        assert_eq!(file.items.iter().filter(|i| i.title.starts_with("Print")).count(), 1, "the File menu lists Print… once");
+        assert!(!menus.iter().any(|m| m.title == "Preview"), "no second Edit menu titled Preview");
+        let edit: Vec<&str> = menus.iter().filter(|m| m.title == "Edit").flat_map(|m| m.items.iter().map(|i| i.title.as_str())).collect();
+        assert!(edit.contains(&"Find\u{2026}") && edit.contains(&"Find Next") && edit.contains(&"Find Previous"));
+        assert!(!edit.iter().any(|t| matches!(*t, "Undo" | "Redo" | "Copy" | "Select All")), "the shell's Edit has these already");
     }
 }

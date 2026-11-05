@@ -243,13 +243,17 @@ impl Reminders {
             self.center(s, ui, "No Recently Deleted Reminders", MAC_TITLE3_PT, Weight::Semibold, LABEL_2.now(), wpx / 2.0, top + ui.pt(EMPTY_TOP_PT));
             return;
         }
-        for (i, reminder) in kept.iter().enumerate() {
+        for (i, archive::Kept { row, reminder }) in kept.iter().enumerate() {
             let (x, y, w, h) = self.deleted_row_rect(ui, i);
             if y + h > bottom {
                 break;
             }
+            // the selected kept reminder (Delete Permanently acts on it, `purge.rs`)
+            if self.kept_selected == Some(*row) {
+                s.fill_rrect(x, y, w, h, 0.0, bifrost_app::kit::ui::SELECTION_INACTIVE.now());
+            }
             s.fill_rrect(x, y + h - 1.0, w, 1.0, 0.0, SEPARATOR_C.now());
-            let title = ui.fit(&clean(&reminder.title), MAC_BODY_PT, w - ui.pt(SPACE_HUGE * 2.0));
+            let title = ui.fit(&clean(&reminder.title), MAC_BODY_PT, w - ui.pt(super::purge::RESTORE_W));
             self.text(s, ui, &title, MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_XS), y + ui.pt(SPACE_L));
             self.right(s, ui, "Restore", MAC_BODY_PT, Weight::Semibold, LINK, x + w - ui.pt(SPACE_XS), y + ui.pt(SPACE_L));
         }
@@ -615,7 +619,7 @@ impl Reminders {
                     (false, Some(EditMode::Group)) => "Delete Group",
                     (false, Some(EditMode::Smart)) => "Delete Smart List",
                     // pressed once: the button asks before the list and its reminders go
-                    (false, _) if self.list_edit.as_ref().is_some_and(|e| e.confirm_delete) => "Confirm Delete List",
+                    (false, _) if self.list_edit.as_ref().is_some_and(|e| e.confirm_delete) => crate::app::CONFIRM_DELETE_LIST,
                     (false, _) => "Delete List",
                 };
                 self.center(c, ui, label, MAC_BODY_PT, Weight::Regular, DESTRUCTIVE, x + w / 2.0, y + h / 2.0);

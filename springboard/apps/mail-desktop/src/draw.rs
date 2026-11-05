@@ -131,6 +131,8 @@ pub enum Side {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Hit {
     Button(Button),
+    /// The search field in the toolbar.
+    Search,
     Side(Side),
     Message(u32),
     Field(usize),
@@ -240,6 +242,10 @@ fn toolbar_glyph(button: &Button) -> Option<(&'static str, &'static str)> {
     })
 }
 
+/// The toolbar item id of the search field, and its width in points.
+const SEARCH_ID: u32 = 8;
+const SEARCH_PT: f32 = 180.0;
+
 fn toolbar_model(mail: &Mail) -> Toolbar {
     let mut items = vec![ToolbarItem::custom(90, "Mailbox title", 180.0), ToolbarItem::flexible_space()];
     let visible = toolbar_items(mail.open.is_some(), open_has_others(mail), mail.filter);
@@ -260,6 +266,7 @@ fn toolbar_model(mail: &Mail) -> Toolbar {
         };
         items.push(item.enabled(enabled));
     }
+    items.push(ToolbarItem::custom(SEARCH_ID, "Search", SEARCH_PT));
     Toolbar::new(items)
 }
 
@@ -397,6 +404,8 @@ pub struct SheetLayout {
     pub attach: Option<Rect>,
     /// Compose: the line that shows the signature the message will end with.
     pub note: Option<Rect>,
+    /// Compose: why the last Send did not go out (`Compose::error`), two lines over the buttons.
+    pub error: Option<Rect>,
     /// Compose: the row of each attached file and its Remove button.
     pub files: Vec<(Rect, Rect)>,
     /// The row of each mailbox Open Quickly matches (below its field), or of each recipient suggestion (right under the
@@ -414,14 +423,26 @@ fn field_height(ui: &Ui, label: &str) -> f32 {
     }
 }
 
+/// A compose sheet that fills its window draws no heading: the window's title bar says it already.
+fn sheet_is_untitled(sheet: &Sheet, fills: bool) -> bool {
+    fills && matches!(sheet, Sheet::Compose(_))
+}
+
+/// What the Save This Message? sheet tells the person.
+const QUESTION_TEXT: &str = "Do you want to save this message as a draft? A draft is kept in Drafts so you can finish it later.";
+
 /// The sheet's layout. `choices` is how many matches the sheet lists under its fields (Open Quickly); it is at most
-/// [`MAX_CHOICES`] and only the sheet that lists them takes any.
-pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> SheetLayout {
+/// [`MAX_CHOICES`] and only the sheet that lists them takes any. `fills` lays the sheet out as the whole content of a
+/// window of its own (a compose window): the panel is the window, and the message field takes the height left over.
+/// Otherwise the sheet is a card centred over the main window.
+pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize, fills: bool) -> SheetLayout {
     let form = sheet.form();
-    // the question sheet has buttons only
+    // the question sheet has buttons only, and floats as a card over the message it asks about (which stays in view)
     let shown: &[crate::state::Field] = if matches!(sheet, Sheet::Question(_)) { &[] } else { &form.fields };
+    let fills = fills && !matches!(sheet, Sheet::Question(_));
     let pad = ui.pt(SHEET_PAD_PT);
-    let head = ui.pt(SHEET_HEAD_PT);
+    // a compose window's title bar already names the message: its sheet has no heading of its own
+    let head = if sheet_is_untitled(sheet, fills) { pad } else { ui.pt(SHEET_HEAD_PT) };
     let foot = ui.pt(SHEET_FOOT_PT);
     let heights: Vec<f32> = shown.iter().map(|f| field_height(ui, f.label)).collect();
     let (note_h, files) = match sheet {
@@ -429,6 +450,8 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> S
         Sheet::Compose(c) => (if c.signature.trim().is_empty() { 0.0 } else { ui.pt(NOTE_PT) }, c.attachments.len()),
         // Add Account: two lines for the progress of the lookup and what it found
         Sheet::Setup(_) => (2.0 * ui.pt(NOTE_PT), 0),
+        // Save This Message?: two lines that say what the choice does
+        Sheet::Question(_) => (2.0 * ui.pt(NOTE_PT), 0),
         _ => (0.0, 0),
     };
     let choices = match sheet {
@@ -438,12 +461,25 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> S
     };
     // the suggestions of a recipient field sit right under it; Open Quickly's list follows its only field
     let list_after = if matches!(sheet, Sheet::Compose(_)) { form.focus } else { shown.len().saturating_sub(1) };
+    let error_h = match sheet {
+        Sheet::Compose(c) if !c.error.is_empty() => 2.0 * ui.pt(NOTE_PT),
+        _ => 0.0,
+    };
     let row_h = ui.pt(ATTACH_ROW_PT);
-    let body: f32 = heights.iter().sum::<f32>() + note_h + files as f32 * row_h + choices as f32 * row_h;
-    let pw = ui.pt(SHEET_W_PT).min(w - 2.0 * ui.pt(SPACE_M)).max(0.0);
-    let ph = head + body + foot;
-    let px = ((w - pw) / 2.0).max(0.0);
-    let py = ((h - ph) / 2.0).max(ui.pt(TOOLBAR_PT) + pad);
+    let mut heights = heights;
+    let body: f32 = heights.iter().sum::<f32>() + note_h + error_h + files as f32 * row_h + choices as f32 * row_h;
+    let (px, py, pw, ph) = if fills {
+        // the window is the sheet: the message field grows into whatever height the other rows leave
+        let spare = (h - (head + body + foot)).max(0.0);
+        if let Some(at) = shown.iter().position(|f| f.label == "Message") {
+            heights[at] += spare;
+        }
+        (0.0, 0.0, w.max(0.0), (head + body + foot).max(h))
+    } else {
+        let pw = ui.pt(SHEET_W_PT).min(w - 2.0 * ui.pt(SPACE_M)).max(0.0);
+        let ph = head + body + foot;
+        (((w - pw) / 2.0).max(0.0), ((h - ph) / 2.0).max(ui.pt(TOOLBAR_PT) + pad), pw, ph)
+    };
     let mut y = py + head;
     let mut fields = Vec::with_capacity(heights.len());
     let mut matched = Vec::with_capacity(choices);
@@ -459,6 +495,8 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> S
     }
     let note = (note_h > 0.0).then(|| [px + pad, y, pw - 2.0 * pad, note_h]);
     y += note_h;
+    let error = (error_h > 0.0).then(|| [px + pad, y, pw - 2.0 * pad, error_h]);
+    y += error_h;
     let remove_w = ui.pt(REMOVE_W_PT);
     let mut rows = Vec::with_capacity(files);
     for _ in 0..files {
@@ -473,7 +511,7 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet, choices: usize) -> S
     let cancel = [primary[0] - ui.pt(SPACE_S) - bw, by, bw, bh];
     let discard = matches!(sheet, Sheet::Question(_)).then(|| [cancel[0] - ui.pt(SPACE_S) - bw, by, bw, bh]);
     let attach = matches!(sheet, Sheet::Compose(_) | Sheet::Rules(..)).then(|| [px + pad, by, bw, bh]);
-    SheetLayout { panel: [px, py, pw, ph], fields, cancel, primary, discard, attach, note, files: rows, choices: matched }
+    SheetLayout { panel: [px, py, pw, ph], fields, cancel, primary, discard, attach, note, error, files: rows, choices: matched }
 }
 
 /// How many lines of text the message field `r` (pixels) shows.
@@ -489,16 +527,16 @@ pub fn first_shown(total: usize, room: usize, back: usize) -> usize {
     at_end - back.min(at_end)
 }
 
-/// `scrollWheel:` on a compose window `w` x `h` pixels: the wheel moved the content `dy` pixels (negative for a wheel
-/// turned down, which shows what is below). The message field scrolls by whole lines, at least one a notch, between
-/// the top of the message and its end. True when it moved.
-pub fn scroll_message(ui: &Ui, compose: &mut Compose, w: f32, h: f32, dy: f32) -> bool {
+/// `scrollWheel:` on a compose sheet `w` x `h` pixels (`fills`: the whole of a compose window, see [`sheet_layout`]):
+/// the wheel moved the content `dy` pixels (negative for a wheel turned down, which shows what is below). The message
+/// field scrolls by whole lines, at least one a notch, between the top of the message and its end. True when it moved.
+pub fn scroll_message(ui: &Ui, compose: &mut Compose, w: f32, h: f32, fills: bool, dy: f32) -> bool {
     if !dy.is_finite() || dy == 0.0 {
         return false;
     }
     let Some(at) = compose.form.fields.iter().position(|f| f.label == "Message") else { return false };
     let sheet = Sheet::Compose(compose.clone());
-    let Some(&r) = sheet_layout(ui, w, h, &sheet, 0).fields.get(at) else { return false };
+    let Some(&r) = sheet_layout(ui, w, h, &sheet, 0, fills).fields.get(at) else { return false };
     let pad = ui.pt(SPACE_S);
     let measure = |text: &str, style: Style| ui.measure(text, MAC_BODY_PT, style_weight(style));
     let total = richtext::layout(compose.message(), &compose.styles, r[2] - 2.0 * pad, &measure).len();
@@ -520,8 +558,8 @@ pub struct Laid {
     pub lines: Vec<String>,
 }
 
-/// Greedy word wrap at `width` pixels. Blank lines in the text stay as blank lines. A word wider than the line is
-/// left whole on its own line.
+/// Greedy line wrap at `width` pixels with the kit's line breaking ([`Ui::wrap`]: after spaces, between CJK
+/// characters, and inside a run wider than the line as a last resort). Blank lines in the text stay as blank lines.
 pub fn wrap(ui: &Ui, text: &str, width: f32, pt: f32, weight: Weight) -> Vec<String> {
     let mut lines = Vec::new();
     for paragraph in text.split('\n') {
@@ -530,17 +568,7 @@ pub fn wrap(ui: &Ui, text: &str, width: f32, pt: f32, weight: Weight) -> Vec<Str
             lines.push(String::new());
             continue;
         }
-        let mut line = String::new();
-        for word in paragraph.split_whitespace() {
-            let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
-            if line.is_empty() || ui.measure(&candidate, pt, weight) <= width {
-                line = candidate;
-            } else {
-                lines.push(std::mem::take(&mut line));
-                line = word.to_string();
-            }
-        }
-        lines.push(line);
+        lines.extend(ui.wrap(paragraph, pt, weight, width));
     }
     lines
 }
@@ -670,6 +698,16 @@ fn short_date(date: &str) -> String {
     }
 }
 
+/// The main window's title: the mailbox it shows ("Inbox"), or "Mail" before an account is added. The toolbar draws it
+/// and the shell's Window menu lists the window by it.
+pub fn main_title(mail: &Mail) -> &str {
+    if mail.accounts.is_empty() {
+        "Mail"
+    } else {
+        mailbox_title(&mail.mailbox)
+    }
+}
+
 fn mailbox_title(name: &str) -> &str {
     if name.eq_ignore_ascii_case("INBOX") {
         "Inbox"
@@ -720,7 +758,7 @@ impl MailWindow {
     pub fn hit(&self, ui: &Ui, x: f32, y: f32) -> Hit {
         let (w, h) = (self.w as f32, self.h as f32);
         if let Some(sheet) = &self.mail.sheet {
-            let l = sheet_layout(ui, w, h, sheet, choice_count(&self.mail));
+            let l = sheet_layout(ui, w, h, sheet, choice_count(&self.mail), self.in_compose_window);
             if inside(l.primary, x, y) {
                 return Hit::Primary;
             }
@@ -754,7 +792,10 @@ impl MailWindow {
             let placed = widgets::toolbar_layout(ui, toolbar_bounds(ui, w), &model);
             // a disabled button takes no click
             let enabled = |id: &u32| model.items.iter().any(|i| i.id == *id && i.enabled);
-            return placed.hit(x / scale, y / scale).filter(enabled).and_then(toolbar_button).map_or(Hit::None, Hit::Button);
+            return match placed.hit(x / scale, y / scale) {
+                Some(SEARCH_ID) => Hit::Search,
+                id => id.filter(enabled).and_then(toolbar_button).map_or(Hit::None, Hit::Button),
+            };
         }
         if y < top {
             return favorite_items(&self.mail, ui, bar, top - bar).into_iter().find(|(_, r)| inside(*r, x, y)).map_or(Hit::None, |(i, _)| Hit::Favorite(i));
@@ -827,7 +868,7 @@ impl MailWindow {
             self.draw_favorites(s, ui, bar, top - bar);
         }
         if let Some(sheet) = self.mail.sheet.clone() {
-            self.draw_sheet(s, ui, &sheet, w, h);
+            self.draw_sheet(s, ui, &sheet, w, h, false);
         }
     }
 
@@ -840,11 +881,17 @@ impl MailWindow {
         }
     }
 
-    /// Paints a compose window: its message sheet, centred, over the content background.
+    /// Paints a compose window: its message sheet fills the window.
     pub fn draw_compose(&mut self, s: &mut Surface, ui: &Ui, sheet: &Sheet) {
         s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         let (w, h) = (s.w as f32, s.h as f32);
-        self.draw_sheet(s, ui, sheet, w, h);
+        if let Sheet::Question(compose) = sheet {
+            // the question is a card over the message, which stays in view behind it
+            self.draw_sheet(s, ui, &Sheet::Compose(compose.clone()), w, h, true);
+            self.draw_sheet(s, ui, sheet, w, h, false);
+            return;
+        }
+        self.draw_sheet(s, ui, sheet, w, h, true);
     }
 
     /// The favourites bar: one chip for each pinned mailbox, the one on screen filled.
@@ -864,11 +911,18 @@ impl MailWindow {
 
     fn draw_toolbar(&mut self, s: &mut Surface, ui: &Ui, w: f32, _top: f32) {
         widgets::toolbar_band(s, ui, bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: w / ui.pt(1.0), h: TOOLBAR_PT });
-        let title = if self.mail.accounts.is_empty() { "Mail" } else { mailbox_title(&self.mail.mailbox) };
+        let title = main_title(&self.mail);
         let model = toolbar_model(&self.mail);
         let placed = widgets::toolbar(s, ui, toolbar_bounds(ui, w), &model, None);
         if let Some(r) = placed.rect_of(90) {
             put_mid(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), ui.pt(r.x), ui.pt(r.y + r.h / 2.0));
+        }
+        if let Some(r) = placed.rect_of(SEARCH_ID) {
+            let mut field = bifrost_app::controls::TextField::new();
+            field.set_text(self.mail.search_shown());
+            // the field is a little shorter than the bar, so its capsule sits clear of the bar's edges
+            let inset = widgets::TOOLBAR_GAP_PT / 2.0;
+            widgets::search_field(s, ui, &field, bifrost_app::controls::Rect { x: r.x, y: r.y + inset, w: r.w, h: r.h - 2.0 * inset }, "Search", self.mail.search_focused);
         }
     }
 
@@ -909,8 +963,11 @@ impl MailWindow {
             let selected = self.mail.is_selected(r.uid);
             if selected {
                 s.fill_rrect(x0 + inset, y + inset / 2.0, width - 2.0 * inset, row - inset, ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
-            } else if !r.flags.contains(Flag::Seen) {
-                s.fill_rrect(x0 + pad, y + row * 0.3 - dot / 2.0, dot, dot, dot / 2.0, colors::SYSTEM_BLUE.now());
+            }
+            // the unread dot shows on the selected row too (white on the plate), so Mark as Unread is seen at once
+            if !r.flags.contains(Flag::Seen) {
+                let tint = if selected { WHITE } else { colors::SYSTEM_BLUE.now() };
+                s.fill_rrect(x0 + pad, y + row * 0.3 - dot / 2.0, dot, dot, dot / 2.0, tint);
             }
             if self.mail.threaded && line.head && line.thread > 1 {
                 let tint = if selected { WHITE } else { LABEL_2.now() };
@@ -1276,19 +1333,26 @@ impl MailWindow {
         }
     }
 
-    fn draw_sheet(&mut self, s: &mut Surface, ui: &Ui, sheet: &Sheet, w: f32, h: f32) {
+    fn draw_sheet(&mut self, s: &mut Surface, ui: &Ui, sheet: &Sheet, w: f32, h: f32, fills: bool) {
         let matches = choices_of(&self.mail);
         let suggestions = if matches!(sheet, Sheet::Compose(_)) { self.mail.recipient_suggestions().to_vec() } else { Vec::new() };
         let highlighted = self.mail.recipient_field.highlighted();
-        let l = sheet_layout(ui, w, h, sheet, if suggestions.is_empty() { matches.len() } else { suggestions.len() });
+        let l = sheet_layout(ui, w, h, sheet, if suggestions.is_empty() { matches.len() } else { suggestions.len() }, fills);
         let [px_, py, pw, ph] = l.panel;
         let rule = ui.pt(1.0).max(1.0);
-        let radius = ui.pt(PANEL_RADIUS_PT);
-        s.fill_rrect(px_ - rule, py - rule, pw + 2.0 * rule, ph + 2.0 * rule, radius + rule, SEPARATOR_C.now());
-        s.fill_rrect(px_, py, pw, ph, radius, CARD_BG.now());
+        if fills {
+            // the window is the sheet: no card of its own, the window's edge and corners are the sheet's
+            s.fill_rect(px(px_), px(py), px(pw), px(ph), CARD_BG.now());
+        } else {
+            let radius = ui.pt(PANEL_RADIUS_PT);
+            s.fill_rrect(px_ - rule, py - rule, pw + 2.0 * rule, ph + 2.0 * rule, radius + rule, SEPARATOR_C.now());
+            s.fill_rrect(px_, py, pw, ph, radius, CARD_BG.now());
+        }
 
         let (title, action, form) = (sheet.title(), sheet.action(), sheet.form());
-        put_centred(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), px_ + pw / 2.0, py + ui.pt(SHEET_HEAD_PT) / 2.0);
+        if !sheet_is_untitled(sheet, fills) {
+            put_centred(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), px_ + pw / 2.0, py + ui.pt(SHEET_HEAD_PT) / 2.0);
+        }
 
         let pad = ui.pt(SPACE_S);
         let caret = ui.pt(1.0).max(1.0);
@@ -1366,6 +1430,19 @@ impl MailWindow {
             let text = fit(ui, &format!("-- {first}{more}"), MAC_FOOTNOTE_PT, Weight::Regular, note[2]);
             put_mid(s, &mut self.labels, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_3.now(), note[0], note[1] + note[3] / 2.0);
         }
+        if let (Sheet::Compose(compose), Some(error)) = (sheet, l.error) {
+            // why the Send did not go out, in the window of the message it is about
+            let line_h = error[3] / 2.0;
+            for (k, line) in wrap(ui, &compose.error, error[2], MAC_FOOTNOTE_PT, Weight::Regular).iter().take(2).enumerate() {
+                put_mid(s, &mut self.labels, ui, line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), error[0], error[1] + line_h * (k as f32 + 0.5));
+            }
+        }
+        if let (Sheet::Question(_), Some(note)) = (sheet, l.note) {
+            let line_h = note[3] / 2.0;
+            for (k, line) in wrap(ui, QUESTION_TEXT, note[2], MAC_FOOTNOTE_PT, Weight::Regular).iter().take(2).enumerate() {
+                put_centred(s, &mut self.labels, ui, line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), note[0] + note[2] / 2.0, note[1] + line_h * (k as f32 + 0.5));
+            }
+        }
         if let (Sheet::Setup(_), Some(note)) = (sheet, l.note) {
             // the progress of the lookup or what it found, else what Add Account does with the address
             let (text, color) = if self.mail.status.is_empty() {
@@ -1440,6 +1517,18 @@ impl MailWindow {
         put_centred(s, &mut self.labels, ui, "Cancel", MAC_BODY_PT, Weight::Regular, LABEL.now(), cr[0] + cr[2] / 2.0, cr[1] + cr[3] / 2.0);
         s.fill_rrect(pr[0], pr[1], pr[2], pr[3], ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
         put_centred(s, &mut self.labels, ui, action, MAC_BODY_PT, Weight::Semibold, WHITE, pr[0] + pr[2] / 2.0, pr[1] + pr[3] / 2.0);
+        // the keyboard focus ring of the question's button Tab reached (Don't Save, Cancel, Save)
+        if let (Sheet::Question(_), Some(focus)) = (sheet, self.question_focus) {
+            let button = match focus {
+                0 => l.discard,
+                1 => Some(cr),
+                _ => Some(pr),
+            };
+            if let Some(b) = button {
+                let p = ui.pt(1.0);
+                widgets::focus_ring(&mut *s, ui, bifrost_app::controls::Rect { x: b[0] / p, y: b[1] / p, w: b[2] / p, h: b[3] / p }, RADIUS_PT);
+            }
+        }
     }
 }
 
@@ -1471,6 +1560,67 @@ mod tests {
         let dot_right = 100.0 + ui.pt(SPACE_M) + ui.pt(DOT_PT);
         assert!(list_text_x(&ui, 100.0, 0) - dot_right >= ui.pt(SPACE_S), "a space between the dot and the first letter");
         assert_eq!(list_text_x(&ui, 100.0, 2) - list_text_x(&ui, 100.0, 0), 2.0 * ui.pt(INDENT_PT));
+    }
+
+    /// E2E N15: in a compose window the sheet is the window: the panel covers it, the buttons sit at its bottom and the
+    /// message field takes the height left over. Over the main window it stays a centred card.
+    #[test]
+    fn a_compose_sheet_fills_its_window_and_floats_as_a_card_otherwise() {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let ui = Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.5);
+        let mut mail = Mail::new(vec![]);
+        mail.open_compose(None);
+        let sheet = mail.sheet.clone().expect("a compose sheet");
+        let message = sheet.form().fields.iter().position(|f| f.label == "Message").expect("a message field");
+        let (w, h) = (1100.0, 1400.0);
+        let filled = sheet_layout(&ui, w, h, &sheet, 0, true);
+        assert_eq!(filled.panel, [0.0, 0.0, w, h]);
+        assert!((filled.primary[1] + filled.primary[3] + ui.pt(SHEET_PAD_PT) - h).abs() < 0.5, "Send sits at the bottom");
+        let card = sheet_layout(&ui, w, h, &sheet, 0, false);
+        assert!(card.panel[2] < w && card.panel[0] > 0.0, "a card over the main window");
+        assert!(filled.fields[message][3] > card.fields[message][3], "the message grows into the window");
+        assert!(filled.fields[message][2] > card.fields[message][2], "and is as wide as the window");
+        // a Send that did not go out says why above the buttons
+        let Some(Sheet::Compose(mut compose)) = mail.sheet.clone() else { unreachable!() };
+        assert!(sheet_layout(&ui, w, h, &Sheet::Compose(compose.clone()), 0, true).error.is_none());
+        compose.error = "e2e@ is not a valid address".into();
+        let failed = sheet_layout(&ui, w, h, &Sheet::Compose(compose), 0, true);
+        let error = failed.error.expect("a line for the error");
+        assert!(error[1] + error[3] <= failed.primary[1], "above the buttons");
+    }
+
+    /// A compose window's sheet has no heading of its own (the title bar names it), and the close question is a card
+    /// over the message with a line that explains the choice.
+    #[test]
+    fn the_compose_sheet_has_no_second_title_and_the_question_is_a_card() {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let ui = Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.5);
+        let mut mail = Mail::new(vec![]);
+        mail.open_compose(None);
+        let Some(Sheet::Compose(compose)) = mail.sheet.clone() else { unreachable!() };
+        let (w, h) = (1100.0, 1400.0);
+        let filled = sheet_layout(&ui, w, h, &Sheet::Compose(compose.clone()), 0, true);
+        let card = sheet_layout(&ui, w, h, &Sheet::Compose(compose.clone()), 0, false);
+        assert!(filled.fields[0][1] < card.fields[0][1] - card.panel[1], "the heading's room is gone in a compose window");
+        assert!(sheet_is_untitled(&Sheet::Compose(compose.clone()), true) && !sheet_is_untitled(&Sheet::Compose(compose.clone()), false));
+        let ask = sheet_layout(&ui, w, h, &Sheet::Question(compose), 0, true);
+        assert!(ask.panel[2] < w && ask.panel[3] < h, "a card, not the whole window: {:?}", ask.panel);
+        let note = ask.note.expect("a line that explains the choice");
+        assert!(note[1] + note[3] <= ask.primary[1], "above the buttons");
+    }
+
+    /// E2E8 finding 6: an all-CJK paragraph wraps between characters instead of running past the reading pane.
+    #[test]
+    fn a_cjk_body_wraps_inside_the_pane() {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let ui = Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 2.0);
+        let body = "Hello\n\n不想再收到我们的邮件？请点击这里取消订阅，或者直接回复这封邮件（或点击「回复」）。";
+        let width = ui.pt(160.0);
+        let lines = wrap(&ui, body, width, MAC_BODY_PT, Weight::Regular);
+        assert_eq!(&lines[..2], &["Hello".to_string(), String::new()]);
+        assert!(lines.len() >= 3, "the CJK paragraph takes several lines: {lines:?}");
+        assert!(lines.iter().all(|l| ui.measure(l, MAC_BODY_PT, Weight::Regular) <= width), "{lines:?}");
+        assert_eq!(lines[2..].concat(), body.lines().last().unwrap());
     }
 
     #[test]
@@ -1596,5 +1746,20 @@ mod tests {
     fn mailbox_titles() {
         assert_eq!(mailbox_title("INBOX"), "Inbox");
         assert_eq!(mailbox_title("Sent"), "Sent");
+    }
+
+    #[test]
+    fn the_main_window_is_named_after_the_mailbox_it_shows() {
+        assert_eq!(main_title(&Mail::new(Vec::new())), "Mail", "no account yet");
+        let mut mail = Mail::new(vec![bifrost_app::controls::internet_accounts::Account::new(
+            bifrost_app::controls::internet_accounts::Kind::Mail,
+            "work",
+            "Work",
+            "user",
+        )]);
+        mail.mailbox = "INBOX".into();
+        assert_eq!(main_title(&mail), "Inbox");
+        mail.mailbox = "Sent Items".into();
+        assert_eq!(main_title(&mail), "Sent Items");
     }
 }

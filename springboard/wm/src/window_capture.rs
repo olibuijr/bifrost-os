@@ -12,7 +12,8 @@
 //!   that connected through the privileged socket (`privileged.rs`), and a request from any other client is answered
 //!   `failed(denied)` anyway. The shell runs as root and the socket is root's, so an app cannot reach it.
 //! - **On demand, scaled in the renderer.** A request renders the window alone into a texture of the fitted size
-//!   (`capture::capture_window`, GLES; the Vulkan scanout answers `failed(unsupported)`), never per frame.
+//!   (`capture::capture_window` on GLES, `render_server::window_shot` on the Vulkan scanout, which answers
+//!   `failed(unsupported)` for a window it cannot sample), never per frame.
 //! - **No work when nothing changed.** Every commit of a window's surface tree advances its content serial; a request
 //!   that names the serial the shell already holds is answered `unchanged`.
 //! - **Minimized windows.** A minimized toplevel stays in `WmState::hidden` (it leaves the space but not the window

@@ -52,9 +52,12 @@ fn ensure_writer() {
     if RUNNING.swap(true, SeqCst) {
         return;
     }
+    // the file the caller reads next was written when the writer last ran, perhaps long ago with apps that have
+    // quit since (E2E N14): refresh it now, before the caller reads it, and keep it fresh from the thread
+    write_resources();
     let spawned = std::thread::Builder::new().name("app-resources".into()).spawn(|| loop {
-        write_resources();
         std::thread::sleep(std::time::Duration::from_secs(5));
+        write_resources();
         if writer_should_park(LAST_WANT.load(SeqCst), now_secs()) {
             RUNNING.store(false, SeqCst);
             // a want that landed after the check and saw RUNNING still set would be lost: take the writer back

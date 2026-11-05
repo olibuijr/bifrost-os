@@ -174,7 +174,10 @@ pub struct WmState {
     pub window_capture: crate::window_capture::WindowCapture,
     /// Minimized toplevels: out of the space, but still held so they can be captured and shown again.
     pub hidden: Vec<Window>,
-    /// The appearance materials follow: Dark unless `BIFROST_WM_APPEARANCE=light`.
+    /// Frames of toplevels destroyed while minimized, for the toplevel their client creates again (`wm::ParkedFrames`).
+    pub parked: crate::wm::ParkedFrames<smithay::reexports::wayland_server::backend::ClientId>,
+    /// The appearance materials follow: the shell's `dark=` line in its display file (`display_options::apply_scheme`),
+    /// Dark until it is read unless `BIFROST_WM_APPEARANCE=light`.
     pub material_dark: bool,
     pub lock_state: smithay::wayland::session_lock::SessionLockManagerState,
     /// A session lock is held: only `lock_surface` is drawn and takes input.
@@ -198,6 +201,9 @@ pub struct WmState {
     pub seat: Seat<WmState>,
     /// Pointer gestures that are running (begin and end paired per kind; see `input.rs`).
     pub gestures: crate::input::GestureGate,
+    /// The pressed keys per keyboard device (libinput id), merged into the seat's one keyboard: a key that a
+    /// keyboard reports on two interfaces is pressed once and released when the last of them lets go (`input.rs`).
+    pub seat_keys: bifrost_ui::seat_keys::SeatKeys<String>,
     /// The fingers on the touchscreen and the one that drives an emulated pointer (`touch.rs`).
     pub contacts: crate::touch::Contacts,
     /// Touchscreens announced by the backend; the seat has the touch capability while there is one.
@@ -295,6 +301,7 @@ impl WmState {
             bifrost_window_capture: crate::window_capture::init(&dh),
             window_capture: Default::default(),
             hidden: Vec::new(),
+            parked: Default::default(),
             material_dark: std::env::var("BIFROST_WM_APPEARANCE").map(|v| v != "light").unwrap_or(true),
             lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, crate::privileged::is_privileged),
             locked: false,
@@ -313,6 +320,7 @@ impl WmState {
             seat_state,
             seat,
             gestures: Default::default(),
+            seat_keys: Default::default(),
             contacts: Default::default(),
             touch_devices: Default::default(),
             last_input_touch: false,
@@ -391,6 +399,20 @@ impl WmState {
         self.wm.set_level(id, level);
         self.apply_frames();
         self.dirty = true;
+    }
+
+    /// `set_stack_rank` for a mapped toplevel: it goes over its band, under the shown windows with a higher rank
+    /// (`Wm::raise_ranked`), and the keyboard stays where it is. False when `surface` is no mapped toplevel: its rank
+    /// then waits for the map.
+    pub fn rank_window(&mut self, surface: &WlSurface, rank: u32) -> bool {
+        let Some(window) = self.window_for_surface(surface) else { return false };
+        let Some(id) = Self::known_id(&window) else { return false };
+        self.wm.raise_ranked(id, rank);
+        self.apply_frames();
+        // the foreign-toplevel list follows the new stack, as after a placement (`place_pending`)
+        self.sync_toplevels();
+        self.dirty = true;
+        true
     }
 
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
@@ -519,27 +541,41 @@ impl WmState {
         if self.locked {
             return self.lock_surface.as_ref().map(|l| (l.wl_surface().clone(), (0.0, 0.0).into()));
         }
-        let output = self.output()?;
-        let layers = layer_map_for_output(&output);
-        let layer_hit = |l: &smithay::wayland::shell::wlr_layer::Layer| {
-            layers.layer_under(*l, pos).and_then(|layer| {
-                let geo = layers.layer_geometry(layer)?;
-                layer
-                    .surface_under(pos - geo.loc.to_f64(), WindowSurfaceType::ALL)
-                    .map(|(s, p)| (s, (p + geo.loc).to_f64()))
-            })
-        };
         use smithay::wayland::shell::wlr_layer::Layer;
-        layer_hit(&Layer::Overlay)
-            .or_else(|| layer_hit(&Layer::Top))
+        self.layer_surface_under(Layer::Overlay, pos)
+            .or_else(|| self.layer_surface_under(Layer::Top, pos))
             .or_else(|| self.input_popup_under(pos))
             .or_else(|| {
                 self.space.element_under(pos).and_then(|(window, loc)| {
                     window.surface_under(pos - loc.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + loc).to_f64()))
                 })
             })
-            .or_else(|| layer_hit(&Layer::Bottom))
-            .or_else(|| layer_hit(&Layer::Background))
+            .or_else(|| self.layer_surface_under(Layer::Bottom, pos))
+            .or_else(|| self.layer_surface_under(Layer::Background, pos))
+    }
+
+    /// The surface of a layer surface on `layer` that takes the pointer at `pos`, the topmost first, and its origin.
+    /// Each surface's input region decides, not its size: a surface exported with room for its shadow (a menu), or one
+    /// that takes no input at all (a sweep, a caption), lets the point through to the surfaces below it on the same
+    /// layer. Picking the topmost surface by its bounds alone (smithay's `layer_under`) ended the search at such a
+    /// surface, and the press fell through to the window under it (E2E R1).
+    pub fn layer_surface_under(&self, layer: smithay::wayland::shell::wlr_layer::Layer, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
+        let output = self.output()?;
+        let layers = layer_map_for_output(&output);
+        // the order they are drawn in, from the top (`scene::layer_surfaces_bottom_first`: z rank, then map order)
+        let found = crate::scene::layer_surfaces_bottom_first(&layers, layer).into_iter().rev().find_map(|l| {
+            let geo = layers.layer_geometry(l)?;
+            l.surface_under(pos - geo.loc.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + geo.loc).to_f64()))
+        });
+        found
+    }
+
+    /// Whether a layer surface above the windows (the Overlay or Top layer: the shell's menus, menu bar, Dock and
+    /// panels) takes the pointer at `pos`. A press there belongs to that surface, so it must not raise or focus the
+    /// window beneath it: an app's pop-up menu that reaches past its window raised the window under that part (E2E R1).
+    pub fn layer_above_windows_at(&self, pos: Point<f64, Logical>) -> bool {
+        use smithay::wayland::shell::wlr_layer::Layer;
+        !self.locked && (self.layer_surface_under(Layer::Overlay, pos).is_some() || self.layer_surface_under(Layer::Top, pos).is_some())
     }
 }
 

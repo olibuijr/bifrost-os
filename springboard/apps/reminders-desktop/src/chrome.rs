@@ -7,7 +7,7 @@ use super::*;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role};
-use bifrost_app::kit::ui::{Weight, CONTENT_BG, LABEL, LABEL_2, SEPARATOR_C, SIDEBAR_BG, GRAY_DIM, WHITE, MAC_BODY_PT, MAC_TITLE2_PT};
+use bifrost_app::kit::ui::{Weight, CONTENT_BG, LABEL, LABEL_2, SEPARATOR_C, SIDEBAR_BG, GRAY_DIM, WHITE, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_SUBHEAD_PT, MAC_TITLE2_PT};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets::{self, CAPSULE_PT, TOOLBAR_GAP_PT};
 use bifrost_app::kit::Surface;
@@ -139,12 +139,12 @@ impl Reminders {
     }
 
     fn list_view(&self) -> bool {
-        matches!(self.view, View::List(_)) && !self.searching
+        matches!(self.view, View::List(_)) && !self.searching && self.deleted.is_none()
     }
 
     /// Whether a custom smart list is on screen (its form is reached from the toolbar's Show List Info).
     fn smart_view(&self) -> bool {
-        matches!(self.view, View::Custom(_)) && !self.searching
+        matches!(self.view, View::Custom(_)) && !self.searching && self.deleted.is_none()
     }
 
     fn search_open(&self) -> bool {
@@ -189,7 +189,9 @@ impl Reminders {
         items.push(ToolbarItem::flexible_space());
         items.push(ToolbarItem::icon(B_EXPORT, "Export List", "square.and.arrow.up").in_group(1).enabled(self.file_export && self.list_view()));
         items.push(ToolbarItem::icon(B_OPTIONS, "View Options", "arrow.up.arrow.down").in_group(1).selected(self.options_open));
-        items.push(ToolbarItem::icon(B_INFO, "Show List Info", "ellipsis").in_group(1).enabled(self.list_view() || self.smart_view()));
+        // on Recently Deleted the "..." holds the page's purge menu, so it is named for that, not for List Info
+        let info = if self.deleted.is_some() { "Recently Deleted Actions" } else { "Show List Info" };
+        items.push(ToolbarItem::icon(B_INFO, info, "ellipsis").in_group(1).enabled(self.list_view() || self.smart_view() || self.deleted.is_some()));
         items.push(ToolbarItem::icon(B_ADD, "New Reminder", "plus").in_group(1));
         // the search field is always in the toolbar (Golden Gate: a visible search field, not a collapsed button)
         let search_w = ((end - start) * 0.35).clamp(SEARCH_MIN_PT, SEARCH_MAX_PT);
@@ -237,6 +239,11 @@ impl Reminders {
             B_EXPORT => Target::OptExport,
             B_OPTIONS => Target::Options,
             // "..." opens the list's menu under the button (Show List Info is one of its rows), E2E W2-21
+            // on Recently Deleted it is the page's menu: Delete Permanently and Delete All (`purge.rs`)
+            B_INFO if self.deleted.is_some() => {
+                let (bx, by, _, bh) = self.bar_px(ui, B_INFO)?;
+                Target::ListMenu(bx, by + bh)
+            }
             B_INFO => match self.view {
                 View::List(_) | View::Custom(_) => {
                     let (bx, by, _, bh) = self.bar_px(ui, B_INFO)?;
@@ -395,19 +402,37 @@ impl Reminders {
         self.data.lists.get((id - LIST_ROW) as usize).map(|l| Target::List(l.id))
     }
 
-    /// A tile name as one or two lines no wider than `max_px`: whole words, cut with an ellipsis only when a single
-    /// word does not fit.
-    pub(super) fn tile_label_lines(ui: &Ui, label: &str, max_px: f32) -> Vec<String> {
-        let mut lines = if ui.measure(label, MAC_BODY_PT, Weight::Semibold) <= max_px {
-            vec![label.to_string()]
-        } else {
-            ui.wrap(label, MAC_BODY_PT, Weight::Semibold, max_px)
-        };
-        if lines.len() > 2 {
-            let rest = lines.split_off(1).join(" ");
-            lines.push(rest);
+    /// A tile name in lines no wider than `max_px`, as the reference tiles draw it: one line at body size when it
+    /// fits, else at callout size, else wrapped at a space onto two lines (callout, then subhead), so "Recently
+    /// Deleted" shows whole in a narrow sidebar (E2E13 8); only a name that fits none of these is cut with an ellipsis
+    /// on one subhead line. Returns the lines (top first) and the point size to draw them at.
+    pub(super) fn tile_label(ui: &Ui, label: &str, max_px: f32) -> (Vec<String>, f32) {
+        let fits = |text: &str, pt: f32| ui.measure(text, pt, Weight::Semibold) <= max_px;
+        for pt in [MAC_BODY_PT, MAC_CALLOUT_PT] {
+            if fits(label, pt) {
+                return (vec![label.to_string()], pt);
+            }
         }
-        lines.iter().map(|l| ui.fit(l, MAC_BODY_PT, max_px)).collect()
+        for pt in [MAC_CALLOUT_PT, MAC_SUBHEAD_PT] {
+            if fits(label, pt) {
+                return (vec![label.to_string()], pt);
+            }
+            // the longest first line that fits, the rest on the second
+            let wrapped = label.match_indices(' ').rev().map(|(i, _)| (label[..i].trim_end(), label[i + 1..].trim_start())).find(|(a, b)| !a.is_empty() && !b.is_empty() && fits(a, pt) && fits(b, pt));
+            if let Some((a, b)) = wrapped {
+                return (vec![a.to_string(), b.to_string()], pt);
+            }
+        }
+        let pt = MAC_SUBHEAD_PT;
+        let mut chars: Vec<char> = label.trim_end().chars().collect();
+        while !chars.is_empty() {
+            chars.pop();
+            let cut: String = chars.iter().collect::<String>().trim_end().to_string() + "\u{2026}";
+            if fits(&cut, pt) {
+                return (vec![cut], pt);
+            }
+        }
+        (vec![String::new()], pt)
     }
 
     /// The sidebar: the smart-list tiles in their colours (count top right, name bottom left, the selected one
@@ -432,12 +457,14 @@ impl Reminders {
                 Tile::List(id) => self.list_glyph(s, ui, id, glyph_at, colour),
             }
             self.right(s, ui, &count.to_string(), MAC_TITLE2_PT, Weight::Bold, WHITE, x + w - ui.pt(SPACE_M), y + ui.pt(SPACE_S));
-            // the name sits at the tile's bottom left; one that is wider than the tile (Recently Deleted) wraps to a
-            // second line above it instead of being cut off
-            let lines = Self::tile_label_lines(ui, &label, w - ui.pt(2.0 * SPACE_M));
-            for (k, line) in lines.iter().rev().enumerate() {
-                let line_y = y + h - ui.pt(SPACE_XL + 2.0) - k as f32 * ui.pt(MAC_BODY_PT * 1.25);
-                self.text(s, ui, line, MAC_BODY_PT, Weight::Semibold, WHITE, x + ui.pt(SPACE_M), line_y);
+            // the name sits at the tile's bottom left; one wider than the tile (Recently Deleted in a narrow sidebar)
+            // is drawn a text style smaller or on two lines, its last line's bottom kept where the body-size line ends
+            let (lines, pt) = Self::tile_label(ui, &label, w - ui.pt(2.0 * SPACE_M));
+            let last_y = y + h - ui.pt(SPACE_XL + 2.0) + ui.pt(MAC_BODY_PT - pt);
+            let leading = ui.pt(pt + SPACE_XXS);
+            for (n, line) in lines.iter().enumerate() {
+                let line_y = last_y - leading * (lines.len() - 1 - n) as f32;
+                self.text(s, ui, line, pt, Weight::Semibold, WHITE, x + ui.pt(SPACE_M), line_y);
             }
         }
         widgets::source_list(s, ui, self.lists_bounds(ui), &self.lists_source(), 0.0, None);

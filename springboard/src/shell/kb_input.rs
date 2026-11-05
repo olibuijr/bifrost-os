@@ -62,6 +62,35 @@ impl Remap {
         };
         REMAP_TARGETS.get(self.slot(slot)).and_then(|t| t.1).unwrap_or(code)
     }
+
+    /// The window server's modifier state (`input::Event::Modifiers`: `held` bits of physical keys, `caps`) as the codes
+    /// `HwKeys::sync_modifiers` takes, after this remap: (held, unsure, caps). The window server cannot tell the left
+    /// key of a pair from the right one, so a held pair whose sides now send different keys is unsure; a remapped
+    /// Caps Lock is unsure too (the window server sees it as a lock, not a held key), and the Caps Lock state is only
+    /// known while no key is remapped. With Slow Keys on, a held key may still be waiting for its delay, so nothing held is
+    /// pressed, only stale counters are released.
+    pub fn modifier_sync(&self, held: u8, caps: Option<bool>, slow: bool) -> (Vec<u16>, Vec<u16>, Option<bool>) {
+        use crate::bare::input::{MOD_ALT, MOD_ALTGR, MOD_CTRL, MOD_META, MOD_SHIFT};
+        let pairs: [(u8, &[u16]); 5] = [(MOD_SHIFT, &[42, 54]), (MOD_CTRL, &[29, 97]), (MOD_ALT, &[56]), (MOD_ALTGR, &[100]), (MOD_META, &[125, 126])];
+        let (mut sure, mut unsure) = (Vec::new(), Vec::new());
+        for (bit, codes) in pairs {
+            if held & bit == 0 {
+                continue;
+            }
+            let sent: Vec<u16> = codes.iter().map(|&c| self.apply(c)).collect();
+            let class = |c: u16| super::sticky_keys::Modifier::of_code(c);
+            if !slow && sent.iter().all(|&c| class(c).is_some() && class(c) == class(sent[0]) && (c == 100) == (sent[0] == 100)) {
+                sure.push(sent[0]);
+            } else {
+                unsure.extend(sent);
+            }
+        }
+        let remapped = [KEY_CAPS_LOCK, KEY_LEFT_CTRL, KEY_LEFT_ALT, KEY_LEFT_META].iter().any(|&c| self.apply(c) != c);
+        if self.apply(KEY_CAPS_LOCK) != KEY_CAPS_LOCK {
+            unsure.push(self.apply(KEY_CAPS_LOCK));
+        }
+        (sure, unsure, if remapped { None } else { caps })
+    }
 }
 
 /// The evdev codes of F1 to F12, in order.
@@ -341,5 +370,29 @@ mod tests {
         set(p);
         assert_eq!(get(), p);
         set(KeyPrefs::DEFAULT);
+    }
+
+    /// A remapped modifier: the window server's mask names the physical keys, so a pair whose sides now send different
+    /// keys is unsure, a remapped Caps Lock is unsure, and the Caps Lock state is unknown (E2E3 F1).
+    #[test]
+    fn modifier_sync_follows_the_remap() {
+        use crate::bare::input::{MOD_CTRL, MOD_SHIFT};
+        let (held, unsure, caps) = Remap::default().modifier_sync(MOD_SHIFT | MOD_CTRL, Some(true), false);
+        assert_eq!((held, unsure, caps), (vec![42, 29], vec![], Some(true)));
+        // Control sends Command: a held Control may be the left key (Command now) or the right one (still Control)
+        let r = Remap { control: 4, ..Remap::default() };
+        let (held, unsure, caps) = r.modifier_sync(MOD_CTRL, Some(true), false);
+        assert!(held.is_empty());
+        assert_eq!(unsure, vec![KEY_LEFT_META, 97]);
+        assert_eq!(caps, None);
+        // Caps Lock sends Control: the window server never reports it held, so Control is unsure
+        let r = Remap { caps_lock: 2, ..Remap::default() };
+        let (held, unsure, _) = r.modifier_sync(0, Some(false), false);
+        assert!(held.is_empty());
+        assert_eq!(unsure, vec![KEY_LEFT_CTRL]);
+        // Slow Keys: a held key may still wait for its delay, so it is not pressed here
+        let (held, unsure, _) = Remap::default().modifier_sync(MOD_SHIFT, None, true);
+        assert!(held.is_empty());
+        assert_eq!(unsure, vec![42, 54]);
     }
 }

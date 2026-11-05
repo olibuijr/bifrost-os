@@ -97,6 +97,19 @@ package_bifrost_files() {
   for pack in "$here"/translation/*.tsv; do
     install -Dm644 "$pack" "$pkgdir/usr/share/bifrost/translation/$(basename "$pack")"
   done
+  # the system English dictionary (WordNet 3.0 as StarDict, built by tools/build-wordnet-stardict.py into PC_DICTIONARIES):
+  # the Dictionary app and the shell's Look Up read /usr/share/stardict; the WordNet licence asks every copy to carry
+  # Princeton's notice, which ships beside the package's other licence files. Without the tree the package ships none.
+  if [[ -n ${PC_DICTIONARIES:-} && -f ${PC_DICTIONARIES}/wordnet.ifo ]]; then
+    if [[ ! -f ${PC_DICTIONARIES}/LICENSE-WordNet ]]; then
+      echo "package-files.sh: $PC_DICTIONARIES has no LICENSE-WordNet; the dictionary may not ship without its notice" >&2
+      return 1 2>/dev/null || exit 1
+    fi
+    for ext in ifo idx dict; do
+      install -Dm644 "$PC_DICTIONARIES/wordnet.$ext" "$pkgdir/usr/share/stardict/wordnet.$ext"
+    done
+    install -Dm644 "$PC_DICTIONARIES/LICENSE-WordNet" "$pkgdir/usr/share/licenses/springboard-shell/LICENSE-WordNet"
+  fi
   install -Dm644 "$here/bifrost-desktop-ready.service" "$pkgdir/usr/lib/systemd/system/bifrost-desktop-ready.service"
   install -Dm644 "$here/bifrost-after-desktop.target" "$pkgdir/usr/lib/systemd/system/bifrost-after-desktop.target"
   install -Dm644 "$here/dbus/org.freedesktop.portal.Desktop.service" "$pkgdir/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service"
@@ -142,6 +155,8 @@ package_bifrost_files() {
   install -Dm644 "$here/tmpfiles-bifrost-audio.conf" "$pkgdir/usr/lib/tmpfiles.d/bifrost-audio.conf"
   # same-uid processes (Term, apps) must not be able to ptrace the shell, which holds the session token
   install -Dm644 "$here/sysctl-bifrost.conf" "$pkgdir/usr/lib/sysctl.d/60-bifrost.conf"
+  # e1000e NICs hang under heavy TX with TSO/GSO on: NetworkManager connection defaults switch them off (no ethtool needed)
+  install -Dm644 "$here/networkmanager/50-bifrost-e1000e.conf" "$pkgdir/usr/lib/NetworkManager/conf.d/50-bifrost-e1000e.conf"
   install -Dm755 "$here/seed-data" "$pkgdir/usr/lib/springboard/seed-data"
   # System assets (UI fonts, app icons, wallpapers): the package owns /usr/share/springboard/system-assets, a path no
   # earlier install has a file at, so an update can change them and pacman finds no conflict. PC_SYSTEM_ASSETS is the
@@ -154,10 +169,9 @@ package_bifrost_files() {
     find "$pkgdir/usr/share/springboard/system-assets" -type f -exec chmod 644 {} +
   fi
   # public key that signs this repository (packaging/arch/keys/README.md); the scriptlet imports it into pacman's keyring.
-  # Absent until the key is generated: the package then ships none and the repository stays unsigned.
-  if [[ -f $here/keys/bifrost-repo.gpg ]]; then
-    install -Dm644 "$here/keys/bifrost-repo.gpg" "$pkgdir/usr/share/bifrost/keys/bifrost-repo.gpg"
-  fi
+  # The repository is signed and installed systems require it, so a package without the key would be a dead end: fail.
+  [[ -s $here/keys/bifrost-repo.gpg ]] || { echo "packaging/arch/keys/bifrost-repo.gpg is missing (packaging/arch/keys/README.md)" >&2; return 1; }
+  install -Dm644 "$here/keys/bifrost-repo.gpg" "$pkgdir/usr/share/bifrost/keys/bifrost-repo.gpg"
   # ML-DSA-65 publisher public keys (`springboard --publisher-keygen`): the shell pins every `*.pub` here and then refuses
   # an app package without a detached signature from one of them (packaging/arch/publisher-keys/README.md). Absent
   # until a key is generated: the package then ships none and store packages pass on their checksum alone.

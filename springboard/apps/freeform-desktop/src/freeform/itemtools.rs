@@ -799,7 +799,7 @@ impl Freeform {
             let n = (len / (d * 2.0)).ceil().max(1.0) as usize;
             for k in 0..=n {
                 let f = k as f32 / n as f32;
-                s.fill_rrect(a.0 + (b.0 - a.0) * f - d / 2.0, top + a.1 + (b.1 - a.1) * f - d / 2.0, d, d, d / 2.0, TINT);
+                s.fill_rrect(a.0 + (b.0 - a.0) * f - d / 2.0, top + a.1 + (b.1 - a.1) * f - d / 2.0, d, d, d / 2.0, accent_now());
             }
         };
         if let Some(Pick::Connector(n)) = self.pick {
@@ -936,7 +936,7 @@ impl Freeform {
         for ((kind, row), (_, name)) in rows.iter().zip(crate::SHAPES.iter()) {
             let chosen = self.tool.shape_kind() == Some(*kind);
             if chosen {
-                s.fill_rrect(ui.pt(row.x), ui.pt(row.y), ui.pt(row.w), ui.pt(row.h), ui.pt(m::SELECTION_RADIUS), TINT);
+                s.fill_rrect(ui.pt(row.x), ui.pt(row.y), ui.pt(row.w), ui.pt(row.h), ui.pt(m::SELECTION_RADIUS), accent_now());
             }
             let ink = if chosen { WHITE } else { LABEL.now() };
             let img = ui.text(name, MAC_CALLOUT_PT, Weight::Regular, ink);
@@ -1022,7 +1022,7 @@ impl Freeform {
         for (i, (row, id)) in rows.iter().zip(hits.iter()).enumerate() {
             let chosen = i == search.sel;
             if chosen {
-                s.fill_rrect(row.x + ui.pt(SPACE_XS), row.y, row.w - 2.0 * ui.pt(SPACE_XS), row.h, ui.pt(m::SELECTION_RADIUS), TINT);
+                s.fill_rrect(row.x + ui.pt(SPACE_XS), row.y, row.w - 2.0 * ui.pt(SPACE_XS), row.h, ui.pt(m::SELECTION_RADIUS), accent_now());
             }
             let title = self.boards.entries().iter().find(|e| e.id == *id).map(|e| e.title.clone()).unwrap_or_default();
             let shown = ui.fit(&title, MAC_CALLOUT_PT, row.w - 2.0 * pad);

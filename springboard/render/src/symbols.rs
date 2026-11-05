@@ -171,6 +171,14 @@ impl Symbols {
         (img.w > 0).then_some(img)
     }
 
+    /// A plain Unicode character (a chess piece, a card suit) from the first symbol font that has it, trimmed to its
+    /// ink with the em `px` tall; `None` when no symbol font covers it, so the caller can draw something else.
+    pub fn render_char(&self, c: char, px: f32, color: u32) -> Option<Image> {
+        let (font, gid) = self.fonts.iter().find_map(|f| Some(f.glyph(c)).filter(|&g| g != 0).map(|g| (f, g)))?;
+        let img = font.render_glyph(gid, &Style { px, embolden: 0.0, color, shadow: false }).trimmed();
+        (img.w > 0).then_some(img)
+    }
+
     /// The symbol scaled to fit a `w` x `h` px box (aspect kept), trimmed.
     pub fn render_fit(&self, sym: Symbol, w: f32, h: f32, color: u32) -> Option<Image> {
         let probe = self.render(sym, 100.0, color)?;

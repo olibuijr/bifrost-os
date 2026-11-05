@@ -3,6 +3,7 @@
 use super::pointer_finger::{Mouse, PointerFinger};
 use super::pointer_prefs::{self, Secondary};
 use super::sys::*;
+use bifrost_ui::seat_keys::SeatKeys;
 use std::ffi::c_int;
 use std::io;
 
@@ -18,6 +19,11 @@ pub enum Event {
     Wheel{x:f32,y:f32,dx:f32,dy:f32,t:f64},
     Context{x:f32,y:f32,t:f64},
     Key { code: u16, down: bool },
+    /// The window server's word on which modifier keys are down (`wl_keyboard` enter, leave and modifiers), as the
+    /// physical key codes before any remap: bit 0 Shift, 1 Ctrl, 2 Alt, 3 the right Alt (AltGr), 4 Meta (`MOD_*`).
+    /// `caps` is the Caps Lock state, None when this event does not know it (a focus leave). The shell corrects its
+    /// own modifier counters with it, so a release that went to another client never leaves a modifier stuck.
+    Modifiers { held: u8, caps: Option<bool> },
     /// A switch (jack insert and the like): the code and whether it is on.
     Switch { code: u16, on: bool },
     /// One finger of a multi-touch screen: the contact's id (unique among the fingers down), its phase and its
@@ -42,6 +48,44 @@ pub const KEY_VOLUMEUP: u16 = 115;
 pub const KEY_POWER: u16 = 116;
 pub const KEY_WAKEUP: u16 = 143;
 pub use crate::media::route::{SW_HEADPHONE_INSERT, SW_MICROPHONE_INSERT};
+
+/// `Event::Modifiers` bits: which modifier keys are down.
+pub const MOD_SHIFT: u8 = 1;
+pub const MOD_CTRL: u8 = 2;
+pub const MOD_ALT: u8 = 4;
+/// The right Alt key, AltGr on a layout with a third level
+pub const MOD_ALTGR: u8 = 8;
+pub const MOD_META: u8 = 16;
+
+/// The `Event::Modifiers` bits of the modifier keys among `codes` (evdev key codes, the pressed keys of `wl_keyboard`'s
+/// enter); other keys are ignored.
+pub fn mods_of_codes(codes: impl IntoIterator<Item = u16>) -> u8 {
+    codes.into_iter().fold(0, |m, code| {
+        m | match code {
+            42 | 54 => MOD_SHIFT,
+            29 | 97 => MOD_CTRL,
+            56 => MOD_ALT,
+            100 => MOD_ALTGR,
+            125 | 126 => MOD_META,
+            _ => 0,
+        }
+    })
+}
+
+/// The `Event::Modifiers` bits of an XKB modifier mask (`wl_keyboard`'s modifiers: depressed and latched together), with
+/// the standard PC keymap's indices: Shift 0, Lock 1, Control 2, Mod1 (Alt) 3, Mod4 (Super) 6, Mod5 (ISO Level 3, AltGr) 7.
+/// Lock is a lock, not a held key: Caps Lock comes from the locked mask (`xkb_caps`).
+pub fn mods_of_xkb(mask: u32) -> u8 {
+    [(1 << 0, MOD_SHIFT), (1 << 2, MOD_CTRL), (1 << 3, MOD_ALT), (1 << 6, MOD_META), (1 << 7, MOD_ALTGR)]
+        .into_iter()
+        .filter(|(bit, _)| mask & bit != 0)
+        .fold(0, |m, (_, b)| m | b)
+}
+
+/// Caps Lock is on in an XKB locked-modifier mask.
+pub fn xkb_caps(locked: u32) -> bool {
+    locked & (1 << 1) != 0
+}
 
 const EV_SYN: u16 = 0;
 const EV_KEY: u16 = 1;
@@ -605,8 +649,12 @@ pub struct InputSet {
     /// inotify fd on /dev/input (-1: not started, or unavailable and the timer rescans)
     watch: c_int,
     pointer: Pointer,
-    /// shift keys held on any keyboard, for the wheel
-    shift: u8,
+    /// The pressed keys of every key device, merged into one seat keyboard by device fd: a keyboard that reports
+    /// each key on two of its interfaces (a boot and an NKRO node) types it once, and Shift for the wheel is held
+    /// while any keyboard holds it.
+    seat_keys: SeatKeys<c_int>,
+    /// releases of the keys of devices a rescan dropped, delivered by the next `read`
+    pending: Vec<Event>,
     /// Mouse Keys drives the pointer from the keypad, so a cursor is drawn even with no pointing device
     pointer_keys: bool,
     /// the hardware keyboard state last handed out by `keyboard_change`; None before the first report
@@ -647,7 +695,7 @@ impl InputSet {
 
     /// A desktop set for a panel of `w` x `h`; `exclusive` grabs keyboards, pointers and touchscreens.
     pub fn desktop(w: f32, h: f32, exclusive: bool) -> Self {
-        InputSet { panel: (w, h), exclusive, slots: vec![], ignored: vec![], next_scan: 0.0, watch: -1, pointer: Pointer::new(w, h), shift: 0, pointer_keys: false, reported_keyboard: None, buttons_only: false }
+        InputSet { panel: (w, h), exclusive, slots: vec![], ignored: vec![], next_scan: 0.0, watch: -1, pointer: Pointer::new(w, h), seat_keys: SeatKeys::new(), pending: vec![], pointer_keys: false, reported_keyboard: None, buttons_only: false }
     }
 
     /// The hardware buttons only (power, volume and lid devices, such as gpio-keys), never grabbed. Under a compositor
@@ -773,10 +821,12 @@ impl InputSet {
             .collect();
         present.sort();
         self.ignored.retain(|p| present.contains(p));
+        let (seat_keys, pending) = (&mut self.seat_keys, &mut self.pending);
         self.slots.retain(|s| {
             let keep = present.contains(&s.path);
             if !keep {
                 unsafe { close(s.fd) };
+                release_device(seat_keys, s.fd, pending);
             }
             keep
         });
@@ -822,14 +872,17 @@ impl InputSet {
 
     /// Drains every device into `out`; a device that was unplugged is closed and forgotten.
     pub fn read(&mut self, out: &mut Vec<Event>) {
+        out.append(&mut self.pending);
         let pointer = &mut self.pointer;
-        let mut shift = self.shift;
+        let seat = &mut self.seat_keys;
+        let buttons_only = self.buttons_only;
         self.slots.retain_mut(|slot| {
             let mut buf = [0u8; EVENT_SIZE * 64];
             loop {
                 let n = unsafe { read(slot.fd, buf.as_mut_ptr() as *mut _, buf.len()) };
                 if n < 0 && io::Error::last_os_error().kind() != io::ErrorKind::WouldBlock {
                     unsafe { close(slot.fd) };
+                    release_device(seat, slot.fd, out);
                     return false;
                 }
                 if n <= 0 {
@@ -844,22 +897,40 @@ impl InputSet {
                         Source::Touch(d) | Source::Keys(d) => {
                             let from = out.len();
                             d.feed(ev.ty, ev.code, ev.value, t, out);
-                            for e in &out[from..] {
-                                if let Event::Key { code: KEY_LEFTSHIFT | KEY_RIGHTSHIFT, down } = *e {
-                                    shift = if down { shift.saturating_add(1) } else { shift.saturating_sub(1) };
-                                }
-                            }
+                            let decoded: Vec<Event> = out.drain(from..).collect();
+                            out.extend(decoded.into_iter().filter(|e| seat_key(seat, slot.fd, buttons_only, e)));
                         }
                         Source::Pointer(d) => {
-                            d.set_shift(shift > 0);
+                            d.set_shift(seat.is_down(KEY_LEFTSHIFT as u32) || seat.is_down(KEY_RIGHTSHIFT as u32));
                             d.feed(pointer, ev.ty, ev.code, ev.value, t, out);
                         }
                     }
                 }
             }
         });
-        self.shift = shift;
     }
+}
+
+/// The hardware button keys `InputSet::buttons` reads itself under a compositor (which drops its own copy of them).
+pub fn is_button_key(code: u16) -> bool {
+    matches!(code, KEY_POWER | KEY_VOLUMEUP | KEY_VOLUMEDOWN | KEY_WAKEUP)
+}
+
+/// Whether a decoded event from the device `fd` reaches the shell. Keys go through the seat's merge (a key held
+/// on another device is not pressed again, and its release waits for the last device); in buttons mode only the
+/// hardware buttons come from evdev, because the compositor delivers every other key (a keyboard with a power key
+/// is opened for that key alone, and its letters typed twice before). Other events always pass.
+fn seat_key(seat: &mut SeatKeys<c_int>, fd: c_int, buttons_only: bool, e: &Event) -> bool {
+    match *e {
+        Event::Key { code, .. } if buttons_only && !is_button_key(code) => false,
+        Event::Key { code, down } => seat.feed(&fd, code as u32, down),
+        _ => true,
+    }
+}
+
+/// The device `fd` is gone (before its fd is closed and reused): the keys only it held are released.
+fn release_device(seat: &mut SeatKeys<c_int>, fd: c_int, out: &mut Vec<Event>) {
+    out.extend(seat.remove_device(&fd).into_iter().map(|code| Event::Key { code: code as u16, down: false }));
 }
 
 impl Drop for InputSet {
@@ -1259,6 +1330,76 @@ mod tests {
     #[test]
     fn keys_skip_autorepeat() {
         let ev = run(&[(EV_KEY, KEY_POWER, 1), (EV_KEY, KEY_POWER, 2), (EV_KEY, KEY_POWER, 0)]);
+        assert_eq!(ev, vec![Event::Key { code: KEY_POWER, down: true }, Event::Key { code: KEY_POWER, down: false }]);
+    }
+
+    /// Feeds raw key records from (fd, code, value) through each device's decoder and the seat merge, as `read` does.
+    fn seat_run(buttons_only: bool, recs: &[(c_int, u16, i32)]) -> Vec<Event> {
+        let mut seat = SeatKeys::new();
+        let mut decoders: std::collections::HashMap<c_int, Decoder> = Default::default();
+        let mut out = vec![];
+        for &(fd, code, value) in recs {
+            let mut decoded = vec![];
+            decoders.entry(fd).or_default().feed(EV_KEY, code, value, 0.0, &mut decoded);
+            out.extend(decoded.into_iter().filter(|e| seat_key(&mut seat, fd, buttons_only, e)));
+        }
+        out
+    }
+
+    const KEY_A: u16 = 30;
+    const KEY_S: u16 = 31;
+
+    #[test]
+    fn a_key_on_two_interfaces_of_one_keyboard_types_once() {
+        let ev = seat_run(false, &[(7, KEY_A, 1), (8, KEY_A, 1), (7, KEY_A, 0), (8, KEY_A, 0)]);
+        assert_eq!(ev, vec![Event::Key { code: KEY_A, down: true }, Event::Key { code: KEY_A, down: false }]);
+    }
+
+    #[test]
+    fn repeats_on_both_interfaces_stay_out() {
+        let ev = seat_run(false, &[(7, KEY_A, 1), (8, KEY_A, 1), (7, KEY_A, 2), (8, KEY_A, 2), (8, KEY_A, 0), (7, KEY_A, 0)]);
+        assert_eq!(ev, vec![Event::Key { code: KEY_A, down: true }, Event::Key { code: KEY_A, down: false }]);
+    }
+
+    #[test]
+    fn rollover_across_two_keyboards_keeps_both_keys() {
+        let ev = seat_run(false, &[(7, KEY_A, 1), (8, KEY_S, 1), (7, KEY_A, 0), (8, KEY_S, 0)]);
+        assert_eq!(
+            ev,
+            vec![
+                Event::Key { code: KEY_A, down: true },
+                Event::Key { code: KEY_S, down: true },
+                Event::Key { code: KEY_A, down: false },
+                Event::Key { code: KEY_S, down: false },
+            ]
+        );
+    }
+
+    #[test]
+    fn shift_on_two_interfaces_is_held_until_both_release() {
+        let mut seat = SeatKeys::new();
+        assert!(seat_key(&mut seat, 7, false, &Event::Key { code: KEY_LEFTSHIFT, down: true }));
+        assert!(!seat_key(&mut seat, 8, false, &Event::Key { code: KEY_LEFTSHIFT, down: true }));
+        assert!(!seat_key(&mut seat, 7, false, &Event::Key { code: KEY_LEFTSHIFT, down: false }));
+        assert!(seat.is_down(KEY_LEFTSHIFT as u32));
+        assert!(seat_key(&mut seat, 8, false, &Event::Key { code: KEY_LEFTSHIFT, down: false }));
+    }
+
+    #[test]
+    fn an_unplugged_keyboard_releases_its_keys() {
+        let mut seat = SeatKeys::new();
+        seat_key(&mut seat, 7, false, &Event::Key { code: KEY_A, down: true });
+        seat_key(&mut seat, 8, false, &Event::Key { code: KEY_A, down: true });
+        seat_key(&mut seat, 8, false, &Event::Key { code: KEY_S, down: true });
+        let mut out = vec![];
+        release_device(&mut seat, 8, &mut out);
+        assert_eq!(out, vec![Event::Key { code: KEY_S, down: false }]);
+    }
+
+    #[test]
+    fn buttons_mode_reads_only_the_hardware_buttons() {
+        // under a compositor a keyboard with a power key is opened for that key; its letters come from wl_keyboard
+        let ev = seat_run(true, &[(9, KEY_A, 1), (9, KEY_A, 0), (9, KEY_POWER, 1), (9, KEY_POWER, 0)]);
         assert_eq!(ev, vec![Event::Key { code: KEY_POWER, down: true }, Event::Key { code: KEY_POWER, down: false }]);
     }
 }

@@ -1,5 +1,59 @@
 # Changelog
 
+## 1.20.13
+
+- Escape closes the details popover and keeps its edits; the Recently Deleted toolbar menu is named for what it does.
+
+## 1.20.12
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 1.20.11
+
+- The Clear and Recently Deleted alerts take Return, Cmd+., Cmd+D, the Tab focus ring and Space.
+
+## 1.20.10
+
+- Delete and Backspace delete the selected reminder, and Esc closes the details popover.
+
+## 1.20.9
+
+- The delete-list message names the button it asks you to press.
+
+## 1.20.8
+
+- Return keeps the new-reminder field open for the next item, List > Delete List... removes a list, and only one Print item uses Cmd+P.
+
+## 1.20.7
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 1.20.6
+
+- The Recently Deleted tile shows its whole name: a name too wide for the tile wraps onto two lines instead of ending in an ellipsis.
+
+## 1.20.5
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
+## 1.20.4
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 1.20.3
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
+## 1.20.2 — 2026-10-25
+
+- Recently Deleted: Delete Permanently and Restore act on the chosen row even when two kept reminders once had the same id. Kept reminders are told apart by their store row, and a new reminder no longer takes the id of one in Recently Deleted.
+- Undo of a deletion (the "Deleted ..." strip or Edit > Undo) also takes the reminder out of Recently Deleted; Redo keeps it there again.
+
+## 1.20.1 — 2026-10-24
+
+- Delete Reminder and Cmd+Backspace act only on a selected reminder that is on screen. A selection made in another list, or one hidden under Recently Deleted, is no longer deleted; opening another list clears the selection.
+- Recently Deleted: a click selects a kept reminder (its Restore link still restores). Delete Permanently comes from the row's context menu, the toolbar's "..." menu and Cmd+Backspace, and Delete All from both menus; each asks first, and the pictures of a purged reminder go with it.
+
 ## 1.20.0 — 2026-10-23
 
 - Add List creates a list even while a reminder's details are open; one click selects; Return commits; Delete List asks first.
@@ -7,7 +61,7 @@
 
 ## 1.19.2 — 2026-10-20
 
-- The Recently Deleted tile in the sidebar shows its whole name: a name wider than the tile wraps to a second line instead of ending in an ellipsis. The tiles are a little taller to make room.
+- The Recently Deleted tile in the sidebar shows its whole name on one line: a name wider than the tile is drawn a text style smaller (callout, then subhead) instead of ending in an ellipsis, and is cut only when even subhead does not fit.
 - The switches in a reminder's details follow the accent colour chosen in Settings > Appearance instead of staying blue.
 
 ## 1.19.1

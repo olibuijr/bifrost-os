@@ -7,7 +7,7 @@
 //! the state and the typing flow are the ones every SDK text field uses.
 use super::kb_layouts::{self, Layout};
 use super::keyboard::Out;
-use super::ui::{Ui, Weight, LABEL, MAC_BODY_PT, MENU_HIGHLIGHT, MENU_HIGHLIGHT_TEXT, MENU_SOLID, WHITE};
+use super::ui::{Ui, Weight, LABEL, MAC_BODY_PT, menu_highlight, MENU_HIGHLIGHT_TEXT, MENU_SOLID, WHITE};
 use super::{Effect, Shell};
 use crate::gfx::Surface;
 use bifrost_ui::compose_method::{self, ComposeTarget, Composer};
@@ -153,7 +153,7 @@ impl Shell {
         s.fill_rrect(x, y, width, height, ui.pt(m::CARD_RADIUS), MENU_SOLID.now());
         for (i, item) in items.iter().enumerate() {
             if selected == Some(i) {
-                s.fill_rrect(x + pad / 2.0, y + pad + row * i as f32, width - pad, row, ui.pt(m::SELECTION_RADIUS), MENU_HIGHLIGHT);
+                s.fill_rrect(x + pad / 2.0, y + pad + row * i as f32, width - pad, row, ui.pt(m::SELECTION_RADIUS), menu_highlight());
             }
             let label = format!("{}   {}", i + 1, item);
             let img = ui.text(&label, MAC_BODY_PT, Weight::Regular, WHITE);

@@ -6,7 +6,7 @@ use crate::source::Reading;
 use crate::state::{Diagnostics, Layout, ScanState, MARGIN_PT, ROW_PT};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::colors::{SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_RED};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SEPARATOR_C, TINT};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SEPARATOR_C, accent_now};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
 use bifrost_app::wlan::Network;
@@ -175,7 +175,7 @@ fn paint_chart(labels: &mut TextCache, s: &mut Surface, ui: &Ui, v: &View, r: Re
         let Some(dbm) = value else { continue };
         let height = chart_fraction(*dbm) * plot.h;
         let x = plot.x + (offset + k) as f32 * col;
-        fill(s, ui, Rect { x, y: bottom - height, w: (col - 1.0).max(1.0), h: height }, 0.0, TINT);
+        fill(s, ui, Rect { x, y: bottom - height, w: (col - 1.0).max(1.0), h: height }, 0.0, history_bar());
     }
     text(
         labels,
@@ -309,9 +309,29 @@ pub fn paint(d: &mut Diagnostics, s: &mut Surface, ui: &Ui) {
     paint_footer(labels, s, ui, &v, v.layout.footer);
 }
 
+/// The fill of a signal-history bar: the user's accent.
+fn history_bar() -> u32 {
+    accent_now()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The accent is process-wide: this test changes it and restores it.
+    static ACCENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn the_signal_history_bars_follow_the_chosen_accent_not_system_blue() {
+        use bifrost_app::kit::appearance::{accent, set_accent, Accent};
+        let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let keep = accent();
+        set_accent(Accent::Green);
+        let (bar, green) = (history_bar(), accent_now());
+        set_accent(keep);
+        assert_eq!(bar, green);
+        assert_ne!(bar, bifrost_app::kit::ui::TINT);
+    }
 
     #[test]
     fn columns_stay_inside_the_card() {

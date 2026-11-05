@@ -55,6 +55,11 @@ fn net() -> Arc<dyn Net> {
     if bifrost_app::testing::pinned() { Arc::new(Offline) } else { Arc::new(Live::default()) }
 }
 
+/// File > Print…: marked as the app's Print, so the shell puts it where its own File > Print… row stands (one Print, at the end of File).
+fn print_item(enabled: bool) -> AppMenuItem {
+    AppMenuItem::print(Act::Print.menu_id().expect("menu items come from MENU_ACTS")).enabled(enabled)
+}
+
 fn item(w: &Window, act: Act, title: &str, key: &str) -> AppMenuItem {
     let id = act.menu_id().expect("menu items come from MENU_ACTS");
     let mut it = AppMenuItem::new(id, title).enabled(w.maps.can(act));
@@ -212,6 +217,28 @@ impl App for MapsApp {
         self.extra.iter().filter_map(|e| e.win.next_wake(t)).chain(main).reduce(f64::min)
     }
 
+    // the map zooms on the wheel; with this set the shell stops emulating the wheel as a drag that pans
+    fn pointer_interest(&self) -> u32 {
+        bifrost_app::pointer_events::WHEEL
+    }
+
+    fn pointer(&mut self, ctx: &Ctx, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        // the main window's events are in surface pixels, which is what the window takes
+        let bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } = *ev else { return false };
+        self.w.as_mut().is_some_and(|w| w.wheel(&ctx.ui, x, y, dy))
+    }
+
+    fn window_pointer(&mut self, ctx: &Ctx, window: WindowId, ev: &bifrost_app::pointer_events::PointerEvent) -> bool {
+        if window.is_main() {
+            return self.pointer(ctx, ev);
+        }
+        // an extra window's events arrive in window points, turned into the pixels it is drawn in
+        let bifrost_app::pointer_events::PointerEvent::Wheel { x, y, dy, .. } = *ev else { return false };
+        let k = ctx.ui.pt(1.0);
+        let Some(e) = self.extra.iter_mut().find(|e| e.id == window) else { return false };
+        e.win.wheel(&ctx.ui, x * k, y * k, dy * k)
+    }
+
     fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
         if window.is_main() {
             return self.event(ctx, ev);
@@ -280,7 +307,7 @@ impl App for MapsApp {
                     sub(item(w, Act::CopyCoordinates, "Copy Coordinates", "cmd+alt+c")),
                     sub(item(w, Act::Share, "Share\u{2026}", "")),
                     AppMenuItem::separator(),
-                    item(w, Act::Print, "Print\u{2026}", "cmd+p"),
+                    print_item(w.maps.can(Act::Print)),
                 ],
             },
             AppMenu {
@@ -414,9 +441,24 @@ mod tests {
     use bifrost_maps::state::MENU_ACTS;
 
     #[test]
+    fn the_map_takes_the_wheel_so_it_zooms_instead_of_panning() {
+        let app = MapsApp { w: None, extra: Vec::new(), shared: None, focus: WindowId::MAIN, net: net(), kb: false, path_request: None };
+        assert_ne!(app.pointer_interest() & bifrost_app::pointer_events::WHEEL, 0);
+    }
+
+    #[test]
     fn new_window_menu_id_is_not_a_map_action() {
         assert!(MENU_ACTS.len() < NEW_WINDOW_MENU as usize);
         assert!(Act::from_menu_id(NEW_WINDOW_MENU).is_none());
         assert!(Act::from_menu_id(NO_COLLECTIONS_MENU).is_none());
+    }
+
+    #[test]
+    fn file_print_is_the_apps_print_item_the_shell_replaces() {
+        let p = print_item(true);
+        assert!(p.prints, "the shell replaces its own File > Print… row only for a prints item");
+        assert_eq!(p.key, "cmd+p");
+        assert_eq!(Act::from_menu_id(p.id), Some(Act::Print));
+        assert!(p.enabled && !print_item(false).enabled);
     }
 }

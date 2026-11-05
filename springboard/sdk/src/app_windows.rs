@@ -44,11 +44,34 @@ pub struct WindowSpec {
     pub position: Option<(f32, f32)>,
     /// The app wants `App::window_title_double_click` when the person double-clicks the title bar (the shell zooms otherwise).
     pub title_double_click: bool,
+    /// With no `position`, the shell cascades the window from the app's other windows (`window_flags::CASCADE`) instead
+    /// of placing it at the desk's next cascade slot.
+    pub cascade: bool,
+    /// The content runs under the title bar (`window_flags::FULL_SIZE`): the shell draws the traffic lights over the
+    /// window and no title row of its own, so the app's unified title and toolbar row is the only one.
+    pub full_size: bool,
 }
 
 impl WindowSpec {
     pub fn new(title: &str, width: f32, height: f32) -> Self {
-        Self { title: title.to_string(), width, height, position: None, title_double_click: false }
+        Self { title: title.to_string(), width, height, position: None, title_double_click: false, cascade: false, full_size: false }
+    }
+
+    /// Asks for a full-size-content window, as the reference toolkit's full-size-content window style does: the app draws its own
+    /// title and toolbar row under the traffic lights, the way its main window does with `window = "full-size"` (a
+    /// second document window looks like the first instead of carrying the shell's title row over the app's).
+    pub fn full_size_content(mut self) -> Self {
+        self.full_size = true;
+        self
+    }
+
+    /// Asks the shell to cascade the window from the app's own windows, as the reference toolkit's cascade call does
+    /// for a document window: the first one opens beside the main window (or over its trailing side when there is no
+    /// room), each later one a title bar's height down and right of the window opened before it. A position given with
+    /// [`WindowSpec::at`] wins.
+    pub fn cascaded(mut self) -> Self {
+        self.cascade = true;
+        self
     }
 
     /// Asks for the window at (x, y) points relative to the visible desktop area (a restored position).
@@ -105,6 +128,8 @@ pub struct AppWindows {
     windows: Vec<AppWindow>,
     limit: usize,
     next: u32,
+    /// The main window was ordered out (`Ctx::close_main_window`): the app runs with no main window on the desk.
+    main_out: bool,
 }
 
 impl Default for AppWindows {
@@ -117,7 +142,18 @@ impl AppWindows {
     /// A registry with the main window only, holding at most `limit` windows.
     pub fn new(limit: usize) -> Self {
         let main = AppWindow { id: WindowId::MAIN, title: String::new(), width: 0.0, height: 0.0, position: None, collapsed: false, title_double_click: false };
-        Self { windows: vec![main], limit: limit.max(1), next: 1 }
+        Self { windows: vec![main], limit: limit.max(1), next: 1, main_out: false }
+    }
+
+    /// Whether the main window is on the desk. It stays in the registry (its id keeps serving `draw` and `event`) while
+    /// it is ordered out, as a reference window that is closed but not released.
+    pub fn main_shown(&self) -> bool {
+        !self.main_out
+    }
+
+    /// Records that the main window was ordered out (`shown` false) or is back on the desk.
+    pub fn set_main_shown(&mut self, shown: bool) {
+        self.main_out = !shown;
     }
 
     /// The open windows, front to back. The first one is focused.
@@ -243,12 +279,14 @@ pub(crate) fn deliver_window<A: crate::App>(app: &mut A, ctx: &crate::Ctx, msg: 
                 None => false,
             }
         }
-        ToApp::WindowTouch { id, touch, kind, x, y, t_ms, mods } => {
+        ToApp::WindowTouch { id, touch, kind, x, y, t_ms, source, mods } => {
             let routed = ctx.windows.borrow().route(WindowId(*id));
             match routed {
                 Some(window) => {
                     let t = crate::runtime::event_time(now, *t_ms);
-                    app.window_event(ctx, window, crate::Input::Touch { kind: *kind, id: *touch, x: *x, y: *y, t, mods: *mods })
+                    let input = crate::Input::Touch { kind: *kind, id: *touch, x: *x, y: *y, t, source: *source, mods: *mods };
+                    input.note_source();
+                    app.window_event(ctx, window, input)
                 }
                 None => false,
             }
@@ -303,7 +341,7 @@ pub fn is_close_window_key(key: &crate::proto::KeyInput) -> bool {
 /// so a click lands under the pointer at every display scale. Any other input is returned as it is.
 pub fn window_touch_in_px(ev: crate::Input, px_per_pt: f32) -> crate::Input {
     match ev {
-        crate::Input::Touch { kind, id, x, y, t, mods } => crate::Input::Touch { kind, id, x: x * px_per_pt, y: y * px_per_pt, t, mods },
+        crate::Input::Touch { kind, id, x, y, t, source, mods } => crate::Input::Touch { kind, id, x: x * px_per_pt, y: y * px_per_pt, t, source, mods },
         other => other,
     }
 }
@@ -334,16 +372,32 @@ mod tests {
     fn a_window_touch_in_points_becomes_px_at_the_display_scale_and_other_input_is_kept() {
         use crate::proto::{ModifierFlags, TouchKind};
         let k = 1200.0 / 768.0; // Midget's 1.5625
-        let ev = crate::Input::Touch { kind: TouchKind::Down, id: 3, x: 100.0, y: 40.0, t: 7.0, mods: ModifierFlags::SHIFT };
+        let ev = crate::Input::Touch { kind: TouchKind::Down, id: 3, x: 100.0, y: 40.0, t: 7.0, source: crate::proto::TouchSource::Pointer, mods: ModifierFlags::SHIFT };
         match window_touch_in_px(ev, k) {
-            crate::Input::Touch { kind, id, x, y, t, mods } => {
+            crate::Input::Touch { kind, id, x, y, t, source, mods } => {
                 assert_eq!((kind, id, t, mods), (TouchKind::Down, 3, 7.0, ModifierFlags::SHIFT));
+                assert_eq!(source, crate::proto::TouchSource::Pointer);
                 assert_eq!((x, y), (156.25, 62.5));
             }
             _ => panic!("still a touch"),
         }
         assert!(matches!(window_touch_in_px(crate::Input::Activate(9), k), crate::Input::Activate(9)));
         assert!(matches!(window_touch_in_px(crate::Input::Context { x: 2.0, y: 2.0 }, k), crate::Input::Context { x, y } if x == 2.0 && y == 2.0));
+    }
+
+    #[test]
+    fn a_window_touch_tells_the_kit_what_produced_it_before_the_app_sees_it() {
+        use crate::proto::TouchSource;
+        let ctx = crate::runtime::test_ctx();
+        let mut app = Fake::default();
+        let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
+        for source in [TouchSource::Pointer, TouchSource::Finger] {
+            let touch = ToApp::WindowTouch { id: id.0, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, source, mods: crate::proto::ModifierFlags::EMPTY };
+            bifrost_ui::pan::set_source(if source == TouchSource::Pointer { TouchSource::Finger } else { TouchSource::Pointer });
+            assert_eq!(deliver_window(&mut app, &ctx, &touch, 0.0), Some(true));
+            assert_eq!(bifrost_ui::pan::source(), source);
+        }
+        bifrost_ui::pan::set_source(TouchSource::Finger);
     }
 
     #[test]
@@ -747,7 +801,7 @@ mod tests {
     }
 
     fn touch_down(id: u32) -> ToApp {
-        ToApp::WindowTouch { id, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, mods: crate::proto::ModifierFlags::EMPTY }
+        ToApp::WindowTouch { id, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, source: crate::proto::TouchSource::Finger, mods: crate::proto::ModifierFlags::EMPTY }
     }
 
     #[test]
@@ -773,7 +827,7 @@ mod tests {
         let mut app = Fake::default();
         let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
         let mods = crate::proto::ModifierFlags::SHIFT | crate::proto::ModifierFlags::COMMAND;
-        let touch = ToApp::WindowTouch { id: id.0, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, mods };
+        let touch = ToApp::WindowTouch { id: id.0, touch: 7, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 0, source: crate::proto::TouchSource::Finger, mods };
         let wire = ToApp::decode(&touch.encode()).unwrap();
         assert_eq!(deliver_window(&mut app, &ctx, &wire, 0.0), Some(true));
         assert_eq!(app.log, vec![format!("touch 7 on 1 mods {:#x}", mods.bits())]);
@@ -821,7 +875,35 @@ mod tests {
         let plain = ctx.open_window(WindowSpec::new("Plain", 10.0, 10.0)).unwrap();
         assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowTitleDoubleClick { window: plain.0 }, 0.0), Some(false));
         assert_eq!(app.log, vec!["moved 1 30 60".to_string(), "double 1".to_string()]);
-        assert_eq!(ctx.move_window(WindowId::MAIN, 1.0, 1.0), Err(WindowError::MainWindow));
+        // the main window moves through the shell (it has no position in the registry)
+        ctx.take_sent();
+        assert_eq!(ctx.move_window(WindowId::MAIN, 1.0, 2.0), Ok(()));
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowMove { window: 0, x: 1.0, y: 2.0 }]);
+        assert!(ctx.move_window(WindowId::MAIN, f32::NAN, 2.0).is_err());
+        assert!(ctx.take_sent().is_empty());
+    }
+
+    #[test]
+    fn a_cascaded_window_sends_the_cascade_flag() {
+        let ctx = crate::runtime::test_ctx();
+        ctx.open_window(WindowSpec::new("Viewer", 560.0, 640.0).cascaded()).unwrap();
+        assert_eq!(
+            ctx.take_sent(),
+            vec![ToShell::WindowOpen { id: 1, title: "Viewer".into(), w: 560.0, h: 640.0, position: None, flags: crate::proto::window_flags::CASCADE }]
+        );
+    }
+
+    /// E2E9 4: a second document window asks for full-size content, so the shell draws no title row over the app's.
+    #[test]
+    fn a_full_size_window_sends_the_full_size_flag() {
+        let ctx = crate::runtime::test_ctx();
+        ctx.open_window(WindowSpec::new("Untitled 2", 560.0, 640.0).cascaded().full_size_content()).unwrap();
+        use crate::proto::window_flags::{CASCADE, FULL_SIZE};
+        assert_eq!(
+            ctx.take_sent(),
+            vec![ToShell::WindowOpen { id: 1, title: "Untitled 2".into(), w: 560.0, h: 640.0, position: None, flags: CASCADE | FULL_SIZE }]
+        );
+        assert!(!WindowSpec::new("Plain", 1.0, 1.0).full_size, "a window keeps the shell's title bar unless it asks");
     }
 
     #[test]
@@ -849,6 +931,56 @@ mod tests {
         assert_eq!((open.title.as_str(), open.width, open.height), ("Grace", 320.0, 240.0));
         assert_eq!(ctx.set_window_title(WindowId(9), "x"), Err(WindowError::Unknown(WindowId(9))));
         assert!(ctx.take_sent().is_empty(), "a refused change sends nothing");
+    }
+
+    /// E2E12 2: a document app with no document left orders its main window out (WindowClose 0) and brings it back
+    /// (WindowOpen 0) once; a second call in the same state sends nothing.
+    #[test]
+    fn the_main_window_is_ordered_out_and_back_once() {
+        let ctx = crate::runtime::test_ctx();
+        assert!(ctx.windows().main_shown());
+        ctx.close_main_window();
+        ctx.close_main_window();
+        assert!(!ctx.windows().main_shown());
+        assert!(ctx.windows().get(WindowId::MAIN).is_some(), "the main window stays in the registry");
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowClose { id: 0 }]);
+        ctx.show_main_window();
+        ctx.show_main_window();
+        assert!(ctx.windows().main_shown());
+        assert!(matches!(ctx.take_sent().as_slice(), [ToShell::WindowOpen { id: 0, .. }]));
+        assert_eq!(deliver_window(&mut Fake::default(), &ctx, &ToApp::Reopen, 0.0), None, "the run loop handles Reopen");
+    }
+
+    /// An app does not ask for the close control unless it says so, and one that does not override `close_requested` has
+    /// its main window ordered out by the default (the shell has not closed it itself).
+    #[test]
+    fn an_app_opts_in_to_close_requests_and_the_default_answer_orders_the_window_out() {
+        use crate::App;
+        let ctx = crate::runtime::test_ctx();
+        let mut app = WheelFake::default();
+        assert!(!app.handles_close_request(), "no opt-in by default: the close control acts as before");
+        assert!(app.close_requested(&ctx));
+        assert!(!ctx.windows().main_shown());
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowClose { id: 0 }]);
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::CloseRequest, 0.0), None, "the run loop handles CloseRequest");
+    }
+
+    /// The red light of an extra window of an opted-in app arrives as `WindowCloseRequest`; the default answer closes that
+    /// window (and tells `window_closed`) and never the main one.
+    #[test]
+    fn the_default_answer_to_an_extra_window_close_request_closes_that_window() {
+        use crate::App;
+        let ctx = crate::runtime::test_ctx();
+        let mut app = WheelFake::default();
+        let id = ctx.open_window(WindowSpec::new("Ada", 480.0, 560.0)).unwrap();
+        ctx.take_sent();
+        assert!(!app.window_close_requested(&ctx, WindowId::MAIN), "the main window has its own request");
+        assert!(ctx.take_sent().is_empty());
+        app.window_close_requested(&ctx, id);
+        assert!(ctx.windows().get(id).is_none(), "the window is closed");
+        assert_eq!(ctx.take_sent(), vec![ToShell::WindowClose { id: id.0 }]);
+        assert!(!app.window_close_requested(&ctx, id), "a window that is gone is ignored");
+        assert_eq!(deliver_window(&mut app, &ctx, &ToApp::WindowCloseRequest { id: id.0 }, 0.0), None, "the run loop handles it");
     }
 
     #[test]

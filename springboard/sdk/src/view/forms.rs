@@ -1,9 +1,9 @@
 //! More control views: Checkbox, Stepper, ProgressIndicator, TextField, PopUpButton and the grouped Form / Section.
 //! Same rules as `controls.rs`: named colours from render ui.rs, `MAC_*_PT` text sizes, `ui.pt()` for every length.
-use super::controls::{draw_text, focus_ring, is_activate, node};
+use super::controls::{centred_baselines, draw_text, focus_ring, is_activate, node};
 use super::{blit, TextInputInfo, View, ViewBase, ViewEvent};
 use crate::kit::clipboard;
-use crate::kit::ui::{Weight, CARD_BG, CONTROL_PRESSED, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, TINT, TRACK_C, WHITE};
+use crate::kit::ui::{Weight, CARD_BG, CONTROL_PRESSED, FIELD_BG, HAIRLINE_C, LABEL, LABEL_2, LABEL_3, SEPARATOR_C, accent_now, TRACK_C, WHITE};
 use crate::kit::{Event, Ui};
 use bifrost_render::canvas::{Canvas, RectF};
 use crate::layout::ROW_PT;
@@ -17,6 +17,8 @@ use bifrost_ui::text::{extend_unit, key_action, ClickCounter, EditCommand, KeyAc
 use bifrost_ui::{values, Command, Node, Rect, Role};
 use std::f32::consts::PI;
 
+/// The line box a text field centres in its frame: the text image's top sits half of this above the middle, in points.
+const TEXT_LINE_PT: f32 = 16.0;
 /// `NativeButton` checkbox box edge, in points.
 const CHECKBOX_PT: f32 = 14.0;
 const CHECKBOX_RADIUS_PT: f32 = 4.0;
@@ -91,13 +93,16 @@ impl View for Checkbox {
     fn intrinsic(&self, ui: &Ui) -> (f32, f32) {
         (CHECKBOX_PT + SPACE_S + ui.measure(&self.label, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0), ROW_PT)
     }
+    fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
+        centred_baselines(ui, MAC_BODY_PT, self.base.frame)
+    }
     fn accepts_first_responder(&self) -> bool {
         true
     }
     fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let f = self.base.frame;
         let b = Rect { x: f.x, y: f.y + (f.h - CHECKBOX_PT) / 2.0, w: CHECKBOX_PT, h: CHECKBOX_PT };
-        let fill = if self.checked && self.base.enabled { TINT } else if self.pressed { CONTROL_PRESSED.now() } else { FIELD_BG.now() };
+        let fill = if self.checked && self.base.enabled { accent_now() } else if self.pressed { CONTROL_PRESSED.now() } else { FIELD_BG.now() };
         s.fill_rrect(RectF::new(ui.pt(b.x), ui.pt(b.y), ui.pt(b.w), ui.pt(b.h)), ui.pt(CHECKBOX_RADIUS_PT), fill);
         if !self.checked {
             s.stroke_rrect(RectF::new(ui.pt(b.x), ui.pt(b.y), ui.pt(b.w), ui.pt(b.h)), ui.pt(CHECKBOX_RADIUS_PT), ui.pt(1.0).max(1.0), HAIRLINE_C.now());
@@ -306,7 +311,7 @@ impl View for ProgressIndicator {
                 s.fill_rrect(RectF::new(ui.pt(track.x), ui.pt(track.y), ui.pt(track.w), ui.pt(track.h)), ui.pt(BAR_H_PT / 2.0), TRACK_C.now());
                 let fill = self.model.filled(track, self.t, BAR_PERIOD_S);
                 if fill.w > 0.0 {
-                    s.fill_rrect(RectF::new(ui.pt(fill.x), ui.pt(fill.y), ui.pt(fill.w), ui.pt(fill.h)), ui.pt(BAR_H_PT / 2.0), TINT);
+                    s.fill_rrect(RectF::new(ui.pt(fill.x), ui.pt(fill.y), ui.pt(fill.w), ui.pt(fill.h)), ui.pt(BAR_H_PT / 2.0), accent_now());
                 }
             }
             ProgressStyle::Spinning => {
@@ -520,6 +525,11 @@ impl View for TextField {
     fn intrinsic(&self, _ui: &Ui) -> (f32, f32) {
         (0.0, ROW_PT)
     }
+    /// The text image's top is half of `TEXT_LINE_PT` above the field's middle (see `draw`).
+    fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
+        let b = (self.base.frame.h - TEXT_LINE_PT) / 2.0 + ui.image_baseline(MAC_BODY_PT);
+        Some((b, b))
+    }
     fn accepts_first_responder(&self) -> bool {
         true
     }
@@ -527,7 +537,7 @@ impl View for TextField {
         let Rect { x, y, w, h } = self.base.frame;
         let focused = self.base.focused;
         bifrost_ui::ax::record(Role::TextField, &self.placeholder, self.text(), self.base.frame, true);
-        s.fill_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(FIELD_RADIUS_PT), if focused { TINT } else { FIELD_BG.now() });
+        s.fill_rrect(RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h)), ui.pt(FIELD_RADIUS_PT), if focused { accent_now() } else { FIELD_BG.now() });
         if focused {
             s.fill_rrect(RectF::new(ui.pt(x + 1.), ui.pt(y + 1.), ui.pt(w - 2.), ui.pt(h - 2.)), ui.pt(FIELD_RADIUS_PT - 1.), FIELD_BG.now());
         }
@@ -557,7 +567,7 @@ impl View for TextField {
             b = n;
         }
         let end = b;
-        let (left, top) = (ui.pt(x + FIELD_INSET_PT), ui.pt(y + (h - 16.) / 2.));
+        let (left, top) = (ui.pt(x + FIELD_INSET_PT), ui.pt(y + (h - TEXT_LINE_PT) / 2.));
         let px = |m: &Vec<(usize, f32)>, at: usize| ui.pt(m.iter().rev().find(|(k, _)| *k <= at).map(|(_, v)| *v).unwrap_or(0.0));
         let sel = buf.selection();
         let marked = buf.marked_range();
@@ -597,7 +607,7 @@ impl View for TextField {
             }
         }
         if focused && sel.is_empty() {
-            s.fill_rrect(RectF::new(left + px(&marks, caret), top, ui.pt(1.), ui.pt(17.)), 0., TINT);
+            s.fill_rrect(RectF::new(left + px(&marks, caret), top, ui.pt(1.), ui.pt(17.)), 0., accent_now());
         }
         self.start = start;
         self.marks = marks;
@@ -836,6 +846,9 @@ impl View for PopUpButton {
     fn intrinsic(&self, ui: &Ui) -> (f32, f32) {
         let w = self.items.iter().map(|t| ui.measure(t, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0)).fold(0.0, f32::max);
         (w + SPACE_XL + SPACE_L, MENU_ROW_PT)
+    }
+    fn baselines(&self, ui: &Ui) -> Option<(f32, f32)> {
+        centred_baselines(ui, MAC_BODY_PT, self.base.frame)
     }
     fn accepts_first_responder(&self) -> bool {
         true

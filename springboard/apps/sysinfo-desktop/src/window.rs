@@ -825,7 +825,7 @@ impl SysInfo {
             }
             items.push(SidebarItem::section(SECTION_BASE as u32 + section.index() as u32, section.title(), self.is_collapsed(section)));
             for category in cats {
-                items.push(SidebarItem::row(ROW_BASE as u32 + category.index() as u32, category.title()).with_symbol(category.symbol()));
+                items.push(SidebarItem::row(ROW_BASE as u32 + category.index() as u32, category.title()));
             }
         }
         let mut list = SourceList::new(items, ROW_PT, HEAD_PT);
@@ -1227,6 +1227,15 @@ mod tests {
         assert!(!w.scroll_by(-10.0), "already at the top");
         assert_eq!(w.max_scroll(), 0.0, "a short list does not scroll");
         assert!(!w.scroll_by(STEP_PT));
+    }
+
+    #[test]
+    fn no_sidebar_row_has_a_symbol_so_the_list_is_uniform() {
+        // the symbol set draws only some of the names, and stock System Information has no sidebar icons
+        let w = SysInfo::new();
+        let rows: Vec<_> = w.sidebar().items.iter().filter(|i| matches!(i, SidebarItem::Row { .. })).cloned().collect();
+        assert!(!rows.is_empty());
+        assert!(rows.iter().all(|i| matches!(i, SidebarItem::Row { symbol: None, .. })));
     }
 
     #[test]

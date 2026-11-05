@@ -65,7 +65,7 @@ fn skip_probe(url: &str) -> bool {
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::controls::Rect;
 use bifrost_app::glyphs;
-use bifrost_app::kit::ui::{Weight, CAPSULE_SHADOW, CARD_BG, DESTRUCTIVE, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEPARATOR_C, TINT};
+use bifrost_app::kit::ui::{Weight, CAPSULE_SHADOW, CARD_BG, DESTRUCTIVE, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, ROW_PRESSED, SEPARATOR_C, accent_now};
 use bifrost_app::kit::{Surface, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::webview::WebViewId;
@@ -81,6 +81,11 @@ const BTN_PT: f32 = 24.0;
 const ICON_PT: f32 = 28.0;
 const ARROW_PT: f32 = 7.0;
 const FOOT_PT: f32 = 28.0;
+
+/// Row glyph buttons and the "Clear" text follow the user's accent.
+fn button_color() -> u32 {
+    accent_now()
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum State {
@@ -580,17 +585,17 @@ impl Downloads {
                 let (x, y, w) = (ui.pt(tx), ui.pt(row.y + 43.0), room);
                 let h = ui.pt(3.0).max(1.0);
                 s.fill_rrect(x, y, w, h, h / 2.0, ROW_PRESSED.now());
-                s.fill_rrect(x, y, (w * it.fraction()).max(h), h, h / 2.0, TINT);
+                s.fill_rrect(x, y, (w * it.fraction()).max(h), h, h / 2.0, accent_now());
             }
             let glyph = if it.state == State::Active { "xmark" } else { "magnifyingglass" };
-            glyphs::glyph(s, ui, glyph, self.button_rect(wpt, i), TINT);
+            glyphs::glyph(s, ui, glyph, self.button_rect(wpt, i), button_color());
             if i + 1 < shown {
                 s.fill_rect(ui.pt(tx) as usize, ui.pt(row.y + row.h) as usize, ui.pt(row.x + row.w - PAD_PT - tx) as usize, 1, SEPARATOR_C.now());
             }
         }
         let c = self.clear_rect(wpt);
         s.fill_rect(ui.pt(c.x) as usize, ui.pt(c.y) as usize, ui.pt(c.w) as usize, 1, SEPARATOR_C.now());
-        let img = ui.text("Clear", MAC_SUBHEAD_PT, Weight::Regular, TINT);
+        let img = ui.text("Clear", MAC_SUBHEAD_PT, Weight::Regular, button_color());
         s.blit(&img, ui.pt(c.x + c.w / 2.0) as i32 - img.w as i32 / 2, ui.pt(c.y + c.h / 2.0) as i32 - img.h as i32 / 2, 255, 255);
     }
 }
@@ -598,6 +603,16 @@ impl Downloads {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_app::kit::appearance::Accent;
+    use bifrost_app::kit::ui::TINT;
+
+    #[test]
+    fn row_buttons_follow_the_chosen_accent_not_system_blue() {
+        // The accent is process-wide: the crate's shared lock keeps other accent tests out.
+        let (c, green) = crate::tokens::with_accent(Accent::Green, || (button_color(), accent_now()));
+        assert_eq!(c, green);
+        assert_ne!(c, TINT);
+    }
 
     #[test]
     fn displayable_types() {

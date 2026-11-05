@@ -8,7 +8,7 @@
 use super::cache::TextCache;
 use super::camera::{fit, Worker, POLL_MS, PREVIEW_MAX_W};
 use super::switcher::draw_scaled;
-use super::ui::{home_zone, Ui, Weight, BLACK, FILL, FILL_PRESSED, SECONDARY, SYSTEM_YELLOW, TINT, TRACK, WHITE};
+use super::ui::{home_zone, Ui, Weight, BLACK, FILL, FILL_PRESSED, SECONDARY, SYSTEM_YELLOW, accent_now, TRACK, WHITE};
 use super::Event;
 use crate::gfx::{pack, Image, Surface};
 use crate::layout::Rect;
@@ -130,8 +130,13 @@ impl Magnifier {
     /// Opens the first camera when the app comes on screen.
     pub fn resume(&mut self) {
         if self.state == State::Idle {
-            self.worker = Some(Worker::spawn(v4l2::probe().into_iter().next().map(|c| c.path).unwrap_or_default()));
-            self.state = State::Live;
+            match v4l2::probe().into_iter().next() {
+                Some(c) => {
+                    self.worker = Some(Worker::spawn(c.path));
+                    self.state = State::Live;
+                }
+                None => self.state = State::Unavailable("No camera found".into()),
+            }
             self.frozen = false;
             self.dirty = true;
         }
@@ -363,7 +368,7 @@ impl Magnifier {
         let ty = sy + (sh - th) / 2.0;
         let frac = (self.zoom - ZOOM_MIN) / (ZOOM_MAX - ZOOM_MIN);
         s.fill_rrect(tx, ty, tw, th, RADIUS, TRACK);
-        s.fill_rrect(tx, ty, tw * frac, th, RADIUS, TINT);
+        s.fill_rrect(tx, ty, tw * frac, th, RADIUS, accent_now());
         let k = ui.pt(28.0);
         s.fill_rrect(tx + tw * frac - k / 2.0, sy + (sh - k) / 2.0, k, k, RADIUS, WHITE);
         let zoom_text = format!("{:.1}×", self.zoom);
@@ -376,7 +381,7 @@ impl Magnifier {
             let r = self.filter_rect(ui, i);
             let on = self.filter == Filter::ALL[i];
             if on {
-                s.fill_rrect(r.0 + ui.pt(2.0), r.1 + ui.pt(2.0), r.2 - ui.pt(4.0), r.3 - ui.pt(4.0), RADIUS, TINT);
+                s.fill_rrect(r.0 + ui.pt(2.0), r.1 + ui.pt(2.0), r.2 - ui.pt(4.0), r.3 - ui.pt(4.0), RADIUS, accent_now());
             }
             self.label(s, ui, Filter::ALL[i].label(), 15.0, WHITE, r);
         }
@@ -444,5 +449,12 @@ mod tests {
         assert!(!m.streaming());
         assert!(m.describe().contains("magnifier_state=idle"));
         assert!(m.next_wake(0.0).is_none());
+    }
+
+    #[test]
+    fn start_errors_are_plain_language() {
+        let why = crate::shell::camera::describe_error("No such file or directory (os error 2)");
+        assert_eq!(why, "No camera found");
+        assert!(!crate::shell::camera::describe_error("weird (os error 5)").contains("os error"));
     }
 }

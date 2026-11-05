@@ -303,6 +303,7 @@ impl Shell {
             Some((super::Anim::Unlock { to, .. }, _)) if to >= 1.0 => {
                 self.screen = Screen::Home;
                 self.wallpaper_owed();
+                self.desk_restack_after_unlock();
             }
             _ => {}
         }
@@ -719,7 +720,7 @@ mod tests {
     fn a_new_wallpaper_is_covered_for_landscape_too() {
         let mut sh = shell();
         landscape(&mut sh, 1000.0);
-        let px: &'static [u32] = Box::leak(vec![pack(200, 40, 40, 255); 1200 * 1920].into_boxed_slice());
+        let px: &'static [u32] = crate::test_support::solid(1200, 1920, pack(200, 40, 40, 255));
         sh.set_wallpaper(View { w: 1200, h: 1920, px });
         assert_eq!(sh.wallpaper().px[1920 * 600 + 960], pack(200, 40, 40, 255));
         assert_eq!((sh.wallpaper().w, sh.wallpaper().h), (1920, 1200));

@@ -94,7 +94,8 @@ impl Calendar {
 
     /// Initial offset showing the start of the day (8 AM unless the setting says otherwise) at the top.
     pub(super) fn scroll_to_morning(&mut self, ui: &Ui) {
-        self.scroll.jump_to(ui.pt(self.prefs.day_start as f32 * self.prefs.hour_h));
+        // the hour label is centred on its line: the line sits a space below the all-day band, or the label's top half hides under it
+        self.scroll.jump_to(ui.pt(self.prefs.day_start as f32 * self.prefs.hour_h - SPACE_S));
     }
 
     /// View > Zoom In / Zoom Out: changes the hour height one step and keeps the same time of day at the top of the grid.
@@ -113,10 +114,11 @@ impl Calendar {
 
     /// Steps by the active view's unit.
     pub(super) fn step_view(&mut self, dir: i32) {
+        let month = self.month_date();
         self.selected = match self.view {
             View::Day => self.selected.shift_days(dir),
             View::Week => self.selected.shift_days(7 * dir),
-            View::Month => self.selected.shift_months(dir),
+            View::Month => month.shift_months(dir),
             View::Year => self.selected.shift_months(12 * dir),
         };
     }
@@ -307,6 +309,11 @@ impl Calendar {
                 let Some((_, title, minute, all_day)) = by_id.iter().find(|e| e.0 == id) else {
                     continue;
                 };
+                // the event a click selected is ringed in the tint: Delete and Backspace remove it
+                if self.picked == Some(id) {
+                    let ring = ui.pt(SPACE_XXS);
+                    g.fill_rrect(x - ring, y - ring, rw + 2.0 * ring, rh + 2.0 * ring, ui.pt(SPACE_XS) + ring, bifrost_app::kit::ui::accent_now());
+                }
                 g.fill_rrect(x, y, rw, rh, ui.pt(SPACE_XS), FIELD_BG.now());
                 g.fill_rrect(x, y, ui.pt(SPACE_XS), rh, ui.pt(SPACE_XS) / 2.0, self.event_colour(id));
                 let text_w = rw - ui.pt(SPACE_M);

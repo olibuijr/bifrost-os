@@ -114,26 +114,56 @@ bifrost_pam_wayvnc() {
 }
 
 # The public key that signs this repository (packaging/arch/keys): imported into pacman's keyring and signed locally, so a
-# signed repository is trusted under SigLevel TrustedOnly. Idempotent; a missing key or keyring is not an error.
+# signed repository is trusted. Idempotent. Returns 0 only when the key is in the keyring and locally signed, so the caller
+# can tell; a missing key or keyring is not an error for the package itself.
 bifrost_repo_key() {
     key=/usr/share/bifrost/keys/bifrost-repo.gpg
-    [ -f "$key" ] || return 0
-    command -v pacman-key >/dev/null 2>&1 || return 0
-    pacman-key --add "$key" >/dev/null 2>&1 || return 0
+    [ -f "$key" ] || return 1
+    command -v pacman-key >/dev/null 2>&1 || return 1
+    pacman-key --add "$key" >/dev/null 2>&1 || return 1
     fpr=$(gpg --batch --with-colons --import-options show-only --import "$key" 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}')
     [ -n "$fpr" ] && pacman-key --lsign-key "$fpr" >/dev/null 2>&1
+}
+
+# Machines installed before the repository was signed carry a [bifrost] section that does not require signatures. Once this
+# package has put the key into the keyring, the section is switched to Required DatabaseRequired, so the NEXT update is
+# verified. This update itself was accepted under the old setting, which is why the key ships in a package and the switch
+# happens in its scriptlet. Idempotent; a section without a SigLevel line gets one; other sections are left alone.
+# BIFROST_PACMAN_CONF is for tests.
+bifrost_repo_siglevel() {
+    conf=${BIFROST_PACMAN_CONF:-/etc/pacman.conf}
+    [ -f "$conf" ] || return 0
+    tmp=$(mktemp) || return 0
+    awk -v lvl="Required DatabaseRequired" '
+        function flush() { if (inb && !done) print "SigLevel = " lvl }
+        /^[ \t]*\[.*\][ \t]*$/ { flush(); inb = ($0 ~ /^[ \t]*\[bifrost\][ \t]*$/); done = 0 }
+        inb && /^[ \t]*SigLevel[ \t]*=/ { if (!done) print "SigLevel = " lvl; done = 1; next }
+        { print }
+        END { flush() }
+    ' "$conf" > "$tmp" && ! cmp -s "$tmp" "$conf" && cat "$tmp" > "$conf"
+    rm -f "$tmp"
+    return 0
+}
+
+# Key first, then the stricter setting: without the key in the keyring a Required repository could not be updated at all.
+bifrost_repo_trust() {
+    if bifrost_repo_key; then
+        bifrost_repo_siglevel
+    else
+        echo "BifrOSt: the repository key could not be imported; [bifrost] in /etc/pacman.conf keeps its signature setting." >&2
+    fi
     return 0
 }
 
 post_install() {
-    bifrost_repo_key
+    bifrost_repo_trust
     bifrost_pam_wayvnc
     bifrost_post_update
     echo "BifrOSt: run 'systemctl enable springboard.service && systemctl set-default graphical.target'"
 }
 
 post_upgrade() {
-    bifrost_repo_key
+    bifrost_repo_trust
     bifrost_pam_wayvnc
     bifrost_post_update
     echo "BifrOSt: apply the update through Settings > Software Update."

@@ -34,9 +34,11 @@ impl App for LocateApp {
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
-        let h = ctx.cfg.h as f32 / ctx.ui.pt(1.0); // the sidebar is measured in points
+        let scale = ctx.ui.pt(1.0).max(0.001);
+        let h = ctx.cfg.h as f32 / scale; // the sidebar is measured in points
         match ev {
             Input::Touch { kind: TouchKind::Down, x, y, .. } => {
+                let (x, y) = (x / scale, y / scale); // touches arrive in pixels, the layout is in points
                 if let Some(section) = self.w.section_at(x, y, h) {
                     self.w.panel.select(section);
                     return true;

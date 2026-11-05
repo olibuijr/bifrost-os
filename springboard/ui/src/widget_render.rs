@@ -50,9 +50,102 @@ pub fn tint(color: Rgba, accentable: bool, accent: Rgba, mode: RenderingMode) ->
     }
 }
 
+/// The colour a widget fills its container with (the reference `containerBackground(_:for: .widget)` given a colour).
+/// A fixed set of system colours, so the shell resolves each to its named constant for the appearance in effect.
+/// Red is left out: in BifrOSt red marks destructive actions (and the calendar's today), never a widget's fill.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ContainerTint {
+    Orange,
+    Yellow,
+    Green,
+    Mint,
+    Teal,
+    Cyan,
+    Blue,
+    Indigo,
+    Purple,
+    Pink,
+    Brown,
+    Gray,
+}
+
+impl ContainerTint {
+    /// Every tint, in the order of the system colour list.
+    pub const ALL: [ContainerTint; 12] = [
+        ContainerTint::Orange,
+        ContainerTint::Yellow,
+        ContainerTint::Green,
+        ContainerTint::Mint,
+        ContainerTint::Teal,
+        ContainerTint::Cyan,
+        ContainerTint::Blue,
+        ContainerTint::Indigo,
+        ContainerTint::Purple,
+        ContainerTint::Pink,
+        ContainerTint::Brown,
+        ContainerTint::Gray,
+    ];
+
+    /// The name an app sends for the tint.
+    pub fn key(self) -> &'static str {
+        match self {
+            ContainerTint::Orange => "orange",
+            ContainerTint::Yellow => "yellow",
+            ContainerTint::Green => "green",
+            ContainerTint::Mint => "mint",
+            ContainerTint::Teal => "teal",
+            ContainerTint::Cyan => "cyan",
+            ContainerTint::Blue => "blue",
+            ContainerTint::Indigo => "indigo",
+            ContainerTint::Purple => "purple",
+            ContainerTint::Pink => "pink",
+            ContainerTint::Brown => "brown",
+            ContainerTint::Gray => "gray",
+        }
+    }
+
+    /// The tint named `key` (case and surrounding space ignored); `grey` is `gray`.
+    pub fn from_key(key: &str) -> Option<ContainerTint> {
+        let k = key.trim().to_ascii_lowercase();
+        let k = if k == "grey" { "gray".to_string() } else { k };
+        ContainerTint::ALL.iter().copied().find(|t| t.key() == k)
+    }
+
+    /// The text on the tint is light: every system colour is dark enough for white text except yellow and mint,
+    /// whose light faces take dark text (luminance of the reference light values above 160).
+    pub fn wants_light_text(self) -> bool {
+        !matches!(self, ContainerTint::Yellow | ContainerTint::Mint)
+    }
+}
+
+/// Whether the widget's container background is drawn in `mode`. The reference removes it in the accented and
+/// vibrant modes, where the widget sits on the system's own material and only its content is tinted.
+pub fn shows_container_background(mode: RenderingMode) -> bool {
+    mode == RenderingMode::FullColor
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_container_tint_is_named_by_its_key() {
+        for t in ContainerTint::ALL {
+            assert_eq!(ContainerTint::from_key(t.key()), Some(t));
+        }
+        assert_eq!(ContainerTint::from_key(" Blue "), Some(ContainerTint::Blue));
+        assert_eq!(ContainerTint::from_key("grey"), Some(ContainerTint::Gray));
+        assert_eq!(ContainerTint::from_key("chartreuse"), None);
+        assert_eq!(ContainerTint::from_key("red"), None, "red is kept for destructive actions");
+        assert!(!ContainerTint::Yellow.wants_light_text() && ContainerTint::Blue.wants_light_text());
+    }
+
+    #[test]
+    fn the_container_background_is_only_drawn_in_full_colour() {
+        assert!(shows_container_background(RenderingMode::FullColor));
+        assert!(!shows_container_background(RenderingMode::Accented));
+        assert!(!shows_container_background(RenderingMode::Vibrant));
+    }
 
     const BLUE: Rgba = Rgba(10, 132, 255, 255);
     const WHITE: Rgba = Rgba(255, 255, 255, 255);

@@ -1065,7 +1065,12 @@ fn draw_image(s: &mut Surface, img: ImageRef<'_>, dst: RectF, alpha: f32, tint: 
     let a = (alpha.clamp(0.0, 1.0) * 255.0).round() as u32;
     let scaled = if img.image.w == w && img.image.h == h { None } else { Some(img.image.resized(w, h)) };
     let src: &Image = scaled.as_ref().unwrap_or(img.image);
-    run(s, &st, dst, map, false, false, &|s, o| {
+    // A keep-alpha glyph changes the pixels under it instead of painting over them, so under a clip or an opacity its
+    // scratch starts from the destination and is copied back by the clip's coverage (as a material is); on an empty
+    // scratch it would blend into transparent black and vanish (vibrant sidebar labels inside a rows clip). An affine
+    // map's scratch is in local space and cannot hold the backdrop, so it keeps the source-over route.
+    let keep = matches!(tint, Some((_, true))) && matches!(map, Map::Trans(..));
+    run(s, &st, dst, map, keep, keep, &|s, o| {
         let x = (dst.x + o.0).round() as i32;
         let y = (dst.y + o.1).round() as i32;
         match tint {
@@ -1230,6 +1235,25 @@ mod tests {
         assert_eq!(px[0], WHITE);
         assert_eq!(px[4], 0);
         assert_eq!(px[4 * 10], 0);
+    }
+
+    #[test]
+    fn keep_alpha_glyph_draws_inside_a_clip() {
+        fresh();
+        // a translucent grey material, a white glyph mask blended in keeping alpha, clipped to the left half
+        let tint = 0xc0_30_30_30u32;
+        let mut px = vec![tint; 8 * 4];
+        let img = Image { w: 8, h: 4, px: vec![0xff00_0000; 8 * 4] };
+        {
+            let mut s = surf(&mut px, 8, 4);
+            s.push_clip(RectF::new(0.0, 0.0, 4.0, 4.0), 0.0);
+            Canvas::image_tinted_keep_alpha(&mut s, ImageRef { id: 7, image: &img }, RectF::new(0.0, 0.0, 8.0, 4.0), 0xd9ff_ffff);
+            s.pop_clip();
+        }
+        let inside = px[8 + 1];
+        assert_eq!(inside >> 24, tint >> 24, "the material's alpha is kept under the glyph");
+        assert!((inside & 255) > (tint & 255) + 60, "the glyph has ink inside the clip: {inside:#x}");
+        assert_eq!(px[8 + 6], tint, "outside the clip the material is untouched");
     }
 
     #[test]

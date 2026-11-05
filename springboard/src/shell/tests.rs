@@ -2,43 +2,22 @@
     use crate::font::Font;
 
     pub fn ui() -> Ui {
-        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let data: &'static [u8] = crate::test_support::sfui();
         let mut ui = Ui::new(Font::parse(data).unwrap(), 1200.0 / 768.0);
-        ui.symbols = crate::symbols::Symbols::load(concat!(env!("CARGO_MANIFEST_DIR"), "/assets"));
+        // what `Symbols::load` of the assets folder finds, from the shared copy: a fresh mapping per call is never unmapped
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/assets");
+        let fonts = crate::symbols::FONT_FILES
+            .iter()
+            .filter(|f| std::path::Path::new(&format!("{dir}/{f}")).exists())
+            .filter_map(|f| Font::parse(crate::test_support::asset(*f)))
+            .collect();
+        ui.symbols = crate::symbols::Symbols::new(fonts);
         ui
     }
 
     #[cfg(test)]
     pub(crate) fn shell() -> Shell {
         shell_sized(1200, 1920)
-    }
-
-    /// For a test of the shell placing windows itself (tiling): with the window server's variable set, the compositor owns
-    /// window positions and a tile is only queued as a request (`compositor_places_windows`). The guard holds the
-    /// crate-wide test lock, so no parallel test has the variable set meanwhile, and puts the variable back when dropped.
-    #[cfg(feature = "desktop-wayland")]
-    pub(crate) struct ShellPlacesWindows {
-        saved: Option<std::ffi::OsString>,
-        _lock: std::sync::MutexGuard<'static, ()>,
-    }
-
-    #[cfg(feature = "desktop-wayland")]
-    impl ShellPlacesWindows {
-        pub(crate) fn new() -> Self {
-            let lock = crate::test_support::global_lock();
-            let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
-            std::env::remove_var("SPRINGBOARD_WAYLAND");
-            ShellPlacesWindows { saved, _lock: lock }
-        }
-    }
-
-    #[cfg(feature = "desktop-wayland")]
-    impl Drop for ShellPlacesWindows {
-        fn drop(&mut self) {
-            if let Some(v) = self.saved.take() {
-                std::env::set_var("SPRINGBOARD_WAYLAND", v);
-            }
-        }
     }
 
     /// A shell in desktop mode (menu bar, dock, windows).
@@ -53,11 +32,12 @@
     }
 
     fn build(w: usize, h: usize, desktop: bool) -> Shell {
-        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUI.ttf")).unwrap().into_boxed_slice());
-        let px: &'static [u32] = Box::leak(vec![rgba(20, 20, 30, 255); w * h].into_boxed_slice());
+        let data: &'static [u8] = crate::test_support::sfui();
+        // shared per size: the wallpaper is read only, and a fresh full-screen copy per shell was never freed
+        let px: &'static [u32] = crate::test_support::solid(w, h, rgba(20, 20, 30, 255));
         let wp = View { w, h, px };
         let info = Info { hour: 9, min: 41, wday: 2, mday: 6, mon: 0, battery: 80, brightness: 0.5, ..Info::default() };
-        let mono: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUIMono.ttf")).unwrap().into_boxed_slice());
+        let mono: &'static [u8] = crate::test_support::sfui_mono();
         let mut sh = Shell::new(w as i32, h as i32, Font::parse(data).unwrap(), mono, wp, |_, _| None, info);
         // `Shell::new` starts in desktop mode; the default test shell is the bifrost presentation (no desk) that most
         // tests were written for. Tests of the desktop use `desktop_shell()`.
@@ -69,7 +49,39 @@
         sh.form = if desktop { bifrost_ui::form_factor::FormFactor::Desktop } else { bifrost_ui::form_factor::FormFactor::Tablet };
         // the keyboard client starts out shown; the shell raises it when a field asks, so start every test from down
         sh.keyboard.set_shown(false, 0.0);
+        // not a client of the window server unless a test says so (`sh.wayland = true`), whatever the environment
+        sh.wayland = false;
         sh
+    }
+
+    /// The built-in windows read what produced the touch they handle (`bifrost_ui::pan`): a mouse press is the pointer's,
+    /// a press made while a touchscreen finger is down is that finger's, and the drag emulated for a wheel notch a
+    /// shell surface did not take is a scroll, so a finger's.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_shell_tells_its_scrollers_whether_a_mouse_or_a_finger_pressed() {
+        use crate::bare::input::TouchPhase;
+        use bifrost_ui::pan::{source, TouchSource::{Finger, Pointer}};
+        let mut sh = desktop_shell();
+        let run = |sh: &mut Shell, t: f64| -> [bifrost_ui::pan::TouchSource; 3] {
+            let mut seen = [Finger; 3];
+            for (i, ev) in [Event::Down(600.0, 600.0), Event::Move(600.0, 500.0), Event::Up(600.0, 500.0)].into_iter().enumerate() {
+                sh.event(ev, t + i as f64 * 16.0);
+                seen[i] = source();
+            }
+            seen
+        };
+        assert_eq!(run(&mut sh, 1000.0), [Pointer; 3], "a mouse drag");
+        sh.ext_contact(4, TouchPhase::Down, 600.0, 600.0, 2000.0, true);
+        sh.event(Event::Down(600.0, 600.0), 2000.0);
+        sh.ext_contact(4, TouchPhase::Up, 600.0, 500.0, 2016.0, true);
+        sh.event(Event::Move(600.0, 500.0), 2016.0);
+        sh.event(Event::Up(600.0, 500.0), 2032.0);
+        assert_eq!(source(), Finger, "a finger's drag stays a finger's to its release");
+        assert_eq!(run(&mut sh, 3000.0), [Pointer; 3], "and the next mouse press is the pointer's again");
+        sh.desk_wheel(4000.0);
+        assert_eq!(run(&mut sh, 4000.0), [Finger; 3], "the drag emulated for a wheel notch");
+        assert_eq!(run(&mut sh, 4100.0), [Pointer; 3], "and only that drag");
     }
 
     #[cfg(feature = "desktop-wayland")]
@@ -77,10 +89,10 @@
     fn the_menu_bar_text_turns_dark_over_a_light_wallpaper() {
         let mut sh = desktop_shell();
         let (w, h) = (sh.w as usize, sh.h as usize);
-        let light: &'static [u32] = Box::leak(vec![rgba(240, 236, 228, 255); w * h].into_boxed_slice());
+        let light: &'static [u32] = crate::test_support::solid(w, h, rgba(240, 236, 228, 255));
         sh.set_wallpaper(View { w, h, px: light });
         assert_eq!(sh.bar_ink().text, super::ui::BAR_TEXT_ON_LIGHT, "dark text on a light sky");
-        let dark: &'static [u32] = Box::leak(vec![rgba(20, 24, 30, 255); w * h].into_boxed_slice());
+        let dark: &'static [u32] = crate::test_support::solid(w, h, rgba(20, 24, 30, 255));
         sh.set_wallpaper(View { w, h, px: dark });
         assert_eq!(sh.bar_ink().text, super::ui::BAR_TEXT, "white text on a dark wallpaper");
     }
@@ -487,15 +499,17 @@
         assert!(sh.menu_row_texts(Menu::Edit)[2].is_empty(),"Edit: Undo, Redo | Cut ...");
     }
 
-    /// Native Linux windows are listed in the Window menu (the front one checked); choosing one activates it.
+    /// The front native Linux app's windows are listed in the Window menu (the front one checked, an untitled one by its
+    /// app id); another app's windows are not (E2E N2); choosing one activates it.
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn window_menu_lists_native_linux_windows_and_activates_them() {
         use desktop_bar::Menu;
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
-        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:7,title:"Notes".into(),app_id:"x.notes".into(),active:true,maximized:false},crate::bare::wayland::ForeignWindow{id:8,title:String::new(),app_id:"x.plain".into(),active:false,maximized:false}];
+        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:7,title:"Notes".into(),app_id:"x.plain".into(),active:true,maximized:false,minimized:false},crate::bare::wayland::ForeignWindow{id:8,title:String::new(),app_id:"x.plain".into(),active:false,maximized:false,minimized:false},crate::bare::wayland::ForeignWindow{id:9,title:"Elsewhere".into(),app_id:"x.other".into(),active:false,maximized:false,minimized:false}];
         let rows=sh.menu_row_texts(Menu::Window);
         assert!(rows.contains(&"\u{2713} Notes".to_string())&&rows.contains(&"  x.plain".to_string()),"{rows:?}");
+        assert!(!rows.iter().any(|t|t.ends_with("Elsewhere")),"another app's window is not in this app's Window menu: {rows:?}");
         sh.desktop_menu=Some(Menu::Window);
         let i=rows.iter().position(|t|t.ends_with("x.plain")).unwrap();sh.desktop_menu_row=Some((Menu::Window,i));
         let fx=sh.desktop_menu_key(28,1.).unwrap();
@@ -532,7 +546,7 @@
         use desktop_bar::Menu;
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         let title="A very long document title ".repeat(20);
-        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:9,title:title.clone(),app_id:"x.long".into(),active:false,maximized:false}];
+        sh.desk.as_mut().unwrap().native_windows=vec![crate::bare::wayland::ForeignWindow{id:9,title:title.clone(),app_id:"x.long".into(),active:true,maximized:false,minimized:false}];
         let rows=sh.menu_row_texts(Menu::Window);
         let row=rows.last().unwrap();
         assert!(row.chars().count()<title.chars().count()/2,"cut: {row}");
@@ -551,7 +565,7 @@
         sh.hw_menu_key(31,true,1.); // s: Settings…
         let rows=sh.menu_row_texts(Menu::App);
         assert_eq!(sh.desktop_menu_row.map(|(_,i)|rows[i].clone()),Some("Settings\u{2026}".to_string()));
-        sh.hw_menu_key(30,true,3.); // a, after the type-ahead pause: About
+        sh.hw_menu_key(30,true,1500.); // a, after the type-ahead pause (shell time is ms): About
         assert!(sh.desktop_menu_row.map(|(_,i)|rows[i].clone()).is_some_and(|t|t.starts_with("About")));
         assert_eq!(sh.desktop_menu,Some(Menu::App),"typing keeps the menu open");
     }
@@ -810,7 +824,7 @@
     }
 
     /// The first pixel of a window's green button, for the pointer tests.
-    #[cfg(feature="desktop-wayland")]
+    #[cfg(all(test, feature="desktop-wayland"))]
     fn green_button(sh:&Shell)->(f32,f32) {
         let m=sh.desk_metrics();let d=sh.desk.as_ref().unwrap();let r=d.wins[0].r;
         for y in (r.y..r.y+80).step_by(2) {for x in (r.x..r.x+200).step_by(2) {
@@ -875,7 +889,6 @@
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn choosing_in_the_window_menu_tiles_that_window_or_takes_it_full_screen() {
-        let _placement=ShellPlacesWindows::new();
         use desktop_bar::Action;
         let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Settings,0.);
@@ -897,7 +910,6 @@
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn the_window_menu_can_tile_two_windows_side_by_side() {
-        let _placement=ShellPlacesWindows::new();
         use desktop_bar::Action;
         let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Terminal,0.);
@@ -963,11 +975,60 @@
     /// A fixture host standing for a running external app in slot 0.
     #[cfg(feature="desktop-wayland")]
     #[allow(dead_code)]
-    fn fixture_app(sh:&mut Shell)->bifrost_proto::sys::Channel{
+    pub(super) fn fixture_app(sh:&mut Shell)->bifrost_proto::sys::Channel{
         let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
         let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
         sh.ext.push(Some(host));
         theirs
+    }
+
+    /// E2E6 1: an app opened while it has drawn nothing yet (its process just started) is the front app, and the focus
+    /// the window server hands back to the window it still knows in front (Search or the Apps grid closing takes its
+    /// exclusive keyboard away) does not put that window over it. Once the app is gone, the hand-back raises as before.
+    /// Returns the front app and the screen after the hand-back.
+    #[cfg(feature="desktop-wayland")]
+    #[allow(dead_code)]
+    pub(super) fn hand_back_after_launch(sh:&mut Shell)->(Option<AppId>,Screen){
+        let id=desk::win_id(AppId::Settings).unwrap();
+        sh.wayland_window_event(crate::bare::wayland::WindowEvent::HandBack(id));
+        (sh.desk.as_ref().unwrap().front().map(|w|w.app),sh.screen)
+    }
+
+    /// A press on Settings (the window under the launching app) while the app has drawn nothing yet: the window layer
+    /// reports a press as a `Focus`, never a hand-back. Returns the front app and the screen after it.
+    #[cfg(feature="desktop-wayland")]
+    #[allow(dead_code)]
+    pub(super) fn press_below_launch(sh:&mut Shell)->(Option<AppId>,Screen){
+        let id=desk::win_id(AppId::Settings).unwrap();
+        sh.wayland_window_event(crate::bare::wayland::WindowEvent::Focus(id));
+        (sh.desk.as_ref().unwrap().front().map(|w|w.app),sh.screen)
+    }
+
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_click_on_the_window_below_a_launching_app_still_raises_it() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let _peer=fixture_app(&mut sh);
+        sh.desk_open(AppId::Settings,0.);
+        sh.desk_open(AppId::External(0),1.);
+        assert!(sh.desk_window_launching(AppId::External(0)),"the app has drawn nothing yet");
+        assert_eq!(hand_back_after_launch(&mut sh),(Some(AppId::External(0)),Screen::App(AppId::External(0))),"the hand-back is ignored");
+        assert_eq!(press_below_launch(&mut sh),(Some(AppId::Settings),Screen::App(AppId::Settings)),"the person's click raises Settings");
+    }
+
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn an_app_launched_over_the_front_window_stays_in_front_when_the_keyboard_is_handed_back() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let _peer=fixture_app(&mut sh);
+        sh.desk_open(AppId::Settings,0.);
+        // the open-app control and Files' Open With both end in `desktop_open_app`, which opens through `desk_open`
+        sh.desk_open(AppId::External(0),1.);
+        assert!(sh.desk_window_launching(AppId::External(0)),"the app has drawn nothing yet");
+        assert_eq!(hand_back_after_launch(&mut sh),(Some(AppId::External(0)),Screen::App(AppId::External(0))),"the launched app stays the front app");
+        // an app whose process is gone holds nothing: the hand-back raises the window under it
+        sh.ext[0].as_mut().unwrap().kill();
+        assert_eq!(hand_back_after_launch(&mut sh),(Some(AppId::Settings),Screen::App(AppId::Settings)));
     }
 
     /// An app that exits without the shell's `pump` seeing it (a failed send, a stall kill) takes its main and extra
@@ -1060,9 +1121,7 @@
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn a_frame_for_an_apps_pixels_alone_draws_no_shell_surface() {
-        let _lock=crate::test_support::global_lock();
-        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
-        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
+        let mut sh=shell();sh.wayland=true;sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
         let (w,h)=(sh.w as usize,sh.h as usize);
         let mut pixels=vec![0;w*h];
         // the first frame draws the desktop whole (it is what sets desk_drawn)
@@ -1087,7 +1146,6 @@
         sh.ext_frame=true;sh.dirty=true;
         sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},2000.);
         assert!(!sh.ext_frame);
-        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
 
     /// A menu, panel or overlay that is only open does not ask for frames: input and the overlays' own timers mark the
@@ -1335,6 +1393,125 @@
         assert!(l.is_empty() && l.msg == login::Msg::Wrong, "the field is cleared and says so");
     }
 
+    /// E2E N0: a lock after a login from the System menu's Lock Screen row (also the Lock Screen hot corner and
+    /// AssistiveTouch's Lock) went through `sleep_screen`, which on a desktop turned the display off: every key was
+    /// dropped, so no dot appeared and the session could not be unlocked. It now keeps the display on, opens the login
+    /// window and signs in again.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_desktop_lock_after_login_from_the_menu_can_be_unlocked() {
+        use desktop_bar::Action;
+        let mut sh = desktop_shell();
+        sh.login_backend = Some(std::sync::Arc::new(FixedLogin(login::Reply::Ok("tok2".into()))));
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.session_token = Some("tok".into());
+        let fx = sh.run_menu_action(Action::Lock, 1000.0);
+        assert!(sh.is_locked(), "the menu row locks");
+        assert!(sh.screen_on, "a desktop lock keeps the display on");
+        assert!(!fx.contains(&Effect::ScreenOff), "and never turns it off");
+        assert!(sh.session_token.is_none(), "the old token is dropped");
+        assert!(sh.login_open(), "the login window is up at once");
+        sh.hw_type(keyboard::Out::Text("p".into()), 1010.0);
+        sh.hw_type(keyboard::Out::Text("w".into()), 1020.0);
+        assert_eq!(sh.login.as_ref().map(login::Login::len), Some(2), "typing shows dots");
+        sh.hw_type(keyboard::Out::Enter, 1030.0);
+        for k in 0..200 {
+            sh.tick(1040.0 + k as f64 * 20.0);
+            if !sh.is_locked() { break; }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(!sh.is_locked(), "the right password unlocks the second lock");
+        assert_eq!(sh.session_token.as_deref(), Some("tok2"));
+    }
+
+    /// A desktop signed in, unlocked, with a login backend that takes any password, as the E2E N0 session had.
+    #[cfg(test)]
+    fn signed_in_desktop() -> Shell {
+        let mut sh = desktop_shell();
+        sh.login_backend = Some(std::sync::Arc::new(FixedLogin(login::Reply::Ok("tok2".into()))));
+        sh.screen = Screen::Home;
+        sh.anim = None;
+        sh.session_token = Some("tok".into());
+        sh
+    }
+
+    /// E2E N0, the chord path: Ctrl+Cmd+Q with one of the shell's layers that hold the keyboard up (the character viewer,
+    /// the assistant panel, the sheets' surface) left it over the lock screen, and `hw_type` returned before the lock
+    /// screen's keys: no dot, no unlock. The lock closes them and the login window takes the typing.
+    #[test]
+    fn ctrl_cmd_q_with_a_keyboard_layer_up_still_types_into_the_login_window() {
+        let mut sh = signed_in_desktop();
+        sh.char_viewer_open();
+        sh.modal_layer = Some(capture_flow::Layer::new(0, 0, Image::new(1, 1), None));
+        sh.hw_shortcut(hwkeys::Shortcut::Lock, 1000.0);
+        assert!(sh.is_locked(), "Ctrl+Cmd+Q locks");
+        assert!(sh.screen_on, "a desktop lock keeps the display on");
+        assert!(sh.char_viewer.is_none(), "the character viewer goes with the lock");
+        assert!(sh.modal_layer.is_none(), "the sheets' surface goes with the lock");
+        assert!(!sh.assistant.is_shown(), "the assistant panel goes with the lock");
+        assert!(sh.login_open(), "the login window is up at once");
+        sh.hw_type(keyboard::Out::Text("p".into()), 1010.0);
+        sh.hw_type(keyboard::Out::Text("w".into()), 1020.0);
+        assert_eq!(sh.login.as_ref().map(login::Login::len), Some(2), "typing shows dots");
+    }
+
+    /// An app's password sheet (or open or save panel, or alert) waits under the lock, as its app still expects an
+    /// answer, but the lock screen takes the keys before it: they reach the login window, never the app's field.
+    #[test]
+    fn an_apps_password_sheet_under_the_lock_leaves_the_keys_to_the_login_window() {
+        let mut sh = signed_in_desktop();
+        let sheet = wifi_page::Sheet::form(&sh.ui, sh.w, 0.0, auth_sheet::prompt_for("Notes", "unlock a note", 0));
+        sh.auth_sheet = Some(auth_sheet::AuthSheet { app: "Notes".into(), reason: "unlock a note".into(), attempt: 0, sheet });
+        sh.lock_screen();
+        sh.hw_type(keyboard::Out::Text("p".into()), 1010.0);
+        sh.hw_type(keyboard::Out::Text("w".into()), 1020.0);
+        assert_eq!(sh.login.as_ref().map(login::Login::len), Some(2), "the login window gets the typing");
+        assert!(sh.auth_sheet.is_some(), "the app's sheet is still there for after the unlock");
+    }
+
+    /// An open menu is closed by the lock, and neither the menu-key path nor Overview's keys run over the lock screen
+    /// (the binary sends keys there before `hw_type`).
+    #[test]
+    fn menus_and_overview_keys_never_run_over_the_lock_screen() {
+        let mut sh = signed_in_desktop();
+        sh.desktop_menu = Some(desktop_bar::Menu::File);
+        sh.lock_screen();
+        assert!(sh.desktop_menu.is_none(), "an open menu closes with the lock");
+        assert_eq!(sh.hw_menu_key(28, true, 1010.0), None, "Return is not a menu key on the lock screen");
+        let mods = overview::KeyMods { ctrl: false, cmd: false, shift: false };
+        assert!(!sh.hw_overview_key(overview::KEY_F3, true, mods, false, 1010.0), "F3 does not open Overview over the lock");
+        assert!(sh.login_open());
+    }
+
+    /// A locked desktop whose display went dark (idle) wakes on a key, and the key goes to the login window.
+    #[test]
+    fn a_key_wakes_a_dark_locked_desktop_into_the_login_window() {
+        let mut sh = signed_in_desktop();
+        sh.lock_screen();
+        sh.screen_on = false;
+        let fx = sh.hw_type(keyboard::Out::Text("p".into()), 1010.0);
+        assert!(sh.screen_on, "the key turns the display on");
+        assert!(fx.contains(&Effect::ScreenOn));
+        assert_eq!(sh.login.as_ref().map(login::Login::len), Some(1), "and types into the login window");
+    }
+
+    /// A lock that finds no login service says so once (`login_missing_logged`) and opens the window on a later key once
+    /// the service is there, instead of leaving the lock screen with no way in.
+    #[test]
+    fn a_lock_without_a_login_service_is_logged_and_retried_on_the_next_key() {
+        let mut sh = signed_in_desktop();
+        sh.login_backend = None;
+        sh.lock_screen();
+        assert!(!sh.login_open(), "no service, no window");
+        assert!(sh.login_missing_logged, "the failed open is logged");
+        sh.login_backend = Some(std::sync::Arc::new(FixedLogin(login::Reply::Ok("tok2".into()))));
+        sh.hw_type(keyboard::Out::Text("p".into()), 1010.0);
+        assert!(sh.login_open(), "the next key opens the window");
+        assert!(!sh.login_missing_logged);
+        assert_eq!(sh.login.as_ref().map(login::Login::len), Some(1));
+    }
+
     #[test]
     fn tablet_lock_screen_still_turns_the_screen_off() {
         let mut sh = shell();
@@ -1486,7 +1663,7 @@
     fn cmd_tab_cycles_while_held_and_raises_the_selection_on_release() {
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Settings,0.);sh.desk_open(AppId::Files,1.);
-        // Cmd+Tab is the switcher (all windows, most recent first); Cmd+` is `desk_cycle_window`
+        // Cmd+Tab is the switcher (the running apps, most recent first); Cmd+` is `desk_cycle_window`
         sh.switcher_cycle(false);
         assert_eq!(sh.desk.as_ref().unwrap().cmdtab.as_ref().map(|c|c.1),Some(1));
         let (w,h)=(sh.w as usize,sh.h as usize);let mut buf=vec![0u32;w*h];
@@ -1494,6 +1671,24 @@
         sh.cmdtab_release(3.);
         assert!(sh.desk.as_ref().unwrap().cmdtab.is_none());
         assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Settings));
+    }
+
+    /// E2E11 4: Cmd+Tab switches apps, not windows. An app showing two windows in front is one entry and the selection is
+    /// the app used before it; releasing on an app brings all of its windows forward in their own order.
+    #[test]
+    fn cmd_tab_switches_apps_when_the_front_app_owns_the_two_newest_windows() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let m=sh.desk_metrics();
+        let (main,second)=(AppId::External(3),AppId::ExternalWindow(3,1));
+        {let d=sh.desk.as_mut().unwrap();d.wins.clear();d.open(&m,AppId::Settings,(700,500));d.open(&m,main,(900,600));d.open(&m,second,(900,600));}
+        sh.switcher_cycle(false);
+        assert_eq!(sh.desk.as_ref().unwrap().cmdtab.clone(),Some((vec![main,AppId::Settings],1)),"one entry per app, the previous app selected");
+        sh.cmdtab_release(1.);
+        assert_eq!(sh.desk.as_ref().unwrap().front().map(|w|w.app),Some(AppId::Settings),"the switch happened");
+        sh.switcher_cycle(false);
+        assert_eq!(sh.desk.as_ref().unwrap().cmdtab.clone(),Some((vec![AppId::Settings,main],1)));
+        sh.cmdtab_release(2.);
+        assert_eq!(sh.desk.as_ref().unwrap().wins.iter().map(|w|w.app).collect::<Vec<_>>(),vec![AppId::Settings,main,second],"both windows came back, the second still in front");
     }
 
     /// The strip is chrome surface 13 above the windows, only while Cmd+Tab is open; it takes neither pointer nor keys.
@@ -1536,8 +1731,10 @@
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
         sh.desk_open(AppId::Files,0.);
         let m=sh.desk_metrics();
-        let r=sh.desk.as_ref().unwrap().wins[0].r;
-        let (x,y)=((r.x+m.light_x+m.light/2) as f32,(r.y+m.title/2) as f32);
+        // the centre of the drawn close light: a full-size window (the App Store here) has them over its sidebar
+        let w=sh.desk.as_ref().unwrap().wins[0];
+        let (r,lr)=(w.r,w.light_rect(&m,0));
+        let (x,y)=((lr.x+lr.w/2) as f32,(lr.y+lr.h/2) as f32);
         sh.desktop_pointer(x,y,false,1.);
         assert_eq!(sh.desk.as_ref().unwrap().lights_hover,Some(sh.desk.as_ref().unwrap().wins[0].app));
         sh.desktop_pointer(x,(r.y+m.title+40) as f32,false,2.);
@@ -1672,9 +1869,7 @@
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn a_bar_only_frame_repaints_only_the_menu_bar_band() {
-        let _lock=crate::test_support::global_lock();
-        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
-        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
+        let mut sh=shell();sh.wayland=true;sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
         let mut pixels=vec![0;sh.w as usize*sh.h as usize];
         let (w,h)=(sh.w as usize,sh.h as usize);
         // a bar-only repaint always follows a full desktop frame (it is what sets desk_drawn)
@@ -1686,7 +1881,6 @@
         let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
         assert!(!damage.is_all());assert!(damage.pixels()<=w*band,"nothing below the bar is repainted");
         assert!(pixels[..w*band]==expected[..w*band],"the bar's rows equal a desktop repaint of them");
-        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
 
     /// A window that windows in front cover keeps no cache entry on purpose; that must not make every partial desktop
@@ -1708,9 +1902,7 @@
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn a_bar_only_frame_reports_damage_for_the_changed_items_alone() {
-        let _lock=crate::test_support::global_lock();
-        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
-        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
+        let mut sh=shell();sh.wayland=true;sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.drawn=Drawn::App;
         let (w,h)=(sh.w as usize,sh.h as usize);
         let mut pixels=vec![0;w*h];
         sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},0.);
@@ -1724,15 +1916,12 @@
         assert!(!damage.is_all());
         assert_eq!(damage.pixels(),100*band,"only the changed item's rectangle");
         assert!(sh.bar_rects.is_empty(),"the rectangles belong to one frame");
-        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
 
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn review_performance_overlay_repaints_only_its_desktop_band() {
-        let _lock=crate::test_support::global_lock();
-        let saved=std::env::var_os("SPRINGBOARD_WAYLAND");std::env::set_var("SPRINGBOARD_WAYLAND","1");
-        let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.perf.enabled=true;sh.drawn=Drawn::App;
+        let mut sh=shell();sh.wayland=true;sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.perf.enabled=true;sh.drawn=Drawn::App;
         let mut pixels=vec![0;sh.w as usize*sh.h as usize];
         let (w,h)=(sh.w as usize,sh.h as usize);
         // a perf-only repaint always follows a full desktop frame (it is what sets desk_drawn)
@@ -1747,7 +1936,6 @@
         let damage=sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},1000.);
         assert!(!damage.is_all());assert!(damage.pixels()<w*h/10);
         assert!(pixels==expected,"partial HUD repaint differs from full desktop");
-        if let Some(v)=saved {std::env::set_var("SPRINGBOARD_WAYLAND",v)} else {std::env::remove_var("SPRINGBOARD_WAYLAND")};
     }
 
     #[cfg(test)]
@@ -2226,7 +2414,7 @@
         fn set_wallpaper_rebuilds_the_dock_backdrop_once() {
         let mut sh = shell();
         let before = sh.dock_bg.clone().unwrap();
-        let px: &'static [u32] = Box::leak(vec![rgba(200, 40, 40, 255); 1200 * 1920].into_boxed_slice());
+        let px: &'static [u32] = crate::test_support::solid(1200, 1920, rgba(200, 40, 40, 255));
         sh.dirty = false;
         sh.set_wallpaper(View { w: 1200, h: 1920, px });
         assert!(sh.dirty);
@@ -2481,6 +2669,54 @@
         tap(&mut sh, stop_x, stop_y, 9300.0);
         assert!(sh.clock.alert().is_none());
         assert!(sh.is_locked(), "back to the lock screen underneath");
+    }
+
+    /// E2E N6: the full-screen alert paints the whole frame, so the frame after Stop repaints the whole desktop, not
+    /// only the regions the desktop's partial frame would clear (the desktop stayed black but for the Stop strip).
+    #[test]
+    fn the_frame_after_the_clock_alert_repaints_the_whole_desktop() {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-clock-alert-damage").join(std::process::id().to_string());
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("clock.ini").to_string_lossy().into_owned();
+        let mut sh = desktop_shell();
+        // a tablet with the desktop presentation keeps the full-screen alert (E2E N5)
+        sh.form = bifrost_ui::form_factor::FormFactor::Tablet;
+        sh.screen = Screen::Home;
+        sh.set_wall(1_000_000, 0, 1000.0);
+        sh.clock.load(&path, 1000.0);
+        let mut buf = vec![0u32; 1200 * 1920];
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 1100.0);
+        let orange_before = buf.contains(&clock::ORANGE);
+        assert!(sh.clock.start_timer("", 1000, 1200.0).is_some());
+        sh.tick(2300.0);
+        assert!(sh.clock_takeover());
+        sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 2400.0);
+        assert!(buf.contains(&clock::ORANGE), "the alert is drawn");
+        assert!(sh.desk_regions.is_none() && !sh.desk_drawn && sh.drawn == Drawn::Nothing, "the frame no longer holds the desktop");
+        // Stop (the button's touch path is covered by the lock screen test above)
+        sh.clock.stop_alert(false, 2500.0);
+        assert!(sh.clock.alert().is_none());
+        let damage = sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, 2600.0);
+        assert!(damage.is_all(), "the whole desktop is repainted after Stop");
+        assert_eq!(buf.contains(&clock::ORANGE), orange_before, "nothing of the alert is left");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E N5: the desktop form shows a ringing alert as a banner (when the Clock app is installed); a tablet and the
+    /// lock screen keep the full-screen alert.
+    #[test]
+    fn the_full_screen_clock_alert_is_for_the_tablet_and_the_lock_screen() {
+        let mut sh = desktop_shell();
+        sh.screen = Screen::Home;
+        assert_eq!(sh.clock_as_banner(), apphost::slot_of(clock::MANIFEST_ID).is_some(), "an unlocked desktop shows a banner");
+        sh.screen = Screen::Lock;
+        assert!(!sh.clock_as_banner(), "the lock screen keeps the full-screen alert");
+        sh.screen = Screen::Home;
+        sh.form = bifrost_ui::form_factor::FormFactor::Tablet;
+        assert!(!sh.clock_as_banner(), "a tablet keeps the full-screen alert");
+        let tablet = shell();
+        assert!(!tablet.clock_as_banner());
     }
 
     /// Unlocked shell with Files open on a temp root holding one text file and a video.
@@ -3000,6 +3236,31 @@
         assert_eq!(bifrost_proto::ToApp::decode(&packet),Ok(bifrost_proto::ToApp::MenuAction(7)));
     }
 
+    /// An app that declares `AppMenuItem::no_print` (an archiver, a disk tool) has no File > Print… at all: the shell's
+    /// window-snapshot row and its separator are gone, the marker shows no row, and the app's other File items stay.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn an_app_that_cannot_print_hides_the_shells_print_row() {
+        use bifrost_proto::{AppMenu,AppMenuItem};
+        let mut sh=desktop_shell();sh.anim=None;
+        let (mine,_theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let mut host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        host.app_menus=vec![AppMenu{title:"File".into(),items:vec![AppMenuItem::new(1,"Open\u{2026}").key("cmd+o")]}];
+        sh.ext.push(Some(host));sh.ext_fg=Some(0);sh.screen=Screen::App(AppId::External(0));
+        let texts=|sh:&Shell|sh.menu_rows(desktop_bar::Menu::File).iter().map(|r|r.text.clone()).collect::<Vec<_>>();
+        assert!(texts(&sh).iter().any(|t|t.starts_with("Print")),"an app that prints keeps the shell's Print…");
+        sh.ext[0].as_mut().unwrap().app_menus[0].items.push(AppMenuItem::no_print());
+        let file=texts(&sh);
+        assert!(!file.iter().any(|t|t.starts_with("Print")),"no Print… for an app that cannot print: {file:?}");
+        assert!(!file.last().is_some_and(|t|t.is_empty()),"no separator left dangling at the end: {file:?}");
+        assert_eq!(file[0],"Open\u{2026}","the app's own File items stay");
+        assert_eq!(file.iter().filter(|t|t.as_str()=="Open\u{2026}").count(),1);
+        assert_eq!(sh.menu_rows(desktop_bar::Menu::Custom(0)).len(),1,"the marker adds no row of its own");
+        // nor in a menu of the app's own
+        sh.ext[0].as_mut().unwrap().app_menus.push(AppMenu{title:"Tools".into(),items:vec![AppMenuItem::new(2,"Run"),AppMenuItem::no_print()]});
+        assert_eq!(sh.menu_rows(desktop_bar::Menu::Custom(1)).iter().map(|r|r.text.as_str()).collect::<Vec<_>>(),vec!["Run"]);
+    }
+
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn app_published_menus_follow_the_app_name_and_send_the_chosen_item_back() {
@@ -3040,6 +3301,30 @@
         assert!(sh.ext_chord(49,CHORD_META),"a key equivalent is consumed as a menu action");
         let bifrost_proto::sys::Recv::Packet(packet,_)=theirs.recv(false).unwrap() else{panic!("missing key equivalent")};
         assert_eq!(bifrost_proto::ToApp::decode(&packet),Ok(bifrost_proto::ToApp::MenuAction(1)));
+    }
+
+    /// Key equivalents read the character the layout produces, not the key's place: on the Icelandic board the key at evdev 13 types
+    /// `-` (Zoom Out) and `=` is Shift+0, while on the U.S. board code 13 is `=` (Zoom In) and `+` is Shift+`=`.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn menu_key_equivalents_follow_the_layout_character() {
+        use bifrost_proto::{AppMenu,AppMenuItem,CHORD_META,CHORD_SHIFT};
+        use crate::installer::keymaps::layout_index;
+        let menus=vec![AppMenu{title:"View".into(),items:vec![
+            AppMenuItem::new(3,"Zoom In").key("cmd+="),AppMenuItem::new(4,"Zoom Out").key("cmd+-"),AppMenuItem::new(5,"Actual Size").key("cmd+0")]}];
+        let is=layout_index("is").unwrap();
+        let us=layout_index("us").unwrap();
+        // Icelandic: code 13 types '-', code 43 types '+', Shift+0 (code 11) types '='
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,is,13,CHORD_META),Some(4),"Cmd+- zooms out");
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,is,43,CHORD_META),Some(3),"Cmd++ zooms in");
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,is,11,CHORD_META|CHORD_SHIFT),Some(3),"Cmd+= (Shift+0) zooms in");
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,is,11,CHORD_META),Some(5),"Cmd+0 is Actual Size");
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,is,12,CHORD_META),None,"the key typing o-umlaut is no zoom key");
+        // U.S.: the existing places hold
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,us,13,CHORD_META),Some(3));
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,us,13,CHORD_META|CHORD_SHIFT),Some(3),"Cmd++ (Shift+=) zooms in");
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,us,12,CHORD_META),Some(4));
+        assert_eq!(desktop_bar::chord_menu_id_in(&menus,us,11,CHORD_META),Some(5));
     }
 
     /// The app's own menus sit after View and before Window (the Browser: File, Edit, View, History, Bookmarks, Develop, Window, Help),
@@ -3185,6 +3470,43 @@
         assert!(!sh.hw_nav(106,CHORD_ALT));
     }
 
+    /// Shift+Tab reaches an SDK app as the chord on Tab (evdev 15) with Shift, so a view or sheet steps its focus back; plain Tab
+    /// is still the plain key. Cmd+Backspace and Cmd+Delete are chords with Meta, never the bare delete.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn shift_tab_and_cmd_delete_reach_the_sdk_app_with_their_modifiers() {
+        use bifrost_proto::{KeyInput,ToApp,CHORD_META,CHORD_SHIFT};
+        use hwkeys::HwKeys;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        let mut sh=desktop_shell();sh.anim=None;
+        sh.ext.push(Some(host));sh.ext_fg=Some(0);sh.screen=Screen::App(AppId::External(0));
+        let sent=||{
+            let mut all=Vec::new();
+            while let bifrost_proto::sys::Recv::Packet(packet,_)=theirs.recv(false).unwrap(){all.push(ToApp::decode(&packet).unwrap());}
+            all
+        };
+        let _=sent();
+        // the physical key: Shift held, Tab is typed as BackTab, not as Tab
+        let mut keys=HwKeys::default();
+        keys.key_front(42,true,false,false);
+        let out=keys.typed(15).expect("Shift+Tab types");
+        assert_eq!(out,keyboard::Out::Named("BackTab"));
+        sh.hw_type(out,1.0);
+        assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(15,CHORD_SHIFT))],"Shift+Tab keeps its Shift");
+        sh.hw_type(keyboard::Out::Named("Tab"),2.0);
+        assert_eq!(sent(),vec![ToApp::Key(KeyInput::Code(9))],"plain Tab is unchanged");
+        // Cmd+Backspace and Cmd+Delete: chords with Meta on the evdev key
+        let mut keys=HwKeys::default();
+        keys.key_front(125,true,false,false);
+        assert_eq!(keys.chord_mods(14),Some(CHORD_META));
+        assert!(sh.hw_chord(14,CHORD_META));
+        assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(14,CHORD_META))],"Cmd+Backspace");
+        assert_eq!(keys.chord_mods(111),Some(CHORD_META));
+        assert!(sh.hw_chord(111,CHORD_META));
+        assert_eq!(sent(),vec![ToApp::Key(KeyInput::chord(111,CHORD_META))],"Cmd+Delete");
+    }
+
     /// Cmd+Q quits the front app and Cmd+W only closes its window. The decision (`desktop_bar::quit_step`) is pure: a window server
     /// toplevel of a running SDK app quits the app, a native or Linux app closes all its windows (as the Dock's Quit does), and a
     /// window of the shell's own desk quits its app or, for a built-in window, closes as before.
@@ -3248,6 +3570,144 @@
         sh.desk_quit_app(0);
         assert!(sh.ext[0].is_none(),"the quit app left the list");
         assert!(sent().contains(&ToApp::Quit),"the app is asked to quit, so it can save its state");
+    }
+
+    /// The close control of an SDK app that answers it itself (a document app with a save sheet) sends `CloseRequest` and
+    /// leaves the window, the process and the desk as they are; the app orders the window out once it has answered. An app
+    /// that did not opt in closes as before, and Quit is never vetoed.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_close_control_asks_an_app_that_opted_in_and_never_vetoes_quit() {
+        use bifrost_proto::{sys::Recv,ToApp};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let sent=||{let mut v=Vec::new();while let Ok(Recv::Packet(p,_))=theirs.recv(false){v.push(ToApp::decode(&p).unwrap());}v};
+        let app=AppId::External(0);
+        let m=sh.desk_metrics();
+        {let d=sh.desk.as_mut().unwrap();d.wins.clear();d.open(&m,app,(600,400));}
+        // no opt-in: the close control closes the window as it did, and sends no request
+        sh.desk_close_requested(app);
+        assert!(!sent().contains(&ToApp::CloseRequest),"an app that did not opt in is not asked");
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_none(),"its window closed");
+        // opted in: the window stays, the app is asked and keeps running
+        {let d=sh.desk.as_mut().unwrap();d.open(&m,app,(600,400));}
+        sh.ext[0].as_mut().unwrap().close_requests=true;
+        sh.desk_close_requested(app);
+        assert_eq!(sent(),vec![ToApp::CloseRequest],"the app gets the request and nothing else (no Quit)");
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_some(),"the window waits for the app's answer");
+        assert!(sh.ext[0].as_ref().is_some_and(|h|h.running()),"the app keeps running");
+        // the app answers by ordering its main window out
+        sh.desk_order_main_out(0);
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_none(),"the window goes when the app orders it out");
+        // Quit is not a close request
+        sh.desk_quit_app(0);
+        assert!(sh.ext[0].is_none());
+        assert!(sent().contains(&ToApp::Quit),"Quit still reaches an app that handles the close control");
+    }
+
+    /// Red close of an app that keeps running after its last window closes (the default: the app announced
+    /// `CloseRequests`, `App::terminates_after_last_window_closed` is false): the shell asks it, the app's default answer
+    /// orders the main window out (`WindowClose` id 0), and it stays running with no window, active and in the Dock. A Dock
+    /// click then puts the window back and tells the app (`Reopen`). An app that terminates after its last window (it
+    /// announced nothing) is quit by the same red light.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_red_light_closes_the_window_and_the_app_keeps_running_unless_it_terminates_with_it() {
+        use bifrost_proto::{sys::Recv,ToApp,ToShell};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let sent=||{let mut v=Vec::new();while let Ok(Recv::Packet(p,_))=theirs.recv(false){v.push(ToApp::decode(&p).unwrap());}v};
+        let app=AppId::External(0);
+        let m=sh.desk_metrics();
+        {let d=sh.desk.as_mut().unwrap();d.wins.clear();d.open(&m,app,(600,400));}
+        sh.screen=Screen::App(app);
+        // the app announces that it answers the close control, as every default app does
+        {let mut out=apphost::Pumped::default();sh.ext[0].as_mut().unwrap().handle(ToShell::CloseRequests{on:true},Vec::new(),&mut out);}
+        sh.desk_close_requested(app);
+        assert_eq!(sent(),vec![ToApp::CloseRequest],"the red light asks the app and does not quit it");
+        // the default answer: the app orders its main window out
+        {let mut out=apphost::Pumped::default();sh.ext[0].as_mut().unwrap().handle(ToShell::WindowClose{id:0},Vec::new(),&mut out);}
+        sh.desk_sync_extra_windows();
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_none(),"the window is closed");
+        assert!(sh.ext[0].as_ref().is_some_and(|h|h.running()),"the app keeps running");
+        assert!(!sent().contains(&ToApp::Quit),"nothing quit it");
+        assert_eq!(sh.desk_windowless_front(),Some(app),"it stays the active app and owns the menu bar");
+        assert!(sh.ext_windowless_apps().contains(&app),"it keeps its Dock dot");
+        // a Dock click (an activation) puts the window back and asks the app to reopen one
+        sh.desk_open(app,1.0);
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_some(),"the window is back");
+        assert_eq!(sent(),vec![ToApp::Reopen]);
+        // an app that terminates with its last window announced nothing: the red light quits it
+        sh.ext[0].as_mut().unwrap().close_requests=false;
+        sh.desk_close_requested(app);
+        assert!(!sent().contains(&ToApp::CloseRequest),"an app that announced nothing is not asked");
+        assert!(sh.desk.as_ref().unwrap().index_of(app).is_none(),"its window is closed by the shell, as before");
+    }
+
+    /// The person's Quit (Cmd+Q, the Dock) of an app that opted in is a `QuitRequest` the app may veto with a save sheet; the app
+    /// stays in the list until it exits itself. An app that did not opt in is quit at once, and `desk_quit_app` (logout,
+    /// shutdown, updates) is never a request.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_persons_quit_asks_an_app_that_opted_in() {
+        use bifrost_proto::{sys::Recv,ToApp};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let sent=||{let mut v=Vec::new();while let Ok(Recv::Packet(p,_))=theirs.recv(false){v.push(ToApp::decode(&p).unwrap());}v};
+        sh.ext[0].as_mut().unwrap().close_requests=true;
+        sh.desk_quit_requested(0);
+        assert_eq!(sent(),vec![ToApp::QuitRequest],"the app is asked, not told to quit");
+        assert!(sh.ext[0].as_ref().is_some_and(|h|h.running()),"the app keeps running until it exits itself");
+        sh.ext[0].as_mut().unwrap().close_requests=false;
+        sh.desk_quit_requested(0);
+        assert!(sh.ext[0].is_none(),"an app that did not opt in quits at once");
+        assert!(sent().contains(&ToApp::Quit));
+    }
+
+    /// The red light of an extra window of an app that opted in asks the app about that window (`WindowCloseRequest`) and
+    /// leaves the window on the desk; before, the shell dropped it and the app's save sheet came back in a new window behind
+    /// the main one. An app that did not opt in, or a window the app no longer has, closes as before.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn the_close_control_of_an_extra_window_asks_the_app_about_that_window() {
+        use bifrost_proto::{sys::Recv,ToApp,ToShell};
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let sent=||{let mut v=Vec::new();while let Ok(Recv::Packet(p,_))=theirs.recv(false){v.push(ToApp::decode(&p).unwrap());}v};
+        let extra=AppId::ExternalWindow(0,1);
+        let m=sh.desk_metrics();
+        {
+            let mut out=apphost::Pumped::default();
+            sh.ext[0].as_mut().unwrap().handle(ToShell::WindowOpen{id:1,title:"Untitled 2".into(),w:300.,h:200.,position:None,flags:0},Vec::new(),&mut out);
+            let d=sh.desk.as_mut().unwrap();d.wins.clear();d.open(&m,AppId::External(0),(600,400));d.open(&m,extra,(300,200));
+        }
+        // no opt-in: the window closes at once and the app is told it closed
+        sh.desk_close_requested(extra);
+        assert_eq!(sent(),vec![ToApp::WindowClosed{id:1}],"an app that did not opt in has its window closed by the shell");
+        assert!(sh.desk.as_ref().unwrap().index_of(extra).is_none());
+        // opted in: the window stays and the app is asked about that window, not the main one
+        {
+            let mut out=apphost::Pumped::default();
+            sh.ext[0].as_mut().unwrap().handle(ToShell::WindowOpen{id:1,title:"Untitled 2".into(),w:300.,h:200.,position:None,flags:0},Vec::new(),&mut out);
+            sh.desk.as_mut().unwrap().open(&m,extra,(300,200));
+        }
+        sh.ext[0].as_mut().unwrap().close_requests=true;
+        sh.desk_close_requested(extra);
+        assert_eq!(sent(),vec![ToApp::WindowCloseRequest{id:1}],"the request names the window and is not the main window's CloseRequest");
+        assert!(sh.desk.as_ref().unwrap().index_of(extra).is_some(),"the window waits for the app's answer");
+        assert!(sh.desk.as_ref().unwrap().index_of(AppId::External(0)).is_some(),"the main window is untouched");
+        assert!(!sh.ext[0].as_ref().unwrap().close_pending,"an extra window's answer is no main-window order-out");
+        // a window the app no longer has closes on the desk without a request
+        sh.desk_close_requested(AppId::ExternalWindow(0,7));
+        assert!(sent().is_empty());
     }
 
     /// Cmd+Q and the App menu's Quit close a built-in window as before: only an SDK app has a process to quit.
@@ -3645,10 +4105,8 @@ mod live_wallpaper_tests {
     #[cfg(feature = "desktop-wayland")]
     #[test]
     fn every_desktop_frame_publishes_the_windows() {
-        let _lock = crate::test_support::global_lock();
-        let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
-        std::env::set_var("SPRINGBOARD_WAYLAND", "1");
         let mut sh = desktop_shell();
+        sh.wayland = true;
         sh.anim = None;
         sh.screen_on = true;
         sh.screen = Screen::Home;
@@ -3675,10 +4133,5 @@ mod live_wallpaper_tests {
         sh.ext_frame = false;
         sh.draw(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 5000.0);
         assert!(sh.take_wayland_windows().iter().any(|f| f.id == id), "a settled frame never publishes an empty window list");
-        if let Some(v) = saved {
-            std::env::set_var("SPRINGBOARD_WAYLAND", v)
-        } else {
-            std::env::remove_var("SPRINGBOARD_WAYLAND")
-        };
     }
 }

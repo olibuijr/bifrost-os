@@ -1,4 +1,4 @@
-//! Viewer windows: a message opened in a window of its own. Double-click on a message row, or File > New Viewer Window,
+//! Viewer windows: a message opened in a window of its own. Double-click on a message row, or File > Open Message,
 //! asks the window for a [`Snapshot`] of the message; the app opens an SDK window (`bifrost_app::app_windows`) and a
 //! [`Viewer`] draws the snapshot there. A viewer holds no connection of its own: it reads the text the main window
 //! already fetched, so it works from a copy and does not change the mailbox.
@@ -39,9 +39,11 @@ impl Snapshot {
         }
     }
 
-    /// The window spec the app opens the viewer with.
+    /// The window spec the app opens the viewer with. Viewers cascade from the main window, beside it or over its
+    /// reading side, so the message list the person double-clicked in stays in view, and each later viewer cascades from
+    /// the one before it.
     pub fn spec(&self) -> WindowSpec {
-        WindowSpec::new(&self.title(), VIEWER_W, VIEWER_H)
+        WindowSpec::new(&self.title(), VIEWER_W, VIEWER_H).cascaded()
     }
 }
 
@@ -170,6 +172,7 @@ mod tests {
         let spec = Snapshot { subject: "Lunch".into(), ..Snapshot::default() }.spec();
         assert_eq!(spec.title, "Lunch");
         assert_eq!((spec.width, spec.height), (VIEWER_W, VIEWER_H));
+        assert!(spec.cascade && spec.position.is_none(), "a viewer cascades from the main window instead of covering its list");
     }
 
     #[test]

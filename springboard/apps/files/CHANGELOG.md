@@ -1,7 +1,57 @@
+# Changelog
+
+## 1.34.12
+
+- The Tags panel shows which tags are on, in its own card; the sidebar scrolls to every tag; tag dots sit on the icon; File has Open (Cmd+O) and Preview shows Space.
+
+## 1.34.11
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 1.34.10
+
+- Open With > Other… lists every installed app; Undo restores tag colours.
+
+## 1.34.9
+
+- Arrow keys move the selection in icon, list and column views, and Cmd+Up from Applications goes to the computer.
+
+## 1.34.8
+
+- The Get Info window draws its contents instead of staying transparent.
+
+## 1.34.7
+
+- Get Info from the menu bar opens its own window.
+
+## 1.34.6
+
+- File menu has Move to Trash, Get Info, Rename and Duplicate; Applications shows app icons and Kind Application; Get Info permissions fit.
+
 ## 1.33.1 — 2026-10-19
 
 - While a search is active the four view buttons collapse into one view pop-up, so the whole "Searching ..." title fits.
 - Generic document icons have a light folded corner instead of a black one.
+
+## 1.34.5
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 1.34.4
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
+## 1.34.3
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 1.34.2
+
+- Icon and gallery views show thumbnails of pictures and documents again, drawn in the app over the shared thumbnail cache as the Dock’s Downloads stack draws them.
+
+## 1.34.1
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
 
 ## 1.34.0 — 2026-10-23
 

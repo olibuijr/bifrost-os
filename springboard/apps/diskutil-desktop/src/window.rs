@@ -347,7 +347,8 @@ impl DiskUtility {
                         let open = self.sheet.as_ref().is_some_and(|p| p.requests.is_empty());
                         if let (true, Some(node)) = (open, self.nodes.iter().find(|n| n.name == name).cloned()) {
                             let extra = model::extra_rows(&pairs);
-                            self.sheet = Some(Pending { sheet: info_sheet(&format!("Info for {name}"), &model::info_lines(&node, &extra)), requests: Vec::new() });
+                            let focus = self.sheet.as_ref().and_then(|p| p.sheet.focus);
+                            self.sheet = Some(Pending { sheet: info_sheet(&format!("Info for {name}"), &model::info_lines(&node, &extra)).with_focus(focus), requests: Vec::new() });
                             changed = true;
                         }
                     }
@@ -498,6 +499,21 @@ impl DiskUtility {
         self.sheet = Some(Pending { sheet: Sheet::alert(&title, &message, buttons), requests: vec![(SHEET_CONFIRM, request)] });
     }
 
+    /// A key press while the confirmation or Get Info sheet is open: Return presses the default button, Escape and Cmd+.
+    /// Cancel, Tab moves the focus ring and Space presses the focused button (`Sheet::handle_key`). The sheet takes every key.
+    pub fn sheet_key(&mut self, input: &bifrost_app::KeyInput) -> bool {
+        use bifrost_app::document::{sheet_key, AlertKey};
+        let Some(pending) = self.sheet.as_mut() else { return false };
+        match sheet_key(&mut pending.sheet, input) {
+            AlertKey::Answer(id) => {
+                let t = self.now;
+                self.activate(Target::Sheet(id), t)
+            }
+            AlertKey::Focus => true,
+            AlertKey::Ignored => false,
+        }
+    }
+
     /// The sheet's answer. Cancel closes it; another button starts the request it names.
     fn answer(&mut self, id: u32) -> bool {
         let Some(pending) = self.sheet.take() else { return false };
@@ -567,8 +583,14 @@ impl DiskUtility {
         !self.busy() && self.selected_node().is_some_and(|n| n.mount_point.is_none() && n.fs_type.is_some())
     }
 
-    /// Whether Unmount can run on the selected row: a mounted row, and no running action.
+    /// Whether Unmount can run on the selected row: a mounted row that is not part of the running system (the
+    /// reference's startup volume cannot be unmounted either), and no running action.
     pub fn can_unmount(&self) -> bool {
+        !self.busy() && self.selected_node().is_some_and(|n| n.mount_point.is_some()) && !self.selected_is_system()
+    }
+
+    /// Whether the selected row is mounted, so Show in Files has a folder to open (true for the system volume too).
+    pub fn selected_mounted(&self) -> bool {
         !self.busy() && self.selected_node().is_some_and(|n| n.mount_point.is_some())
     }
 
@@ -577,17 +599,51 @@ impl DiskUtility {
         !self.busy() && self.selected_node().is_some_and(|n| n.kind == Kind::Disk && n.removable)
     }
 
+    /// Whether a row is selected and no action is running: Get Info and the commands below build on it.
+    pub fn has_selection(&self) -> bool {
+        !self.busy() && self.selected_node().is_some()
+    }
+
+    /// Whether the selected row can be erased: any row but the running system's (see `selected_is_system`). The
+    /// toolbar and the Disk menu both ask this, so they always agree.
+    pub fn can_erase(&self) -> bool {
+        self.has_selection() && !self.selected_is_system()
+    }
+
+    /// Whether First Aid can run on the selected row; the same rule as Erase.
+    pub fn can_first_aid(&self) -> bool {
+        self.can_erase()
+    }
+
+    /// Whether the selected row can be restored over; the same rule as Erase.
+    pub fn can_restore(&self) -> bool {
+        self.can_erase()
+    }
+
+    /// Whether the selected row can be renamed: a row with a file system.
+    pub fn can_rename(&self) -> bool {
+        self.has_selection() && self.selected_node().is_some_and(|n| n.fs_type.is_some())
+    }
+
+    /// Whether the selected row can be partitioned: a whole disk that is not the running system's.
+    pub fn can_partition(&self) -> bool {
+        self.can_erase() && self.selected_node().is_some_and(|n| n.kind == Kind::Disk)
+    }
+
+    /// Whether Detach can run: the selected row is a disk image, and no action is running.
+    pub fn can_detach(&self) -> bool {
+        !self.busy() && self.selected_image()
+    }
+
     /// The toolbar for the current state. Actions need a selected row and no running action.
     pub fn toolbar(&self) -> Toolbar {
-        let idle = !self.busy();
-        let node = self.selected_node();
         Toolbar::new(vec![
             ToolbarItem::button(B_MOUNT, "Mount").enabled(self.can_mount()),
             ToolbarItem::button(B_UNMOUNT, "Unmount").enabled(self.can_unmount()),
             ToolbarItem::button(B_EJECT, "Eject").enabled(self.can_eject()),
-            ToolbarItem::button(B_DETACH, "Detach").enabled(idle && self.selected_image()),
-            ToolbarItem::button(B_ERASE, "Erase").enabled(idle && node.is_some() && !self.selected_is_system()),
-            ToolbarItem::button(B_FIRST_AID, "First Aid").enabled(idle && node.is_some() && !self.selected_is_system()),
+            ToolbarItem::button(B_DETACH, "Detach").enabled(self.can_detach()),
+            ToolbarItem::button(B_ERASE, "Erase").enabled(self.can_erase()),
+            ToolbarItem::button(B_FIRST_AID, "First Aid").enabled(self.can_first_aid()),
             ToolbarItem::flexible_space(),
             ToolbarItem::icon(B_REFRESH, "Refresh", "arrow.clockwise"),
         ])
@@ -847,6 +903,39 @@ mod tests {
     }
 
     #[test]
+    fn the_system_volume_cannot_be_unmounted() {
+        let mut w = DiskUtility::new();
+        w.nodes = vec![
+            Node { name: "nvme0n1".into(), size: 500_000_000_000, ..Node::default() },
+            Node { name: "nvme0n1p2".into(), kind: Kind::Partition, parent: Some("nvme0n1".into()), fs_type: Some("btrfs".into()), mount_point: Some("/".into()), ..Node::default() },
+        ];
+        w.selected = Some("nvme0n1p2".into());
+        assert!(!w.can_unmount(), "unmounting / would break the running system");
+        assert!(w.selected_mounted(), "the system volume can still be shown in Files");
+        let bar = w.toolbar();
+        assert!(!bar.items.iter().find(|i| i.id == B_UNMOUNT).is_some_and(|i| i.enabled));
+    }
+
+    #[test]
+    fn erase_and_the_other_disk_commands_follow_one_predicate_each() {
+        let mut w = DiskUtility::new();
+        w.nodes = vec![
+            Node { name: "sdb".into(), removable: true, size: 8_000_000_000, ..Node::default() },
+            Node { name: "sdb1".into(), kind: Kind::Partition, parent: Some("sdb".into()), fs_type: Some("vfat".into()), ..Node::default() },
+        ];
+        let enabled = |w: &DiskUtility, id: u32| w.toolbar().items.iter().find(|i| i.id == id).is_some_and(|i| i.enabled);
+        assert!(!w.can_erase() && !enabled(&w, B_ERASE), "nothing selected");
+        w.selected = Some("sdb".into());
+        assert!(w.can_erase() && enabled(&w, B_ERASE), "a whole disk can be erased");
+        assert!(w.can_first_aid() && w.can_restore() && w.can_partition() && !w.can_rename());
+        w.selected = Some("sdb1".into());
+        assert!(w.can_erase() && w.can_rename() && !w.can_partition(), "a partition is erased and renamed, not partitioned");
+        w.job = Some(Job { verb: "Erasing", name: "sdb1".into(), rx: std::sync::mpsc::channel().1, commit: None });
+        assert!(!w.can_erase() && !w.can_first_aid() && !w.can_restore() && !w.can_rename() && !w.can_partition() && !w.has_selection());
+        assert!(!enabled(&w, B_ERASE) && !enabled(&w, B_FIRST_AID));
+    }
+
+    #[test]
     fn detach_is_enabled_only_for_a_selected_disk_image() {
         let mut w = DiskUtility::new();
         w.nodes = vec![
@@ -1049,5 +1138,34 @@ mod tests {
         w.selected = Some("sdb1".into());
         assert!(w.ask_menu(Ask::Partition(2)));
         assert!(w.form.is_none() && w.error.is_some());
+    }
+
+    #[test]
+    fn the_confirmation_sheet_takes_the_sheet_keys_with_a_focus_ring() {
+        use bifrost_app::proto::{CHORD_FLAG, CHORD_META};
+        use bifrost_app::KeyInput;
+        let mut w = one_stick();
+        w.selected = Some("sdb1".into());
+        let (tab, space, esc) = (KeyInput::Code(9), KeyInput::Text(" ".into()), KeyInput::Code(1));
+        // Cmd+. is the chord on evdev key 52 with Meta
+        let cmd_period = KeyInput::Code(CHORD_FLAG | 52 | (CHORD_META << 8));
+        assert!(w.activate(Target::Toolbar(B_FIRST_AID), 1.0));
+        assert!(!w.sheet_key(&space), "Space with no focus presses nothing");
+        assert!(w.sheet.is_some());
+        assert!(w.sheet_key(&tab) && w.sheet.as_ref().unwrap().sheet.focus == Some(SHEET_REPAIR), "the ring starts on the default button");
+        assert!(w.sheet_key(&tab) && w.sheet.as_ref().unwrap().sheet.focus == Some(SHEET_VERIFY));
+        assert!(w.sheet_key(&cmd_period), "Cmd+. is Cancel");
+        assert!(w.sheet.is_none() && w.job.is_none());
+        assert!(w.activate(Target::Toolbar(B_FIRST_AID), 1.0));
+        assert!(w.sheet_key(&esc) && w.sheet.is_none(), "Escape is Cancel");
+        // Tab to Cancel (the last button), then Space presses it
+        assert!(w.activate(Target::Toolbar(B_FIRST_AID), 1.0));
+        for _ in 0..3 {
+            assert!(w.sheet_key(&tab));
+        }
+        assert_eq!(w.sheet.as_ref().unwrap().sheet.focus, Some(SHEET_CANCEL));
+        assert!(w.sheet_key(&space));
+        assert!(w.sheet.is_none() && w.job.is_none(), "Cancel starts nothing");
+        assert!(!w.sheet_key(&esc), "no sheet, no key");
     }
 }

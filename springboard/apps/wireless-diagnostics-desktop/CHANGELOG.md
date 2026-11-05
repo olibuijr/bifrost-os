@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.12
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 0.1.11
+
+- A missing Wi-Fi adapter is explained in plain words instead of a raw error.
+
+## 0.1.10
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 0.1.9
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
+## 0.1.8
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 0.1.7
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.1.6
 
 - Wireless Diagnostics stops reading the radio while its window is hidden or minimised and starts again when it is shown, repaints only when a reading changes what is on screen, and kills an `iw` that does not answer in time (5 s for a link read, 30 s for a scan).

@@ -6,7 +6,7 @@
 //! ```text
 //! ---
 //! title: Open a file
-//! keywords: open, double click, finder
+//! keywords: open, double click, files
 //! ---
 //! ## Open a file {#open}
 //! ```
@@ -491,7 +491,7 @@ pub fn with_index<T>(root: &Path, f: impl FnOnce(&HelpIndex) -> T) -> T {
 mod tests {
     use super::*;
 
-    const PAGE: &str = "---\ntitle: Open a file\nkeywords: open, double click, finder\n---\n## Open a file {#open}\nDouble click a file to open it in its app.\n## Save a copy {#copy}\nChoose Duplicate to keep a copy.\n";
+    const PAGE: &str = "---\ntitle: Open a file\nkeywords: open, double click, files\n---\n## Open a file {#open}\nDouble click a file to open it in its app.\n## Save a copy {#copy}\nChoose Duplicate to keep a copy.\n";
 
     fn page(app: &str, slug_name: &str, text: &str) -> Page {
         parse_page(app, slug_name, text).unwrap()
@@ -519,7 +519,7 @@ mod tests {
     fn front_matter_gives_title_and_keywords() {
         let (fm, body) = parse_front_matter(PAGE).unwrap();
         assert_eq!(fm.title.as_deref(), Some("Open a file"));
-        assert_eq!(fm.keywords, vec!["open", "double click", "finder"]);
+        assert_eq!(fm.keywords, vec!["open", "double click", "files"]);
         assert!(body.starts_with("## Open a file"));
     }
 

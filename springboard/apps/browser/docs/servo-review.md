@@ -107,7 +107,22 @@ removal fails, and reports that failure; a stopped engine cannot make the clear 
   property for Servo (`layout.css.backdrop-filter.enabled`), and the engine pin (`engine.json`) moves to a release
   that has both; then re-check the compat page list in the README. `filter` itself is supported. Until then a site
   can keep its header legible with `@supports not (backdrop-filter: blur(1px))` and an opaque or near-opaque
-  background (that query is false here); bifrost.olibuijr.com does not do this yet.
+  background (that query is false here); bifrost.olibuijr.com does this since 2026-10-19 (`site/style.css`, `.nav`
+  falls back to the solid page colour).
+  Why it is not patched in the engine (reviewed 2026-10-27): the engine is one extra workspace member added to an
+  unmodified Servo checkout (`tools/build-webview-engine.sh`), so there is no patch set to extend. Drawing the filter
+  needs changes in three places the embedder does not own: (1) stylo, a crates.io dependency (`stylo` 0.22,
+  `properties/longhands.toml`, `[backdrop-filter]`, `servo_pref = "layout.unimplemented"`) that would have to be forked
+  and wired in with a `[patch.crates-io]` entry; (2) `components/layout`, which has to carry the computed
+  `backdrop-filter` list into the stacking context and emit `push_backdrop_filter` with the border-box clip (and
+  respect the backdrop root rules of the WebRender stacking context: a parent with opacity, filter or mask isolates the
+  backdrop); (3) the display-list translation in `components/paint`. The build runs `--offline` and no Servo source
+  checkout is kept on the build host (only the registry crates `stylo`, `webrender` and `webrender_api` 0.70), so
+  such a patch cannot be written, compiled or tested without the lead first unpacking the source archive and building
+  the fork; an untested layout change in a 10-minute-plus engine build is not a reasonable guess. If this is taken up:
+  fork the three places above, keep the patches as `.patch` files applied by `build-webview-engine.sh` after the
+  unpack step, and test with a page that stacks a translucent `backdrop-filter: blur(8px) saturate(180%)` bar over a
+  striped background (blur visible, no blur on a parent with `opacity < 1`).
 
 ## Official references
 

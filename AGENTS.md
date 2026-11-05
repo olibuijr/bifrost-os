@@ -62,14 +62,19 @@ Apple HIG and the Bifrost checklist are the design authority; cite the section (
 
 ## Working
 
+- **Simplicity and footprint first** (owner, 2026-10-27): fewer, finished features that work beat new surface. Respect
+  system resources the way the last 32-bit-era release of the reference desktop did: near-zero idle CPU, small resident
+  memory, no needless redraws or dependencies. A change that adds surface, a dependency or memory must justify it;
+  reviews reject it otherwise, and a fix that can remove code should.
 - Read the code before changing it. Prefer real files and command output over memory.
 - Make the smallest correct change. Keep changes focused on what was asked.
 - Verify before claiming it works: run the focused tests, and for visual work compare a preview or a Midget
   screenshot against the design rules below. Report the commands and their results.
 - Commit each finished change with a conventional message. If you are on `main`, create a feature branch first.
-- Do not push, merge or deploy unless asked.
+- Commit every finished change and push `main` and `integration` to origin after each merge batch (owner, 2026-10-27), after a secrets, name and licence scan; agents commit on their own branch and never push.
 - Agent teams (owner, 2026-10-13): Haiku 5.5 agents only code and commit; they never build, test, run
-  tools/check-names.py or touch Midget. The lead reviews and merges, asks the owner before every build, runs one build
+  tools/check-names.py or touch Midget. Exception (owner, 2026-10-25): agents may run `tools/agent-check.sh`
+  (cargo check only, memory-limited, one at a time) before committing. The lead reviews and merges, asks the owner before every build, runs one build
   at a time, and never builds while agents run.
 - **Parity status** (owner rule, 2026-10-11): parity with the reference SDKs is tracked with the `bifrost-parity-matrix`
   skill and `bifrost pc parity`. A change that adds or completes a capability updates its rows in

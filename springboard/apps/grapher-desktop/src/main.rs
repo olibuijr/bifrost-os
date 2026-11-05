@@ -18,11 +18,21 @@ use bifrost_app::controls::{Node, Role};
 use bifrost_app::{App, Ctx, Input};
 use window::{Grapher, Target, ROW_BASE};
 
+/// The window size in points, from the configured size in pixels and the display scale.
+fn size_pt(w_px: u32, h_px: u32, scale: f32) -> (f32, f32) {
+    let scale = scale.max(f32::EPSILON);
+    (w_px as f32 / scale, h_px as f32 / scale)
+}
+
 struct GrapherApp {
     grapher: Grapher,
 }
 
 impl App for GrapherApp {
+    /// A single-window utility: the red light quits it (`applicationShouldTerminateAfterLastWindowClosed:`).
+    fn terminates_after_last_window_closed(&self) -> bool {
+        true
+    }
     fn id(&self) -> &str {
         "is.olibuijr.grapher.desktop"
     }
@@ -30,7 +40,8 @@ impl App for GrapherApp {
     fn configure(&mut self, ctx: &Ctx) {
         // every change is saved as it happens, so nothing is lost when the app closes
         ctx.enable_sudden_termination();
-        self.grapher.size = (ctx.cfg.w as f32, ctx.cfg.h as f32);
+        // `cfg` is in pixels, the layout in points: a scaled window would otherwise lay out wider than it is
+        self.grapher.size = size_pt(ctx.cfg.w, ctx.cfg.h, ctx.ui.pt(1.0));
         self.grapher.load(&ctx.data_dir);
     }
 

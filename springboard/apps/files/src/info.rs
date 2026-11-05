@@ -128,6 +128,11 @@ pub(crate) fn tag_colour(tag: Tag) -> u32 {
     pack((c >> 16) as u8, (c >> 8) as u8, c as u8, 255)
 }
 
+/// The "On" label of a Tags row: 60 points wide, 20 points in from the card's right edge (the card ends at `w - 16`).
+pub(crate) fn tag_on_x(w: f32) -> f32 {
+    w - 16. - 20. - 60.
+}
+
 /// The colour dots of an item, left to right, starting at (x, y).
 pub(crate) fn tag_dots(s: &mut Surface, ui: &Ui, index: &TagIndex, path: &Path, x: f32, y: f32) {
     for (i, tag) in index.tags(path).into_iter().enumerate() {
@@ -143,6 +148,16 @@ impl Files {
             self.notice = Some(format!("Could not save tags: {e}"));
         }
         self.revision += 1;
+    }
+    /// A tag change the person made, undoable with Cmd+Z: runs `change` on the index and, when it changed the colours
+    /// of any of `paths`, records the tags they had before as one undo step.
+    pub(crate) fn edit_tags(&mut self, paths: &[PathBuf], change: impl FnOnce(&mut TagIndex)) {
+        let before: Vec<(PathBuf, Vec<Tag>)> = paths.iter().map(|p| (p.clone(), self.tag_index.tags(p))).collect();
+        self.with_tags(change);
+        let changed: Vec<(PathBuf, Vec<Tag>)> = before.into_iter().filter(|(p, old)| self.tag_index.tags(p) != *old).collect();
+        if !changed.is_empty() {
+            self.push_undo(Undo::Tags(changed));
+        }
     }
     pub(crate) fn open_tags(&mut self) {
         if self.selection.is_empty() {
@@ -161,7 +176,7 @@ impl Files {
             return;
         }
         let all = paths.iter().all(|p| self.tag_index.has(p, tag));
-        self.with_tags(|index| {
+        self.edit_tags(&paths, |index| {
             for p in &paths {
                 if index.has(p, tag) == all {
                     index.toggle(p, tag);
@@ -208,7 +223,10 @@ impl Files {
         let w = self.w;
         if self.tag_panel {
             let (x, y) = (self.side() + 16., 72.);
-            rect(s, ui, x, y, w - x - 16., TAG_PANEL_H, CARD_BG.now());
+            let (cw, ch) = (w - x - 16., TAG_PANEL_H);
+            // a rounded card with a hairline edge, so it reads apart from the content in both schemes
+            s.fill_rrect(ui.pt(x - 1.), ui.pt(y - 1.), ui.pt(cw + 2.), ui.pt(ch + 2.), ui.pt(CARD_R), SEPARATOR_C.now());
+            s.fill_rrect(ui.pt(x), ui.pt(y), ui.pt(cw), ui.pt(ch), ui.pt(CARD_R), CARD_BG.now());
             text(s, ui, "Tags", 17., LABEL.now(), x + 20., y + 18., w - x - 56.);
             let picked: Vec<&PathBuf> = self.selection.iter().filter_map(|&i| self.rows.get(i)).map(|e| &e.path).collect();
             for (i, tag) in Tag::ALL.into_iter().enumerate() {
@@ -216,7 +234,7 @@ impl Files {
                 s.fill_rrect(ui.pt(x + 20.), ui.pt(row_y + 7.), ui.pt(SPACE_L), ui.pt(SPACE_L), ui.pt(SPACE_S), tag_colour(tag));
                 text(s, ui, tag.label(), 13., LABEL.now(), x + 44., row_y + 6., 200.);
                 if !picked.is_empty() && picked.iter().all(|p| self.tag_index.has(p, tag)) {
-                    text(s, ui, "On", 13., TINT, x + w - 120., row_y + 6., 60.);
+                    text(s, ui, "On", 13., accent_now(), tag_on_x(w), row_y + 6., 60.);
                 }
             }
             text(s, ui, "Click a colour to turn it on or off for the selection. Click elsewhere to close.", 11., LABEL_2.now(), x + 20., TAG_ROWS_TOP + Tag::ALL.len() as f32 * TAG_ROW + 14., w - x - 56.);
@@ -371,5 +389,22 @@ mod image_tests {
     #[test]
     fn only_image_extensions_are_read() {
         assert!(disk_image_rows(std::path::Path::new("/nonexistent/notes.txt"), 10).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod tag_panel_tests {
+    use super::*;
+    use crate::tests::fixture;
+
+    #[test]
+    fn the_on_label_sits_inside_the_tags_card() {
+        // the card runs from side + 16 to w - 16; the "On" label (60 wide) must lie within it at every window width
+        for w in [480., 600., 960., 1280.] {
+            let files = fixture(vec![]);
+            let card = (files.side() + 16., w - 16.);
+            let x = tag_on_x(w);
+            assert!(x >= card.0 && x + 60. <= card.1, "On at {x} outside the card {card:?} at width {w}");
+        }
     }
 }

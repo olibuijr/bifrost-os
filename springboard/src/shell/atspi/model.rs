@@ -88,6 +88,8 @@ pub struct SNode {
     pub help: String,
     /// caret, selection and visible range of a text element; `None` until the app reports them
     pub text: Option<AxText>,
+    /// the element's named custom actions (`accessibilityCustomActions`, `ToShell::AxActions`), listed after the standard ones
+    pub actions: Vec<String>,
 }
 
 impl SNode {
@@ -144,6 +146,7 @@ pub fn build_ax(nodes: &[Node], ext: &[NodeExt], texts: &[AxText], metas: &[AxMe
                 title: metas.iter().find(|m| m.id == n.id).map(|m| m.title.clone()).unwrap_or_default(),
                 help: metas.iter().find(|m| m.id == n.id).map(|m| m.help.clone()).unwrap_or_default(),
                 text: (n.role == Role::TextField).then(|| texts.iter().find(|t| t.id == n.id).copied()).flatten(),
+                actions: Vec::new(),
             }
         })
         .collect();
@@ -321,7 +324,7 @@ pub const CHROME_SLOT: u8 = 250;
 pub fn chrome_snap(menus: &[(String, Vec<(String, bool)>)], dock: &[(String, bool)]) -> AppSnap {
     let bounds = Rect { x: 0., y: 0., w: 0., h: 0. };
     let node = |id: u64, parent: Option<u64>, role: Role, name: &str, value: &str, enabled: bool| SNode {
-        id, parent, role, name: name.into(), value: value.into(), bounds, enabled, focused: false, checked: None, title: String::new(), help: String::new(), text: None,
+        id, parent, role, name: name.into(), value: value.into(), bounds, enabled, focused: false, checked: None, title: String::new(), help: String::new(), text: None, actions: Vec::new(),
     };
     let mut nodes = vec![node(1, None, Role::List, "Menu Bar", "", true)];
     for (m, (title, rows)) in menus.iter().enumerate() {
@@ -339,9 +342,104 @@ pub fn chrome_snap(menus: &[(String, Vec<(String, bool)>)], dock: &[(String, boo
     AppSnap { slot: CHROME_SLOT, app_id: "shell".into(), name: "BifrOSt Shell".into(), nodes }
 }
 
+/// What a press on a shell chrome element (`chrome_snap`, `add_widgets`) does: choose row `.1` of menu `.0`, open the
+/// `.0`-th dock app, open the search field, or run button `.1` of widget row `.0`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChromePress {
+    MenuRow(usize, usize),
+    DockApp(usize),
+    Search,
+    Widget(usize, usize),
+}
+
+/// The first id of the dock's apps; the range ends where the widget rows start.
+const DOCK_BASE: u64 = 1000;
+/// The first widget row id; row `i` is `WIDGET_BASE + 10 * i`, its buttons the nine ids after it.
+const WIDGET_BASE: u64 = 5000;
+
+/// The press target of chrome element `id`, from the positional ids `chrome_snap` and `add_widgets` give out. The bar, a
+/// menu title, the dock, the Widgets list and a widget row are containers and press nothing.
+pub fn chrome_target(id: u64) -> Option<ChromePress> {
+    match id {
+        3 => Some(ChromePress::Search),
+        100..=999 if id % 100 != 0 => Some(ChromePress::MenuRow((id / 100 - 1) as usize, (id % 100 - 1) as usize)),
+        DOCK_BASE..=4999 => Some(ChromePress::DockApp((id - DOCK_BASE) as usize)),
+        WIDGET_BASE.. => {
+            let (row, slot) = (((id - WIDGET_BASE) / 10) as usize, (id - WIDGET_BASE) % 10);
+            (slot != 0 && row < MAX_WIDGET_ROWS).then(|| ChromePress::Widget(row, slot as usize - 1))
+        }
+        _ => None,
+    }
+}
+
+/// One widget row as the screen reader gets it: its title, its text as the value, the spoken label (title, value and
+/// an actions hint) and its buttons as `(label, toggle state, enabled)`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WidgetSnap {
+    pub title: String,
+    pub value: String,
+    pub label: String,
+    pub buttons: Vec<(String, Option<bool>, bool)>,
+}
+
+/// The node id of the Widgets list in the shell chrome tree.
+const WIDGETS_NODE: u64 = 4;
+/// The most widget rows exported; each row's buttons take the ids just after its own.
+const MAX_WIDGET_ROWS: usize = 64;
+
+/// Adds the Notification Centre widgets to the shell chrome: a Widgets list under the application with one static
+/// text per widget (name = title, value = its text, help = the spoken label) and its buttons and toggles below it.
+pub fn add_widgets(snap: &mut AppSnap, widgets: &[WidgetSnap]) {
+    if widgets.is_empty() {
+        return;
+    }
+    let bounds = Rect { x: 0., y: 0., w: 0., h: 0. };
+    let node = |id: u64, parent: Option<u64>, role: Role, name: &str, value: &str, enabled: bool, checked: Option<bool>, help: &str| SNode {
+        id, parent, role, name: name.into(), value: value.into(), bounds, enabled, focused: false, checked, title: String::new(), help: help.into(), text: None, actions: Vec::new(),
+    };
+    snap.nodes.push(node(WIDGETS_NODE, None, Role::List, "Widgets", "", true, None, ""));
+    for (i, w) in widgets.iter().enumerate().take(MAX_WIDGET_ROWS) {
+        let wid = WIDGET_BASE + 10 * i as u64;
+        snap.nodes.push(node(wid, Some(WIDGETS_NODE), Role::StaticText, &w.title, &w.value, true, None, &w.label));
+        for (j, (label, on, enabled)) in w.buttons.iter().enumerate().take(9) {
+            let role = if on.is_some() { Role::Toggle } else { Role::Button };
+            snap.nodes.push(node(wid + 1 + j as u64, Some(wid), role, label, "", *enabled, *on, ""));
+        }
+    }
+}
+
 /// The AT-SPI `Action` names of an element: `press`, and for a numeric one `increment` and `decrement`.
 pub fn action_names(numeric: bool) -> Vec<&'static str> {
     if numeric { vec!["press", "increment", "decrement"] } else { vec!["press"] }
+}
+
+/// Gives each node the custom actions its app named for it (`ToShell::AxActions`, already cleaned by the host). A set for
+/// an id that is not in `nodes` is ignored, so stale actions never outlive their element.
+pub fn with_actions(mut nodes: Vec<SNode>, sets: &[bifrost_ui::ax_action::AxActionSet]) -> Vec<SNode> {
+    for n in nodes.iter_mut() {
+        if let Some(s) = sets.iter().find(|s| s.id == n.id) {
+            n.actions = s.names.clone();
+        }
+    }
+    nodes
+}
+
+/// What `Action.DoAction(index)` asks for: index 0 is press (only on an element that can be pressed), then `increment` and
+/// `decrement` on a numeric one, then the element's custom actions by name. `None` for an index past the list.
+pub fn action_at(n: &SNode, actionable: bool, index: i32) -> Option<bifrost_proto::AxAction> {
+    use bifrost_proto::AxAction;
+    let numeric = n.role == Role::Slider;
+    let i = usize::try_from(index).ok()?;
+    let standard = bifrost_ui::ax_action::standard_count(numeric);
+    if i >= standard {
+        return n.actions.get(i - standard).map(|name| AxAction::Custom(name.clone()));
+    }
+    match action_names(numeric)[i] {
+        "press" if actionable => Some(AxAction::Press),
+        "increment" => Some(AxAction::Increment),
+        "decrement" => Some(AxAction::Decrement),
+        _ => None,
+    }
 }
 
 /// A numeric value read from the node's value text: "0.4" is 0.4 of 1.0, "40%" is 40 of 100, and "3/10"
@@ -466,6 +564,80 @@ mod tests {
         let notes = s.nodes.iter().find(|n| n.id == 1000).unwrap();
         assert_eq!((notes.role, notes.value.as_str()), (Role::Button, "open"));
         assert_eq!(s.nodes.iter().find(|n| n.id == 3).unwrap().role, Role::TextField);
+    }
+
+    #[test]
+    fn every_pressable_chrome_element_names_its_target() {
+        let menus = vec![("File".to_string(), vec![("New".to_string(), true), ("Close".to_string(), true)]), ("Edit".to_string(), vec![("Copy".to_string(), true)])];
+        let dock = vec![("Notes".to_string(), false), ("Files".to_string(), true)];
+        let s = chrome_snap(&menus, &dock);
+        let find = |name: &str| s.nodes.iter().find(|n| n.name == name).unwrap().id;
+        assert_eq!(chrome_target(find("Close")), Some(ChromePress::MenuRow(0, 1)));
+        assert_eq!(chrome_target(find("Copy")), Some(ChromePress::MenuRow(1, 0)));
+        assert_eq!(chrome_target(find("Files")), Some(ChromePress::DockApp(1)));
+        assert_eq!(chrome_target(find("Search")), Some(ChromePress::Search));
+        for container in ["Menu Bar", "File", "Dock"] {
+            assert_eq!(chrome_target(find(container)), None, "{container} presses nothing");
+        }
+    }
+
+    #[test]
+    fn custom_actions_follow_the_standard_ones_and_run_by_index() {
+        use bifrost_proto::{AxAction, Node, UiRect};
+        use bifrost_ui::ax_action::AxActionSet;
+        let r = UiRect { x: 0., y: 0., w: 10., h: 10. };
+        let nodes = vec![
+            Node { id: 1, role: Role::Row, label: "Mail".into(), value: String::new(), bounds: r, enabled: true },
+            Node { id: 2, role: Role::Slider, label: "Volume".into(), value: "0.5".into(), bounds: r, enabled: true },
+        ];
+        let sets = [AxActionSet::new(1, &["Archive", "Reply"]), AxActionSet::new(2, &["Mute"]), AxActionSet::new(9, &["Gone"])];
+        let s = with_actions(build(&nodes, &[]), &sets);
+        assert_eq!(s[0].actions, vec!["Archive", "Reply"]);
+        assert_eq!(action_at(&s[0], true, 0), Some(AxAction::Press));
+        assert_eq!(action_at(&s[0], true, 1), Some(AxAction::Custom("Archive".into())));
+        assert_eq!(action_at(&s[0], true, 2), Some(AxAction::Custom("Reply".into())));
+        assert_eq!(action_at(&s[0], true, 3), None);
+        assert_eq!(action_at(&s[0], false, 0), None, "a disabled element is not pressed");
+        assert_eq!(action_at(&s[0], true, -1), None);
+        assert_eq!(action_at(&s[1], true, 2), Some(AxAction::Decrement));
+        assert_eq!(action_at(&s[1], true, 3), Some(AxAction::Custom("Mute".into())));
+    }
+
+    #[test]
+    fn widgets_are_a_list_beside_the_chrome_with_their_buttons_below_them() {
+        let mut s = chrome_snap(&[], &[]);
+        add_widgets(&mut s, &[]);
+        assert!(!s.nodes.iter().any(|n| n.id == WIDGETS_NODE), "no list without widgets");
+        let w = WidgetSnap { title: "Next".into(), value: "Standup".into(), label: "Next, Standup, Actions: Done, Mute".into(), buttons: vec![("Done".into(), None, true), ("Mute".into(), Some(true), false)] };
+        add_widgets(&mut s, &[w]);
+        assert!(children(&s.nodes, None).contains(&WIDGETS_NODE));
+        assert_eq!(children(&s.nodes, Some(WIDGETS_NODE)), vec![5000]);
+        let row = s.nodes.iter().find(|n| n.id == 5000).unwrap();
+        assert_eq!((row.role, row.name.as_str(), row.value.as_str()), (Role::StaticText, "Next", "Standup"));
+        assert_eq!(row.help, "Next, Standup, Actions: Done, Mute", "the spoken label is the help text");
+        assert_eq!(children(&s.nodes, Some(5000)), vec![5001, 5002]);
+        let mute = s.nodes.iter().find(|n| n.id == 5002).unwrap();
+        assert_eq!((mute.role, mute.checked, mute.enabled), (Role::Toggle, Some(true), false), "a waiting toggle is not enabled");
+    }
+
+    #[test]
+    fn a_press_on_a_widget_button_reaches_the_widget_not_the_dock() {
+        let dock: Vec<(String, bool)> = (0..3).map(|i| (format!("App {i}"), false)).collect();
+        let mut s = chrome_snap(&[], &dock);
+        let rows = [
+            WidgetSnap { title: "Next".into(), value: String::new(), label: String::new(), buttons: vec![("Done".into(), None, true)] },
+            WidgetSnap { title: "Timer".into(), value: String::new(), label: String::new(), buttons: vec![("Pause".into(), None, true), ("Mute".into(), Some(false), true)] },
+        ];
+        add_widgets(&mut s, &rows);
+        let find = |name: &str| s.nodes.iter().find(|n| n.name == name).unwrap().id;
+        assert_eq!(chrome_target(find("Done")), Some(ChromePress::Widget(0, 0)));
+        assert_eq!(chrome_target(find("Mute")), Some(ChromePress::Widget(1, 1)));
+        assert_eq!(chrome_target(find("App 2")), Some(ChromePress::DockApp(2)));
+        for container in ["Widgets", "Next", "Timer"] {
+            assert_eq!(chrome_target(find(container)), None, "{container} presses nothing");
+        }
+        assert_eq!(chrome_target(4999), Some(ChromePress::DockApp(3999)), "the dock range stops below the widgets");
+        assert_eq!(chrome_target(WIDGET_BASE + 10 * MAX_WIDGET_ROWS as u64 + 1), None, "past the last widget row");
     }
 
     #[test]

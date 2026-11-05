@@ -121,7 +121,7 @@
     }
   ],
   "gaps": [
-    "Live-region announcements and custom actions reach the model only: bifrost_ui::ax has Announcements and add_custom_action (tests ax::tests), and custom rotors are in sdk/src/accessibility_rotor.rs (tests in ui/src/ax_rotor.rs); no SDK call posts an announcement.",
+    "Live-region announcements and custom actions: the SDK call Runtime::announce (springboard/sdk/src/runtime.rs:335) sends ToShell::Announce (springboard/proto/src/lib.rs:1126), the shell queues it (springboard/src/shell/apphost.rs:1450) and shows it in the announcement banner (springboard/src/shell/accessibility/banner.rs), so the announce call exists. Still missing: no SwiftUI-named announcement modifier, and no test that the spoken path reaches Midget. bifrost_ui::ax has Announcements and add_custom_action (tests ax::tests), and custom rotors are in sdk/src/accessibility_rotor.rs (tests in ui/src/ax_rotor.rs).",
     "Declarative gesture composition",
     "Focused values across scenes",
     "User activity/handoff"

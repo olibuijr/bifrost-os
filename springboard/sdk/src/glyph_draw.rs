@@ -55,6 +55,10 @@ pub fn text_path(font: &Font, text: &str, px: f32, vars: &[Var], origin: (f32, f
     let mut x = 0.0_f32;
     let mut all = Path::new();
     for ch in text.chars() {
+        // default-ignorable characters (zero-width spaces, joiners, the soft hyphen) take no room and draw nothing
+        if bifrost_render::font::is_default_ignorable(ch) {
+            continue;
+        }
         let gid = font.glyph(ch);
         let p = glyph_path(font, gid, px, vars, (origin.0 + x, origin.1));
         for sp in p.flatten_subpaths(0.1) {

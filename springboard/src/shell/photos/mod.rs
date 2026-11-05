@@ -28,6 +28,7 @@ pub mod models;
 pub mod places;
 pub mod recipe;
 pub mod repair;
+pub mod sidebar;
 pub mod slideshow;
 pub mod stars;
 pub mod thumbs;
@@ -91,6 +92,15 @@ const BAR_PT: f32 = 50.0;
 const MARGIN_PT: f32 = 16.0;
 const EMPTY_BUTTON_W_PT: f32 = 137.0;
 const EMPTY_BUTTON_H_PT: f32 = 28.5;
+/// The empty library's hint, its first line in the reference's two-line layout, and its type.
+const EMPTY_HINT: &str = "You can take photos and videos using the camera, or copy photos and videos into Pictures using Files.";
+const EMPTY_HINT_FIRST: &str = "You can take photos and videos using the camera, or";
+const EMPTY_HINT_PT: f32 = 17.0;
+/// Line pitch of the empty library's hint.
+const EMPTY_LINE_PT: f32 = 22.0;
+/// Empty-state text wraps to at least this width and at most this many lines.
+const EMPTY_HINT_MIN_PT: f32 = 40.0;
+const EMPTY_HINT_MAX_LINES: usize = 6;
 const SHEET_ROW_PT: f32 = 56.0;
 const SHEET_W_PT: f32 = 260.0;
 /// Columns the zoom buttons step through (fewer = bigger).
@@ -507,8 +517,21 @@ enum Done {
 }
 
 pub struct Photos {
+    /// the photo pane's width: the window's, less the source list on the desktop
     w: i32,
     h: i32,
+    /// the window's width (px); `w` plus `sidebar`
+    win_w: i32,
+    /// the desktop sidebar layout (`sidebar.rs`): a source list beside the pane and a toolbar in the unified band
+    desktop: bool,
+    /// the source list's width in px (0 on the tablet)
+    sidebar: i32,
+    /// the press in progress began in the source list, and the row it landed on
+    side_down: bool,
+    side_press: Option<sidebar::Row>,
+    /// the source list's scroll (px), and the album it last brought into view (`sidebar.rs` `fit_side`)
+    side_scroll: Scroller,
+    side_shown: Option<Album>,
     data: PathBuf,
     pictures: PathBuf,
     dirs: Vec<PathBuf>,
@@ -669,6 +692,7 @@ fn nav_mid(ui: &Ui) -> f32 {
 impl Photos {
     /// A pinch step on the open picture, about `focal` (px in the Photos content). False when no picture is open.
     pub fn pinch(&mut self, step: f32, focal: (f32, f32)) -> bool {
+        let focal = (focal.0 - self.sidebar_px() as f32, focal.1);
         match self.viewer.as_mut() {
             Some(v) => {
                 v.pinch(step, focal);
@@ -685,10 +709,64 @@ impl Photos {
         }
     }
 
-    /// Lays the app out for a pane of `w` x `h` px (Split View, Slide Over).
-    pub fn set_size(&mut self, w: i32, h: i32) {
-        self.w = w;
+    /// Lays the app out for a pane of `w` x `h` px (Split View, Slide Over, a desktop window). On the desktop the pane
+    /// is the window less the source list, applied here so keys, menu commands and scrolling use the new width before
+    /// the next draw.
+    pub fn set_size(&mut self, ui: &Ui, w: i32, h: i32) {
+        // a new height may leave the open album's row out of view: bring it back on the fit below
+        if h != self.h {
+            self.side_shown = None;
+        }
+        self.win_w = w;
         self.h = h;
+        if self.desktop {
+            self.fit_pane(ui);
+        } else {
+            self.w = w;
+        }
+    }
+
+    /// Turns the desktop sidebar layout on or off: a full-size window with a source list and a toolbar on the desktop
+    /// form factor; the tablet keeps its push navigation (`sidebar.rs`).
+    pub fn set_desktop(&mut self, ui: &Ui, on: bool) {
+        self.desktop = on;
+        sidebar::set_sidebar_layout(on);
+        self.fit_pane(ui);
+    }
+
+    /// The source list's width in px (0 on the tablet): the column the shell declares as the `.sidebar` material.
+    pub fn sidebar_px(&self) -> i32 {
+        if self.desktop { self.sidebar } else { 0 }
+    }
+
+    /// Sizes the source list for the window and gives the pane the rest; the grid is laid out again when the pane's
+    /// width changed.
+    fn fit_pane(&mut self, ui: &Ui) {
+        let pt = ui.pt(1.0).max(0.01);
+        self.sidebar = if self.desktop { ui.pt(sidebar::width(self.win_w as f32 / pt, self.h as f32 / pt)).round() as i32 } else { 0 };
+        let w = (self.win_w - self.sidebar).max(1);
+        if w != self.w {
+            self.w = w;
+            self.grid = Grid::build(&self.sections, self.cols, self.w as f32, GAP_PX, ui.pt(HEADER_PT));
+            self.fit_scroll(ui);
+            self.dirty = true;
+        }
+        self.fit_side(ui);
+    }
+
+    /// Top of the pane's content: under the navigation bar on the tablet, under the unified toolbar band on the desktop.
+    fn top(&self, ui: &Ui) -> f32 {
+        if self.desktop { ui.pt(sidebar::BAR_PT) } else { content_top(ui) }
+    }
+
+    /// Vertical centre of the navigation bar, or of the desktop toolbar band.
+    fn mid(&self, ui: &Ui) -> f32 {
+        if self.desktop { ui.pt(sidebar::BAR_PT / 2.0) } else { nav_mid(ui) }
+    }
+
+    /// Where the navigation bar starts: under the status bar on the tablet, the window's top edge on the desktop.
+    fn status_top(&self, ui: &Ui) -> f32 {
+        if self.desktop { 0.0 } else { ui.pt(STATUS_PT) }
     }
 
     /// `data` holds the caches and settings, `dirs` are scanned for pictures
@@ -703,6 +781,13 @@ impl Photos {
         let mut p = Photos {
             w,
             h,
+            win_w: w,
+            desktop: false,
+            sidebar: 0,
+            side_down: false,
+            side_press: None,
+            side_scroll: Scroller::new(),
+            side_shown: None,
             pictures,
             dirs,
             pool: Pool::new(WORKERS)?,
@@ -841,7 +926,7 @@ impl Photos {
         if let Some((_, until)) = &self.note {
             due = earliest(due, Some(*until));
         }
-        if self.keywords_open && self.kw_scroll.animating() {
+        if (self.keywords_open && self.kw_scroll.animating()) || (self.desktop && self.side_scroll.animating()) {
             due = earliest(due, Some(self.now));
         }
         due
@@ -1347,7 +1432,7 @@ impl Photos {
     }
 
     fn fit_scroll(&mut self, ui: &Ui) {
-        let view = self.content_bottom(ui) - content_top(ui);
+        let view = self.content_bottom(ui) - self.top(ui);
         self.scroll.set_max(self.grid.height - view);
     }
 
@@ -1380,6 +1465,20 @@ impl Photos {
         true
     }
 
+    /// Opens the viewer on the picture at `path` (the Dock's Downloads stack opens a picture whose default app is
+    /// Photos): from the library, or, for a picture outside it, read now and kept with the pictures added this session
+    /// (`add_photo`, which a rescan keeps). False when the file cannot be read as a picture.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub fn open_file(&mut self, ui: &Ui, path: &Path) -> bool {
+        if self.show(ui, path) {
+            return true;
+        }
+        let Some(image) = std::fs::read(path).ok().and_then(|b| decode_upright(&b)) else { return false };
+        let Some(photo) = Photo::from_path_at(path.to_path_buf(), self.offset) else { return false };
+        self.add_photo(ui, photo, image);
+        self.show(ui, path)
+    }
+
     fn open_viewer(&mut self, i: usize) {
         if i >= self.photos().len() {
             return;
@@ -1395,7 +1494,7 @@ impl Photos {
 
     fn request_thumbs(&mut self, ui: &Ui) {
         let top = self.scroll.offset();
-        let view = self.content_bottom(ui) - content_top(ui);
+        let view = self.content_bottom(ui) - self.top(ui);
         // while moving, also the screenful the scroll is heading to
         let ahead = if top > self.thumb_scroll { (top + view, top + 2.0 * view) } else if top < self.thumb_scroll { (top - view, top) } else { (top, top) };
         self.thumb_scroll = top;
@@ -1609,6 +1708,9 @@ impl Photos {
         if self.keywords_open {
             self.dirty |= self.kw_scroll.tick(t);
         }
+        if self.desktop {
+            self.dirty |= self.side_scroll.tick(t);
+        }
         if let Some(e) = self.entry.as_mut() {
             let typed = e.keyboard.tick(t);
             e.field.tick(ui, t);
@@ -1650,14 +1752,35 @@ impl Photos {
         self.album == Album::All && self.filter.is_none() && self.search.is_empty() && !self.selection.active && !self.scanning && self.photos().is_empty()
     }
 
-    /// The empty library's Open Camera button (x, y, w, h), centred on the screen.
+    /// The empty library's hint wrapped to the pane: the reference's two lines (broken after "or") where they fit,
+    /// more lines in a narrow pane so nothing runs past its edges or under the source list.
+    fn empty_hint_lines(&self, ui: &Ui) -> Vec<String> {
+        let max = (self.w as f32 - 2.0 * ui.pt(MARGIN_PT)).max(ui.pt(EMPTY_HINT_MIN_PT));
+        let second = &EMPTY_HINT[EMPTY_HINT_FIRST.len() + 1..];
+        if [EMPTY_HINT_FIRST, second].iter().all(|l| ui.measure(l, EMPTY_HINT_PT, Weight::Regular) <= max) {
+            return vec![EMPTY_HINT_FIRST.to_string(), second.to_string()];
+        }
+        ui.wrap_capped(EMPTY_HINT, EMPTY_HINT_PT, Weight::Regular, max, EMPTY_HINT_MAX_LINES)
+    }
+
+    /// How far (pixels) the empty library's block moves down from its two-line layout; negative moves it up. The
+    /// block stays centred on the pane as the hint gains or loses lines.
+    fn empty_shift(&self, ui: &Ui, lines: usize) -> f32 {
+        ui.pt((lines as f32 - 2.0) * EMPTY_LINE_PT / 2.0)
+    }
+
+    /// The empty library's Open Camera button (x, y, w, h), centred in the pane under the hint.
     fn camera_button(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         let (w, h) = (ui.pt(EMPTY_BUTTON_W_PT), ui.pt(EMPTY_BUTTON_H_PT));
-        ((self.w as f32 - w) / 2.0, self.h as f32 / 2.0 + ui.pt(34.0), w, h)
+        let shift = self.empty_shift(ui, self.empty_hint_lines(ui).len());
+        ((self.w as f32 - w) / 2.0, self.h as f32 / 2.0 + shift + ui.pt(34.0), w, h)
     }
 
     fn nav_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
-        if y >= ui.pt(STATUS_PT) && y < content_top(ui) {
+        if self.desktop {
+            return self.toolbar_hit(ui, x, y);
+        }
+        if y >= self.status_top(ui) && y < self.top(ui) {
             let m = ui.pt(MARGIN_PT);
             if x < m + ui.pt(150.0) {
                 return Some(if self.showing_pick() { Target::PlacesBack } else { Target::Album });
@@ -1754,7 +1877,7 @@ impl Photos {
                         return Some(t);
                     }
                 }
-                if y < content_top(ui) && x < ui.pt(120.0) {
+                if y < self.top(ui) && x < ui.pt(120.0) {
                     return Some(Target::ShowDone);
                 }
             }
@@ -1779,15 +1902,15 @@ impl Photos {
                     Target::Content
                 });
             }
-            if y < content_top(ui) || y >= self.content_bottom(ui) {
+            if y < self.top(ui) || y >= self.content_bottom(ui) {
                 return None;
             }
             if self.album == Album::Places && self.place_pick.is_none() {
-                let (local_x, local_y) = (f64::from(x), f64::from(y - content_top(ui)));
+                let (local_x, local_y) = (f64::from(x), f64::from(y - self.top(ui)));
                 let radius = f64::from(ui.pt(18.0));
                 return Some(places::cluster_at(&self.place_clusters(ui), local_x, local_y, radius).map_or(Target::Content, Target::Place));
             }
-            return Some(self.grid.hit(x, y - content_top(ui) + self.scroll.offset()).map_or(Target::Content, Target::Cell));
+            return Some(self.grid.hit(x, y - self.top(ui) + self.scroll.offset()).map_or(Target::Content, Target::Cell));
         };
         if let Some(sheet) = self.sheet {
             if sheet == Sheet::Details {
@@ -1845,7 +1968,7 @@ impl Photos {
             }
         }
         if v.chrome {
-            if y < content_top(ui) {
+            if y < self.top(ui) {
                 return Some(if x < ui.pt(160.0) {
                     Target::Back
                 } else if x >= self.w as f32 - ui.pt(100.0) && self.album != Album::Trash {
@@ -1888,6 +2011,16 @@ impl Photos {
     }
 
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) {
+        if self.desktop {
+            self.fit_pane(ui);
+            // a press in the source list is the list's; the rest reaches the pane in its own coordinates
+            let Some(ev) = self.side_touch(ui, ev, t) else { return };
+            return self.touch_pane(ui, ev, t);
+        }
+        self.touch_pane(ui, ev, t)
+    }
+
+    fn touch_pane(&mut self, ui: &Ui, ev: Event, t: f64) {
         self.dirty = true;
         self.now = t;
         if self.entry.is_some() {
@@ -2498,7 +2631,7 @@ impl Photos {
 
     fn edit_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
         let w = self.w as f32;
-        if y >= ui.pt(STATUS_PT) && y < content_top(ui) {
+        if y >= self.status_top(ui) && y < self.top(ui) {
             return Some(if x < w / 3.0 {
                 Target::EditCancel
             } else if x < w * 2.0 / 3.0 {
@@ -2652,6 +2785,12 @@ impl Photos {
 
     // --- drawing ---
 
+    /// A one-line bold empty-state title shortened with an ellipsis to the pane's width less its margins.
+    fn fit_pane_text(&self, ui: &Ui, text: &str, pt: f32) -> String {
+        let max = (self.w as f32 - 2.0 * ui.pt(MARGIN_PT)).max(ui.pt(EMPTY_HINT_MIN_PT));
+        ui.wrap_capped(text, pt, Weight::Bold, max, 1).into_iter().next().unwrap_or_default()
+    }
+
     fn label(&mut self, s: &mut Surface, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32, cx: f32, cy: f32) {
         let img = self.text.get(ui, text, pt, weight, color);
         let (w, h) = (img.w as i32, img.h as i32);
@@ -2665,8 +2804,26 @@ impl Photos {
     }
 
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
+        if !self.desktop {
+            return self.draw_pane(s, ui, t);
+        }
+        // the desktop window: the source list, then the pane drawn on its own and set beside it
+        self.fit_pane(ui);
+        let mut image = Image::new(self.w.max(1) as usize, self.h.max(1) as usize);
+        {
+            let mut pane = Surface { w: image.w, h: image.h, stride: image.w, px: &mut image.px, y0: 0 };
+            self.draw_pane(&mut pane, ui, t);
+        }
+        self.draw_sidebar(s, ui);
+        s.blit(&image, self.sidebar, 0, 255, 255);
+        self.publish_toolbar(ui);
+    }
+
+    fn draw_pane(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         self.dirty = false;
-        s.fill_rect(0, 0, self.w as usize, self.h as usize, BLACK);
+        // the viewer, the editor and a slideshow are black on every form; the grid follows the appearance on the desktop
+        let bg = if self.slideshow.is_some() || self.editor.is_some() || self.viewer.is_some() { BLACK } else { self.pane_bg() };
+        s.fill_rect(0, 0, self.w as usize, self.h as usize, bg);
         if self.slideshow.is_some() {
             self.draw_slideshow(s, ui);
         } else if self.editor.is_some() {
@@ -2741,7 +2898,7 @@ impl Photos {
 
     /// The centre of the viewer's play/pause control.
     fn clip_centre(&self, ui: &Ui) -> (f32, f32) {
-        (self.w as f32 / 2.0, (content_top(ui) + self.bar_top(ui)) / 2.0)
+        (self.w as f32 / 2.0, (self.top(ui) + self.bar_top(ui)) / 2.0)
     }
 
     /// The movie's controls under a touch: the progress bar (seek) or the play/pause button.
@@ -2790,14 +2947,14 @@ impl Photos {
 
     /// The pins of the Places map for the current window: clusters of photos that would overlap on screen.
     fn place_clusters(&self, ui: &Ui) -> Vec<places::Cluster> {
-        let h = (self.content_bottom(ui) - content_top(ui)).max(0.0) as u32;
+        let h = (self.content_bottom(ui) - self.top(ui)).max(0.0) as u32;
         places::layout(&self.place_points, self.w as u32, h, f64::from(ui.pt(PIN_CELL_PT)))
     }
 
     /// The Places map: a graticule over the content area, the shared map tiles over it, and one pin per cluster with
     /// a count on pins that stand for several photos.
     fn draw_places(&mut self, s: &mut Surface, ui: &Ui) {
-        let (top, bottom) = (content_top(ui), self.content_bottom(ui));
+        let (top, bottom) = (self.top(ui), self.content_bottom(ui));
         let step = ui.pt(48.0) as usize;
         let (w, top_u, h) = (self.w as usize, top as usize, (bottom - top).max(0.0) as usize);
         let mut x = 0;
@@ -2821,6 +2978,9 @@ impl Photos {
             if many {
                 self.label(s, ui, &c.members.len().to_string(), 14.0, Weight::Bold, WHITE, cx, cy);
             }
+        }
+        if self.desktop {
+            self.draw_toolbar(s, ui);
         }
     }
 
@@ -2864,19 +3024,20 @@ impl Photos {
     }
 
     fn draw_grid(&mut self, s: &mut Surface, ui: &Ui) {
-        let (top, bottom) = (content_top(ui), self.content_bottom(ui));
+        let (top, bottom) = (self.top(ui), self.content_bottom(ui));
         let off = self.scroll.offset();
         let pressed = self.pressed;
         let empty = self.photos().is_empty();
         let selecting = self.selection.active;
         let fit = self.fit_grid();
+        let (header_ink, cell_bg) = (self.pane_label(), self.pane_cell());
         let keys: Vec<(usize, String, bool, bool)> = self.grid.visible(off, off + bottom - top).into_iter().filter_map(|i| self.photos().get(i).map(|p| (i, self.thumb_key(p), self.album != Album::Trash && self.fav_paths.contains(&p.path), self.selection.contains(&p.path)))).collect();
         {
             let mut band = s.rows(top as usize, bottom as usize);
             for (si, y) in self.grid.headers(off, off + bottom - top) {
                 let title = self.sections[si].title.clone();
                 let hy = top + y - off + ui.pt(HEADER_PT) / 2.0 + ui.pt(4.0);
-                self.label_left(&mut band, ui, &title, 22.0, Weight::Bold, WHITE, ui.pt(MARGIN_PT), hy);
+                self.label_left(&mut band, ui, &title, 22.0, Weight::Bold, header_ink, ui.pt(MARGIN_PT), hy);
             }
             for (i, key, favorite, picked) in keys {
                 let (x, y, cw, ch) = self.grid.cell_rect(i);
@@ -2887,7 +3048,7 @@ impl Photos {
                         let target = if fit { fit_rect(r, img.w, img.h) } else { r };
                         super::switcher::draw_scaled(&mut band, img, target, 0.0, 255)
                     }
-                    None => band.fill_rect(r.x as usize, r.y as usize, r.w as usize, r.h as usize, CELL),
+                    None => band.fill_rect(r.x as usize, r.y as usize, r.w as usize, r.h as usize, cell_bg),
                 }
                 if pressed == Some(Target::Cell(i)) {
                     band.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, 0.0, pack(0, 0, 0, 100));
@@ -2918,38 +3079,55 @@ impl Photos {
             let cx = self.w as f32 / 2.0;
             if self.blank_library() {
                 let cy = self.h as f32 / 2.0;
-                self.label(s, ui, "No Photos or Videos", 22.0, Weight::Bold, EMPTY_STATE_GRAY, cx, cy - ui.pt(50.5));
-                self.label(s, ui, "You can take photos and videos using the camera, or", 17.0, Weight::Regular, EMPTY_STATE_GRAY, cx, cy - ui.pt(22.0));
-                self.label(s, ui, "copy photos and videos into Pictures using Files.", 17.0, Weight::Regular, EMPTY_STATE_GRAY, cx, cy);
+                let lines = self.empty_hint_lines(ui);
+                // the two-line layout's last line sits at cy; extra lines grow the block equally up and down
+                let shift = self.empty_shift(ui, lines.len());
+                let first = cy + shift - ui.pt(EMPTY_LINE_PT) * (lines.len().max(1) - 1) as f32;
+                let title = self.fit_pane_text(ui, "No Photos or Videos", 22.0);
+                self.label(s, ui, &title, 22.0, Weight::Bold, EMPTY_STATE_GRAY, cx, first - ui.pt(28.5));
+                for (i, line) in lines.iter().enumerate() {
+                    self.label(s, ui, line, EMPTY_HINT_PT, Weight::Regular, EMPTY_STATE_GRAY, cx, first + ui.pt(EMPTY_LINE_PT) * i as f32);
+                }
                 let (bx, by, bw, bh) = self.camera_button(ui);
                 let (r, line) = (ui.pt(2.0), ui.pt(1.0));
                 s.fill_rrect(bx, by, bw, bh, r, EMPTY_STATE_GRAY);
-                s.fill_rrect(bx + line, by + line, bw - 2.0 * line, bh - 2.0 * line, (r - line).max(0.0), if pressed == Some(Target::OpenCamera) { rgba(255, 255, 255, 40) } else { BLACK });
+                s.fill_rrect(bx + line, by + line, bw - 2.0 * line, bh - 2.0 * line, (r - line).max(0.0), if pressed == Some(Target::OpenCamera) { rgba(255, 255, 255, 40) } else { self.pane_bg() });
                 self.label(s, ui, "Open Camera", 17.0, Weight::Regular, EMPTY_STATE_GRAY, cx, by + bh / 2.0);
             } else {
                 let cy = (top + bottom) / 2.0;
                 let (title, hint) = match (self.album, &self.filter) {
-                    _ if !self.search.is_empty() => ("No Results", "Nothing matches your search. Tap the title to change it."),
-                    (_, Some(_)) => ("No Photos", "Nothing matches the date filter. Tap the title to change it."),
+                    _ if !self.search.is_empty() => ("No Results", "Nothing matches your search. Click the title to change it."),
+                    (_, Some(_)) => ("No Photos", "Nothing matches the date filter. Click the title to change it."),
                     (Album::All, _) => ("No Photos", "Screenshots and pictures you save appear here."),
                     (Album::Recents, _) => ("No Recent Photos", "Pictures from the last 30 days appear here."),
-                    (Album::Favorites, _) => ("No Favorites", "Tap the heart on a photo to add it to Favorites."),
+                    (Album::Favorites, _) => ("No Favorites", "Click the heart on a photo to add it to Favorites."),
                     (Album::Screenshots, _) => ("No Screenshots", "Screenshots you take appear here."),
                     (Album::Trash, _) => ("No Recently Deleted Photos", "Deleted photos wait here for 30 days."),
                     (Album::Hidden, _) => ("No Hidden Photos", "Photos you hide from All Photos appear here."),
                     (Album::Duplicates, _) => ("No Duplicates", "Pictures that are the same file appear here."),
                     (Album::Places, _) => ("No Places", "Photos with a location in their file appear here."),
-                    (Album::User(_), _) => ("No Photos", "Open a photo and tap Album to add it here."),
+                    (Album::User(_), _) => ("No Photos", "Open a photo and click Album to add it here."),
                     (Album::Smart(_), _) => ("No Photos", "No photo matches the rules of this smart album."),
                     (Album::Memory(_), _) => ("No Photos", "This memory has no photos left."),
                 };
-                self.label(s, ui, title, 22.0, Weight::Bold, WHITE, cx, cy - ui.pt(14.0));
-                self.label(s, ui, hint, 15.0, Weight::Regular, SECONDARY, cx, cy + ui.pt(14.0));
+                let max = (self.w as f32 - 2.0 * ui.pt(MARGIN_PT)).max(ui.pt(EMPTY_HINT_MIN_PT));
+                let lines = ui.wrap_capped(hint, 15.0, Weight::Regular, max, EMPTY_HINT_MAX_LINES);
+                let step = ui.pt(19.0);
+                let first = cy + ui.pt(14.0) - step * (lines.len().max(1) - 1) as f32 / 2.0;
+                let title = self.fit_pane_text(ui, title, 22.0);
+                self.label(s, ui, &title, 22.0, Weight::Bold, self.pane_label(), cx, first - ui.pt(28.0));
+                for (i, line) in lines.iter().enumerate() {
+                    self.label(s, ui, line, 15.0, Weight::Regular, self.pane_label2(), cx, first + step * i as f32);
+                }
             }
         }
-        // navigation bar over the content
+        // navigation bar over the content; on the desktop, the toolbar in the unified band
+        if self.desktop {
+            self.draw_toolbar(s, ui);
+            return self.finish_grid(s, ui);
+        }
         s.fill_rect(0, 0, self.w as usize, top as usize, BLACK);
-        let mid = nav_mid(ui);
+        let mid = self.mid(ui);
         let m = ui.pt(MARGIN_PT);
         let blank = self.blank_library();
         let title = if self.selection.active {
@@ -3036,7 +3214,7 @@ impl Photos {
     fn album_row(&self, ui: &Ui, album: Album) -> (f32, f32, f32, f32) {
         let row = self.menu_albums().iter().position(|&a| a == album).unwrap_or(0);
         let margin = ui.pt(MARGIN_PT);
-        (margin, content_top(ui) + ui.pt(8.0 + row as f32 * 56.0), ui.pt(280.0).min(self.w as f32 - 2.0 * margin), ui.pt(56.0))
+        (margin, self.top(ui) + ui.pt(8.0 + row as f32 * 56.0), ui.pt(280.0).min(self.w as f32 - 2.0 * margin), ui.pt(56.0))
     }
 
     /// The `k`-th row under the album list.
@@ -3149,12 +3327,12 @@ impl Photos {
             self.draw_clip_controls(s, ui);
         }
         let current = around.into_iter().find(|(i, _)| *i == index).map(|(_, p)| p);
-        let top = content_top(ui);
+        let top = self.top(ui);
         s.fill_rect(0, 0, w, top as usize, BAR);
         let bar_top = self.bar_top(ui);
         s.fill_rect(0, bar_top as usize, w, h - bar_top as usize, BAR);
         let pressed = self.pressed;
-        let mid = nav_mid(ui);
+        let mid = self.mid(ui);
         let m = ui.pt(MARGIN_PT);
         let back = if pressed == Some(Target::Back) { rgba(10, 132, 255, 140) } else { BLUE };
         self.label_left(s, ui, "‹", 34.0, Weight::Medium, back, m - ui.pt(6.0), mid - ui.pt(2.0));
@@ -3256,7 +3434,7 @@ impl Photos {
 
     /// The edit screen: the live preview and the tool panel.
     fn draw_editor(&mut self, s: &mut Surface, ui: &Ui) {
-        let (w, top, panel) = (self.w as f32, content_top(ui), self.edit_panel_top(ui));
+        let (w, top, panel) = (self.w as f32, self.top(ui), self.edit_panel_top(ui));
         let Some((cur, preview)) = self.editor.as_ref().map(|e| (e.edit, (e.preview.w as f32, e.preview.h as f32))) else { return };
         if let Some(ed) = &self.editor {
             let (aw, ah) = (w, panel - top);
@@ -3267,7 +3445,7 @@ impl Photos {
         }
         s.fill_rect(0, 0, w as usize, top as usize, BAR);
         s.fill_rect(0, panel as usize, w as usize, self.h as usize - panel as usize, BAR);
-        let (mid, m, pressed) = (nav_mid(ui), ui.pt(MARGIN_PT), self.pressed);
+        let (mid, m, pressed) = (self.mid(ui), ui.pt(MARGIN_PT), self.pressed);
         let tint = |t: Target, c: u32| if pressed == Some(t) { crate::gfx::scale(c, 140) } else { c };
         if cur.is_identity() {
             self.label(s, ui, "Edit", 17.0, Weight::Semibold, WHITE, w / 2.0, mid);
@@ -3440,13 +3618,13 @@ impl Photos {
         if !controls {
             return;
         }
-        let top = content_top(ui);
+        let top = self.top(ui);
         s.fill_rect(0, 0, w, top as usize, BAR);
         let bar_top = self.bar_top(ui);
         s.fill_rect(0, bar_top as usize, w, h - bar_top as usize, BAR);
         let pressed = self.pressed;
         let col = |t: Target| if pressed == Some(t) { rgba(10, 132, 255, 140) } else { BLUE };
-        self.label_left(s, ui, "Done", 17.0, Weight::Semibold, col(Target::ShowDone), ui.pt(MARGIN_PT), nav_mid(ui));
+        self.label_left(s, ui, "Done", 17.0, Weight::Semibold, col(Target::ShowDone), ui.pt(MARGIN_PT), self.mid(ui));
         let (cx, cy, k) = (w as f32 / 2.0, self.show_bar_y(ui) + ui.pt(BAR_PT) / 2.0, ui.pt(10.0));
         let step = ui.pt(96.0);
         for (t, bx, dir) in [(Target::ShowPrev, cx - step, -1.0f32), (Target::ShowNext, cx + step, 1.0)] {
@@ -3631,692 +3809,4 @@ fn read_head(path: &Path) -> Vec<u8> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::library::tests::{picture, scratch};
-    use super::*;
-    use crate::shell::tests::ui;
-
-    /// The embedded 8x8 fixture with an EXIF block of the given orientation spliced in.
-    fn oriented_jpeg(orientation: u16) -> Vec<u8> {
-        use super::exif::tests::{short, tiff};
-        let dot = include_bytes!("../../deildu/fixtures/dot.jpg");
-        let t = tiff(true, vec![short(true, 0x0112, orientation)], vec![], vec![]);
-        let mut out = dot[..2].to_vec();
-        out.extend([0xFF, 0xE1]);
-        out.extend(((t.len() + 8) as u16).to_be_bytes());
-        out.extend(b"Exif\0\0");
-        out.extend(&t);
-        out.extend(&dot[2..]);
-        out
-    }
-
-    #[test]
-    fn decoding_applies_the_exif_orientation() {
-        let plain = crate::cg::imageio::decode(include_bytes!("../../deildu/fixtures/dot.jpg")).unwrap();
-        assert_eq!(decode_upright(&oriented_jpeg(1)).unwrap(), plain);
-        assert_eq!(decode_upright(&oriented_jpeg(3)).unwrap(), edit::rotate(&plain, 2));
-        assert_eq!(decode_upright(&oriented_jpeg(6)).unwrap(), edit::rotate(&plain, 1));
-    }
-
-    /// A Photos app over a scratch library of `n` pictures a day apart.
-    pub(super) fn photos(name: &str, n: usize) -> (Photos, PathBuf, Ui) {
-        let ui = ui();
-        let dir = scratch(name);
-        let pics = dir.join("Pictures");
-        for i in 0..n {
-            picture(&pics.join(format!("IMG_{i:04}.png")), 1_790_000_000 + i as i64 * 86_400);
-        }
-        let mut p = Photos::new(&ui, 1200, 1920, dir.clone(), vec![pics, dir.join("missing")], 0).unwrap();
-        pump_until(&mut p, &ui, |p| !p.scanning);
-        (p, dir, ui)
-    }
-
-    pub(super) fn pump_until(p: &mut Photos, ui: &Ui, done: impl Fn(&Photos) -> bool) {
-        let start = std::time::Instant::now();
-        while !done(p) && start.elapsed().as_secs() < 30 {
-            crate::bare::sys::wait(&p.fds(), 50);
-            p.pump(ui);
-        }
-        assert!(done(p), "timed out: {}", p.describe());
-    }
-
-    pub(super) fn tap(p: &mut Photos, ui: &Ui, x: f32, y: f32, t: f64) {
-        p.touch(ui, Event::Down(x, y), t);
-        p.touch(ui, Event::Up(x, y), t + 30.0);
-    }
-
-    pub(super) fn choose_album(p: &mut Photos, ui: &Ui, album: Album, t: f64) {
-        tap(p, ui, ui.pt(40.0), nav_mid(ui), t);
-        assert!(p.album_menu);
-        let (x, y, w, h) = p.album_row(ui, album);
-        tap(p, ui, x + w / 2.0, y + h / 2.0, t + 100.0);
-        assert_eq!(p.album(), album);
-        assert!(!p.album_menu);
-    }
-
-    pub(super) fn frame(p: &mut Photos, ui: &Ui) -> Vec<u32> {
-        let mut buf = vec![0u32; 1200 * 1920];
-        p.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, ui, 0.0);
-        buf
-    }
-
-    #[test]
-    fn album_rows_delete_sort_and_set_the_slide_length() {
-        let (mut p, dir, ui) = photos("album-rows", 2);
-        assert_eq!((p.new_album(), p.new_album(), p.new_album()), (Some(0), Some(1), Some(2)));
-        p.pref_set("ua.0.name", "Trip");
-        p.pref_set("ua.1.name", "aspen");
-        p.pref_set("ua.2.name", "Beach");
-        p.rebuild(&ui);
-        let order = |p: &Photos| p.menu_albums().into_iter().filter_map(|a| if let Album::User(i) = a { Some(i) } else { None }).collect::<Vec<_>>();
-        assert_eq!(order(&p), [0, 1, 2]);
-
-        // Sort Albums flips between creation order and by name
-        tap(&mut p, &ui, ui.pt(40.0), nav_mid(&ui), 100.0);
-        let (x, y, w, h) = p.extra_row_of(&ui, Target::AlbumSort);
-        tap(&mut p, &ui, x + w / 2.0, y + h / 2.0, 200.0);
-        assert_eq!(p.prefs.get("album_sort"), Some("name"));
-        assert_eq!(order(&p), [1, 2, 0]);
-
-        // the Slideshow row steps the seconds and the show uses them
-        assert_eq!(p.show_seconds(), 4);
-        p.touch(&ui, Event::Down(x + w / 2.0, y + h / 2.0 + h), 300.0);
-        p.touch(&ui, Event::Up(x + w / 2.0, y + h / 2.0 + h), 330.0);
-        assert!(p.album_menu, "the picker stays open after the first tap");
-        assert_eq!(p.show_seconds(), 6);
-        p.start_slideshow(p.photos().to_vec(), 0, 400.0);
-        assert!(p.slideshow.is_some());
-        p.slideshow = None;
-        p.album_menu = false;
-
-        // Delete Album removes the open album; the later one moves down
-        p.select_album(&ui, Album::User(1));
-        tap(&mut p, &ui, ui.pt(40.0), nav_mid(&ui), 500.0);
-        let (x, y, w, h) = p.extra_row_of(&ui, Target::DeleteAlbum);
-        tap(&mut p, &ui, x + w / 2.0, y + h / 2.0, 600.0);
-        assert_eq!(p.album(), Album::All);
-        assert_eq!(p.user_albums.len(), 2);
-        assert_eq!(p.album_title(Album::User(0)), "Trip");
-        assert_eq!(p.album_title(Album::User(1)), "Beach");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn scans_into_month_sections_and_starts_at_the_bottom() {
-        let (mut p, dir, ui) = photos("sections", 12);
-        assert_eq!(p.photos().len(), 12);
-        assert_eq!(p.sections.iter().map(|s| s.title.as_str()).collect::<Vec<_>>(), ["September 2026", "October 2026"]);
-        assert_eq!(p.cols(), 5);
-        assert_eq!(p.scroll.offset(), 0.0, "twelve photos fit on one screen");
-        assert!(p.describe().contains("photos_screen=grid"));
-        // thumbnails are decoded for the visible cells and cached on disk
-        p.tick(&ui, 0.0);
-        pump_until(&mut p, &ui, |p| p.thumbs.len() == 12);
-        assert_eq!(p.disk.len(), 12);
-        assert!(p.thumb_pending.is_empty());
-        let buf = frame(&mut p, &ui);
-        let (x, y, cw, ch) = p.grid.cell_rect(0);
-        let px = buf[(content_top(&ui) + y + ch / 2.0) as usize * 1200 + (x + cw / 2.0) as usize];
-        assert_eq!(px, pack(10, 20, 30, 255), "the thumbnail's colour fills its cell");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn thumbnail_requests_cover_the_visible_cells_and_drop_the_rest() {
-        let (mut p, dir, ui) = photos("wanted", 12);
-        p.tick(&ui, 0.0);
-        let visible: HashSet<String> = p.grid.visible(0.0, p.content_bottom(&ui) - content_top(&ui)).into_iter().map(|i| p.photos()[i].key()).collect();
-        assert_eq!(*p.thumb_wanted.lock().unwrap_or_else(|p| p.into_inner()), visible);
-        assert_eq!(visible.len(), 12);
-        // the caching manager holds one preparation per visible thumbnail, at the grid's thumbnail size
-        assert_eq!(p.preheat.len(), 12);
-        assert!(p.preheat.is_started(&PreKey::new(&p.photos()[0].key(), thumbs::SIZE as u32, thumbs::SIZE as u32)));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn revert_to_original_drops_the_saved_edit_and_never_touches_the_file() {
-        let (mut p, dir, ui) = photos("revert", 1);
-        let original = dir.join("Pictures/IMG_0000.png");
-        p.open_viewer(0);
-        frame(&mut p, &ui);
-        let photo = p.photos()[0].clone();
-        p.set_recipe(&photo, Edit { turns: 1, ..Edit::default() });
-        assert!(p.recipe(&photo).is_some());
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
-        assert_eq!(p.sheet, Some(Sheet::Info));
-        assert!(p.info_revert, "an edited photo offers Revert to Original");
-        // the Revert row sits under the detail rows, the rating, Hide Photo, Edit Details and Look Up rows
-        let (sx, sy, sw, _) = p.sheet_rect(&ui, Sheet::Info);
-        let row = ui.pt(INFO_ROW_PT);
-        let y = sy + row * (p.info.len() + 1 + 3 + 1) as f32 + row / 2.0;
-        tap(&mut p, &ui, sx + sw / 2.0, y, 2000.0);
-        assert!(p.recipe(&photo).is_none(), "the saved edit is dropped");
-        assert!(original.exists(), "the original is never changed");
-        assert_eq!(p.photos().len(), 1, "nothing leaves the library");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn the_info_sheet_look_up_row_hands_the_open_photo_to_the_shell_once() {
-        let (mut p, dir, ui) = photos("lookup", 1);
-        p.open_viewer(0);
-        frame(&mut p, &ui);
-        let path = p.photos()[0].path.clone();
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
-        assert_eq!(p.sheet, Some(Sheet::Info));
-        assert!(!p.info_revert, "an unedited photo has no Revert row, so Look Up is the last row");
-        assert_eq!(p.take_visual_search(), None, "nothing is sent before the row is tapped");
-        // the Look Up row sits under the detail rows, the rating, Hide Photo and Edit Details rows
-        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Info);
-        let row = ui.pt(INFO_ROW_PT);
-        let y = sy + row * (p.info.len() + 1 + 3) as f32 + row / 2.0;
-        assert!(y < sy + sh, "the row is inside the sheet");
-        tap(&mut p, &ui, sx + sw / 2.0, y, 2000.0);
-        assert_eq!(p.sheet, None, "the sheet closes");
-        assert_eq!(p.take_visual_search(), Some(path), "the shell is handed the open photo");
-        assert_eq!(p.take_visual_search(), None, "once");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_long_library_opens_scrolled_to_the_newest_row() {
-        let (mut p, dir, ui) = photos("long", 60);
-        assert!(p.grid.height > 1920.0);
-        assert_eq!(p.scroll.offset(), p.grid.height - (p.content_bottom(&ui) - content_top(&ui)));
-        // zoom in: three columns, position kept proportionally
-        let k = p.scroll.offset() / p.grid.height;
-        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 22.0), nav_mid(&ui), 100.0);
-        assert_eq!(p.cols(), 3);
-        assert!((p.scroll.offset() / p.grid.height - k).abs() < 0.05);
-        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 22.0), nav_mid(&ui), 200.0);
-        assert_eq!(p.cols(), 2);
-        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 22.0), nav_mid(&ui), 250.0);
-        assert_eq!(p.cols(), 2, "no further zoom level");
-        assert_eq!(p.prefs.get("cols"), Some("2"), "the level is remembered");
-        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 300.0);
-        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 350.0);
-        assert_eq!(p.cols(), 5);
-        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 400.0);
-        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 450.0);
-        assert_eq!(p.cols(), 8, "more, smaller thumbnails");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn tapping_a_cell_opens_the_viewer_and_back_returns() {
-        let (mut p, dir, ui) = photos("viewer", 3);
-        let (x, y, cw, ch) = p.grid.cell_rect(1);
-        tap(&mut p, &ui, x + cw / 2.0, content_top(&ui) + y + ch / 2.0, 1000.0);
-        assert_eq!(p.viewing().map(Photo::name).as_deref(), Some("IMG_0001.png"));
-        assert!(p.describe().contains("photos_screen=viewer"));
-        p.tick(&ui, 1100.0);
-        pump_until(&mut p, &ui, |p| p.full.len() == 3);
-        let buf = frame(&mut p, &ui);
-        assert_eq!(buf[960 * 1200 + 600], pack(10, 20, 30, 255), "the picture is centred");
-        assert!(!p.fullscreen());
-        // a single tap hides the chrome once the double-tap window passes
-        tap(&mut p, &ui, 600.0, 900.0, 2000.0);
-        p.tick(&ui, 2400.0);
-        assert!(p.fullscreen());
-        assert_eq!(p.next_wake(), None);
-        tap(&mut p, &ui, 600.0, 900.0, 3000.0);
-        p.tick(&ui, 3400.0);
-        assert!(!p.fullscreen());
-        tap(&mut p, &ui, ui.pt(40.0), nav_mid(&ui), 4000.0);
-        assert!(p.viewer.is_none());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn favourite_persists_in_the_prefs_file() {
-        let (mut p, dir, ui) = photos("fav", 2);
-        p.open_viewer(0);
-        let photo = p.viewing().cloned().unwrap();
-        assert!(!p.is_favourite(&photo));
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 600.0, cy, 1000.0);
-        assert!(p.is_favourite(&photo));
-        let again = Prefs::load(dir.join(PREFS_FILE));
-        assert_eq!(again.get(&format!("fav:{}", photo.path.display())), Some("1"));
-        tap(&mut p, &ui, 600.0, cy, 2000.0);
-        assert!(!p.is_favourite(&photo));
-        frame(&mut p, &ui);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn delete_moves_to_recently_deleted_where_it_can_be_recovered_or_purged() {
-        let (mut p, dir, ui) = photos("delete", 3);
-        p.open_viewer(2);
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.88, cy, 1000.0);
-        assert_eq!(p.sheet, Some(Sheet::Delete));
-        assert!(p.describe().contains("photos_screen=sheet"));
-        frame(&mut p, &ui);
-        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Delete);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + 3.0 * sh / 4.0, 1100.0);
-        assert_eq!(p.sheet, None, "cancelled");
-        assert_eq!(p.photos().len(), 3);
-        tap(&mut p, &ui, 1200.0 * 0.88, cy, 1200.0);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 4.0, 1300.0);
-        assert_eq!(p.photos().len(), 2);
-        assert_eq!(p.viewing().map(Photo::name).as_deref(), Some("IMG_0001.png"), "the viewer moves to the last remaining");
-        assert!(dir.join("Pictures/.trash/IMG_0002.png").exists());
-        // Recently Deleted
-        p.viewer = None;
-        choose_album(&mut p, &ui, Album::Trash, 2000.0);
-        assert_eq!(p.album(), Album::Trash);
-        assert_eq!(p.photos().len(), 1);
-        frame(&mut p, &ui);
-        p.open_viewer(0);
-        frame(&mut p, &ui);
-        tap(&mut p, &ui, 1200.0 * 0.15, cy, 3000.0);
-        assert!(dir.join("Pictures/IMG_0002.png").exists(), "recovered");
-        assert_eq!((p.all.len(), p.trash.len()), (3, 0));
-        assert!(p.viewer.is_none(), "nothing left to view in the trash");
-        frame(&mut p, &ui);
-        // delete for good
-        choose_album(&mut p, &ui, Album::All, 4000.0);
-        p.open_viewer(0);
-        tap(&mut p, &ui, 1200.0 * 0.88, cy, 5000.0);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 4.0, 5100.0);
-        assert_eq!(p.all.len(), 2, "trashed again");
-        p.viewer = None;
-        choose_album(&mut p, &ui, Album::Trash, 6000.0);
-        assert_eq!(p.album(), Album::Trash);
-        p.open_viewer(0);
-        tap(&mut p, &ui, 1200.0 * 0.85, cy, 7000.0);
-        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Delete);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 4.0, 7100.0);
-        assert!(p.trash.is_empty() && !dir.join("Pictures/.trash/IMG_0000.png").exists());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn set_as_wallpaper_packs_the_photo_and_emits_the_effect() {
-        let (mut p, dir, ui) = photos("wallpaper", 1);
-        p.open_viewer(0);
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
-        assert_eq!(p.sheet, Some(Sheet::Share));
-        frame(&mut p, &ui);
-        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 6.5 / 8.0, 1100.0);
-        pump_until(&mut p, &ui, |p| !p.effects.is_empty());
-        assert_eq!(p.take_effects(), vec![Effect::Wallpaper("custom-1".into())]);
-        let raw = std::fs::read(dir.join("wallpapers/custom-1.raw")).unwrap();
-        let img = Image::from_raw(&raw).unwrap();
-        assert_eq!((img.w, img.h), (1200, 1920));
-        assert_eq!(img.px[0], pack(10, 20, 30, 255));
-        assert!(Image::from_raw(&std::fs::read(dir.join("wallpapers/custom-1.thumb.raw")).unwrap()).is_some());
-        assert_eq!(Prefs::load(dir.join("wallpapers/index.ini")).get("custom-1"), Some("Photo 1"));
-        assert_eq!(p.next_wallpaper_id(), "custom-2");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn duplicate_copies_the_photo_with_its_edit_and_rating() {
-        let (mut p, dir, ui) = photos("duplicate", 1);
-        p.open_viewer(0);
-        let photo = p.photos()[0].clone();
-        p.set_recipe(&photo, Edit { turns: 1, ..Edit::default() });
-        p.set_rating(&photo, 4);
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
-        frame(&mut p, &ui);
-        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 4.5 / 8.0, 1100.0);
-        assert_eq!(p.sheet, None);
-        pump_until(&mut p, &ui, |p| !p.scanning && p.all.len() == 2);
-        let copy = dir.join("Pictures/IMG_0000 2.png");
-        assert!(copy.exists() && dir.join("Pictures/IMG_0000.png").exists());
-        let dup = p.all.iter().find(|q| q.path == copy).cloned().expect("the copy is in the library");
-        assert_eq!(p.rating(&dup), 4);
-        assert_eq!(p.recipe(&dup).map(|e| e.turns), Some(1));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn the_info_sheet_rates_with_stars() {
-        let (mut p, dir, ui) = photos("rating", 1);
-        p.open_viewer(0);
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
-        frame(&mut p, &ui);
-        let photo = p.photos()[0].clone();
-        assert_eq!(p.rating(&photo), 0);
-        let ((rx, ry, _, rh), (x0, x1)) = p.info_rating_row(&ui);
-        let star = |n: f32| x0 + (x1 - x0) * (n - 0.5) / 5.0;
-        tap(&mut p, &ui, star(4.0), ry + rh / 2.0, 1100.0);
-        assert_eq!(p.sheet, Some(Sheet::Info), "the sheet stays open");
-        assert_eq!(p.rating(&photo), 4);
-        frame(&mut p, &ui);
-        tap(&mut p, &ui, star(4.0), ry + rh / 2.0, 1200.0);
-        assert_eq!(p.rating(&photo), 0, "the same star clears it");
-        tap(&mut p, &ui, star(1.0), ry + rh / 2.0, 1300.0);
-        assert_eq!(p.rating(&photo), 1);
-        assert!(rx < x0);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn hiding_a_photo_moves_it_from_all_photos_to_the_hidden_album() {
-        let (mut p, dir, ui) = photos("hidden", 3);
-        p.open_viewer(0);
-        let photo = p.photos()[0].clone();
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
-        frame(&mut p, &ui);
-        let (hx, hy, hw, hh) = p.info_hide_row(&ui);
-        tap(&mut p, &ui, hx + hw / 2.0, hy + hh / 2.0, 1100.0);
-        assert!(p.is_hidden(&photo));
-        assert_eq!((p.visible.len(), p.hidden.len(), p.all.len()), (2, 1, 3));
-        assert!(!p.album_list(Album::All).iter().any(|q| q.path == photo.path));
-        assert!(p.menu_albums().contains(&Album::Hidden));
-        assert!(!p.favorites.iter().chain(&p.recents).any(|q| q.path == photo.path));
-        p.viewer = None;
-        p.select_album(&ui, Album::Hidden);
-        assert_eq!(p.photos().len(), 1);
-        p.open_viewer(0);
-        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1200.0);
-        frame(&mut p, &ui);
-        let (hx, hy, hw, hh) = p.info_hide_row(&ui);
-        tap(&mut p, &ui, hx + hw / 2.0, hy + hh / 2.0, 1300.0);
-        assert_eq!((p.visible.len(), p.hidden.len()), (3, 0));
-        assert_eq!(p.album(), Album::All, "an empty Hidden album closes");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn send_nearby_hands_the_photo_path_to_the_shell() {
-        let (mut p, dir, ui) = photos("nearby", 1);
-        p.open_viewer(0);
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
-        frame(&mut p, &ui);
-        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 3.5 / 8.0, 1100.0);
-        assert_eq!(p.sheet, None);
-        assert_eq!(p.take_share(), p.photos().first().map(|q| q.path.clone()));
-        assert_eq!(p.take_share(), None);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn share_sheet_slideshow_plays_and_pauses() {
-        let (mut p, dir, ui) = photos("slideshow", 2);
-        p.open_viewer(0);
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
-        frame(&mut p, &ui);
-        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 16.0, 1100.0);
-        assert!(p.slideshow.is_some());
-        p.activate(&ui, Target::ShowPlay, 1200.0);
-        assert!(p.slideshow.as_ref().unwrap().paused);
-        p.activate(&ui, Target::ShowDone, 1300.0);
-        assert!(p.slideshow.is_none());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_new_screenshot_shows_at_once_and_opens_by_path() {
-        let (mut p, dir, ui) = photos("shot", 2);
-        let path = dir.join("Pictures/Screenshot-20261004-002315.png");
-        let shot = Photo { path: path.clone(), mtime: 1_800_000_000, size: 9 };
-        let img = Image { w: 1200, h: 1920, px: vec![pack(1, 2, 3, 255); 1200 * 1920] };
-        p.add_photo(&ui, shot, img);
-        assert_eq!(p.photos().len(), 3);
-        assert!(p.thumbs.contains(&p.photos()[2].key()) && p.full.len() == 1);
-        p.rescan();
-        pump_until(&mut p, &ui, |p| !p.scanning);
-        assert_eq!(p.photos().len(), 3, "a scan that cannot see the file yet keeps it");
-        assert!(p.show(&ui, &path));
-        assert_eq!(p.viewing().map(|q| q.path.clone()), Some(path));
-        let buf = frame(&mut p, &ui);
-        assert_eq!(buf[960 * 1200 + 600], pack(1, 2, 3, 255));
-        assert!(!p.show(&ui, Path::new("/nowhere.png")));
-        let empty = Photos::new(&ui, 1200, 1920, dir.join("empty"), vec![dir.join("empty/Pictures")], 0).unwrap();
-        let mut empty = empty;
-        pump_until(&mut empty, &ui, |p| !p.scanning);
-        frame(&mut empty, &ui);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    fn select_button(ui: &Ui) -> f32 {
-        1200.0 - ui.pt(MARGIN_PT + 96.0 + 38.0)
-    }
-
-    fn cell_centre(p: &Photos, ui: &Ui, i: usize) -> (f32, f32) {
-        let (x, y, cw, ch) = p.grid.cell_rect(i);
-        (x + cw / 2.0, content_top(ui) + y - p.scroll.offset() + ch / 2.0)
-    }
-
-    #[test]
-    fn screenshots_and_recents_are_albums_of_their_own() {
-        let (mut p, dir, ui) = photos("albums", 3);
-        picture(&dir.join("Pictures/Screenshot-20261004-002315.png"), 1_791_000_000);
-        p.rescan();
-        pump_until(&mut p, &ui, |p| !p.scanning);
-        assert_eq!(p.album_list(Album::All).len(), 4);
-        choose_album(&mut p, &ui, Album::Screenshots, 1000.0);
-        assert_eq!(p.photos().iter().map(Photo::name).collect::<Vec<_>>(), ["Screenshot-20261004-002315.png"]);
-        frame(&mut p, &ui);
-        choose_album(&mut p, &ui, Album::Recents, 2000.0);
-        assert!(p.photos().len() <= 4, "only what is within 30 days of now");
-        choose_album(&mut p, &ui, Album::All, 3000.0);
-        assert_eq!(p.photos().len(), 4);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn the_title_cycles_through_months_and_dates_can_be_typed() {
-        let (mut p, dir, ui) = photos("filter", 12);
-        assert_eq!(p.photos().len(), 12);
-        tap(&mut p, &ui, 600.0, nav_mid(&ui), 1000.0);
-        assert_eq!(p.filter.as_ref().map(|f| f.0.as_str()), Some("October 2026"));
-        assert_eq!(p.photos().len(), 2);
-        assert!(p.describe().contains("photos_filter=October 2026"));
-        frame(&mut p, &ui);
-        tap(&mut p, &ui, 600.0, nav_mid(&ui), 2000.0);
-        assert_eq!(p.photos().len(), 10, "September");
-        tap(&mut p, &ui, 600.0, nav_mid(&ui), 3000.0);
-        assert!(p.filter.is_none());
-        assert_eq!(p.photos().len(), 12);
-        assert!(p.set_date_query(&ui, "2026-09-25"));
-        assert_eq!(p.photos().len(), 1);
-        assert!(!p.set_date_query(&ui, "not a date"));
-        assert_eq!(p.photos().len(), 1, "a bad query leaves the filter");
-        p.clear_filter(&ui);
-        assert_eq!(p.photos().len(), 12);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn multi_select_deletes_to_recently_deleted_with_a_purge_clock() {
-        let (mut p, dir, ui) = photos("select", 4);
-        tap(&mut p, &ui, select_button(&ui), nav_mid(&ui), 1000.0);
-        assert!(p.selection.active);
-        let (x, y) = cell_centre(&p, &ui, 0);
-        tap(&mut p, &ui, x, y, 1100.0);
-        assert!(p.viewer.is_none(), "taps select while selecting");
-        let (x, y) = cell_centre(&p, &ui, 2);
-        tap(&mut p, &ui, x, y, 1200.0);
-        assert_eq!(p.selection.len(), 2);
-        assert!(p.describe().contains("photos_selected=2"));
-        frame(&mut p, &ui);
-        let bar_y = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.88, bar_y, 1300.0);
-        pump_until(&mut p, &ui, |p| !p.scanning && p.all.len() == 2);
-        assert_eq!(p.trash.len(), 2);
-        assert!(!p.selection.active);
-        assert!(dir.join("Pictures/.trash/IMG_0000.png").exists() && dir.join("Pictures/.trash/IMG_0002.png").exists());
-        let t = p.trash[0].clone();
-        assert!(p.deleted_at(&t).is_some_and(|at| (unix_now() - at).abs() < 60));
-        assert_eq!(p.trash_note(&t), "30 days left");
-        // an old deletion is purged at the next scan; a recent one stays
-        let old = p.trash[0].clone();
-        p.pref_set(&format!("del:{}", old.path.display()), &(unix_now() - 31 * 86_400).to_string());
-        p.rescan();
-        pump_until(&mut p, &ui, |p| !p.scanning);
-        assert_eq!(p.trash.len(), 1);
-        assert!(!old.path.exists());
-        // Recently Deleted: select and recover
-        choose_album(&mut p, &ui, Album::Trash, 5000.0);
-        tap(&mut p, &ui, select_button(&ui), nav_mid(&ui), 5100.0);
-        let (x, y) = cell_centre(&p, &ui, 0);
-        tap(&mut p, &ui, x, y, 5200.0);
-        frame(&mut p, &ui);
-        tap(&mut p, &ui, 1200.0 * 0.15, bar_y, 5300.0);
-        pump_until(&mut p, &ui, |p| !p.scanning && p.all.len() == 3);
-        assert!(p.trash.is_empty());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn tapping_the_selection_title_selects_and_deselects_everything() {
-        let (mut p, dir, ui) = photos("selectall", 4);
-        tap(&mut p, &ui, select_button(&ui), nav_mid(&ui), 1000.0);
-        tap(&mut p, &ui, 600.0, nav_mid(&ui), 1100.0);
-        assert_eq!(p.selection.len(), 4);
-        tap(&mut p, &ui, 600.0, nav_mid(&ui), 1200.0);
-        assert!(p.selection.is_empty() && p.selection.active, "Deselect All keeps selecting");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn permanent_multi_delete_asks_twice() {
-        let (mut p, dir, ui) = photos("purge2", 2);
-        p.delete(&ui, &p.photos()[0].clone());
-        pump_until(&mut p, &ui, |p| !p.scanning && p.trash.len() == 1);
-        choose_album(&mut p, &ui, Album::Trash, 1000.0);
-        tap(&mut p, &ui, select_button(&ui), nav_mid(&ui), 1100.0);
-        let (x, y) = cell_centre(&p, &ui, 0);
-        tap(&mut p, &ui, x, y, 1200.0);
-        let bar_y = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.8, bar_y, 1300.0);
-        assert!(p.confirm_purge && p.trash.len() == 1, "the first tap only asks");
-        frame(&mut p, &ui);
-        tap(&mut p, &ui, 1200.0 * 0.8, bar_y, 1400.0);
-        pump_until(&mut p, &ui, |p| !p.scanning && p.trash.is_empty());
-        assert!(!dir.join("Pictures/.trash/IMG_0000.png").exists());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn the_info_sheet_lists_the_file_details_and_closes_on_a_tap() {
-        let (mut p, dir, ui) = photos("info", 1);
-        p.open_viewer(0);
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
-        assert_eq!(p.sheet, Some(Sheet::Info));
-        let labels: Vec<&str> = p.info.iter().map(|(l, _)| l.as_str()).collect();
-        assert_eq!(labels, ["Name", "Date", "Size", "File Size"], "PNG dimensions are available without EXIF");
-        assert_eq!(p.info[0].1, "IMG_0000.png");
-        frame(&mut p, &ui);
-        tap(&mut p, &ui, 100.0, 100.0, 2000.0);
-        assert_eq!(p.sheet, None);
-        assert!(p.viewer.is_some());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn the_editor_previews_edits_and_saves_a_recipe() {
-        let (mut p, dir, ui) = photos("editor", 1);
-        p.open_viewer(0);
-        p.tick(&ui, 1000.0);
-        pump_until(&mut p, &ui, |p| p.full.len() == 1);
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.69, cy, 2000.0);
-        assert!(p.editor.is_some() && p.describe().contains("photos_screen=editor"));
-        frame(&mut p, &ui);
-        let row = ui.pt(EDIT_ROW_PT);
-        let top = p.edit_panel_top(&ui);
-        let col = 1200.0 / 7.0;
-        // 16:9 is the sixth preset: the 4x4 picture crops to 4x2
-        tap(&mut p, &ui, col * 6.5, top + row / 2.0, 2100.0);
-        assert_eq!(p.editor.as_ref().map(|e| (e.preview.w, e.preview.h)), Some((4, 2)));
-        tap(&mut p, &ui, col / 2.0, top + row / 2.0, 2200.0);
-        assert_eq!(p.editor.as_ref().map(|e| e.edit.turns), Some(1));
-        assert_eq!(p.editor.as_ref().map(|e| (e.preview.w, e.preview.h)), Some((4, 2)), "a square rotates into itself and keeps the 16:9 crop");
-        // brightness slider: the right end is +1
-        let (_, x1) = p.slider_track(&ui);
-        tap(&mut p, &ui, x1, top + row * 3.5, 2300.0);
-        assert_eq!(p.editor.as_ref().map(|e| e.edit.brightness), Some(1.0));
-        // the Effects tab: its first slider is blur, and the right end is the full radius
-        tap(&mut p, &ui, 1200.0 / 4.0 * 1.5, top + row * 2.5, 2350.0);
-        assert_eq!(p.editor.as_ref().map(|e| e.pane), Some(EditPane::Effects));
-        tap(&mut p, &ui, x1, top + row * 3.5, 2360.0);
-        assert_eq!(p.editor.as_ref().map(|e| (e.edit.blur, e.edit.brightness)), Some((1.0, 1.0)));
-        frame(&mut p, &ui);
-        // Save
-        tap(&mut p, &ui, 1100.0, ui.pt(STATUS_PT) + 5.0, 2400.0);
-        assert!(p.editor.is_none());
-        let photo = p.photos()[0].clone();
-        assert!(p.recipe(&photo).is_some_and(|e| e.turns == 1 && e.aspect == Aspect::R16x9), "the edit is saved as a recipe");
-        assert!(dir.join("Pictures/IMG_0000.png").exists(), "the original stays");
-        assert_eq!(p.all.len(), 1, "no copy is written");
-        // Cancel leaves nothing behind
-        p.open_viewer(0);
-        p.tick(&ui, 3000.0);
-        pump_until(&mut p, &ui, |p| p.full.len() >= 1);
-        tap(&mut p, &ui, 1200.0 * 0.69, cy, 3100.0);
-        tap(&mut p, &ui, 100.0, ui.pt(STATUS_PT) + 5.0, 3200.0);
-        assert!(p.editor.is_none() && p.viewer.is_some());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn the_tools_page_flips_rotates_and_enhances() {
-        let (mut p, dir, ui) = photos("tools", 1);
-        p.open_viewer(0);
-        p.tick(&ui, 1000.0);
-        pump_until(&mut p, &ui, |p| p.full.len() == 1);
-        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
-        tap(&mut p, &ui, 1200.0 * 0.69, cy, 2000.0);
-        let (row, top) = (ui.pt(EDIT_ROW_PT), p.edit_panel_top(&ui));
-        tap(&mut p, &ui, 1200.0 / 4.0 * 3.5, top + row * 2.5, 2100.0);
-        assert_eq!(p.editor.as_ref().map(|e| e.pane), Some(EditPane::Tools));
-        tap(&mut p, &ui, 1200.0 / 6.0, top + row * 3.5, 2200.0);
-        assert_eq!(p.editor.as_ref().map(|e| e.edit.turns), Some(3), "Rotate Left is a quarter back");
-        tap(&mut p, &ui, 600.0, top + row * 3.5, 2300.0);
-        tap(&mut p, &ui, 1000.0, top + row * 3.5, 2400.0);
-        tap(&mut p, &ui, 600.0, top + row * 4.5, 2500.0);
-        let e = p.editor.as_ref().map(|e| e.edit).unwrap();
-        assert!(e.flip_h && e.flip_v && e.auto);
-        tap(&mut p, &ui, 600.0, top + row * 3.5, 2600.0);
-        assert_eq!(p.editor.as_ref().map(|e| e.edit.flip_h), Some(false), "a second tap turns the flip off");
-        assert!(p.editor.as_ref().is_some_and(|e| e.hist.iter().sum::<u32>() > 0), "the histogram follows the preview");
-        frame(&mut p, &ui);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn histogram_columns_scale_to_the_tallest() {
-        let mut bins = [0u32; edit::HISTOGRAM_BINS];
-        bins[0] = 10;
-        bins[255] = 5;
-        let cols = histogram_columns(&bins, 128);
-        assert_eq!((cols.len(), cols[0], cols[127]), (128, 1.0, 0.5));
-        assert!(histogram_columns(&bins, 0).is_empty());
-        assert_eq!(histogram_columns(&bins, 256).len(), 256);
-        assert_eq!(histogram_columns(&[0; edit::HISTOGRAM_BINS], 4), vec![0.0; 4]);
-    }
-
-    #[test]
-    fn at_most_three_full_size_pictures_stay_decoded() {
-        let (mut p, dir, ui) = photos("budget", 7);
-        p.open_viewer(2);
-        p.tick(&ui, 1000.0);
-        pump_until(&mut p, &ui, |p| p.full.len() == 3);
-        p.open_viewer(5);
-        p.tick(&ui, 2000.0);
-        let last = p.photos()[6].key();
-        pump_until(&mut p, &ui, |p| p.full.contains(&last));
-        assert_eq!(p.full.len(), 3, "the oldest were evicted");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-}
+mod tests;

@@ -19,7 +19,7 @@ const INDEX_EVERY_MS: f64 = 3000.0;
 
 struct MailApp {
     window: Option<MailWindow>,
-    /// Viewer windows: a message in a window of its own (double-click, File > New Viewer Window).
+    /// Viewer windows: a message in a window of its own (double-click, File > Open Message).
     viewers: Vec<Viewer>,
     /// Compose windows, and the one whose compose is in the main window's sheet slot.
     composes: Composes,
@@ -35,6 +35,8 @@ struct MailApp {
     scheduled: bool,
     /// The connections the background check opens.
     transport: std::sync::Arc<dyn springboard::deildu::http::Transport>,
+    /// The main window's title as last told to the shell (`draw::main_title`).
+    title: String,
 }
 
 impl MailApp {
@@ -81,7 +83,15 @@ impl MailApp {
 
     fn sync(&mut self, ctx: &Ctx) -> bool {
         match &mut self.window {
-            Some(mail) => self.composes.sync(ctx, mail),
+            Some(mail) => {
+                // the main window is titled after the mailbox it shows, so the shell's Window menu lists it by that name
+                let title = bifrost_mail::draw::main_title(&mail.mail);
+                if self.title != title {
+                    self.title = title.to_string();
+                    bifrost_app::document::DocumentHost::set_document_state(ctx, &self.title, false, "");
+                }
+                self.composes.sync(ctx, mail)
+            }
             None => false,
         }
     }
@@ -335,6 +345,26 @@ impl App for MailApp {
         d
     }
 
+    /// The red button of an extra window comes to the app first: a compose window asks Save This Message, Don't Save,
+    /// Cancel for a message with changes instead of the shell dropping it.
+    fn handles_close_request(&self) -> bool {
+        true
+    }
+
+    fn window_close_requested(&mut self, ctx: &Ctx, window: WindowId) -> bool {
+        if window.is_main() {
+            ctx.close_main_window();
+            return true;
+        }
+        if let Some(mail) = &mut self.window {
+            if self.composes.owns(window) {
+                return self.composes.close_requested(ctx, mail, window) | self.sync(ctx);
+            }
+        }
+        // a viewer window closes at once
+        ctx.close_window(window).is_ok() && self.window_closed(ctx, window)
+    }
+
     fn window_closed(&mut self, ctx: &Ctx, window: WindowId) -> bool {
         let before = self.viewers.len();
         self.viewers.retain(|v| v.id != window);
@@ -467,7 +497,7 @@ impl MailApp {
 
 impl MailApp {
     fn new(transport: std::sync::Arc<dyn springboard::deildu::http::Transport>) -> MailApp {
-        MailApp { window: None, viewers: Vec::new(), composes: Composes::default(), pending_url: None, indexed: Default::default(), next_index: 0.0, check: None, scheduled: false, transport }
+        MailApp { window: None, viewers: Vec::new(), composes: Composes::default(), pending_url: None, indexed: Default::default(), next_index: 0.0, check: None, scheduled: false, transport, title: String::new() }
     }
 }
 
@@ -577,7 +607,7 @@ mod tests {
         let mail = app.window.as_ref().unwrap();
         let sheet = mail.mail.sheet.clone().expect("the compose is in the sheet slot");
         let at = sheet.form().fields.iter().position(|f| f.label == label).expect("the field");
-        let r = sheet_layout(ui, w, h, &sheet, choice_count(&mail.mail)).fields[at];
+        let r = sheet_layout(ui, w, h, &sheet, choice_count(&mail.mail), true).fields[at];
         (r[0] + r[2] / 2.0, r[1] + r[3] / 2.0)
     }
 
@@ -610,7 +640,7 @@ mod tests {
     /// A click with modifier keys held (a Shift-click, a Cmd-click), as the shell sends it.
     fn click_with(app: &mut MailApp, ctx: &Ctx, (x, y): (f32, f32), t: f64, mods: ModifierFlags) {
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.event(ctx, Input::Touch { kind, id: 0, x, y, t, mods });
+            app.event(ctx, Input::Touch { kind, id: 0, x, y, t, source: bifrost_app::TouchSource::Finger, mods });
         }
     }
 
@@ -695,6 +725,13 @@ mod tests {
         click(&mut app, &ctx, at, 1100.0);
         let viewers: Vec<u32> = app.window.as_mut().unwrap().take_viewers().iter().map(|v| v.uid).collect();
         assert_eq!(viewers, vec![9]);
+        // after Mark as Unread on the open message, opening it in its own window marks it read again
+        app.window.as_mut().unwrap().mail.set_flag_locally(9, Flag::Seen, false);
+        click(&mut app, &ctx, at, 3000.0);
+        click(&mut app, &ctx, at, 3100.0);
+        let window = app.window.as_mut().unwrap();
+        assert_eq!(window.take_viewers().iter().map(|v| v.uid).collect::<Vec<u32>>(), vec![9]);
+        assert!(window.mail.flags_of(9).is_some_and(|f| f.contains(Flag::Seen)), "the viewer marks its message read");
         // clicks a second apart are single clicks
         click(&mut app, &ctx, at, 5000.0);
         click(&mut app, &ctx, at, 6000.0);
@@ -722,10 +759,14 @@ mod tests {
         });
         let items = menu.expect("a context menu");
         assert!(items.iter().any(|i| i.id == bifrost_mail::window::MENU_REPLY && i.enabled));
-        // the choice runs the menu action: Open in New Window
+        // the choice runs the menu action: Open in New Window, which marks the message read like every viewer open,
+        // also after Mark as Unread on the message the reader shows
+        app.window.as_mut().unwrap().mail.set_flag_locally(3, Flag::Seen, false);
         app.event(&ctx, Input::ContextAction(bifrost_mail::window::MENU_NEW_VIEWER));
-        let viewers: Vec<u32> = app.window.as_mut().unwrap().take_viewers().iter().map(|v| v.uid).collect();
+        let window = app.window.as_mut().unwrap();
+        let viewers: Vec<u32> = window.take_viewers().iter().map(|v| v.uid).collect();
         assert_eq!(viewers, vec![3]);
+        assert!(window.mail.flags_of(3).is_some_and(|f| f.contains(Flag::Seen)), "Open in New Window marks it read");
         // a right-click on no message opens nothing
         let _ = ctx.take_sent();
         assert!(!app.event(&ctx, Input::Context { x: 1.0, y: 599.0 }));
@@ -770,13 +811,191 @@ mod tests {
         // a click on Subject moves the focus there, and typing follows it
         let (x, y) = field_centre(&app, &ctx.ui, "Subject", COMPOSE_W, COMPOSE_H);
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x, y, t: 10.0, mods: bifrost_app::ModifierFlags::EMPTY });
+            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x, y, t: 10.0, source: bifrost_app::TouchSource::Finger, mods: bifrost_app::ModifierFlags::EMPTY });
         }
         app.window_event(&ctx, id, Input::Key(KeyInput::Text("Fundur".into())));
         assert_eq!(compose_field(&app, "Subject"), "Fundur");
         // Escape closes the message, asking first because it has text
         app.window_event(&ctx, id, Input::Key(KeyInput::Code(1)));
         assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))), "Save This Message, Don't Save, Cancel");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// On the Save This Message question Cmd+D is Don't Save, and Tab moves a focus ring over Don't Save, Cancel and Save
+    /// with Space pressing the focused one (Cancel here returns to the message).
+    #[test]
+    fn the_save_this_message_question_takes_cmd_d_and_tab_space() {
+        use bifrost_app::proto::{CHORD_FLAG, CHORD_META};
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-question-keys-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        let ask = |app: &mut MailApp, ctx: &Ctx| {
+            app.with_window(ctx, |mail| {
+                mail.mail.open_compose(None);
+                true
+            });
+            let id = app.composes.active.expect("a compose window");
+            app.window_event(ctx, id, Input::Key(KeyInput::Text("dummy test text".into())));
+            app.window_event(ctx, id, Input::Key(KeyInput::Code(1)));
+            assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))));
+            id
+        };
+        let id = ask(&mut app, &ctx);
+        assert_eq!(app.window.as_ref().unwrap().question_focus, None, "no ring until Tab");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Code(9)));
+        assert_eq!(app.window.as_ref().unwrap().question_focus, Some(0), "Don't Save");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Code(9)));
+        assert_eq!(app.window.as_ref().unwrap().question_focus, Some(1), "Cancel");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text(" ".into())));
+        assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Compose(_))), "Space on Cancel returns to the message");
+        assert_eq!(app.window.as_ref().unwrap().question_focus, None);
+        // ask again: Cmd+D is Don't Save
+        app.window_event(&ctx, id, Input::Key(KeyInput::Code(1)));
+        assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))));
+        app.window_event(&ctx, id, Input::Key(KeyInput::Code(CHORD_FLAG | 32 | (CHORD_META << 8))));
+        assert!(app.window.as_ref().map_or(true, |w| !matches!(w.mail.sheet, Some(Sheet::Question(_)))), "Cmd+D answered the question");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The red button on a compose window with changes asks first: the window stays, as the question, and nothing is
+    /// closed or opened again. Cancel returns to the message; an unchanged message closes with its window.
+    #[test]
+    fn the_red_button_on_a_compose_window_with_text_asks_before_closing() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-compose-red-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        assert!(app.handles_close_request());
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("a compose window");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("dummy test text".into())));
+        ctx.take_sent();
+        assert!(app.window_close_requested(&ctx, id));
+        assert!(matches!(app.window.as_ref().unwrap().mail.sheet, Some(Sheet::Question(_))), "Save This Message, Don't Save, Cancel");
+        assert!(ctx.windows().get(id).is_some(), "the window waits for the answer");
+        assert_eq!(app.composes.slots.len(), 1);
+        let sent = ctx.take_sent();
+        assert!(!sent.iter().any(|m| matches!(m, bifrost_app::proto::ToShell::WindowClose { .. } | bifrost_app::proto::ToShell::WindowOpen { .. })), "{sent:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Cmd+F puts the cursor in the toolbar's search field (no Find sheet), typing filters the list live, a click away
+    /// leaves the field, and Escape clears the text first.
+    #[test]
+    fn find_focuses_the_toolbar_search_field_and_typing_filters_live() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-search-field-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        assert_eq!(app.window.as_ref().unwrap().mail.visible_rows().len(), 2);
+        app.menu_action(&ctx, bifrost_mail::window::MENU_FIND);
+        let mail = &app.window.as_ref().unwrap().mail;
+        assert!(mail.search_focused, "Find focuses the field");
+        assert!(mail.sheet.is_none(), "no Find sheet opens");
+        app.event(&ctx, Input::Key(KeyInput::Text("fund".into())));
+        let mail = &app.window.as_ref().unwrap().mail;
+        assert_eq!(mail.search_shown(), "fund");
+        assert_eq!(mail.visible_rows().len(), 1, "the list filters as the text grows");
+        app.event(&ctx, Input::Key(KeyInput::Text(" ".into())));
+        assert_eq!(app.window.as_ref().unwrap().mail.search_shown(), "fund ", "a space typed in the field stays");
+        // Escape clears the text, a second one leaves the field
+        app.event(&ctx, Input::Key(KeyInput::Code(1)));
+        let mail = &app.window.as_ref().unwrap().mail;
+        assert_eq!((mail.search_shown(), mail.search_focused, mail.visible_rows().len()), ("", true, 2));
+        app.event(&ctx, Input::Key(KeyInput::Code(1)));
+        assert!(!app.window.as_ref().unwrap().mail.search_focused);
+        // the field is in the toolbar: a click on it focuses it, a click on the list leaves it
+        let mail = app.window.as_ref().unwrap();
+        let x = (0..800).rev().step_by(4).find(|x| matches!(mail.hit(&ctx.ui, *x as f32, 20.0), Hit::Search)).expect("a search field in the toolbar") as f32;
+        for kind in [TouchKind::Down, TouchKind::Up] {
+            app.event(&ctx, Input::Touch { kind, id: 0, x, y: 20.0, t: 10.0, source: bifrost_app::TouchSource::Finger, mods: bifrost_app::ModifierFlags::EMPTY });
+        }
+        assert!(app.window.as_ref().unwrap().mail.search_focused);
+        let (rx, ry) = row_point(&app, &ctx.ui, 9);
+        for kind in [TouchKind::Down, TouchKind::Up] {
+            app.event(&ctx, Input::Touch { kind, id: 0, x: rx, y: ry, t: 500.0, source: bifrost_app::TouchSource::Finger, mods: bifrost_app::ModifierFlags::EMPTY });
+        }
+        assert!(!app.window.as_ref().unwrap().mail.search_focused);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E N9: a compose window that closes (here an empty message's Escape) gives the main window its own size back, so
+    /// a click in the sidebar picks a mailbox instead of landing on a list row of the compose window's narrow layout.
+    #[test]
+    fn a_closed_compose_window_gives_the_main_window_its_own_clicks_back() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-compose-closed-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_inbox(&ctx);
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("a compose window");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Code(1)));
+        assert!(app.composes.slots.is_empty(), "an empty message closes without asking");
+        assert_eq!(app.composes.active, None);
+        let mail = app.window.as_ref().unwrap();
+        assert_eq!((mail.w, mail.h), (800, 600), "the main window's size is back");
+        assert!(!mail.in_compose_window);
+        let side = bifrost_mail::draw::columns(&ctx.ui, 800.0, mail.mail.show_sidebar)[0];
+        assert!(side > 0.0, "the sidebar is shown");
+        let hits: Vec<Hit> = (0..600).step_by(4).map(|y| mail.hit(&ctx.ui, side / 2.0, y as f32)).collect();
+        assert!(hits.iter().any(|h| matches!(h, Hit::Side(_))), "the sidebar takes its clicks");
+        assert!(!hits.iter().any(|h| matches!(h, Hit::Message(_))), "no sidebar click lands on a message");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E N15: why a Send did not go out shows on the compose sheet, in the compose window, not in the main window's
+    /// list footer; the message stays in its window to be fixed.
+    #[test]
+    fn a_send_that_fails_says_why_in_the_compose_window() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-compose-error-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_account(&ctx);
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("a compose window");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("e2e@".into())));
+        app.window_input(&ctx, id, WindowInput::MenuAction(bifrost_mail::window::MENU_SEND));
+        assert_eq!(app.composes.active, Some(id), "the message stays in its window");
+        let mail = app.window.as_ref().unwrap();
+        let Some(Sheet::Compose(compose)) = &mail.mail.sheet else { panic!("the compose is still open") };
+        assert!(compose.error.contains("e2e@"), "the compose says why: {:?}", compose.error);
+        assert!(mail.mail.status.is_empty(), "the main window's footer stays quiet: {:?}", mail.mail.status);
+        // an edit clears it
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("x.is".into())));
+        let Some(Sheet::Compose(compose)) = &app.window.as_ref().unwrap().mail.sheet else { panic!("the compose is still open") };
+        assert!(compose.error.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A half-typed recipient is no error of the main window: autosave and closing keep the draft as typed, and the list
+    /// footer stays quiet (the "lead body is not a valid address" seen under the message list).
+    #[test]
+    fn a_draft_with_a_half_typed_recipient_leaves_the_list_footer_quiet() {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-draft-footer-{}", std::process::id()));
+        let ctx = ctx(&dir);
+        let mut app = app_with_account(&ctx);
+        app.with_window(&ctx, |mail| {
+            mail.mail.open_compose(None);
+            true
+        });
+        let id = app.composes.active.expect("a compose window");
+        app.window_event(&ctx, id, Input::Key(KeyInput::Text("lead body".into())));
+        assert_eq!(compose_field(&app, "To"), "lead body");
+        // the autosave of a changed message
+        app.composes.autosave(app.window.as_mut().unwrap(), 1000.0);
+        let status = &app.window.as_ref().unwrap().mail.status;
+        assert!(!status.contains("not a valid address"), "autosave: {status:?}");
+        // the red button, then Save This Message
+        assert!(app.window_close_requested(&ctx, id));
+        let Some(Sheet::Question(compose)) = app.window.as_ref().unwrap().mail.sheet.clone() else { panic!("the question is open") };
+        app.window.as_mut().unwrap().save_draft(&compose);
+        let status = &app.window.as_ref().unwrap().mail.status;
+        assert!(!status.contains("not a valid address"), "close: {status:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -800,6 +1019,41 @@ mod tests {
             Some(Sheet::Compose(c)) => c.scroll_back,
             _ => app.composes.slots[0].compose.scroll_back,
         }
+    }
+
+    /// Drags the message list of a 60-message inbox upwards, as the shell would deliver it (the SDK notes the touch's source
+    /// first), on a machine of form `form`; returns the list's offset and whether it is flinging afterwards.
+    fn drag_the_list(form: bifrost_app::controls::form_factor::FormFactor, source: bifrost_app::TouchSource) -> (f32, bool) {
+        let dir = std::env::temp_dir().join(format!("bifrost-mail-drag-{}-{:?}-{:?}", std::process::id(), form, source));
+        let ctx = ctx(&dir);
+        let mut app = app_with_account(&ctx);
+        let listed = |uid: u32| Listed { uid, flags: Flags::empty(), header: format!("Subject: m{uid}\r\nFrom: Ana <ana@x.is>\r\n\r\n") };
+        app.window.as_mut().unwrap().mail.apply_listing("work", INBOX, vec![], (1..=60).map(listed).collect());
+        app.window.as_mut().unwrap().list_scroll.set_max(1000.0);
+        let (x, y) = row_point(&app, &ctx.ui, 60);
+        let out = bifrost_app::pan::with_touch(form, bifrost_app::TouchSource::Finger, || {
+            for (i, (kind, dy)) in [(TouchKind::Down, 0.0), (TouchKind::Move, -60.0), (TouchKind::Move, -140.0), (TouchKind::Up, -140.0)].into_iter().enumerate() {
+                let input = Input::Touch { kind, id: 0, x, y: y + dy, t: 100.0 + 16.0 * i as f64, source, mods: ModifierFlags::EMPTY };
+                input.note_source();
+                app.event(&ctx, input);
+            }
+            let list = &app.window.as_ref().unwrap().list_scroll;
+            (list.offset(), list.animating())
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        out
+    }
+
+    /// A mouse drag in the message list does not scroll it on a desktop, like a finger drag does; on a tablet both scroll.
+    #[test]
+    fn a_pointer_drag_does_not_scroll_the_message_list_on_a_desktop_but_a_finger_drag_does() {
+        use bifrost_app::controls::form_factor::FormFactor::{Desktop, Tablet};
+        use bifrost_app::TouchSource::{Finger, Pointer};
+        assert_eq!(drag_the_list(Desktop, Pointer), (0.0, false), "no pan and no fling for a mouse drag");
+        let (offset, flinging) = drag_the_list(Desktop, Finger);
+        assert!(offset > 50.0 && flinging, "a finger drag scrolls: {offset}");
+        assert!(drag_the_list(Tablet, Finger).0 > 50.0);
+        assert!(drag_the_list(Tablet, Pointer).0 > 50.0, "on a tablet every drag scrolls, as before");
     }
 
     /// E2E: Mail takes the wheel (so the shell no longer emulates a drag for it in any window): the main window's
@@ -880,7 +1134,7 @@ mod tests {
         let id = app.composes.active.expect("a compose window");
         let (x, y) = field_centre(&app, &ctx.ui, "Subject", 2.0 * COMPOSE_W, 2.0 * COMPOSE_H);
         for kind in [TouchKind::Down, TouchKind::Up] {
-            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x: x / 2.0, y: y / 2.0, t: 10.0, mods: bifrost_app::ModifierFlags::EMPTY });
+            app.window_event(&ctx, id, Input::Touch { kind, id: 0, x: x / 2.0, y: y / 2.0, t: 10.0, source: bifrost_app::TouchSource::Finger, mods: bifrost_app::ModifierFlags::EMPTY });
         }
         app.window_event(&ctx, id, Input::Key(KeyInput::Text("Fundur".into())));
         assert_eq!(compose_field(&app, "Subject"), "Fundur");

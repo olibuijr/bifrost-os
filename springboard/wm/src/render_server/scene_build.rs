@@ -207,7 +207,7 @@ pub(crate) fn buffer_key(buffer: &WlBuffer) -> u64 {
 /// Appends the nodes of a surface tree at `origin` (output logical px): one node per surface with a dma-buf buffer,
 /// subsurfaces placed by their offsets. Surfaces without a dma-buf (shm, see the module note) add nothing.
 /// `corner` clips every node of the tree (windows pass `WINDOW_RADIUS`, layer-shell surfaces 0).
-fn surface_nodes(importer: &mut Importer, surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface, origin: Point<i32, Logical>, scale: f32, corner: f32, out: &mut Vec<SceneNode>) {
+pub(crate) fn surface_nodes(importer: &mut Importer, surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface, origin: Point<i32, Logical>, scale: f32, corner: f32, out: &mut Vec<SceneNode>) {
     with_surface_tree_downward(
         surface,
         origin,
@@ -259,11 +259,10 @@ fn surface_nodes(importer: &mut Importer, surface: &smithay::reexports::wayland_
     );
 }
 
-/// The surfaces of one layer-shell layer, bottom first (the map lists them top first).
+/// The surfaces of one layer-shell layer, bottom first: by z rank, then the newest on top, as the pointer finds them
+/// (`scene::layer_surfaces_bottom_first`).
 fn layer_surfaces(importer: &mut Importer, map: &smithay::desktop::LayerMap, layer: ShellLayer, scale: f32, out: &mut Vec<SceneNode>) {
-    let mut ls: Vec<_> = map.layers_on(layer).collect();
-    ls.reverse();
-    for l in ls {
+    for l in crate::scene::layer_surfaces_bottom_first(map, layer) {
         let Some(geo) = map.layer_geometry(l) else { continue };
         surface_nodes(importer, l.wl_surface(), geo.loc, scale, 0.0, out);
     }

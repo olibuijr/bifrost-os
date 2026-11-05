@@ -7,6 +7,31 @@ use crate::gfx::{pack, scale, Image};
 use crate::gvar::{self, Axis, Gvar};
 use crate::shape_ot::{self, Features, OtLayout, ShapeOptions};
 
+/// Unicode `Default_Ignorable_Code_Point` (DerivedCoreProperties): characters that take no room and have no shape
+/// unless a font gives them a special rendering, such as zero-width spaces and joiners, the soft hyphen, the byte order
+/// mark, bidi controls, variation selectors and tag characters. Text layout draws nothing for them and gives them no
+/// advance, so a font that lacks them never shows its missing-glyph box (`.notdef`). The soft hyphen is shown only
+/// where a line breaks at it, which the line breaker does (`bifrost_ui::typeset`).
+pub fn is_default_ignorable(c: char) -> bool {
+    matches!(c as u32,
+        0x00AD | 0x034F | 0x061C | 0x115F..=0x1160 | 0x17B4..=0x17B5 | 0x180B..=0x180F | 0x200B..=0x200F
+        | 0x202A..=0x202E | 0x2060..=0x206F | 0x3164 | 0xFE00..=0xFE0F | 0xFEFF | 0xFFA0 | 0xFFF0..=0xFFF8
+        | 0x1BCA0..=0x1BCA3 | 0x1D173..=0x1D17A | 0xE0000..=0xE0FFF)
+}
+
+/// How a character enters a one-line run. Line and paragraph breaks and the other whitespace controls (tab, CR, LF,
+/// NEL, U+2028/2029) lay out as a space, the way a single-line label shows text that holds a break; any other control
+/// character takes no room. Fonts give none of them a visible glyph (the UI font has no cmap entry for tab, CR or LF),
+/// so without this a mail subject or notification body with a newline drew the `.notdef` box between its words.
+/// Every other character passes unchanged.
+pub fn run_char(c: char) -> Option<char> {
+    match c {
+        '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | '\u{85}' | '\u{2028}' | '\u{2029}' => Some(' '),
+        c if c.is_control() => None,
+        c => Some(c),
+    }
+}
+
 /// One glyph placed by the shaper: advance and offsets in font units (offset y is up).
 struct PlacedGlyph {
     gid: u16,
@@ -51,6 +76,9 @@ pub type Var = ([u8; 4], f32);
 
 pub struct Font<'a> {
     data: &'a [u8],
+    /// offset of this face's table directory: 0 for a single font, the face's entry for a collection (`ttcf`);
+    /// table offsets stay file-relative either way
+    base: usize,
     /// CFF outlines (OpenType `OTTO`); otherwise glyf/loca are used
     cff: Option<Cff<'a>>,
     axes: Vec<Axis>,
@@ -144,11 +172,18 @@ impl Affine {
 }
 
 impl<'a> Font<'a> {
+    /// Parses a font file. A collection (`.ttc`/`.otc`) opens its first face; `parse_face` picks another.
     pub fn parse(data: &'a [u8]) -> Option<Self> {
-        let tables = u16_at(data, 4)? as usize;
+        Self::parse_face(data, 0)
+    }
+
+    /// Parses face `index` of a collection, or the font itself (index 0) for a single-font file.
+    pub fn parse_face(data: &'a [u8], index: usize) -> Option<Self> {
+        let base = crate::fontinfo::face_offset(data, index)?;
+        let tables = u16_at(data, base + 4)? as usize;
         let table = |tag: &[u8; 4]| -> Option<&'a [u8]> {
             (0..tables).find_map(|i| {
-                let rec = 12 + 16 * i;
+                let rec = base + 12 + 16 * i;
                 if data.get(rec..rec + 4)? != tag {
                     return None;
                 }
@@ -159,7 +194,7 @@ impl<'a> Font<'a> {
         };
         let find = |tag: &[u8; 4]| -> Option<usize> {
             (0..tables).find_map(|i| {
-                let rec = 12 + 16 * i;
+                let rec = base + 12 + 16 * i;
                 (data.get(rec..rec + 4)? == tag).then(|| u32_at(data, rec + 8).map(|o| o as usize)).flatten()
             })
         };
@@ -204,6 +239,7 @@ impl<'a> Font<'a> {
             underline_position: post_field(8),
             underline_thickness: post_field(10),
             data,
+            base,
             cff,
             gvar: table(b"gvar").filter(|_| !axes.is_empty()).and_then(Gvar::parse),
             avar: table(b"avar"),
@@ -774,7 +810,7 @@ impl Font<'_> {
     /// Identity of the loaded font file (address and length of its bytes): rendered text cached under one face
     /// is never served for another.
     pub(crate) fn ident(&self) -> (usize, usize) {
-        (self.data.as_ptr() as usize, self.data.len())
+        (self.data.as_ptr() as usize + self.base, self.data.len())
     }
 
     pub fn measure(&self, text: &str, px: f32) -> f32 {
@@ -822,13 +858,42 @@ impl Font<'_> {
     }
 
     fn shape_run(&self, text: &str, norm: &[f32], features: &Features) -> Vec<PlacedGlyph> {
-        let layout = self.ot.get_or_init(|| OtLayout::from_sfnt(self.data));
+        let layout = self.ot.get_or_init(|| OtLayout::from_sfnt_at(self.data, self.base));
+        // control characters become spaces or leave the run before anything else sees them (`run_char`)
+        let controls: String;
+        // U+2028/2029 are separators, not `is_control`, so the test is whether `run_char` changes anything
+        let text = if text.chars().any(|c| run_char(c) != Some(c)) {
+            controls = text.chars().filter_map(run_char).collect();
+            controls.as_str()
+        } else {
+            text
+        };
         if layout.is_trivial() {
-            return text.chars().map(|c| { let gid = self.glyph(c); PlacedGlyph { gid, advance: self.advance_at(gid, norm), dx: 0.0, dy: 0.0 } }).collect();
+            return text
+                .chars()
+                .filter(|&c| !is_default_ignorable(c))
+                .map(|c| { let gid = self.glyph(c); PlacedGlyph { gid, advance: self.advance_at(gid, norm), dx: 0.0, dy: 0.0 } })
+                .collect();
         }
+        // Default-ignorable characters leave the run before shaping, so kerning and ligatures see their visible
+        // neighbours side by side. The joiners (ZWNJ, ZWJ) stay in for the shaper, since they steer the substitutions
+        // around them, and their own glyphs are dropped afterwards: no ink, no advance, never `.notdef`. A glyph the
+        // shaper substituted for a joiner is kept.
+        let stripped: String;
+        let text = if text.chars().any(|c| is_default_ignorable(c) && !matches!(c, '\u{200c}' | '\u{200d}')) {
+            stripped = text.chars().filter(|&c| !is_default_ignorable(c) || matches!(c, '\u{200c}' | '\u{200d}')).collect();
+            stripped.as_str()
+        } else {
+            text
+        };
         let opts = ShapeOptions { script: shape_ot::detect_script(text), language: None, features, coords: norm };
         let out = layout.shape_text(text, &|c| self.glyph(c), &|g| self.advance_at(g, norm).round() as i32, &opts);
-        out.iter().map(|g| PlacedGlyph { gid: g.gid, advance: g.x_advance as f32, dx: g.x_offset as f32, dy: g.y_offset as f32 }).collect()
+        let chars: Vec<char> = if text.chars().any(is_default_ignorable) { text.chars().collect() } else { Vec::new() };
+        let ignored = |g: &shape_ot::ShapedGlyph| chars.get(g.cluster as usize).is_some_and(|&c| is_default_ignorable(c) && (g.gid == 0 || g.gid == self.glyph(c)));
+        out.iter()
+            .filter(|g| !ignored(*g))
+            .map(|g| PlacedGlyph { gid: g.gid, advance: g.x_advance as f32, dx: g.x_offset as f32, dy: g.y_offset as f32 })
+            .collect()
     }
 
     /// Runs of `text`, emoji clusters (drawn from the color emoji font) flagged true.
@@ -975,6 +1040,11 @@ impl Font<'_> {
     /// Renders one glyph by id (symbols looked up by name rather than character).
     pub fn render_glyph(&self, gid: u16, st: &Style) -> Image {
         self.render_glyphs(&[gid], st, &[])
+    }
+
+    /// Renders one glyph by id at a variation instance (the default instance for a static font).
+    pub fn render_glyph_var(&self, gid: u16, st: &Style, vars: &[Var]) -> Image {
+        self.render_glyphs(&[gid], st, &self.normalized(vars))
     }
 
     fn render_glyphs(&self, gids: &[u16], st: &Style, norm: &[f32]) -> Image {
@@ -1215,6 +1285,31 @@ mod tests {
         std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/test-cff.otf")).expect("tests/fixtures/test-cff.otf")
     }
 
+    /// Noto Sans CJK is CID-keyed: its local subrs and widths live per font DICT (FDArray/FDSelect). Each of 你 and
+    /// 好 has strokes on both sides of the em, so a glyph whose local subrs went missing shows up as a lopsided or
+    /// blank image. Skipped when the system font is not installed.
+    #[test]
+    fn cid_keyed_cjk_glyphs_have_ink_in_both_halves() {
+        let Ok(data) = std::fs::read("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc") else {
+            eprintln!("skipped: NotoSansCJK-Regular.ttc not installed");
+            return;
+        };
+        let f = Font::parse(&data).unwrap();
+        assert!(f.cff().is_some_and(|c| c.is_cid()), "Noto Sans CJK is CID-keyed CFF");
+        let st = Style { px: 64.0, embolden: 0.0, color: pack(255, 255, 255, 255), shadow: false };
+        for ch in ['你', '好'] {
+            let gid = f.glyph(ch);
+            assert_ne!(gid, 0, "{ch} is in the font");
+            let img = f.render_glyph(gid, &st);
+            let half = |left: bool| -> u64 {
+                (0..img.h).flat_map(|y| (0..img.w).map(move |x| (x, y))).filter(|&(x, _)| (x < img.w / 2) == left).map(|(x, y)| (img.px[y * img.w + x] >> 24) as u64).sum()
+            };
+            let (l, r) = (half(true), half(false));
+            assert!(l > 255 * 64 && r > 255 * 64, "{ch}: ink left {l}, right {r}");
+            assert!(l.min(r) * 4 > l.max(r), "{ch}: both halves carry strokes (left {l}, right {r})");
+        }
+    }
+
     #[test]
     fn cff_font_renders_through_the_same_path() {
         let data = cff_fixture();
@@ -1355,6 +1450,65 @@ mod run_cache_tests {
         off.set(tag("liga"), 0);
         assert!(!std::sync::Arc::ptr_eq(&first, &f.shaped("Hello", &[], &off)), "features are part of the key");
         assert!(!std::sync::Arc::ptr_eq(&first, &f.shaped("World", &[], &Features::new())), "the text is part of the key");
+    }
+
+    #[test]
+    fn default_ignorable_characters_take_no_room_and_draw_no_box() {
+        let data = sf();
+        let f = Font::parse(&data).unwrap();
+        let st = Style { px: 20.0, embolden: 0.0, color: 0xffff_ffff, shadow: false };
+        let plain = "548 Market St.";
+        let padded = "5\u{200c}4\u{200b}8 M\u{2060}a\u{feff}rket S\u{ad}t.\u{200e}";
+        assert_eq!(f.measure(padded, 20.0), f.measure(plain, 20.0), "the invisible characters add no width");
+        let (a, b) = (f.render(plain, &st), f.render(padded, &st));
+        assert_eq!((a.w, a.h), (b.w, b.h));
+        assert_eq!(a.px, b.px, "and draw exactly the same pixels: no missing-glyph boxes");
+        for c in ['\u{ad}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{2060}', '\u{feff}', '\u{fe0f}', '\u{e0041}'] {
+            assert!(is_default_ignorable(c), "{:04X}", c as u32);
+            assert_eq!(f.measure(&c.to_string(), 20.0), 0.0, "{:04X} alone measures zero", c as u32);
+        }
+        for c in ['a', ' ', '-', '\u{a0}', '\u{2010}', '\u{25cf}'] {
+            assert!(!is_default_ignorable(c), "{:04X} is visible", c as u32);
+        }
+    }
+
+    #[test]
+    fn a_newline_or_tab_lays_out_as_a_space_and_draws_no_box() {
+        let data = sf();
+        let f = Font::parse(&data).unwrap();
+        let st = Style { px: 20.0, embolden: 0.0, color: 0xffff_ffff, shadow: false };
+        // a notification body "subtitle\nbody" and a folded mail subject draw like their one-line form
+        let plain = f.render("Reddit u/someone replied", &st);
+        for broken in ["Reddit\nu/someone replied", "Reddit\tu/someone replied", "Reddit\u{2028}u/someone replied"] {
+            assert_eq!(f.measure(broken, 20.0), f.measure("Reddit u/someone replied", 20.0), "{broken:?}");
+            let img = f.render(broken, &st);
+            assert_eq!((img.w, img.h), (plain.w, plain.h), "{broken:?}");
+            assert_eq!(img.px, plain.px, "{broken:?} draws no missing-glyph box");
+        }
+        assert_eq!(f.measure("a\u{7}\u{1b}b", 20.0), f.measure("ab", 20.0), "other controls take no room");
+        assert_eq!(run_char('\r'), Some(' '));
+        assert_eq!(run_char('\u{0}'), None);
+        assert_eq!(run_char('|'), Some('|'));
+    }
+
+    #[test]
+    fn a_vertical_line_is_a_thin_stroke_at_body_size() {
+        let data = sf();
+        let f = Font::parse(&data).unwrap();
+        assert_ne!(f.glyph('|'), 0, "the UI font has the vertical line");
+        // body text (13 pt) at the 1.5625 panel scale, regular and semibold
+        let px = crate::ui::MAC_BODY_PT * 1.5625;
+        for wght in [400.0, 590.0] {
+            let st = Style { px, embolden: 0.0, color: 0xffff_ffff, shadow: false };
+            let img = f.render_var("|", &st, &[(*b"wght", wght)]);
+            let inked = |x: usize| (0..img.h).filter(|&y| (img.px[y * img.w + x] >> 24) > 128).count();
+            let cols: Vec<usize> = (0..img.w).filter(|&x| inked(x) > 0).collect();
+            let tall = cols.iter().map(|&x| inked(x)).max().unwrap_or(0);
+            assert!(cols.len() <= 3, "wght {wght}: a stroke, not a box: {} inked columns", cols.len());
+            assert!(tall as f32 >= px * 0.9, "wght {wght}: it spans ascender to descender: {tall} rows at {px} px");
+            let notdef = f.render_glyph_var(0, &st, &[(*b"wght", wght)]);
+            assert_ne!(img.px, notdef.px, "wght {wght}: not the missing-glyph box");
+        }
     }
 
     #[test]

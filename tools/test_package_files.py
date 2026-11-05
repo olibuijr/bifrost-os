@@ -4,6 +4,8 @@
 Run: python3 -I tools/test_package_files.py
 """
 import os
+import subprocess
+import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -34,8 +36,13 @@ class NoRetiredCompositor(unittest.TestCase):
 
     def test_session_env_carries_toolkit_defaults(self):
         text = read(ARCH, "wayland", "session-env")
-        for key in ("XDG_CURRENT_DESKTOP", "MOZ_ENABLE_WAYLAND", "QT_QPA_PLATFORM", "GDK_BACKEND", "XCURSOR_THEME", "XCURSOR_SIZE"):
+        for key in ("XDG_CURRENT_DESKTOP", "MOZ_ENABLE_WAYLAND", "QT_QPA_PLATFORM", "QT_QPA_PLATFORMTHEME", "GDK_BACKEND", "XCURSOR_THEME", "XCURSOR_SIZE"):
             self.assertIn("'%s':" % key, text)
+
+    def test_launchers_pass_the_qt_theme(self):
+        # Qt follows the Settings portal's color-scheme only with its GNOME theme
+        self.assertIn("'QT_QPA_PLATFORMTHEME': 'gnome'", read(ARCH, "wayland", "session-env"))
+        self.assertIn("'QT_QPA_PLATFORMTHEME'", read(ARCH, "wayland", "apps"))
 
 
 class RepositoryKey(unittest.TestCase):
@@ -47,6 +54,62 @@ class RepositoryKey(unittest.TestCase):
         self.assertIn("pacman-key --add", scriptlet)
         self.assertIn("pacman-key --lsign-key", scriptlet)
         self.assertTrue(os.path.exists(os.path.join(ARCH, "keys", "README.md")))
+
+    def test_the_committed_public_key_is_an_armored_public_key(self):
+        key = read(ARCH, "keys", "bifrost-repo.gpg")
+        self.assertTrue(key.startswith("-----BEGIN PGP PUBLIC KEY BLOCK-----"))
+        self.assertNotIn("PRIVATE", key)
+
+    def run_siglevel(self, conf):
+        """Run the scriptlet's bifrost_repo_siglevel on `conf` text; return the new text."""
+        scriptlet = read(ARCH, "springboard.install")
+        start = scriptlet.index("bifrost_repo_siglevel() {")
+        end = scriptlet.index("\n}\n", start) + 3
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "pacman.conf")
+            with open(path, "w") as f:
+                f.write(conf)
+            script = scriptlet[start:end] + "bifrost_repo_siglevel\nbifrost_repo_siglevel\n"
+            subprocess.run(["bash", "-c", script], check=True, env={**os.environ, "BIFROST_PACMAN_CONF": path})
+            return read(path)
+
+    def test_an_old_install_is_switched_to_required_signatures_after_the_key_is_in(self):
+        old = ("[options]\nSigLevel = Required DatabaseOptional\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n"
+               "[bifrost]\nSigLevel = Optional TrustAll\nServer = https://bifrost.olibuijr.com/arch/$arch\n\n[extra]\nInclude = /x\n")
+        new = self.run_siglevel(old)
+        self.assertEqual(new, old.replace("Optional TrustAll", "Required DatabaseRequired"), "only the [bifrost] line changes, once")
+
+    def test_a_bifrost_section_without_a_siglevel_line_gets_one_and_the_last_section_works(self):
+        new = self.run_siglevel("[options]\nSigLevel = Never\n[bifrost]\nServer = https://r/$arch\n")
+        self.assertEqual(new, "[options]\nSigLevel = Never\n[bifrost]\nServer = https://r/$arch\nSigLevel = Required DatabaseRequired\n")
+        same = "[bifrost]\nSigLevel = Required DatabaseRequired\nServer = s\n"
+        self.assertEqual(self.run_siglevel(same), same)
+
+    def test_the_switch_happens_only_after_the_key_import_succeeded(self):
+        scriptlet = read(ARCH, "springboard.install")
+        trust = scriptlet[scriptlet.index("bifrost_repo_trust() {"):]
+        trust = trust[:trust.index("\n}\n")]
+        self.assertLess(trust.index("if bifrost_repo_key"), trust.index("bifrost_repo_siglevel"))
+        for hook in ("post_install() {", "post_upgrade() {"):
+            body = scriptlet[scriptlet.index(hook):]
+            self.assertIn("bifrost_repo_trust", body[:body.index("\n}\n")], hook)
+
+    def test_trust_migration_requires_a_successful_key_import(self):
+        scriptlet = read(ARCH, "springboard.install")
+        start = scriptlet.index("bifrost_repo_siglevel() {")
+        end = scriptlet.index("\n}\n", scriptlet.index("bifrost_repo_trust() {", start)) + 3
+        functions = scriptlet[start:end]
+        original = "[options]\nSigLevel = Required DatabaseOptional\n[bifrost]\nSigLevel = Optional TrustAll\nServer = s\n"
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "pacman.conf")
+            for status in (1, 0):
+                with open(path, "w") as f:
+                    f.write(original)
+                script = functions + f"\nbifrost_repo_key() {{ return {status}; }}\nbifrost_repo_trust\n"
+                subprocess.run(["bash", "-c", script], check=True, capture_output=True,
+                               env={**os.environ, "BIFROST_PACMAN_CONF": path})
+                expected = original if status else original.replace("Optional TrustAll", "Required DatabaseRequired")
+                self.assertEqual(read(path), expected)
 
 
 class AgentAccessIsLabOnly(unittest.TestCase):

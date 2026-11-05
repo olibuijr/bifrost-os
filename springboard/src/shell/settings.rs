@@ -41,6 +41,31 @@ pub use super::list::{GROUP_GAP_PT, MARGIN_PT, RADIUS_PT, ROW_PT};
 pub use super::list::HIGHLIGHT;
 /// The rows Search offers as "Settings" results, by their names.
 pub const PAGES: [&str; 10] = ["Wi-Fi", "Display & Brightness", "Wallpaper", "About", "Battery", "Focus", "Do Not Disturb", "Notifications", "Accessibility", "AssistiveTouch"];
+/// The pane a Settings row name stands for (`PAGES` and the sidebar rows Search and the agent socket name directly).
+pub(crate) fn named_page(name: &str) -> Option<PageId> {
+    Some(match name {
+        "Network" => PageId::Network,
+        "Assistant" => PageId::Assistant,
+        "Ethernet" => PageId::Ethernet,
+        "Wi-Fi" => PageId::Wifi,
+        "Bluetooth" => PageId::Bluetooth,
+        "Location Services" => PageId::LocationServices,
+        "Display & Brightness" => PageId::Display,
+        "Night Shift" => PageId::NightShift,
+        "Wallpaper" => PageId::Wallpaper,
+        "Screen Saver" => PageId::ScreenSaver,
+        "About" => PageId::About,
+        "Battery" => PageId::Battery,
+        "Focus" | "Do Not Disturb" => PageId::Focus,
+        "Notifications" => PageId::Notifications,
+        "Software Update" => PageId::SoftwareUpdate,
+        "Fonts" => PageId::Fonts,
+        "Appearance" => PageId::Appearance,
+        "Keyboard" => PageId::Keyboard,
+        "Accessibility" | "AssistiveTouch" => PageId::Accessibility,
+        _ => return None,
+    })
+}
 /// The push/pop slide, as NativeNavigationController times it.
 pub const PUSH_MS: f64 = 350.0;
 /// How far the page underneath slides left while one is pushed over it.
@@ -54,7 +79,7 @@ const DETAIL_MAX_PT: f32 = 760.0;
 use super::icons::RED;
 /// The pref behind Display & Brightness › Interface Scale on a desktop: "auto" or a factor ("1.25").
 pub const DISPLAY_SCALE_PREF: &str = "display_scale";
-/// The pref behind Displays › Appearance: "light", "dark" or "auto" (default dark).
+/// The pref behind the Appearance pane: "light", "dark" or "auto" (default dark).
 pub const APPEARANCE_PREF: &str = "appearance_mode";
 pub const ACCENT_PREF: &str = "accent_color";
 /// The pref behind Developer › Performance HUD ("1" = on).
@@ -285,6 +310,18 @@ impl Loads {
     }
 }
 
+/// Where the keyboard is in the split window (see `Settings::cycle_focus`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Stop {
+    Search,
+    Sidebar,
+    /// the nth focusable control of the detail pane
+    Pane(usize),
+}
+
+/// How far a Left or Right key moves a focused slider, as a part of its track.
+const SLIDER_KEY_STEP: f32 = 0.1;
+
 pub struct Settings {
     /// the detail pane's width (the whole frame in the phone layout)
     w: i32,
@@ -449,8 +486,23 @@ pub struct Settings {
     st_gate: Option<(Lock, StEdit)>,
     /// the search field over the root page
     search: Search,
+    /// the sidebar's selected row shows the keyboard focus ring: Tab or an arrow key moved the focus there, and a touch
+    /// takes it away (the sidebar has the keyboard whenever the search field has not)
+    side_ring: bool,
+    /// the detail pane's focused control (page, group, item): Tab from the sidebar moves the keyboard there, Tab and
+    /// Shift+Tab step through the pane's controls, Space and Return press the focused one. It is void once the page changes.
+    pane_focus: Option<(PageId, usize, usize)>,
     /// what Search finds, while it has a query (see `settings_search::index`)
     index: Option<Vec<settings_search::Entry>>,
+    /// the page of each hit for the query it was found for (`hit_pages`), kept by `requery` so the sidebar's draw does
+    /// not match the whole index again every frame
+    hits: (String, Vec<PageId>),
+    /// the page opened (by a tap on a result, an arrow key or Return) since the query last changed: the search highlight.
+    /// A new query clears it, so the highlight starts at the first hit rather than at a pane that was already open.
+    hit_open: Option<PageId>,
+    /// The split layout's earlier panes, latest last: a pane opened from Search goes over the stack that was open, so
+    /// Back returns to it (E2E13 5). A sidebar row, a deep link and the single column start a new history.
+    pane_back: Vec<Vec<Entry>>,
     /// Users & Groups: the last error from privd, shown under the list ("" when none)
     users_note: String,
 }
@@ -464,6 +516,20 @@ fn wallpaper_name(list: &[Wallpaper], id: &str) -> String {
 fn slide(push: bool) -> Transition {
     let e = Transition::push(Subtype::FromRight).parallax(PARALLAX, 60.0 / 255.0).ease(Ease::OutCubic);
     if push { e } else { e.reversed() }
+}
+
+/// How many earlier panes Back keeps in the split layout (`Settings::pane_back`).
+const PANE_HISTORY: usize = 8;
+
+/// The page an arrow key moves the search highlight to: the next (or previous) hit on another page than the highlighted
+/// one, since every hit of a page is filled together. With none highlighted explicitly (`at` None) the first hit shows
+/// highlighted only as a cue: Down steps on from it to the next page's hit, and Up opens the last hit.
+fn step_hit(hits: &[PageId], at: Option<usize>, down: bool) -> Option<PageId> {
+    let Some(at) = at else {
+        return if hits.is_empty() { None } else if down { step_hit(hits, Some(0), true) } else { hits.last().copied() };
+    };
+    let cur = hits[at];
+    if down { hits[at + 1..].iter().find(|p| **p != cur) } else { hits[..at].iter().rev().find(|p| **p != cur) }.copied()
 }
 
 impl Settings {
@@ -499,7 +565,11 @@ impl Settings {
                 let entry = self.build(ui, PageId::General, None);
                 self.stack.push(entry);
             }
-            self.sidebar = Some(self.build_sidebar(ui));
+            // a resize keeps where the sidebar was scrolled to (clamped to the new height)
+            let offset = self.sidebar.as_ref().map_or(0.0, ListPage::offset);
+            let mut sb = self.build_sidebar(ui);
+            sb.jump_to(offset);
+            self.sidebar = Some(sb);
         } else {
             // the split view's default detail page (General, opened by itself) is not a page the
             // user navigated to: the single column starts at the root list again
@@ -507,6 +577,7 @@ impl Settings {
                 self.stack.clear();
             }
             self.sidebar = None;
+            self.pane_back.clear();
             if self.stack.first().is_none_or(|e| e.id != PageId::Root) {
                 let root = self.build(ui, PageId::Root, None);
                 self.stack.insert(0, root);
@@ -553,7 +624,7 @@ impl Settings {
             root = results;
         }
         let mut page = ListPage::in_pane(ui, root, self.side_w, self.h, None, pane);
-        page.select(self.stack.first().map_or(PageId::Root, |e| e.id));
+        page.select(self.side_selected());
         page
     }
 
@@ -662,7 +733,12 @@ impl Settings {
             st_edge: None,
             st_gate: None,
             search: Search::new(ui, w),
+            side_ring: false,
+            pane_focus: None,
             index: None,
+            hits: (String::new(), Vec::new()),
+            hit_open: None,
+            pane_back: Vec::new(),
             users_note: String::new(),
         };
         let root = st.build(ui, PageId::Root, None);
@@ -947,6 +1023,7 @@ impl Settings {
             self.stack[k] = entry;
         }
         self.sync_forward();
+        self.sync_pane_ring();
     }
 
     fn rebuild_sidebar(&mut self, ui: &Ui) {
@@ -1583,27 +1660,9 @@ impl Settings {
     /// Jumps to the page a row name stands for (rows without a page of
     /// their own show the root), dropping any sheet; Wi-Fi starts a scan.
     pub fn open_page(&mut self, ui: &Ui, name: &str, t: f64) -> Vec<Effect> {
-        let id = match name {
-            "Network" => PageId::Network,
-            "Assistant" => PageId::Assistant,
-            "Ethernet" => PageId::Ethernet,
-            "Wi-Fi" => PageId::Wifi,
-            "Bluetooth" => PageId::Bluetooth,
-            "Location Services" => PageId::LocationServices,
-            "Display & Brightness" => PageId::Display,
-            "Night Shift" => PageId::NightShift,
-            "Wallpaper" => PageId::Wallpaper,
-            "Screen Saver" => PageId::ScreenSaver,
-            "About" => PageId::About,
-            "Battery" => PageId::Battery,
-            "Focus" | "Do Not Disturb" => PageId::Focus,
-            "Notifications" => PageId::Notifications,
-            "Software Update" => PageId::SoftwareUpdate,
-            "Fonts" => PageId::Fonts,
-            "Appearance" => PageId::Appearance,
-            "Keyboard" => PageId::Keyboard,
-            "Accessibility" | "AssistiveTouch" => PageId::Accessibility,
-            _ => match settings_search::alias(name).or_else(|| settings_search::find_page(&self.build_index(), name)) {
+        let id = match named_page(name) {
+            Some(id) => id,
+            None => match settings_search::alias(name).or_else(|| settings_search::find_page(&self.build_index(), name)) {
                 Some(id) => id,
                 None => {
                     self.reset_overlays();
@@ -1651,7 +1710,21 @@ impl Settings {
             }
             return vec![];
         }
+        // while Search has a query the page opened is the highlighted hit (when it is one)
+        let searching = !self.search.query().trim().is_empty();
+        let first_hit = self.hit_open.is_none_or(|p| !self.stack.iter().any(|e| e.id == p));
+        self.hit_open = searching.then_some(id);
         let path = self.path_to(id);
+        // the first hit opened for a query in the split layout keeps the pane that was open under it, so Back returns
+        // there; stepping on through the hits replaces only the hit, and any other way in starts a new history
+        if self.side_w > 0 && searching && first_hit && !self.stack.is_empty() && self.stack.first().map(|e| e.id) != path.first().copied() {
+            self.pane_back.push(std::mem::take(&mut self.stack));
+            if self.pane_back.len() > PANE_HISTORY {
+                self.pane_back.remove(0);
+            }
+        } else if !searching {
+            self.pane_back.clear();
+        }
         self.stack.truncate(usize::from(self.side_w == 0));
         for p in path {
             self.push(ui, p, t);
@@ -1858,7 +1931,7 @@ impl Settings {
 
     /// Esc: backs out of the page on top (an open sheet or picker swallows it); false at the root.
     pub fn back_page(&mut self, t: f64) -> bool {
-        if self.stack.len() <= 1 {
+        if self.stack.len() <= 1 && !self.has_earlier_pane() {
             return false;
         }
         if self.transition.is_none() && !self.overlay_open() {
@@ -1867,14 +1940,29 @@ impl Settings {
         true
     }
 
-    /// Back (the pill's back half, Esc, Cmd+[): pops the top page and keeps it for Forward.
+    /// Back (the pill's back half, Esc, Cmd+[): pops the top page and keeps it for Forward. At a pane opened from
+    /// Search it returns to the pane that was open before (its whole stack); Forward does not bring that pane back.
     fn go_back(&mut self, t: f64) {
         if self.stack.len() > 1 {
             let id = self.page();
             self.pop(t);
             self.forward.push(id);
             self.sync_forward();
+        } else if self.has_earlier_pane() {
+            if let Some(earlier) = self.pane_back.pop() {
+                let leaving = std::mem::replace(&mut self.stack, earlier).pop();
+                self.transition = Some(Slide { push: false, start: t, leaving, imgs: None });
+                // the pane was built when it was left: `tick` brings it up to date once the slide ends
+                self.stale_depth = usize::MAX;
+                self.forward.clear();
+                self.sync_forward();
+            }
         }
+    }
+
+    /// Whether Back at the first page returns to an earlier pane (the split layout, after a pane opened from Search).
+    fn has_earlier_pane(&self) -> bool {
+        self.side_w > 0 && !self.pane_back.is_empty()
     }
 
     /// Forward (the pill's forward half, Cmd+]): opens again the page Back left last; false when there is none.
@@ -1895,13 +1983,21 @@ impl Settings {
         !self.forward.is_empty()
     }
 
-    /// Shows the forward state on the top page's toolbar pill.
+    /// Shows the forward state on the top page's toolbar pill, and an earlier pane behind the first page on its back
+    /// half.
     fn sync_forward(&mut self) {
         let on = !self.forward.is_empty();
         if let Some(top) = self.stack.last_mut() {
             top.nav.set_forward(on);
             if let View::List(p) = &mut top.view {
                 p.set_forward(on);
+            }
+        }
+        let earlier = self.has_earlier_pane();
+        if let Some(first) = self.stack.first_mut() {
+            first.nav.set_earlier(earlier);
+            if let View::List(p) = &mut first.view {
+                p.set_earlier(earlier);
             }
         }
     }
@@ -1915,6 +2011,19 @@ impl Settings {
         self.sync_forward();
     }
 
+    /// The scroll wheel over the window at window x `x` moved the content `dy` px: the sidebar or the page under it
+    /// scrolls, and nothing is pressed (a notch over a slider must not set or save it). False when no list is there to
+    /// take it (an overlay, a slide or the wallpaper grid), so the drag emulated for the wheel scrolls it as before.
+    pub fn wheel(&mut self, x: f32, dy: f32) -> bool {
+        if self.transition.is_some() || self.overlay_open() {
+            return false;
+        }
+        let list = if self.side_w > 0 && x < self.side_w as f32 { self.sidebar.as_mut() } else { self.list_mut() };
+        let Some(list) = list else { return false };
+        list.wheel(dy);
+        true
+    }
+
     /// Handles a touch; `prefs` receives every persisted change.
     pub fn touch(&mut self, ui: &Ui, prefs: &mut Prefs, ev: Event, t: f64) -> Vec<Effect> {
         let (x, y) = match ev {
@@ -1923,6 +2032,11 @@ impl Settings {
         };
         if self.transition.is_some() {
             return vec![];
+        }
+        if matches!(ev, Event::Down(..)) {
+            self.side_ring = false;
+            self.pane_focus = None;
+            self.sync_pane_ring();
         }
         let (ev, x, y) = if self.side_w > 0 {
             if matches!(ev, Event::Down(..)) {
@@ -2122,6 +2236,7 @@ impl Settings {
             return vec![];
         }
         self.stack.clear();
+        self.pane_back.clear();
         self.push(ui, id, t);
         match id {
             PageId::Wifi => vec![Effect::Wifi(WifiAction::Scan)],
@@ -2256,6 +2371,50 @@ impl Settings {
         Some(settings_search::results(self.index.as_deref().unwrap_or(&[]), query))
     }
 
+    /// The page of each search hit, in the order the results list them (empty without a query): the hits `requery` kept
+    /// for this query, else matched now.
+    fn hit_pages(&self) -> Vec<PageId> {
+        let query = self.search.query();
+        if query.trim().is_empty() {
+            return Vec::new();
+        }
+        if self.hits.0 == query {
+            return self.hits.1.clone();
+        }
+        self.match_hit_pages()
+    }
+
+    /// Matches the query against the index: the page of each hit, in the order the results list them.
+    fn match_hit_pages(&self) -> Vec<PageId> {
+        let query = self.search.query();
+        if query.trim().is_empty() {
+            return Vec::new();
+        }
+        settings_search::matches(self.index.as_deref().unwrap_or(&[]), query).iter().map(|e| e.page).collect()
+    }
+
+    /// The hit the sidebar fills: the first one on the page opened since the query changed (by a tap or an arrow key),
+    /// while it is still open, so Return opens what is highlighted. Once Back left that page, the hit of the pane shown
+    /// now, if it is one. None until one is opened (Return then opens the first) or when the shown pane is no hit.
+    fn highlighted_hit(&self, hits: &[PageId]) -> Option<usize> {
+        let open = self.hit_open?;
+        let shown = if self.stack.iter().any(|e| e.id == open) { open } else { self.stack.iter().rev().map(|e| e.id).find(|p| hits.contains(p))? };
+        hits.iter().position(|p| *p == shown)
+    }
+
+    /// The page whose sidebar rows are filled: the highlighted hit while Search has a query (the first hit until one
+    /// is opened, the one Return opens, as the reference highlights it, E2E13 5), else the open pane.
+    fn side_selected(&self) -> PageId {
+        let hits = self.hit_pages();
+        let shown = || self.stack.first().map_or(PageId::Root, |e| e.id);
+        match self.highlighted_hit(&hits) {
+            Some(i) => hits[i],
+            // Back left the hit opened from Search for a pane that is no hit: no hit row is highlighted
+            None if self.hit_open.is_some() => shown(),
+            None => hits.first().copied().unwrap_or_else(shown),
+        }
+    }
+
     /// Rebuilds the root page for a changed search query, from the top.
     fn requery(&mut self, ui: &Ui) {
         // the index is built when a query starts (so it shows the rows as they are now) and dropped when it ends
@@ -2264,6 +2423,10 @@ impl Settings {
         } else if self.index.is_none() {
             self.index = Some(self.build_index());
         }
+        // the hits for this query and index, for every draw of the sidebar until the query changes
+        self.hits = (self.search.query().to_string(), self.match_hit_pages());
+        // a new query's highlight starts at its first hit
+        self.hit_open = None;
         // a query replaces the root list with its matches
         if self.stack.first().is_some_and(|e| e.id == PageId::Root) {
             self.rebuild_pages(ui, 0..1);
@@ -2290,20 +2453,46 @@ impl Settings {
     }
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) -> Vec<Effect> {
+        // Shift+Tab steps the split window's keyboard back; in a sheet, a picker or the single column it is Tab, as before
+        let out = if out == Out::Named("BackTab") && !(self.side_w > 0 && !self.overlay_open()) { Out::Named("Tab") } else { out };
         if let Some(p) = &mut self.zone_picker {
             p.key(ui, out, t);
             return vec![];
         }
         if self.sheet.is_none() && self.search.active && (self.stack.len() == 1 || self.side_w > 0) {
-            // Return opens the first match (the field keeps its query, so the results stay in the sidebar)
-            let first = matches!(out, Out::Enter).then(|| settings_search::first_hit(self.index.as_deref().unwrap_or(&[]), self.search.query())).flatten();
+            // Up and Down step through the hits, opening each; Return opens the highlighted hit, else the first (the
+            // field keeps its query, so the results stay in the sidebar)
+            let hits = self.hit_pages();
+            // Tab leaves the field for the sidebar, which keeps the query's results; Shift+Tab for the pane's last control
+            if matches!(out, Out::Named("Tab" | "BackTab")) && self.side_w > 0 {
+                return self.cycle_focus(ui, out == Out::Named("Tab"), t);
+            }
+            if let Out::Named(dir @ ("Up" | "Down")) = out {
+                // the sidebar keeps the results beside the page they open; the single column has them on its root only
+                if self.side_w > 0 && !hits.is_empty() {
+                    // the first hit shows highlighted before any is opened: Down steps on from it, Up opens the last
+                    return match step_hit(&hits, self.highlighted_hit(&hits), dir == "Down") {
+                        Some(id) => self.open_page_id(ui, id, t),
+                        None => vec![],
+                    };
+                }
+            }
+            let target = matches!(out, Out::Enter).then(|| hits.get(self.highlighted_hit(&hits).unwrap_or(0)).copied()).flatten();
             if self.search.edit(ui, out, t) {
                 self.requery(ui);
             }
-            if let Some(id) = first {
+            if let Some(id) = target {
                 return self.open_page_id(ui, id, t);
             }
             return vec![];
+        }
+        if self.sheet.is_none() && !self.overlay_open() {
+            match out {
+                Out::Named(tab @ ("Tab" | "BackTab")) => return self.cycle_focus(ui, tab == "Tab", t),
+                Out::Named(name @ ("Up" | "Down")) if self.valid_pane_focus().is_some() => return self.pane_step(ui, name == "Down"),
+                Out::Named(name @ ("Up" | "Down")) => return self.sidebar_key(ui, name, t),
+                _ => {}
+            }
         }
         let submit = self.sheet.as_mut().is_some_and(|sh| sh.edit(ui, out, t));
         if submit {
@@ -2311,6 +2500,175 @@ impl Settings {
         } else {
             vec![]
         }
+    }
+
+    /// Tab (`forward`) or Shift+Tab moves the keyboard round the window: the sidebar, the detail pane's controls from the top,
+    /// then the search field, and back to the sidebar. Each stop shows its focus ring (the field has its own). The pane has
+    /// no stop when its page has no control to press. Only the split layout has more than one place for the keyboard.
+    fn cycle_focus(&mut self, ui: &Ui, forward: bool, t: f64) -> Vec<Effect> {
+        if self.side_w == 0 || self.sidebar.is_none() {
+            return vec![];
+        }
+        // an open pop-up menu holds the keyboard until it is chosen from or dismissed
+        if self.list().is_some_and(ListPage::popup_open) {
+            return vec![];
+        }
+        let controls = self.list().map(ListPage::focusable).unwrap_or_default();
+        let n = controls.len();
+        // where the keyboard is now: the search field, a pane control (by its place among them), else the sidebar
+        let here = if self.search.active {
+            Stop::Search
+        } else {
+            match self.valid_pane_focus().and_then(|f| controls.iter().position(|c| *c == f)) {
+                Some(k) => Stop::Pane(k),
+                None => Stop::Sidebar,
+            }
+        };
+        let next = match (here, forward) {
+            (Stop::Search, true) => Stop::Sidebar,
+            (Stop::Sidebar, true) if n > 0 => Stop::Pane(0),
+            (Stop::Sidebar, true) => Stop::Search,
+            (Stop::Pane(k), true) if k + 1 < n => Stop::Pane(k + 1),
+            (Stop::Pane(_), true) => Stop::Search,
+            (Stop::Search, false) if n > 0 => Stop::Pane(n - 1),
+            (Stop::Search, false) => Stop::Sidebar,
+            (Stop::Sidebar, false) => Stop::Search,
+            (Stop::Pane(0), false) => Stop::Sidebar,
+            (Stop::Pane(k), false) => Stop::Pane(k - 1),
+        };
+        self.search.focus(next == Stop::Search, t);
+        self.side_ring = next == Stop::Sidebar;
+        self.pane_focus = match next {
+            Stop::Pane(k) => Some((self.page(), controls[k].0, controls[k].1)),
+            _ => None,
+        };
+        self.sync_pane_ring();
+        if let Stop::Pane(k) = next {
+            if let Some(p) = self.list_mut() {
+                p.reveal_row(ui, controls[k].0, controls[k].1);
+            }
+        }
+        vec![]
+    }
+
+    /// The pane control with the keyboard focus, when it is still on the page that was focused, is still a control, and the
+    /// keyboard is not in the search field or an overlay.
+    fn valid_pane_focus(&self) -> Option<(usize, usize)> {
+        let (id, g, i) = self.pane_focus?;
+        if id != self.page() || self.search.active || self.overlay_open() {
+            return None;
+        }
+        self.list()?.focusable().contains(&(g, i)).then_some((g, i))
+    }
+
+    /// Shows the focus ring on the page's focused control, or on none.
+    fn sync_pane_ring(&mut self) {
+        let focus = self.valid_pane_focus();
+        if let Some(p) = self.list_mut() {
+            p.set_focus(focus);
+        }
+    }
+
+    /// Down and Up while the pane has the keyboard: the next or previous control, stopping at the ends (Tab goes round).
+    /// With a pop-up menu open they move its highlight instead.
+    fn pane_step(&mut self, ui: &Ui, down: bool) -> Vec<Effect> {
+        let Some(page) = self.list() else { return vec![] };
+        if page.popup_open() {
+            if let Some(p) = self.list_mut() {
+                p.popup_step(if down { 1 } else { -1 });
+            }
+            return vec![];
+        }
+        let controls = page.focusable();
+        let Some(k) = self.valid_pane_focus().and_then(|f| controls.iter().position(|c| *c == f)) else { return vec![] };
+        let k = if down { (k + 1).min(controls.len() - 1) } else { k.saturating_sub(1) };
+        self.pane_focus = Some((self.page(), controls[k].0, controls[k].1));
+        self.sync_pane_ring();
+        if let Some(p) = self.list_mut() {
+            p.reveal_row(ui, controls[k].0, controls[k].1);
+        }
+        vec![]
+    }
+
+    /// A key for the window, with the preferences a press may change: while the detail pane has the keyboard, Space and
+    /// Return press its focused control (a switch flips, a pop-up button opens its menu, a link opens its page, a segmented
+    /// row steps to its next segment) and Left and Right nudge a slider or step a segmented row. Every other key is `key`'s.
+    pub fn key_with_prefs(&mut self, ui: &Ui, prefs: &mut Prefs, out: Out, t: f64) -> Vec<Effect> {
+        let Some((g, i)) = self.valid_pane_focus() else { return self.key(ui, out, t) };
+        let press = matches!(&out, Out::Enter) || matches!(&out, Out::Text(s) if s == " ");
+        let step = match out {
+            Out::Named("Left") => Some(false),
+            Out::Named("Right") => Some(true),
+            _ => None,
+        };
+        let Some(page) = self.list() else { return self.key(ui, out, t) };
+        // an open pop-up menu takes Space and Return (they choose the highlighted item); Up and Down are `key`'s
+        if page.popup_open() {
+            return match (press, page.popup_choice()) {
+                (true, Some(k)) => {
+                    let fx = self.activate(ui, prefs, Hit::Choice(k), t);
+                    self.sync_pane_ring();
+                    fx
+                }
+                (true, None) => vec![],
+                _ => self.key(ui, out, t),
+            };
+        }
+        let fx = if let (Some(up), Some(v)) = (step, page.slider_value(g, i)) {
+            // a slider moves a tenth of its track a key, as a release (so the value is saved)
+            let (tx, _, tw) = page.track(ui, g, i);
+            let v = (v + if up { SLIDER_KEY_STEP } else { -SLIDER_KEY_STEP }).clamp(0.0, 1.0);
+            self.slide(ui, prefs, g, i, tx + v * tw, true)
+        } else if let (true, Some((sel, n))) = (step.is_some() || press, page.choice_state(g, i)) {
+            let k = match step {
+                Some(true) => (sel + 1).min(n - 1),
+                Some(false) => sel.saturating_sub(1),
+                None => (sel + 1) % n.max(1),
+            };
+            self.activate(ui, prefs, Hit::Segment(g, i, k), t)
+        } else if press {
+            self.activate(ui, prefs, Hit::Row(g, i), t)
+        } else {
+            return self.key(ui, out, t);
+        };
+        self.sync_pane_ring();
+        fx
+    }
+
+    /// Keys while the sidebar has the keyboard (the window opens that way, and Tab leaves the search field for it): Up
+    /// and Down move the selection to the previous or next pane and open it. While Search shows results the arrows step
+    /// over the hits as in the field. The focus ring shows from the first key.
+    fn sidebar_key(&mut self, ui: &Ui, name: &str, t: f64) -> Vec<Effect> {
+        if self.side_w == 0 || self.sidebar.is_none() {
+            return vec![];
+        }
+        self.side_ring = true;
+        let down = name == "Down";
+        let hits = self.hit_pages();
+        let fx = if !hits.is_empty() {
+            match step_hit(&hits, self.highlighted_hit(&hits), down) {
+                Some(id) => self.open_page_id(ui, id, t),
+                None => vec![],
+            }
+        } else {
+            let pages = self.sidebar.as_ref().map(|sb| sb.push_pages()).unwrap_or_default();
+            let next = match pages.iter().position(|p| *p == self.side_selected()) {
+                Some(at) if down => pages.get(at + 1),
+                Some(at) => at.checked_sub(1).and_then(|k| pages.get(k)),
+                None if down => pages.first(),
+                None => pages.last(),
+            };
+            match next.copied() {
+                Some(id) => self.select(ui, id, t),
+                None => vec![],
+            }
+        };
+        let selected = self.side_selected();
+        if let Some(sb) = &mut self.sidebar {
+            sb.select(selected);
+            sb.reveal_selected(ui);
+        }
+        fx
     }
 
     fn join(&mut self, ui: &Ui, t: f64) -> Vec<Effect> {
@@ -3105,6 +3463,8 @@ impl Settings {
                         self.desk.sidebar_icons = k.min(super::pages::SIDEBAR_ICON_SIZES.len() - 1);
                         let _ = prefs.set(super::pages::SIDEBAR_ICON_PREF, &self.desk.sidebar_icons.to_string());
                         self.desk.apply();
+                        // the sidebar's row pitch is laid out when it is built: build it again at the new size now
+                        self.rebuild_sidebar(ui);
                         vec![]
                     }
                     Pick::Remap(slot, target) => {
@@ -3135,10 +3495,10 @@ impl Settings {
                         }
                         vec![]
                     }
-                    Pick::SpotlightExclude(k) => {
-                        if self.opts.spotlight.remove_excluded(k) {
+                    Pick::SearchExclude(k) => {
+                        if self.opts.search_scope.remove_excluded(k) {
                             self.opts.save(prefs);
-                            super::spotlight_scope::install(self.opts.spotlight.clone());
+                            super::search_scope::install(self.opts.search_scope.clone());
                         }
                         vec![]
                     }
@@ -3563,6 +3923,7 @@ impl Settings {
             Toggle::SwitchControl => flip(&mut self.a11y.switch_control),
             Toggle::VoiceControl => flip(&mut self.a11y.voice_control),
             Toggle::LiveCaptions => flip(&mut self.a11y.live_captions),
+            Toggle::SpeakUnderPointer => flip(&mut self.a11y.speak_under_pointer),
             Toggle::AutoTime => {
                 let on = flip(&mut self.info.time_manual);
                 // the switch shows "automatic", the flag stores "manual"
@@ -3636,11 +3997,11 @@ impl Settings {
                 }
                 None => false,
             },
-            Toggle::SpotlightCategory(c) => {
-                let on = !self.opts.spotlight.allows(c);
-                self.opts.spotlight.set_allowed(c, on);
+            Toggle::SearchCategory(c) => {
+                let on = !self.opts.search_scope.allows(c);
+                self.opts.search_scope.set_allowed(c, on);
                 self.opts.save(prefs);
-                super::spotlight_scope::install(self.opts.spotlight.clone());
+                super::search_scope::install(self.opts.search_scope.clone());
                 on
             }
             Toggle::BatteryPercent => flip(&mut self.opts.battery_percent),
@@ -3985,14 +4346,14 @@ impl Settings {
         if self.side_w == 0 {
             return self.draw_pane(s, ui, t);
         }
-        let selected = self.stack.first().map_or(PageId::Root, |e| e.id);
+        let selected = self.side_selected();
         let (side_w, h) = (self.side_w as usize, self.h as usize);
         // the sidebar rarely changes while the pane slides or scrolls: draw it once and reuse it
         if let Some(sb) = &mut self.sidebar {
             sb.select(selected);
             use std::hash::{Hash, Hasher};
             let mut k = std::collections::hash_map::DefaultHasher::new();
-            (format!("{selected:?}{:?}", self.side_pressed), sb.gen(), sb.draw_offset().to_bits(), side_w, h, bifrost_render::appearance::scheme().to_bits(), vibrant()).hash(&mut k);
+            (format!("{selected:?}{:?}", self.side_pressed), sb.gen(), sb.draw_offset().to_bits(), side_w, h, bifrost_render::appearance::scheme().to_bits(), vibrant(), bifrost_render::ui::scroll_bars_mode()).hash(&mut k);
             let key = k.finish();
             let fresh = !sb.animating(t) && self.side_cache.as_ref().is_some_and(|(k, i)| *k == key && (i.w, i.h) == (side_w, h));
             if !fresh {
@@ -4007,6 +4368,12 @@ impl Settings {
             }
             if let Some((_, img)) = &self.side_cache {
                 s.copy(img.view(), 0, 0);
+            }
+        }
+        // the keyboard focus ring on the selected row, over the cached column (the field has its own while it is typed in)
+        if self.side_ring && !self.search.active && self.sheet.is_none() {
+            if let Some(sb) = &self.sidebar {
+                sb.draw_selected_ring(s, ui);
             }
         }
         // the sidebar's search field is live, so it draws over the cached column
@@ -4102,1012 +4469,7 @@ impl Settings {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::gfx::pack;
-    use crate::shell::Network;
-
-    fn info() -> Info {
-        Info { battery: 42, charging: true, online: false, wifi: "Off".into(), model: "Midget".into(), kernel: "6.12".into(), memory: "2.4 GB".into(), brightness: 0.5, ..Info::default() }
-    }
-
-    fn net(ssid: &str, secure: bool, saved: bool) -> Network {
-        Network { ssid: ssid.into(), bars: 2, secure, saved }
-    }
-
-    fn wifi_info() -> Info {
-        Info {
-            wifi: "Home".into(),
-            wifi_on: true,
-            current_ssid: Some("Home".into()),
-            networks: vec![net("Home", true, true), net("Cafe", false, false), net("Office", true, true), net("Neighbour", true, false)],
-            ..info()
-        }
-    }
-
-    /// The single-column layout: the page logic tests (push/pop, rows) predate the split view.
-    fn settings(ui: &Ui, info: &Info) -> (Settings, Prefs) {
-        let mut st = Settings::new(ui, info, &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
-        st.allow_split(ui, false);
-        (st, Prefs::memory())
-    }
-
-    fn tap(st: &mut Settings, ui: &Ui, prefs: &mut Prefs, x: f32, y: f32) -> Vec<Effect> {
-        let mut fx = st.touch(ui, prefs, Event::Down(x, y), 0.0);
-        fx.extend(st.touch(ui, prefs, Event::Up(x, y), 10.0));
-        fx
-    }
-
-    /// Taps the row labelled `label` on the top page and settles the slide.
-    fn tap_row(st: &mut Settings, ui: &Ui, prefs: &mut Prefs, label: &str) -> Vec<Effect> {
-        // root rows live in the sidebar in the bifrost split layout
-        let (x, y) = st.row_centre(ui, label).or_else(|| st.sidebar_centre(ui, label)).unwrap_or_else(|| panic!("no row {label} on {:?}", st.page()));
-        let fx = tap(st, ui, prefs, x, y);
-        settle(st, ui);
-        fx
-    }
-
-    /// Chooses the `k`th choice of the pop-up row labelled `label`: taps the row to open its menu, then picks from the menu.
-    fn pick(st: &mut Settings, ui: &Ui, prefs: &mut Prefs, label: &str, k: usize) -> Vec<Effect> {
-        tap_row(st, ui, prefs, label);
-        let fx = st.activate(ui, prefs, Hit::Choice(k), 0.0);
-        settle(st, ui);
-        fx
-    }
-
-    fn settle(st: &mut Settings, ui: &Ui) {
-        st.tick(ui, 1e9);
-        // the pages' reads run on worker threads (see `settings_load`): wait for them, as a frame would
-        let began = std::time::Instant::now();
-        while st.loads.busy() && began.elapsed() < std::time::Duration::from_secs(30) {
-            std::thread::sleep(std::time::Duration::from_millis(1));
-            st.tick(ui, 1e9);
-        }
-    }
-
-    fn back(st: &mut Settings, ui: &Ui, prefs: &mut Prefs) {
-        tap(st, ui, prefs, ui.pt(40.0), ui.pt(42.0));
-        settle(st, ui);
-    }
-
-    /// A data dir with the packed default fonts and one library font (a copy of the system font).
-    fn font_dir(tag: &str) -> (PathBuf, String) {
-        let dir = std::env::temp_dir().join(format!("settings-fonts-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join("fonts")).unwrap();
-        let assets = concat!(env!("CARGO_MANIFEST_DIR"), "/assets");
-        for f in ["SFUI.ttf", "SFUIMono.ttf"] {
-            std::fs::copy(format!("{assets}/{f}"), dir.join(f)).unwrap();
-        }
-        let lib = dir.join("fonts/Other.ttf");
-        std::fs::copy(format!("{assets}/SFUI.ttf"), &lib).unwrap();
-        (dir, lib.to_string_lossy().into_owned())
-    }
-
-    /// Lets the Fonts read on its worker land, as the frames would.
-    fn settle_fonts(st: &mut Settings, ui: &Ui) {
-        let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while st.loads.fonts.busy() && std::time::Instant::now() < end {
-            st.tick(ui, 0.0);
-            std::thread::sleep(std::time::Duration::from_millis(2));
-        }
-        st.tick(ui, 0.0);
-    }
-
-    #[test]
-    fn a_deep_link_from_another_app_opens_its_pane() {
-        let ui = super::super::tests::ui();
-        let (mut st, _prefs) = settings(&ui, &wifi_info());
-        st.open_page(&ui, "Wi-Fi Settings", 0.0);
-        assert_eq!(st.page(), PageId::Wifi);
-        st.open_page(&ui, "Battery", 0.0);
-        assert_eq!(st.page(), PageId::Battery);
-        st.open_page(&ui, "Print & Scan", 0.0);
-        assert_eq!(st.page(), PageId::PrintScan);
-        assert!(st.open_page(&ui, "No Such Pane", 0.0).is_empty());
-    }
-
-    /// Opens General > Startup Disk with a boot table of two usable systems landed.
-    fn startup_page(ui: &Ui) -> (Settings, Prefs) {
-        use super::super::startup_disk_page::{Disk, View};
-        let (mut st, mut prefs) = settings(ui, &wifi_info());
-        tap_row(&mut st, ui, &mut prefs, "General");
-        tap_row(&mut st, ui, &mut prefs, "Startup Disk");
-        assert_eq!(st.page(), PageId::StartupDisk);
-        let disk = |id: &str, label: &str, default: bool| Disk { id: id.into(), label: label.into(), active: true, current: default, next: false, default };
-        st.loads.startup.set(View { disks: vec![disk("0001", "BifrOSt", true), disk("0003", "Rescue", false)], error: None });
-        st.rebuild_visible(ui);
-        (st, prefs)
-    }
-
-    #[test]
-    fn the_screen_sharing_switch_asks_for_an_account_before_anything_starts() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        tap_row(&mut st, &ui, &mut prefs, "Sharing");
-        assert_eq!(st.page(), PageId::Sharing);
-        st.loads.sharing.set(super::super::sharing_page::View { computer: "Midget".into(), services: vec![("screen_sharing", false)], screen_user: None });
-        st.rebuild_visible(&ui);
-        tap_row(&mut st, &ui, &mut prefs, "Screen Sharing");
-        assert!(st.sheet.is_some(), "the account prompt is up");
-        assert!(st.alert().is_none(), "nothing was sent to privd");
-    }
-
-    #[test]
-    fn startup_disk_is_a_general_row_that_lists_the_systems() {
-        let ui = super::super::tests::ui();
-        let (st, _prefs) = startup_page(&ui);
-        let spec = st.spec_for(PageId::StartupDisk);
-        let labels: Vec<&str> = spec.groups[0].items.iter().map(|i| i.label.as_str()).collect();
-        assert_eq!(labels, ["BifrOSt", "Rescue"]);
-        assert_eq!(spec.groups[0].items[1].action, Action::StartupDisk(super::super::startup_disk_page::Edit::Choose("0003".into())));
-    }
-
-    #[test]
-    fn choosing_a_system_waits_for_the_password_sheet_and_a_cancel_changes_nothing() {
-        use super::super::services::local_auth::{self, Failure};
-        use super::super::startup_disk_page::APP;
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = startup_page(&ui);
-        tap_row(&mut st, &ui, &mut prefs, "Rescue");
-        assert_eq!(st.startup_pending.as_deref(), Some("0003"));
-        let request = local_auth::take_request().expect("the sheet is queued");
-        assert_eq!(request.app, APP);
-        assert!(request.reason.contains("Rescue"));
-        // while the sheet is up a second tap does not queue another
-        assert!(local_auth::take_request().is_none());
-        local_auth::finish(APP, Err(Failure::UserCancel));
-        st.tick(&ui, 2e9);
-        assert_eq!(st.startup_pending, None);
-        assert!(st.alert().is_none(), "a cancel says nothing");
-    }
-
-    #[test]
-    fn a_wrong_password_is_reported_and_sets_nothing() {
-        use super::super::services::local_auth::{self, Failure};
-        use super::super::startup_disk_page::APP;
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = startup_page(&ui);
-        tap_row(&mut st, &ui, &mut prefs, "Rescue");
-        assert!(local_auth::take_request().is_some());
-        local_auth::finish(APP, Err(Failure::AuthenticationFailed));
-        st.tick(&ui, 2e9);
-        assert_eq!(st.startup_pending, None);
-        assert!(st.alert().is_some(), "the person is told the change did not happen");
-    }
-
-    #[test]
-    fn the_firewall_page_hands_the_shell_each_change() {
-        use super::super::firewall_sheet::{Edit, FirewallView};
-        use bifrost_core::app_firewall::Policy;
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
-        st.set_firewall(vec![FirewallView { app_id: "is.example.chat".into(), name: "Chat".into(), policy: Policy::Block, ports: "tcp/8080".into() }]);
-        st.open_page_id(&ui, PageId::Firewall, 0.0);
-        settle(&mut st, &ui);
-        assert_eq!(st.page(), PageId::Firewall);
-        tap_row(&mut st, &ui, &mut prefs, "Allow Incoming Connections");
-        assert_eq!(st.take_firewall_edits(), vec![("is.example.chat".to_string(), Edit::Allow)]);
-        assert_eq!(st.firewall[0].policy, Policy::Allow, "the row shows the choice at once");
-        assert!(st.take_firewall_edits().is_empty());
-        tap_row(&mut st, &ui, &mut prefs, "Forget This Choice");
-        assert_eq!(st.take_firewall_edits(), vec![("is.example.chat".to_string(), Edit::Forget)]);
-        assert!(st.firewall.is_empty(), "a forgotten choice leaves the page");
-    }
-
-    #[test]
-    fn picking_a_library_font_saves_the_override_the_shell_reads() {
-        use bifrost_render::fontprefs::{family, FontRole};
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        let (dir, lib) = font_dir("pick");
-        st.set_data_dir(&dir);
-        let name = family(&lib).expect("the library font has a family name");
-        for label in ["General", "Fonts"] {
-            tap_row(&mut st, &ui, &mut prefs, label);
-        }
-        settle_fonts(&mut st, &ui);
-        tap_row(&mut st, &ui, &mut prefs, "System Font");
-        assert_eq!(st.page(), PageId::FontPick(FontRole::System));
-        tap_row(&mut st, &ui, &mut prefs, &name);
-        assert_eq!(prefs.get(FontRole::System.pref()), Some(lib.as_str()), "saved under the key the shell reads at start");
-        assert_eq!(st.loads.fonts.value.overrides[FontRole::System.index()].as_deref(), Some(lib.as_str()));
-        let default = format!("{} (Default)", st.loads.fonts.value.defaults[FontRole::System.index()]);
-        tap_row(&mut st, &ui, &mut prefs, &default);
-        assert_eq!(prefs.get(FontRole::System.pref()), Some(""), "Default clears the override");
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    /// Developer preview: `PREVIEW_DIR=/tmp FONTS_DIR=<packed assets> cargo test preview_fonts_pages -- --ignored`
-    /// writes fonts.png and fonts-system.png, the desktop Fonts pages drawn with the packed default font.
-    #[test]
-    #[ignore]
-    fn preview_fonts_pages() {
-        let (Some(out), Some(fonts)) = (std::env::var_os("PREVIEW_DIR"), std::env::var("FONTS_DIR").ok()) else { return };
-        let data: &'static [u8] = Box::leak(std::fs::read(format!("{fonts}/SFUI.ttf")).unwrap().into_boxed_slice());
-        let ui = Ui::new(crate::font::Font::parse(data).unwrap(), 1.5);
-        let (w, h) = (1500usize, 1050usize);
-        let info = Info { display_mode: Some((2048, 1152, 60)), ..wifi_info() };
-        let mut prefs = Prefs::memory();
-        let mut st = Settings::new(&ui, &info, &prefs, w as i32, h as i32, Rc::new(vec![]));
-        st.set_data_dir(&fonts);
-        st.open_page(&ui, "Fonts", 0.0);
-        settle(&mut st, &ui);
-        let shot = |st: &mut Settings, name: &str| {
-            let mut img = crate::gfx::Image::new(w, h);
-            st.draw(&mut Surface { w, h, stride: w, px: &mut img.px, y0: 0 }, &ui, 1e9);
-            std::fs::write(std::path::Path::new(&out).join(name), crate::shell::screenshot::encode(&img)).unwrap();
-        };
-        shot(&mut st, "fonts.png");
-        tap_row(&mut st, &ui, &mut prefs, "System Font");
-        shot(&mut st, "fonts-system.png");
-    }
-
-    #[test]
-    fn banded_page_draw_equals_the_single_thread_draw() {
-        let ui = super::super::tests::ui();
-        let (st, _) = settings(&ui, &wifi_info());
-        let (w, h) = (1200usize, 1920usize);
-        let mut one = vec![0u32; w * h];
-        st.page_view().expect("plain list").draw(&mut Surface { w, h, stride: w, px: &mut one, y0: 0 }, &ui, 1e9);
-        let mut many = vec![0u32; w * h];
-        let view = st.page_view().unwrap();
-        Surface { w, h, stride: w, px: &mut many, y0: 0 }.draw_rows(&[(0, h)], 4, &|s| view.draw(s, &ui, 1e9));
-        assert!(one == many, "banded draw differs from single-thread draw");
-    }
-
-    #[test]
-    fn rows_push_pages_and_back_pops_them_with_a_slide() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        assert_eq!(st.page(), PageId::Root);
-        let (x, y) = st.row_centre(&ui, "Wi-Fi").unwrap();
-        let fx = tap(&mut st, &ui, &mut prefs, x, y);
-        assert_eq!(fx, vec![Effect::Wifi(WifiAction::Scan)]);
-        assert_eq!(st.page(), PageId::Wifi);
-        assert!(st.transitioning());
-        assert_eq!(st.next_wake(20.0), Some(20.0), "the slide wants frames");
-        assert!(tap(&mut st, &ui, &mut prefs, x, y).is_empty(), "touches wait for the slide");
-        let mut buf = vec![0u32; 1200 * 1920];
-        st.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 100.0);
-        assert!(st.tick(&ui, 200.0));
-        assert!(st.tick(&ui, 1000.0), "one last frame draws the settled page");
-        assert!(!st.transitioning());
-        assert!(!st.tick(&ui, 1100.0));
-        assert_eq!(st.stack(), vec![PageId::Root, PageId::Wifi]);
-        back(&mut st, &ui, &mut prefs);
-        assert_eq!(st.page(), PageId::Root);
-        assert!(tap_row(&mut st, &ui, &mut prefs, "Battery").is_empty(), "the Battery row is a plain link");
-        assert_eq!(st.page(), PageId::Battery);
-        back(&mut st, &ui, &mut prefs);
-        back(&mut st, &ui, &mut prefs);
-        assert_eq!(st.stack(), vec![PageId::Root], "the root never pops");
-    }
-
-    #[test]
-    fn every_page_is_reachable_and_draws() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        let mut buf = vec![0u32; 1200 * 1920];
-        let mut draw = |st: &mut Settings| st.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 1e9);
-        let routes: Vec<(Vec<&str>, PageId)> = vec![
-            (vec!["Sounds"], PageId::Sounds),
-            (vec!["Focus"], PageId::Focus),
-            (vec!["Notifications"], PageId::Notifications),
-            (vec!["General"], PageId::General),
-            (vec!["General", "About"], PageId::About),
-            (vec!["General", "Software Update"], PageId::SoftwareUpdate),
-            (vec!["General", "Date & Time"], PageId::DateTime),
-            (vec!["General", "Default Apps"], PageId::DefaultApps),
-            (vec!["General", "Login Items & Extensions"], PageId::LoginItems),
-            (vec!["General", "Game Controllers"], PageId::GameControllers),
-            (vec!["General", "Fonts"], PageId::Fonts),
-            (vec!["General", "Fonts", "System Font"], PageId::FontPick(bifrost_render::fontprefs::FontRole::System)),
-            (vec!["General", "Keyboard"], PageId::Keyboard),
-            (vec!["General", "Keyboard", "Keyboards"], PageId::Keyboards),
-            (vec!["General", "Keyboard", "Text Replacements"], PageId::TextReplacements),
-            (vec!["General", "Keyboard", "Modifier Keys"], PageId::ModifierKeys),
-            (vec!["General", "Language & Region"], PageId::Language),
-            (vec!["General", "Language & Region", "Region"], PageId::Region),
-            (vec!["General", "Transfer or Reset Tab"], PageId::Reset),
-            (vec!["Control Center"], PageId::ControlCentre),
-            (vec!["Menu Bar"], PageId::MenuBar),
-            (vec!["Display & Brightness"], PageId::Display),
-            (vec!["Display & Brightness", "Auto-Lock"], PageId::AutoLock),
-            (vec!["Home Screen & Dock"], PageId::HomeScreen),
-            (vec!["Home Screen & Dock", "Hot Corners"], PageId::HotCorners),
-            (vec!["Overview"], PageId::Overview),
-            (vec!["Sharing"], PageId::Sharing),
-            (vec!["Print & Scan"], PageId::PrintScan),
-            (vec!["Sharing", "Nearby Share"], PageId::Nearby),
-            (vec!["Sharing", "AirPlay & Handoff"], PageId::AirPlayHandoff),
-            (vec!["Lock Screen"], PageId::LockScreen),
-            (vec!["Trackpad"], PageId::Trackpad),
-            (vec!["Mouse"], PageId::Mouse),
-            (vec!["Users & Groups"], PageId::Users),
-            (vec!["Keyboard Shortcuts"], PageId::Shortcuts),
-            (vec!["Accessibility"], PageId::Accessibility),
-            (vec!["Wallpaper"], PageId::Wallpaper),
-            (vec!["Screen Saver"], PageId::ScreenSaver),
-            (vec!["Battery"], PageId::Battery),
-            (vec!["Privacy"], PageId::Privacy),
-            (vec!["Privacy", "App Permissions"], PageId::PrivacyPermissions),
-            (vec!["Privacy", "Location Services"], PageId::LocationServices),
-            (vec!["Privacy", "Analytics & Diagnostics"], PageId::Diagnostics),
-            (vec!["General", "bifrost Storage"], PageId::Storage),
-            (vec!["General", "Backup"], PageId::Backup),
-            (vec!["Passcode"], PageId::Passcode),
-            (vec!["Passwords"], PageId::Passwords),
-            (vec!["Internet Accounts"], PageId::InternetAccounts),
-            (vec!["Developer"], PageId::Developer),
-            (vec!["Wi-Fi", "Home"], PageId::WifiDetail),
-        ];
-        let desk = true;
-        let routes: Vec<(Vec<&str>, PageId)> = routes
-            .into_iter()
-            .filter(|(r, _)| !(desk && r.last() == Some(&"Transfer or Reset Tab")) && (desk || r.last() != Some(&"Default Apps")))
-            .map(|(r, id)| if desk && r.last() == Some(&"bifrost Storage") { (vec!["General", "Storage"], id) } else { (r, id) })
-            .collect();
-        for (route, id) in routes {
-            for label in &route {
-                tap_row(&mut st, &ui, &mut prefs, label);
-            }
-            assert_eq!(st.page(), id, "{route:?}");
-            draw(&mut st);
-            for _ in 0..route.len() {
-                back(&mut st, &ui, &mut prefs);
-            }
-            assert_eq!(st.page(), PageId::Root);
-        }
-    }
-
-    #[test]
-    fn a_drag_off_the_row_cancels_the_tap_and_scrolls() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        let (x, y) = st.row_centre(&ui, "Wi-Fi").unwrap();
-        st.touch(&ui, &mut prefs, Event::Down(x, y), 0.0);
-        for k in 1..=5 {
-            st.touch(&ui, &mut prefs, Event::Move(x, y - 80.0 * k as f32), k as f64 * 30.0);
-        }
-        assert!(st.touch(&ui, &mut prefs, Event::Up(x, y - 400.0), 160.0).is_empty());
-        assert_eq!(st.page(), PageId::Root);
-        assert!(st.list().unwrap().offset() > 0.0, "the list scrolled");
-    }
-
-    #[test]
-    fn airplane_mode_switches_wifi_off_and_on() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Airplane Mode"), vec![Effect::Wifi(WifiAction::Enable(false))]);
-        let root = st.list().unwrap();
-        let (g, i) = root.find("Wi-Fi").unwrap();
-        assert_eq!(root.item(g, i).value, "Off");
-        // group 0 is the BifrOSt Account row, so the Airplane Mode switch is the first row of group 1
-        assert_eq!(root.item(1, 0).accessory, super::super::list::Accessory::Switch(true));
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Airplane Mode"), vec![Effect::Wifi(WifiAction::Enable(true))]);
-        assert_eq!(st.list().unwrap().item(g, i).value, "Home");
-    }
-
-    #[test]
-    fn wifi_switch_toggles_and_hides_the_networks() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
-        // the switch, the networks, and the Country or Region group
-        assert_eq!(st.list().unwrap().spec().groups.len(), 3);
-        // the switch animates right after the tap; the settle that follows reloads the page and ends it
-        let (x, y) = st.row_centre(&ui, "Wi-Fi").unwrap();
-        let fx = tap(&mut st, &ui, &mut prefs, x, y);
-        assert_eq!(fx, vec![Effect::Wifi(WifiAction::Enable(false))]);
-        assert!(st.list().unwrap().animating(50.0), "the switch animates");
-        settle(&mut st, &ui);
-        assert_eq!(st.list().unwrap().spec().groups.len(), 1, "no networks while off");
-        let fx = tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
-        assert_eq!(fx, vec![Effect::Wifi(WifiAction::Enable(true)), Effect::Wifi(WifiAction::Scan)]);
-        assert_eq!(st.list().unwrap().spec().groups.len(), 3, "the switch, the networks and Country or Region are back");
-    }
-
-    #[test]
-    fn networks_join_select_or_ask_for_a_password() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Cafe"), vec![Effect::Wifi(WifiAction::Join { ssid: "Cafe".into(), psk: None })]);
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Office"), vec![Effect::Wifi(WifiAction::Select("Office".into()))]);
-        assert!(tap_row(&mut st, &ui, &mut prefs, "Neighbour").is_empty());
-        assert_eq!(st.sheet(), Some("Neighbour"));
-    }
-
-    #[test]
-    fn other_row_opens_the_sheet_that_joins_a_hidden_network() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
-        assert!(tap_row(&mut st, &ui, &mut prefs, "Other…").is_empty());
-        assert!(st.sheet().is_some());
-        st.key(&ui, Out::Text("Ghost".into()), 0.0);
-        st.key(&ui, Out::Named("Tab"), 0.0);
-        st.key(&ui, Out::Text("secret12".into()), 0.0);
-        let fx = st.key(&ui, Out::Enter, 0.0);
-        assert!(matches!(&fx[..], [Effect::Wifi(WifiAction::JoinOther(c))] if c.ssid == "Ghost" && c.hidden && c.password == "secret12"));
-        assert_eq!(st.sheet(), None);
-    }
-
-    #[test]
-    fn a_scanned_enterprise_network_opens_the_full_sheet() {
-        let ui = super::super::tests::ui();
-        let info = Info { enterprise: vec!["Neighbour".into()], ..wifi_info() };
-        let (mut st, mut prefs) = settings(&ui, &info);
-        tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
-        assert!(tap_row(&mut st, &ui, &mut prefs, "Neighbour").is_empty());
-        assert_eq!(st.sheet(), Some("Neighbour"));
-        assert!(st.sheet.as_ref().unwrap().config().unwrap().security.is_enterprise());
-    }
-
-    fn sheet_open(ui: &Ui) -> (Settings, Prefs) {
-        let (mut st, mut prefs) = settings(ui, &wifi_info());
-        tap_row(&mut st, ui, &mut prefs, "Wi-Fi");
-        tap_row(&mut st, ui, &mut prefs, "Neighbour");
-        (st, prefs)
-    }
-
-    #[test]
-    fn join_needs_eight_characters() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = sheet_open(&ui);
-        let (jx, jy) = st.sheet.as_ref().unwrap().join_button(&ui, 1200, 1920);
-        st.key(&ui, Out::Text("secret1".into()), 0.0);
-        assert!(tap(&mut st, &ui, &mut prefs, jx, jy).is_empty(), "7 characters");
-        assert!(st.key(&ui, Out::Enter, 0.0).is_empty());
-        st.key(&ui, Out::Text("2".into()), 0.0);
-        let join = vec![Effect::Wifi(WifiAction::Join { ssid: "Neighbour".into(), psk: Some("secret12".into()) })];
-        assert_eq!(tap(&mut st, &ui, &mut prefs, jx, jy), join);
-        assert_eq!(st.sheet(), None);
-        let (mut st, _) = sheet_open(&ui);
-        st.key(&ui, Out::Text("secret12".into()), 0.0);
-        assert_eq!(st.key(&ui, Out::Enter, 0.0), join, "return submits");
-    }
-
-    #[test]
-    fn cancel_closes_the_sheet_without_effects() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = sheet_open(&ui);
-        let (cx, cy) = st.sheet.as_ref().unwrap().cancel_button(&ui, 1200, 1920);
-        assert!(tap(&mut st, &ui, &mut prefs, cx, cy).is_empty());
-        assert_eq!(st.sheet(), None);
-        assert_eq!(st.page(), PageId::Wifi);
-    }
-
-    #[test]
-    fn hidden_keyboard_returns_when_the_field_is_tapped() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = sheet_open(&ui);
-        st.key(&ui, Out::Hide, 0.0);
-        let sh = st.sheet.as_ref().unwrap();
-        assert!(sh.keyboard_top(&ui, 1920).is_none());
-        let (fx, fy) = sh.field(&ui, 1200, 1920);
-        tap(&mut st, &ui, &mut prefs, fx, fy);
-        assert!(st.sheet.as_ref().unwrap().keyboard_top(&ui, 1920).is_some());
-    }
-
-    #[test]
-    fn long_press_on_the_password_field_offers_paste() {
-        use super::super::clipboard;
-        let _g = clipboard::tests::exclusive();
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = sheet_open(&ui);
-        clipboard::set_text("hunter22");
-        let (fx, fy) = st.sheet.as_ref().unwrap().field(&ui, 1200, 1920);
-        st.touch(&ui, &mut prefs, Event::Down(fx, fy), 1000.0);
-        assert!(st.next_wake(1000.0).is_some_and(|w| w <= 1400.0), "the long press wants a tick");
-        assert!(st.tick(&ui, 1400.0));
-        assert!(st.touch(&ui, &mut prefs, Event::Up(fx, fy), 1450.0).is_empty());
-        let menu = st.sheet.as_ref().unwrap().field.menu().expect("Paste over the field");
-        let (mx, my, _, mh) = menu.rect();
-        assert_eq!(menu.hit(mx + 5.0, my + 5.0), Some(super::super::edit::Action::Paste));
-        assert!(tap(&mut st, &ui, &mut prefs, mx + 5.0, my + mh / 2.0).is_empty());
-        let sh = st.sheet.as_ref().unwrap();
-        assert_eq!(sh.password(), "hunter22");
-        assert!(sh.can_join() && sh.field.menu().is_none());
-    }
-
-    #[test]
-    fn typing_on_the_docked_keyboard_edits_the_password() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = sheet_open(&ui);
-        let top = st.sheet.as_ref().unwrap().keyboard_top(&ui, 1920).unwrap();
-        let (x, y) = st.sheet.as_ref().unwrap().keyboard.centre("q").unwrap();
-        let y = top + y;
-        tap(&mut st, &ui, &mut prefs, x, y);
-        assert_eq!(st.sheet.as_ref().unwrap().password(), "q");
-    }
-
-    fn stills() -> Rc<Vec<Wallpaper>> {
-        let thumb = |c| Image { w: 320, h: 180, px: vec![pack(c, c, c, 255); 320 * 180] };
-        Rc::new(vec![
-            Wallpaper { id: "a".into(), name: "Desert Peak Day".into(), thumb: thumb(10) },
-            Wallpaper { id: "b".into(), name: "Lake The Lake Night".into(), thumb: thumb(20) },
-        ])
-    }
-
-    #[test]
-    fn dynamic_wallpaper_switch_persists_and_turning_it_off_restores_the_picked_still() {
-        let ui = super::super::tests::ui();
-        let mut prefs = Prefs::memory();
-        let mut st = Settings::new(&ui, &Info { wallpaper: "a".into(), ..info() }, &prefs, 1200, 1920, stills());
-        st.allow_split(&ui, false);
-        assert!(tap_row(&mut st, &ui, &mut prefs, "Wallpaper").is_empty());
-        let (x, y, w, h) = super::super::wallpaper_page::dynamic_row(&ui, 1200);
-        assert!(tap(&mut st, &ui, &mut prefs, x + w / 2.0, y + h / 2.0).is_empty(), "on: the shell changes the still on its next tick");
-        assert_eq!(prefs.get("wallpaper_dynamic"), Some("1"));
-        assert_eq!(tap(&mut st, &ui, &mut prefs, x + w / 2.0, y + h / 2.0), vec![Effect::Wallpaper("a".into())], "off: the picked still comes back");
-        assert_eq!(prefs.get("wallpaper_dynamic"), Some("0"));
-    }
-
-    #[test]
-    fn live_look_row_picks_an_animated_wallpaper_persists_it_and_reset_goes_back_to_the_still() {
-        let ui = super::super::tests::ui();
-        let mut prefs = Prefs::memory();
-        let mut st = Settings::new(&ui, &Info { wallpaper: "a".into(), ..info() }, &prefs, 1200, 1920, stills());
-        st.allow_split(&ui, false);
-        assert!(tap_row(&mut st, &ui, &mut prefs, "Wallpaper").is_empty());
-        let centre = |i: usize| {
-            let (x, y, w, h) = super::super::wallpaper_page::look_segment(&ui, 1200, i);
-            (x + w / 2.0, y + h / 2.0)
-        };
-        for (i, look) in Look::ALL.into_iter().enumerate() {
-            let (x, y) = centre(i);
-            assert_eq!(tap(&mut st, &ui, &mut prefs, x, y), vec![Effect::LiveWallpaper(look.pref().to_string())], "{look:?}");
-            assert_eq!(prefs.get("wallpaper_look"), Some(look.pref()));
-            let View::Wallpaper(page) = &st.stack.last().unwrap().view else { panic!("wallpaper page") };
-            assert_eq!(page.look(), look, "the selected plate follows the tap");
-        }
-        let (x, y) = centre(1);
-        tap(&mut st, &ui, &mut prefs, x, y);
-        let mut buf = vec![0u32; 1200 * 1920];
-        st.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 1e9);
-        // a fresh Settings reads the stored look back
-        let again = Settings::new(&ui, &Info { wallpaper: "a".into(), ..info() }, &prefs, 1200, 1920, stills());
-        assert_eq!(again.wallpaper_look, Look::Drift);
-        let fx = st.run(&ui, &mut prefs, Command::ResetSettings, 0.0);
-        assert!(fx.contains(&Effect::LiveWallpaper("still".into())));
-        assert_eq!(st.wallpaper_look, Look::Still);
-        assert_eq!(prefs.get("wallpaper_look"), None);
-    }
-
-    #[test]
-    fn on_the_desktop_a_click_applies_a_wallpaper_where_show_on_says_and_the_add_buttons_ask_for_the_panel() {
-        use bifrost_ui::form_factor::FormFactor;
-        let ui = super::super::tests::ui();
-        super::super::pages::set_test_form(FormFactor::Desktop);
-        let mut prefs = Prefs::memory();
-        let mut st = Settings::new(&ui, &Info { wallpaper: "a".into(), ..info() }, &prefs, 1200, 1920, stills());
-        st.allow_split(&ui, false); // single-column geometry
-        assert!(tap_row(&mut st, &ui, &mut prefs, "Wallpaper").is_empty());
-        let View::Wallpaper(page) = &st.stack.last().unwrap().view else { panic!("wallpaper page") };
-        assert!(page.desktop());
-        let (cx, cy, cw, ch) = page.cell(&ui, 1200, 1);
-        // a click applies it at once, to the desktop and the lock screen together: no preview
-        assert_eq!(tap(&mut st, &ui, &mut prefs, cx + cw / 2.0, cy + ch / 2.0), vec![Effect::LockWallpaper(String::new()), Effect::Wallpaper("b".into())]);
-        let View::Wallpaper(page) = &st.stack.last().unwrap().view else { panic!("wallpaper page") };
-        assert!(!page.previewing(), "the desktop has no Set Lock Screen / Home / Both preview");
-        assert_eq!((prefs.get("wallpaper"), st.info.wallpaper.as_str()), (Some("b"), "b"));
-        // Lock Screen Only: the next click sets the lock screen alone, and the choice is kept
-        let (sx, sy, sw, sh) = super::super::wallpaper_page::show_on_segment(&ui, 1200, 1);
-        assert!(tap(&mut st, &ui, &mut prefs, sx + sw / 2.0, sy + sh / 2.0).is_empty());
-        assert_eq!(prefs.get(SHOW_ON_PREF), Some("lock"));
-        let (cx, cy, cw, ch) = match &st.stack.last().unwrap().view {
-            View::Wallpaper(page) => page.cell(&ui, 1200, 0),
-            _ => panic!("wallpaper page"),
-        };
-        assert_eq!(tap(&mut st, &ui, &mut prefs, cx + cw / 2.0, cy + ch / 2.0), vec![Effect::LockWallpaper("a".into())]);
-        assert_eq!((prefs.get("wallpaper_lock"), st.info.wallpaper.as_str()), (Some("a"), "b"), "the desktop keeps its wallpaper");
-        assert_eq!(Settings::new(&ui, &info(), &prefs, 1200, 1920, stills()).wallpaper_show_on, ShowOn::LockScreen);
-        // Add Photo… and Add Folder… ask the shell for its open panel once
-        for (i, kind) in Import::ALL.into_iter().enumerate() {
-            let (bx, by, bw, bh) = super::super::wallpaper_page::add_button(&ui, 1200, i);
-            assert!(tap(&mut st, &ui, &mut prefs, bx + bw / 2.0, by + bh / 2.0).is_empty());
-            assert_eq!(st.take_wallpaper_import(), Some(kind));
-            assert_eq!(st.take_wallpaper_import(), None);
-        }
-        // a picture added through the panel joins the grid and is applied where Show On says
-        let mut more = (*stills()).clone();
-        more.push(Wallpaper { id: "photo_fjord".into(), name: "Fjord".into(), thumb: Image { w: 320, h: 180, px: vec![pack(1, 2, 3, 255); 320 * 180] } });
-        let fx = st.wallpapers_added(&ui, &mut prefs, Rc::new(more), &["photo_fjord".to_string()]);
-        assert_eq!(fx, vec![Effect::LockWallpaper("photo_fjord".into())]);
-        let View::Wallpaper(page) = &st.stack.last().unwrap().view else { panic!("wallpaper page") };
-        assert_eq!(page.len(), 3, "the grid lists the added picture");
-        super::super::pages::set_test_form(FormFactor::Tablet);
-    }
-
-    #[test]
-    fn wallpaper_row_opens_the_grid_and_a_tap_picks_and_persists_a_wallpaper() {
-        let ui = super::super::tests::ui();
-        let mut prefs = Prefs::memory();
-        let mut st = Settings::new(&ui, &Info { wallpaper: "a".into(), ..info() }, &prefs, 1200, 1920, stills());
-        st.allow_split(&ui, false); // single-column geometry
-        assert!(tap_row(&mut st, &ui, &mut prefs, "Wallpaper").is_empty());
-        assert_eq!(st.page(), PageId::Wallpaper);
-        let (cx, cy, cw, ch) = super::super::wallpaper_page::cell(&ui, 1200, 9.0 / 16.0, 1);
-        assert!(tap(&mut st, &ui, &mut prefs, cx + cw / 2.0, cy + ch / 2.0).is_empty(), "opens the preview");
-        let View::Wallpaper(page) = &st.stack.last().unwrap().view else { panic!("wallpaper page") };
-        let (bx, by, bw, bh) = page.button(&ui, 1200, 1920, 2);
-        assert_eq!(tap(&mut st, &ui, &mut prefs, bx + bw / 2.0, by + bh / 2.0), vec![Effect::LockWallpaper(String::new()), Effect::Wallpaper("b".into())]);
-        assert_eq!(prefs.get("wallpaper"), Some("b"));
-        assert_eq!(st.info.wallpaper, "b");
-        let mut buf = vec![0u32; 1200 * 1920];
-        st.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 1e9);
-        back(&mut st, &ui, &mut prefs);
-        assert_eq!(st.page(), PageId::Root);
-        let root = st.list().unwrap();
-        let (g, i) = root.find("Wallpaper").unwrap();
-        assert_eq!(root.item(g, i).value, "Lake The Lake Night");
-        st.refresh(&ui, &Info { wallpaper: "b".into(), ..info() });
-        assert_eq!(wallpaper_name(&st.wallpapers, "zzz"), "");
-    }
-
-    #[test]
-    fn resize_keeps_page_sheet_and_text_and_widens_the_keyboard() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = sheet_open(&ui);
-        st.key(&ui, Out::Text("abc".into()), 0.0);
-        let before = st.sheet.as_ref().unwrap().keyboard.h();
-        st.resize(&ui, 1920, 1200);
-        assert_eq!(st.page(), PageId::Wifi);
-        assert_eq!(st.sheet.as_ref().unwrap().password(), "abc");
-        assert_eq!(st.sheet.as_ref().unwrap().keyboard.w, 1920.0);
-        assert!(st.sheet.as_ref().unwrap().keyboard.h() > before);
-        let mut buf = vec![0u32; 1920 * 1200];
-        st.draw(&mut Surface { w: 1920, h: 1200, stride: 1920, px: &mut buf, y0: 0 }, &ui, 0.5);
-        assert!(st.touch(&ui, &mut prefs, Event::Down(1900.0, 600.0), 1.0).is_empty());
-        st.resize(&ui, 1200, 1920);
-        assert_eq!(st.sheet.as_ref().unwrap().keyboard.h(), before);
-    }
-
-    #[test]
-    fn refresh_keeps_page_sheet_and_scroll() {
-        let ui = super::super::tests::ui();
-        let (mut st, prefs) = sheet_open(&ui);
-        st.key(&ui, Out::Text("abc".into()), 0.0);
-        st.refresh(&ui, &Info { battery: 7, ..wifi_info() });
-        assert_eq!(st.page(), PageId::Wifi);
-        assert_eq!(st.sheet.as_ref().unwrap().password(), "abc");
-        // a short screen makes About scroll
-        let mut st = Settings::new(&ui, &wifi_info(), &prefs, 1200, 900, Rc::new(vec![]));
-        st.allow_split(&ui, false); // single-column geometry
-        let mut prefs2 = Prefs::memory();
-        tap_row(&mut st, &ui, &mut prefs2, "General");
-        tap_row(&mut st, &ui, &mut prefs2, "About");
-        st.touch(&ui, &mut prefs2, Event::Down(600.0, 800.0), 0.0);
-        for k in 1..=6 {
-            st.touch(&ui, &mut prefs2, Event::Move(600.0, 800.0 - 100.0 * k as f32), k as f64 * 30.0);
-        }
-        st.touch(&ui, &mut prefs2, Event::Up(600.0, 200.0), 1000.0);
-        settle(&mut st, &ui);
-        let offset = st.list().unwrap().offset();
-        assert!(offset > 0.0);
-        st.refresh(&ui, &Info { battery: 9, ..wifi_info() });
-        assert_eq!(st.list().unwrap().offset(), offset, "scroll survives a refresh");
-        assert_eq!(st.stack(), vec![PageId::Root, PageId::General, PageId::About]);
-    }
-
-    #[test]
-    fn switches_persist_their_options() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
-        tap_row(&mut st, &ui, &mut prefs, "Sounds");
-        assert!(tap_row(&mut st, &ui, &mut prefs, "Keyboard Clicks").is_empty());
-        assert_eq!(prefs.get("keyboard_clicks"), Some("0"));
-        tap_row(&mut st, &ui, &mut prefs, "Lock Sound");
-        assert_eq!(prefs.get("lock_sound"), Some("0"));
-        // Alert sound is a pop-up (the Golden Gate Sound pane): its second choice is Chime
-        assert_eq!(pick(&mut st, &ui, &mut prefs, "Alert sound", 1), vec![Effect::AlertSound(1)], "choosing an alert sound plays it once");
-        assert_eq!(prefs.get("alert_sound"), Some("1"));
-        assert_eq!(st.options().alert_sound, 1);
-        back(&mut st, &ui, &mut prefs);
-        tap_row(&mut st, &ui, &mut prefs, "General");
-        tap_row(&mut st, &ui, &mut prefs, "Date & Time");
-        tap_row(&mut st, &ui, &mut prefs, "24-Hour Time");
-        assert_eq!(prefs.get("clock_24h"), Some("0"));
-        assert!(!st.options().clock_24h);
-        back(&mut st, &ui, &mut prefs);
-        tap_row(&mut st, &ui, &mut prefs, "Keyboard");
-        tap_row(&mut st, &ui, &mut prefs, "Auto-Capitalisation");
-        assert_eq!(prefs.get("auto_caps"), Some("0"));
-        back(&mut st, &ui, &mut prefs);
-        back(&mut st, &ui, &mut prefs);
-        tap_row(&mut st, &ui, &mut prefs, "Display & Brightness");
-        tap_row(&mut st, &ui, &mut prefs, "Bold Text");
-        assert_eq!(prefs.get("bold_text"), Some("1"));
-        assert_eq!(Options::load(&prefs), *st.options(), "the file matches the live options");
-    }
-
-    #[test]
-    fn focus_and_assistive_touch_switches_persist_and_reload() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
-        tap_row(&mut st, &ui, &mut prefs, "Focus");
-        assert_eq!(st.page(), PageId::Focus);
-        assert!(tap_row(&mut st, &ui, &mut prefs, "Do Not Disturb").is_empty());
-        assert_eq!(prefs.get("dnd"), Some("1"));
-        back(&mut st, &ui, &mut prefs);
-        let list = st.list().unwrap();
-        let (g, i) = list.find("Focus").unwrap();
-        assert_eq!(list.item(g, i).value, "On");
-        tap_row(&mut st, &ui, &mut prefs, "Accessibility");
-        assert!(tap_row(&mut st, &ui, &mut prefs, "AssistiveTouch").is_empty());
-        assert_eq!(prefs.get("assistive_touch"), Some("1"));
-        let again = Settings::new(&ui, &info(), &prefs, 1200, 1920, Rc::new(vec![]));
-        assert!(again.options().dnd);
-        assert!(again.options().assistive_touch);
-        assert_eq!(Options::load(&prefs), *st.options());
-    }
-
-    #[test]
-    fn auto_lock_picks_persist_and_update_the_display_page() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
-        tap_row(&mut st, &ui, &mut prefs, "Display & Brightness");
-        tap_row(&mut st, &ui, &mut prefs, "Auto-Lock");
-        assert_eq!(st.page(), PageId::AutoLock);
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Never"), vec![Effect::AutoLock(0)]);
-        assert_eq!(prefs.get("auto_lock_ms"), Some("0"));
-        let p = st.list().unwrap();
-        assert_eq!(p.item(0, 4).accessory, super::super::list::Accessory::Check(true));
-        assert_eq!(p.item(0, 2).accessory, super::super::list::Accessory::Check(false));
-        back(&mut st, &ui, &mut prefs);
-        let d = st.list().unwrap();
-        let (g, i) = d.find("Auto-Lock").unwrap();
-        assert_eq!(d.item(g, i).value, "Never");
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Auto-Lock"), vec![]);
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "30 seconds"), vec![Effect::AutoLock(30_000)]);
-    }
-
-    #[test]
-    fn require_password_picks_persist_and_update_the_lock_screen_row() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
-        tap_row(&mut st, &ui, &mut prefs, "Lock Screen");
-        tap_row(&mut st, &ui, &mut prefs, "Require Password");
-        assert_eq!(st.page(), PageId::RequirePassword);
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "1 minute"), vec![]);
-        assert_eq!(prefs.get("lock_grace_seconds"), Some("60"));
-        assert_eq!(st.options().lock_grace_s, 60);
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Immediately"), vec![]);
-        assert_eq!(prefs.get("lock_grace_seconds"), Some("0"));
-    }
-
-    #[test]
-    fn energy_picks_persist_and_apply_without_restart() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
-        tap_row(&mut st, &ui, &mut prefs, "Battery");
-        tap_row(&mut st, &ui, &mut prefs, "Energy");
-        assert_eq!(st.page(), PageId::Energy);
-        assert_eq!(pick(&mut st, &ui, &mut prefs, "Sleep After", 3), vec![Effect::SystemSleepAfter(15)]);
-        assert_eq!(prefs.get("system_sleep_minutes"), Some("15"));
-        assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), Some(900_000.0));
-        assert_eq!(pick(&mut st, &ui, &mut prefs, "Sleep After", 6), vec![Effect::SystemSleepAfter(0)]);
-        assert_eq!(crate::bare::sleep::system_sleep_after(prefs.get("system_sleep_minutes")), None);
-    }
-
-    #[test]
-    fn privacy_offers_open_anyway_for_a_blocked_program_and_the_allow_setting() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
-        let dir = std::env::temp_dir().join(format!("settings-launch-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let prog = dir.join("tool");
-        std::fs::write(&prog, "#!/bin/sh\n").unwrap();
-        st.set_data_dir(&dir);
-        tap_row(&mut st, &ui, &mut prefs, "Privacy");
-        assert!(st.row_centre(&ui, "Open Anyway").is_none(), "nothing waits");
-        assert!(st.row_centre(&ui, "Allow Apps From").is_some());
-        back(&mut st, &ui, &mut prefs);
-        super::super::launch_gate::write_blocked(&dir, &prog, "\"tool\" cannot be opened because its developer cannot be identified.");
-        tap_row(&mut st, &ui, &mut prefs, "Privacy");
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Open Anyway"), vec![]);
-        assert!(st.row_centre(&ui, "Open Anyway").is_none(), "the block is lifted");
-        let remembered = std::fs::read_to_string(dir.join("launch_overrides.txt")).unwrap();
-        assert!(remembered.starts_with(&format!("{}\t", prog.display())), "{remembered:?}");
-        // the setting persists and the check follows the tap
-        assert_eq!(pick(&mut st, &ui, &mut prefs, "Allow Apps From", 2), vec![]);
-        assert_eq!(prefs.get("allow_apps_from"), Some("anywhere"));
-        assert_eq!(super::super::launch_gate::load_policy(&prefs, &dir).setting(), bifrost_core::launch_policy::Setting::Anywhere);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// Probes that answer from a table instead of the network.
-    struct FakeProbe {
-        resolves: bool,
-    }
-
-    impl bifrost_core::net_probe::Probe for FakeProbe {
-        fn link_states(&self) -> Vec<(String, String)> {
-            vec![("lo".into(), "unknown".into()), ("wlan0".into(), "up".into())]
-        }
-        fn global_addresses(&self) -> String {
-            "3: wlan0    inet 192.168.1.20/24 brd 192.168.1.255 scope global dynamic wlan0\n".into()
-        }
-        fn resolve(&self, _host: &str, port: u16) -> Vec<std::net::SocketAddr> {
-            if self.resolves { vec![std::net::SocketAddr::from(([192, 168, 1, 1], port))] } else { Vec::new() }
-        }
-        fn connect(&self, _addr: std::net::SocketAddr) -> bool {
-            true
-        }
-    }
-
-    #[test]
-    fn network_diagnose_runs_the_probe_off_the_draw_thread_and_shows_the_diagnosis() {
-        let ui = super::super::tests::ui();
-        // the Network row is the desktop's own network page, so the snapshot has to be there
-        let info = Info { desktop_network: Some(super::super::desktop_network::Snapshot::default()), ..info() };
-        let (mut st, mut prefs) = settings(&ui, &info);
-        st.net_probe = std::sync::Arc::new(FakeProbe { resolves: false });
-        tap_row(&mut st, &ui, &mut prefs, "Network");
-        assert_eq!(st.page(), PageId::Network);
-        assert!(st.row_centre(&ui, "Diagnose").is_some());
-        assert!(st.row_centre(&ui, "Name Lookup").is_none(), "no result before a run");
-        // tap without settling: the run is on its worker, the page says so
-        let (x, y) = st.row_centre(&ui, "Diagnose").unwrap();
-        assert_eq!(tap(&mut st, &ui, &mut prefs, x, y), vec![]);
-        assert!(st.loads.net_diag.busy() || st.loads.net_diag.get().is_some());
-        settle(&mut st, &ui);
-        let report = st.loads.net_diag.get().and_then(|r| r.as_ref()).expect("the run landed");
-        assert_eq!(report.diagnosis.stage, bifrost_core::net_diagnostic::Stage::Name);
-        // the steps and the diagnosis are on the page
-        assert!(st.row_centre(&ui, "Name Lookup").is_some());
-        assert!(st.row_centre(&ui, "Connection").is_some());
-        assert!(st.row_centre(&ui, report.diagnosis.title).is_some());
-    }
-
-    #[test]
-    fn battery_schedule_adds_and_edits_times_and_arms_the_wake() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
-        tap_row(&mut st, &ui, &mut prefs, "Battery");
-        tap_row(&mut st, &ui, &mut prefs, "Energy");
-        tap_row(&mut st, &ui, &mut prefs, "Schedule");
-        assert_eq!(st.page(), PageId::WakeSchedule);
-        let fx = tap_row(&mut st, &ui, &mut prefs, "Add Time");
-        assert!(matches!(fx.as_slice(), [Effect::WakeSchedule(at)] if *at > 0), "{fx:?}");
-        assert_eq!(prefs.get("wake_schedule"), Some("31,420,wake,1"));
-        tap_row(&mut st, &ui, &mut prefs, "Repeat");
-        assert_eq!(prefs.get("wake_schedule"), Some("96,420,wake,1"));
-        tap_row(&mut st, &ui, &mut prefs, "Action");
-        assert_eq!(prefs.get("wake_schedule"), Some("96,420,poweron,1"));
-        // the time row opens the time-of-day picker; its answer moves the entry and arms the clock again
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Time"), vec![]);
-        assert!(st.time_picker.is_some());
-        let fx = st.wake_set_minute(&ui, &mut prefs, 0, 8 * 60);
-        assert!(matches!(fx.as_slice(), [Effect::WakeSchedule(at)] if *at > 0), "{fx:?}");
-        assert_eq!(prefs.get("wake_schedule"), Some("96,480,poweron,1"));
-        st.time_picker = None;
-        // a fresh Settings reads it back and the Battery page shows it
-        let reloaded = Settings::new(&ui, &info(), &prefs, 1200, 1920, Rc::new(vec![]));
-        assert_eq!(super::super::wake_page::summary(&reloaded.wake), "1 time");
-        // off disarms (0), and Remove deletes the entry
-        let fx = tap_row(&mut st, &ui, &mut prefs, "Enabled");
-        assert_eq!(fx, vec![Effect::WakeSchedule(0)]);
-        let fx = tap_row(&mut st, &ui, &mut prefs, "Remove");
-        assert_eq!(fx, vec![Effect::WakeSchedule(0)]);
-        assert_eq!(prefs.get("wake_schedule"), Some(""));
-    }
-
-    #[test]
-    fn screen_saver_picks_persist_and_preview_is_queued_once() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
-        tap_row(&mut st, &ui, &mut prefs, "Screen Saver");
-        assert_eq!(st.page(), PageId::ScreenSaver);
-        assert_eq!(pick(&mut st, &ui, &mut prefs, "Screen Saver", 1), vec![]);
-        assert_eq!(prefs.get("screensaver_module"), Some("1"));
-        let ten = super::super::screensaver::START_AFTER.iter().position(|(_, min)| *min == 10).unwrap();
-        assert_eq!(pick(&mut st, &ui, &mut prefs, "Start After", ten), vec![]);
-        assert_eq!(prefs.get("screensaver_minutes"), Some("10"));
-        assert!(!st.take_screensaver_preview());
-        tap_row(&mut st, &ui, &mut prefs, "Preview");
-        assert!(st.take_screensaver_preview(), "Preview asks the shell to start the saver");
-        assert!(!st.take_screensaver_preview(), "the request is taken once");
-    }
-
-    #[test]
-    fn screen_saver_options_are_saved_per_saver() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
-        tap_row(&mut st, &ui, &mut prefs, "Screen Saver");
-        // Clock is the first saver: its switch and its choices are on the page
-        tap_row(&mut st, &ui, &mut prefs, "Show Date");
-        assert_eq!(prefs.get("ScreenSaver.Clock.show_date"), Some("false"));
-        pick(&mut st, &ui, &mut prefs, "Move Every", 0);
-        assert_eq!(prefs.get("ScreenSaver.Clock.move_every"), Some("30s"));
-        assert_eq!(prefs.get("ScreenSaver.Colours.speed"), None, "another saver's keys are untouched");
-        // the next saver shows its own options
-        pick(&mut st, &ui, &mut prefs, "Screen Saver", 1);
-        pick(&mut st, &ui, &mut prefs, "Colour Change", 2);
-        assert_eq!(prefs.get("ScreenSaver.Colours.speed"), Some("fast"));
-        assert_eq!(prefs.get("ScreenSaver.Clock.move_every"), Some("30s"));
-    }
-
-    fn drag_slider(st: &mut Settings, ui: &Ui, prefs: &mut Prefs, label_row_above: Option<&str>, g: usize, i: usize, from: f32, to: f32) -> Vec<Effect> {
-        let _ = label_row_above;
-        let (tx, ty, tw) = st.list().unwrap().track(ui, g, i);
-        let mut fx = st.touch(ui, prefs, Event::Down(tx + tw * from, ty), 0.0);
-        fx.extend(st.touch(ui, prefs, Event::Move(tx + tw * to, ty + 200.0), 50.0));
-        fx.extend(st.touch(ui, prefs, Event::Up(tx + tw * to, ty + 200.0), 100.0));
-        fx
-    }
-
-    #[test]
-    fn sliders_emit_live_effects_and_persist_on_release() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &info());
-        tap_row(&mut st, &ui, &mut prefs, "Display & Brightness");
-        let fx = drag_slider(&mut st, &ui, &mut prefs, None, 0, 0, 0.25, 0.75);
-        assert_eq!(fx, vec![Effect::Brightness(0.25), Effect::Brightness(0.75), Effect::Brightness(0.75)]);
-        assert_eq!(st.brightness(), 0.75);
-        assert_eq!(st.page(), PageId::Display, "dragging never taps");
-        // text size snaps to the seven notches and persists on release
-        let (g, i) = st.list().unwrap().find("Bold Text").map(|(g, i)| (g, i - 1)).unwrap();
-        assert!(drag_slider(&mut st, &ui, &mut prefs, None, g, i, 0.5, 1.0).is_empty());
-        assert_eq!(st.options().text_scale, TEXT_SIZES[6]);
-        assert_eq!(prefs.get("text_scale"), Some("1.30"));
-        drag_slider(&mut st, &ui, &mut prefs, None, g, i, 1.0, 0.0);
-        assert_eq!(st.options().text_scale, TEXT_SIZES[0]);
-        back(&mut st, &ui, &mut prefs);
-        tap_row(&mut st, &ui, &mut prefs, "Sounds");
-        // the Output volume slider sits under the output devices
-        let g = st.list().unwrap().spec().groups.iter().position(|g| g.header.as_deref() == Some("OUTPUT VOLUME")).expect("Output volume");
-        let fx = drag_slider(&mut st, &ui, &mut prefs, None, g, 0, 0.5, 0.0);
-        assert_eq!(fx.last(), Some(&Effect::Volume(0.0)));
-        assert_eq!(prefs.get("volume"), Some("0.00"));
-    }
-
-    #[test]
-    fn the_restart_alert_offers_reopen_windows_and_remembers_the_choice() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        tap_row(&mut st, &ui, &mut prefs, "General");
-        tap_row(&mut st, &ui, &mut prefs, "Restart");
-        assert_eq!(st.alert().unwrap().reopen(), Some(true), "on by default");
-        let (cx, cy) = st.alert().unwrap().reopen_centre(&ui, 1200, 1920).expect("a checkbox row");
-        assert!(tap(&mut st, &ui, &mut prefs, cx, cy).is_empty(), "the checkbox does not confirm");
-        assert_eq!(st.alert().unwrap().reopen(), Some(false));
-        assert_eq!(prefs.get(super::super::session::REOPEN_PREF), Some("0"));
-        let (cx, cy) = st.alert().unwrap().button(&ui, 1200, 1920, AlertHit::Confirm);
-        assert_eq!(tap(&mut st, &ui, &mut prefs, cx, cy), vec![Effect::Power(PowerAction::Restart)]);
-    }
-
-    #[test]
-    fn close_windows_when_quitting_is_a_general_setting() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        tap_row(&mut st, &ui, &mut prefs, "General");
-        assert_eq!(prefs.get(super::super::session::CLOSE_ON_QUIT_PREF), None);
-        tap_row(&mut st, &ui, &mut prefs, "Close windows when quitting an application");
-        assert_eq!(prefs.get(super::super::session::CLOSE_ON_QUIT_PREF), Some("1"));
-        tap_row(&mut st, &ui, &mut prefs, "Close windows when quitting an application");
-        assert_eq!(prefs.get(super::super::session::CLOSE_ON_QUIT_PREF), Some("0"));
-    }
-
-    #[test]
-    fn forget_network_from_the_detail_page() {
-        let ui = super::super::tests::ui();
-        let (mut st, mut prefs) = settings(&ui, &wifi_info());
-        tap_row(&mut st, &ui, &mut prefs, "Wi-Fi");
-        tap_row(&mut st, &ui, &mut prefs, "Home");
-        assert_eq!(st.page(), PageId::WifiDetail);
-        assert_eq!(st.list().unwrap().spec().title, "Home");
-        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Auto-Join"), vec![Effect::Wifi(WifiAction::SetAutoJoin { ssid: "Home".into(), on: false })]);
-        tap_row(&mut st, &ui, &mut prefs, "Forget This Network");
-        let (cx, cy) = st.alert().unwrap().button(&ui, 1200, 1920, AlertHit::Confirm);
-        assert_eq!(tap(&mut st, &ui, &mut prefs, cx, cy), vec![Effect::Wifi(WifiAction::Forget("Home".into()))]);
-        settle(&mut st, &ui);
-        assert_eq!(st.page(), PageId::Wifi, "back to the list");
-    }
-}
+mod tests;
 
 /// Behind-window vibrancy for the sidebar column: on the GPU presenter (and without Reduce Transparency) the desk
 /// declares the column a `.sidebar` material and the presenter blurs the desktop under it.
@@ -5138,232 +4500,8 @@ fn read_on_worker<T: Send + 'static>(name: &str, read: impl FnOnce() -> T + Send
 }
 
 #[cfg(test)]
-mod read_on_worker_tests {
-    use super::read_on_worker;
-
-    #[test]
-    fn a_read_runs_off_the_caller_and_delivers_its_value() {
-        let caller = std::thread::current().id();
-        let rx = read_on_worker("test-read", move || (7usize, std::thread::current().id()));
-        let (value, worker) = rx.recv().expect("the worker sends its result");
-        assert_eq!(value, 7);
-        assert_ne!(worker, caller, "the read must not run on the calling thread");
-    }
-}
+mod read_on_worker_tests;
 
 /// E2E wave 3 (Settings): navigation history, Escape, the Sound page, search and the sidebar order.
 #[cfg(test)]
-mod e2e_w3_tests {
-    use super::*;
-    use bifrost_ui::prefs_layout::m;
-
-    fn info() -> Info {
-        Info { battery: 42, wifi: "Home".into(), wifi_on: true, model: "Midget".into(), brightness: 0.5, ..Info::default() }
-    }
-
-    /// The desktop split layout (sidebar + detail).
-    fn split(ui: &Ui) -> (Settings, Prefs) {
-        let st = Settings::new(ui, &info(), &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
-        assert!(st.sidebar_list().is_some(), "1200 px at this scale is wide enough for the split layout");
-        (st, Prefs::memory())
-    }
-
-    fn settle(st: &mut Settings, ui: &Ui) {
-        st.tick(ui, 1e9);
-    }
-
-    fn tap(st: &mut Settings, ui: &Ui, prefs: &mut Prefs, x: f32, y: f32) -> Vec<Effect> {
-        let mut fx = st.touch(ui, prefs, Event::Down(x, y), 0.0);
-        fx.extend(st.touch(ui, prefs, Event::Up(x, y), 10.0));
-        settle(st, ui);
-        fx
-    }
-
-    /// The centre of the back (`false`) or forward (`true`) half of the toolbar pill, in window px.
-    fn pill(st: &Settings, ui: &Ui, forward: bool) -> (f32, f32) {
-        let k = if forward { 0.75 } else { 0.25 };
-        (st.pane_x() + ui.pt(m::TOOLBAR_X + m::TOOLBAR_PILL_W * k), ui.pt(m::TOOLBAR_Y + m::TOOLBAR_PILL_H / 2.0))
-    }
-
-    /// W3-3: a page opened in the split layout (a deep link, a Search hit) had no back target, so the pill and Esc did
-    /// nothing; it now goes on its pane, and the pill walks back and forward through the history.
-    #[test]
-    fn the_split_layout_pill_goes_back_and_forward() {
-        let ui = crate::shell::tests::ui();
-        let (mut st, mut prefs) = split(&ui);
-        st.open_page(&ui, "About", 0.0);
-        settle(&mut st, &ui);
-        assert_eq!(st.stack(), vec![PageId::General, PageId::About], "About goes on its pane");
-        let nav = st.list().expect("list").nav();
-        assert!(nav.has_back() && !nav.has_forward(), "only the back half is enabled");
-        let (bx, by) = pill(&st, &ui, false);
-        tap(&mut st, &ui, &mut prefs, bx, by);
-        assert_eq!(st.stack(), vec![PageId::General], "the back half pops About");
-        assert!(st.can_go_forward() && st.list().expect("list").nav().has_forward(), "About is ahead now");
-        assert!(!st.list().expect("list").nav().has_back(), "General is the first page: nothing behind it");
-        let (fx, fy) = pill(&st, &ui, true);
-        tap(&mut st, &ui, &mut prefs, fx, fy);
-        assert_eq!(st.stack(), vec![PageId::General, PageId::About], "the forward half opens About again");
-        assert!(!st.can_go_forward());
-        // a tap on the dimmed forward half does nothing
-        tap(&mut st, &ui, &mut prefs, fx, fy);
-        assert_eq!(st.page(), PageId::About);
-    }
-
-    /// W3-3: Esc pops a sub-page in the split layout, and is not used at the pane (so the shell leaves it alone).
-    #[test]
-    fn escape_pops_a_split_sub_page_and_stops_at_its_pane() {
-        let ui = crate::shell::tests::ui();
-        let (mut st, _) = split(&ui);
-        st.open_page(&ui, "Software Update", 0.0);
-        settle(&mut st, &ui);
-        assert_eq!(st.stack(), vec![PageId::General, PageId::SoftwareUpdate]);
-        assert!(st.back_page(0.0));
-        settle(&mut st, &ui);
-        assert_eq!(st.stack(), vec![PageId::General]);
-        assert!(!st.back_page(0.0), "nothing to pop at the pane");
-    }
-
-    /// A new navigation (a sidebar row, a deep link) clears what was ahead.
-    #[test]
-    fn a_new_page_clears_the_forward_history() {
-        let ui = crate::shell::tests::ui();
-        let (mut st, _) = split(&ui);
-        st.open_page(&ui, "About", 0.0);
-        settle(&mut st, &ui);
-        st.back_page(0.0);
-        settle(&mut st, &ui);
-        assert!(st.can_go_forward());
-        st.open_page(&ui, "Bluetooth", 0.0);
-        settle(&mut st, &ui);
-        assert!(!st.can_go_forward());
-        assert!(!st.forward_page(&ui, 0.0));
-    }
-
-    /// The single column stacks the same way, on the root.
-    #[test]
-    fn the_single_column_stacks_a_deep_link_on_its_pane() {
-        let ui = crate::shell::tests::ui();
-        let (mut st, _) = split(&ui);
-        st.allow_split(&ui, false);
-        st.open_page(&ui, "About", 0.0);
-        settle(&mut st, &ui);
-        assert_eq!(st.stack(), vec![PageId::Root, PageId::General, PageId::About]);
-    }
-
-    /// W3-13: with a pointer a click on the empty middle of a switch row did flip the switch; now only the switch or its
-    /// label does. A finger (the tablet form) still flips it from anywhere on the row.
-    #[test]
-    fn a_pointer_flips_a_switch_only_on_the_switch_or_its_label() {
-        use bifrost_ui::form_factor::FormFactor;
-        let ui = crate::shell::tests::ui();
-        let (mut st, mut prefs) = split(&ui);
-        st.open_page(&ui, "Focus", 0.0);
-        settle(&mut st, &ui);
-        let (g, i) = st.list().expect("list").find("Do Not Disturb").expect("the switch row");
-        let (rx, ry, rw, rh) = st.list().expect("list").row_rect(&ui, g, i);
-        let (px, mid) = (st.pane_x(), ry + rh / 2.0);
-        let middle = px + rx + rw * 0.55;
-        let switch = px + rx + rw - ui.pt(16.0 + 19.0);
-        let before = st.options().dnd;
-        super::super::pages::set_test_form(FormFactor::Desktop);
-        tap(&mut st, &ui, &mut prefs, middle, mid);
-        assert_eq!(st.options().dnd, before, "a click on the row's empty middle does nothing");
-        tap(&mut st, &ui, &mut prefs, switch, mid);
-        assert_eq!(st.options().dnd, !before, "a click on the switch flips it");
-        super::super::pages::set_test_form(FormFactor::Tablet);
-        tap(&mut st, &ui, &mut prefs, middle, mid);
-        assert_eq!(st.options().dnd, before, "a finger flips it from anywhere on the row");
-    }
-
-    /// W3-11: Return in the search field did nothing; it opens the first match.
-    #[test]
-    fn return_in_search_opens_the_first_match() {
-        let ui = crate::shell::tests::ui();
-        let (mut st, _) = split(&ui);
-        st.search.active = true;
-        st.key(&ui, Out::Text("about".into()), 0.0);
-        let first = settings_search::first_hit(st.index.as_deref().unwrap_or(&[]), "about").expect("a match");
-        st.key(&ui, Out::Enter, 0.0);
-        settle(&mut st, &ui);
-        assert_eq!(st.page(), first, "Return opened the first match");
-        assert_eq!(first, PageId::About);
-    }
-
-    /// The Output volume slider's value on the open Sound page.
-    fn sound_slider(st: &Settings) -> f32 {
-        let spec = st.list().expect("list").spec();
-        let g = spec.groups.iter().find(|g| g.header.as_deref() == Some("OUTPUT VOLUME")).expect("the output volume group");
-        match g.items[0].body {
-            super::super::list::Body::Slider { value, .. } => value,
-            _ => panic!("not a slider"),
-        }
-    }
-
-    /// W3-9: Sound showed the saved "volume" pref (0) while the system played at 0.644; it shows the live level, and
-    /// follows it while open.
-    #[test]
-    fn sound_shows_and_follows_the_live_output_level() {
-        let ui = crate::shell::tests::ui();
-        let (mut st, _) = split(&ui);
-        st.set_audio(&ui, 0.644, false);
-        st.open_page(&ui, "Sound", 0.0);
-        settle(&mut st, &ui);
-        assert_eq!(st.page(), PageId::Sounds);
-        assert!((sound_slider(&st) - 0.644).abs() < 1e-4, "the live level");
-        st.set_audio(&ui, 0.25, false);
-        assert!((sound_slider(&st) - 0.25).abs() < 1e-4, "a level set by the keys or Control Center shows at once");
-        let spec = st.list().expect("list").spec();
-        assert!(spec.groups.iter().any(|g| g.header.as_deref() == Some("OUTPUT") && !g.items.is_empty()), "the output devices are listed");
-        assert!(spec.groups[0].items.iter().any(|i| i.label == "Play sound effects through"));
-    }
-
-    /// W3-12: the desktop sidebar was one flat list; it follows the Golden Gate groups, with Appearance and Keyboard as
-    /// panes of their own.
-    #[test]
-    fn the_desktop_sidebar_follows_the_golden_gate_groups() {
-        let ui = crate::shell::tests::ui();
-        let desk = Info { display_mode: Some((2560, 1440, 60)), ..info() };
-        let mut st = Settings::new(&ui, &desk, &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
-        let groups: Vec<Vec<String>> = st.sidebar_list().expect("split").spec().groups.iter().map(|g| g.items.iter().map(|i| i.label.clone()).collect()).collect();
-        assert_eq!(groups[0], ["BifrOSt Account"]);
-        assert_eq!(groups[1][..2], ["Wi-Fi", "Bluetooth"], "connections first; no Airplane Mode on a desktop");
-        assert_eq!(groups[2], ["General", "Sharing", "Accessibility", "Appearance", "Desktop & Dock", "Overview", "Displays", "Menu Bar", "Control Center", "Assistant", "Search", "Wallpaper", "Screen Saver"]);
-        assert_eq!(groups[3], ["Notifications", "Sound", "Focus", "Screen Time"]);
-        assert_eq!(groups[4][..2], ["Lock Screen", "Privacy & Security"]);
-        assert_eq!(groups[4].last().map(String::as_str), Some("Users & Groups"));
-        assert_eq!(groups[5], ["Passwords", "Internet Accounts"]);
-        assert_eq!(groups[6], ["Keyboard", "Keyboard Shortcuts", "Mouse", "Trackpad", "Printers & Scanners"]);
-        assert_eq!(groups.last().expect("groups"), &["Developer"]);
-        // Appearance and Keyboard open as first-level panes (their sidebar row selected), not under Displays or General
-        st.open_page(&ui, "Appearance", 0.0);
-        settle(&mut st, &ui);
-        assert_eq!(st.stack(), vec![PageId::Appearance]);
-        st.open_page(&ui, "Keyboard", 0.0);
-        settle(&mut st, &ui);
-        assert_eq!(st.stack(), vec![PageId::Keyboard]);
-        // the tablet's root list keeps its own order
-        let tablet = Settings::new(&ui, &info(), &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
-        let first = tablet.sidebar_list().expect("split").spec().groups[1].items[0].label.clone();
-        assert_eq!(first, "Airplane Mode");
-    }
-
-    /// W3-3: a Search result in the sidebar that is a page inside a pane (Night Shift) opens on its pane, with a back
-    /// target, instead of as a first page with none.
-    #[test]
-    fn a_sidebar_search_hit_inside_a_pane_has_a_back_target() {
-        let ui = crate::shell::tests::ui();
-        let (mut st, mut prefs) = split(&ui);
-        st.search.active = true;
-        st.key(&ui, Out::Text("night shift".into()), 0.0);
-        let label = st.sidebar_list().expect("split").spec().groups[0].items[0].label.clone();
-        let want = settings_search::first_hit(st.index.as_deref().unwrap_or(&[]), "night shift").expect("a match");
-        assert_eq!(want, PageId::NightShift);
-        let (x, y) = st.sidebar_centre(&ui, &label).expect("the result row");
-        tap(&mut st, &ui, &mut prefs, x, y);
-        assert_eq!(st.page(), PageId::NightShift);
-        assert!(st.stack().len() >= 2, "Night Shift sits on its pane: {:?}", st.stack());
-        assert!(st.list().expect("list").nav().has_back());
-        assert!(st.back_page(0.0), "Esc goes back to the pane");
-    }
-}
+mod e2e_w3_tests;

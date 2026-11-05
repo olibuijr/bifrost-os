@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.2.15
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 0.2.14
+
+- Import, Export and a New Password button sit in a toolbar clear of the window buttons, and every bar button responds.
+
+## 0.2.13
+
+- New Password (Cmd+N) adds a login; one segmented control for the kinds; the detail pane uses the window background.
+
+## 0.2.12
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 0.2.11
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
+## 0.2.10
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 0.2.9
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
 ## 0.2.8
 
 - Documentation only: the doc comment of the one-time-code clock helper is back above it.

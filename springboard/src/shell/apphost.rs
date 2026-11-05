@@ -492,7 +492,14 @@ fn remember_incompatible(id: &str, exec: &Path) {
 
 /// True when this exact binary was already found incompatible with the shell's SDK protocol.
 pub(super) fn is_known_incompatible(id: &str, exec: &Path) -> bool {
-    INCOMPATIBLE.lock().map(|g| g.iter().any(|(i, e)| i == id && e == exec)).unwrap_or(false)
+    let exec = resolved(exec);
+    INCOMPATIBLE.lock().map(|g| g.iter().any(|(i, e)| i == id && *e == exec)).unwrap_or(false)
+}
+
+/// A binary's path with the package's `current` symlink resolved to its version folder (`apps/<id>/1.2.0/bin`), so two
+/// versions have two paths; a path that cannot be resolved (gone, or a test fixture) is kept as it is.
+pub(super) fn resolved(exec: &Path) -> PathBuf {
+    std::fs::canonicalize(exec).unwrap_or_else(|_| exec.to_path_buf())
 }
 
 /// Whether an app's request to open a web link goes through: the app must be in front, and the previous link it opened
@@ -593,7 +600,18 @@ const STALL_MS: f64 = 5000.0;
 const PB_WRITE_GRACE_MS: f64 = 1500.0;
 
 /// How long after a wheel event the drag emulated for it can still arrive, in ms.
-const WHEEL_DRAG_MS: f64 = 250.0;
+pub(super) const WHEEL_DRAG_MS: f64 = 250.0;
+
+/// Counts one plain touch at `t` ms against the drag emulated for a wheel event (`left` touches, until `until`): true
+/// while the down, the move and the up of that drag are still due.
+fn wheel_drag_touch((left, until): &mut (u8, f64), t: f64) -> bool {
+    if *left == 0 || t > *until {
+        (*left, *until) = (0, 0.0);
+        return false;
+    }
+    *left -= 1;
+    true
+}
 
 pub struct AppHost {
     pub id: String,
@@ -664,6 +682,8 @@ pub struct AppHost {
     pub ax_notes: Vec<(u64, bifrost_ui::ax::AxNotification)>,
     /// The app's custom rotors (`ToShell::AxRotors`), cleaned with `bifrost_ui::ax_rotor::clean`; empty when it declares none.
     pub custom_rotors: Vec<bifrost_ui::ax::AxCustomRotor>,
+    /// The named custom actions of the app's elements (`ToShell::AxActions`), cleaned with `bifrost_ui::ax_action::clean`.
+    pub ax_actions: Vec<bifrost_ui::ax_action::AxActionSet>,
     /// Guided Access requests (`ToShell::GuidedAccessRequest`: start with restrictions, or end), oldest first, taken by the shell each tick.
     pub guided_requests: Vec<(bool, Vec<bifrost_proto::GuidedRestriction>)>,
     last_notification: Option<f64>,
@@ -671,6 +691,13 @@ pub struct AppHost {
     last_open_url: Option<f64>,
     /// `ToShell::SuddenTermination`: the app allows being killed with no Quit round trip.
     pub sudden: bool,
+    /// `ToShell::CloseRequests`: the app answers the close control of its main window itself (a save sheet for an edited
+    /// document), so the shell sends `ToApp::CloseRequest` for it (`Shell::desk_close_requested`) instead of closing at once.
+    pub close_requests: bool,
+    /// A `ToApp::CloseRequest` was sent and the app has not ordered its main window out since. On the direct route the
+    /// app's toplevel cannot be unmapped (`desk_order_main_out`), so the order-out that answers the request quits the app, as
+    /// the close control did before apps could answer it (`order_out_quits`).
+    pub close_pending: bool,
     /// `ToShell::Activity`: the union of the app's live `ActivityOptions`; a user-initiated or latency-critical
     /// activity keeps the app from being suspended when it leaves the foreground.
     pub activity: u32,
@@ -702,6 +729,9 @@ pub struct AppHost {
     pub pointer_interest: u32,
     /// Plain touches still to drop after a wheel event went to the app: the drag emulated for the wheel, and until when.
     wheel_swallow: (u8, f64),
+    /// Plain touches still to come after a wheel event the app did not take: the drag emulated for the wheel, and until
+    /// when. They are a scroll, so the app gets them as a finger's and they pan on a desktop too (`Shell::ext_touch`).
+    wheel_pan: (u8, f64),
     /// How the shell shows this app (`launch_route` at spawn; a `Buffers` message from a direct app demotes it).
     route: Route,
     /// The touch frames the app gets (`ToApp::Touches`): one tracker per surface, at the app's scale.
@@ -712,6 +742,21 @@ pub struct AppHost {
     fallback: bool,
     /// The extra windows the app has open, front to back (`ToShell::WindowOpen` and friends). The desk draws each one.
     pub windows: WindowTable,
+    /// Where the app asked its main window to go (`ToShell::WindowMove` with window 0, points relative to the visible
+    /// desktop area): a document app moving a document into its main window keeps that document's frame. The desk
+    /// applies it once (`take_main_move`).
+    main_move: Option<(f32, f32)>,
+    /// The window the app asked to bring to the front (`ToShell::WindowRaise`, 0 is the main window), applied once by the
+    /// desk (`take_raise`).
+    raise: Option<u32>,
+    /// The app ordered its main window out (`WindowClose` id 0, its last document closed) or asked for it back
+    /// (`WindowOpen` id 0): `Some(false)` and `Some(true)`, applied once by the desk (`take_main_order`). The app keeps
+    /// running either way; only activating it reopens a main window it ordered out (`ToApp::Reopen`).
+    main_order: Option<bool>,
+    /// The main window is out because the app itself ordered it out (`WindowClose` id 0) and has not ordered it back in
+    /// since. Only then does activating the app send `ToApp::Reopen`: the first activation of an app started in the
+    /// background, or of a direct app that fell back to shared memory, is a plain first show. The desk keeps it.
+    pub main_ordered_out: bool,
     /// The window with key focus: 0 is the main window, otherwise an extra window's id. Keys, commands, menu items and
     /// text edits go to it (`input`); the desk sets it (`set_key_window`).
     pub key_window: u32,
@@ -719,6 +764,10 @@ pub struct AppHost {
     window_bufs: std::collections::BTreeMap<u32, WinBufs>,
     /// Buffers and frames that arrived for a window the table does not hold yet, oldest first (`Early`).
     early: std::collections::VecDeque<Early>,
+    /// Windows the shell closed (the red light, an app that does not ask) or refused: what the app still had in flight
+    /// for them when it heard (`WindowClosed`) is dropped, not kept as early pixels. Kept, it would show as the first frame
+    /// of the next window to open under that id. An id is forgotten when its window opens again.
+    shell_closed: std::collections::HashSet<u32>,
 }
 
 /// The `window` value of the manifest beside `exec` (empty for a classic title-bar window), `None` when there is none.
@@ -778,7 +827,8 @@ impl AppHost {
         let mut h = AppHost::with_channel(id, mine, Some(child), cfg);
         crate::shell::services::metric_reports::note_launch(id);
         crate::shell::services::metric_reports::note_foreground(id);
-        h.exec = exec.to_path_buf();
+        // the version folder this process runs from: `current` moves on when the app is updated, this does not
+        h.exec = resolved(exec);
         h.route = route;
         h.send(&ToApp::Configure(cfg));
         Ok(h)
@@ -824,6 +874,7 @@ impl AppHost {
             announce_banner: Vec::new(),
             ax_notes: Vec::new(),
             custom_rotors: Vec::new(),
+            ax_actions: Vec::new(),
             guided_requests: Vec::new(),
             last_notification: None,
             last_open_url: None,
@@ -832,6 +883,8 @@ impl AppHost {
             dock_menu: Vec::new(),
             quick_actions: Vec::new(),
             sudden: false,
+            close_requests: false,
+            close_pending: false,
             activity: 0,
             window_level: Default::default(),
             quit_at: None,
@@ -845,14 +898,20 @@ impl AppHost {
             accessory: Vec::new(),
             pointer_interest: 0,
             wheel_swallow: (0, 0.0),
+            wheel_pan: (0, 0.0),
             route: Route::Shm,
             frames: bifrost_ui::touch::TouchTracker::with_scale(cfg.scale),
             frame_scale: cfg.scale,
             fallback: false,
             windows: WindowTable::new(),
+            main_move: None,
+            raise: None,
+            main_order: None,
+            main_ordered_out: false,
             key_window: 0,
             window_bufs: std::collections::BTreeMap::new(),
             early: std::collections::VecDeque::new(),
+            shell_closed: std::collections::HashSet::new(),
         }
     }
 
@@ -890,6 +949,7 @@ impl AppHost {
         self.windows.close_app(&self.id);
         self.window_bufs.clear();
         self.early.clear();
+        self.shell_closed.clear();
         true
     }
 
@@ -1004,8 +1064,13 @@ impl AppHost {
 
     /// True when the installed binary is no longer the one this process runs (the app was updated while open), so
     /// opening it again must start the new version instead of focusing the old process.
+    /// `installed` is the registry's path (`apps/<id>/current/<exec>`, the same before and after an update), so it is
+    /// compared with `current` resolved: the process keeps the version folder it was started from. Only a path that
+    /// resolves counts: while an update flips `current` the link can dangle for a moment (or name a half-installed
+    /// folder without the binary yet), and that must not make the running app look outdated and get a missing or
+    /// partial package launched.
     pub fn is_outdated(&self, installed: &Path) -> bool {
-        !self.exec.as_os_str().is_empty() && self.exec != installed
+        !self.exec.as_os_str().is_empty() && std::fs::canonicalize(installed).is_ok_and(|now| self.exec != now)
     }
 
     pub fn size(&self) -> (usize, usize) {
@@ -1170,17 +1235,23 @@ impl AppHost {
 
     /// True for each plain touch of the drag emulated for a wheel event the app took already.
     pub(super) fn swallows_touch(&mut self, t: f64) -> bool {
-        if self.wheel_swallow.0 == 0 || t > self.wheel_swallow.1 {
-            self.wheel_swallow = (0, 0.0);
-            return false;
-        }
-        self.wheel_swallow.0 -= 1;
-        true
+        wheel_drag_touch(&mut self.wheel_swallow, t)
     }
 
-    /// A press, drag or release for the app's main window, with the modifier keys held (`NSEvent.modifierFlags`).
-    pub fn touch(&mut self, kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32, mods: bifrost_proto::ModifierFlags) {
-        self.send(&ToApp::Touch { kind, id, x, y, t_ms, mods });
+    /// A wheel event the app did not ask for happened at `t` ms: the drag emulated for it still reaches the app, as a
+    /// finger's, since a wheel notch is a scroll and not a mouse drag (`pans_touch`).
+    pub(super) fn keep_wheel_drag(&mut self, t: f64) {
+        self.wheel_pan = (3, t + WHEEL_DRAG_MS);
+    }
+
+    /// True for each plain touch of the drag emulated for a wheel event the app did not take: it pans like a finger.
+    pub(super) fn pans_touch(&mut self, t: f64) -> bool {
+        wheel_drag_touch(&mut self.wheel_pan, t)
+    }
+
+    /// A press, drag or release for the app's main window, with the modifier keys held (the reference event modifier flags).
+    pub fn touch(&mut self, kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32, source: bifrost_proto::TouchSource, mods: bifrost_proto::ModifierFlags) {
+        self.send(&ToApp::Touch { kind, id, x, y, t_ms, source, mods });
     }
 
     /// Sends one frame of touches (`ToApp::Touches`). Call it before the matching `touch` so the app can drop the
@@ -1292,7 +1363,7 @@ impl AppHost {
         out
     }
 
-    fn handle(&mut self, msg: ToShell, fds: Vec<sys::Owned>, out: &mut Pumped) {
+    pub(super) fn handle(&mut self, msg: ToShell, fds: Vec<sys::Owned>, out: &mut Pumped) {
         match msg {
             ToShell::Hello { sdk_version, app_id } => {
                 if sdk_version != SDK_VERSION {
@@ -1387,6 +1458,7 @@ impl AppHost {
                 self.announcements.push((text, priority));
             }
             ToShell::AxRotors(list) => self.custom_rotors = bifrost_ui::ax_rotor::clean(list),
+            ToShell::AxActions(list) => self.ax_actions = bifrost_ui::ax_action::clean(list),
             ToShell::GuidedAccessRequest { on, restrictions } => {
                 if self.guided_requests.len() >= 4 {
                     self.guided_requests.remove(0);
@@ -1410,6 +1482,7 @@ impl AppHost {
                 }
             }
             ToShell::SuddenTermination { enabled } => self.sudden = enabled,
+            ToShell::CloseRequests { on } => self.close_requests = on,
             ToShell::Activity { options } => {
                 self.activity = options;
                 crate::bare::sleep::note_app_activity(&self.id, options);
@@ -1427,19 +1500,36 @@ impl AppHost {
                 }
             }
             ToShell::InputAccessory(items) => self.accessory = items.into_iter().take(bifrost_proto::MAX_ACCESSORY_ITEMS).collect(),
+            // window 0 is the main window: the desk orders it back in on its next sync
+            ToShell::WindowOpen { id: 0, .. } => {
+                self.main_order = Some(true);
+                out.chrome();
+            }
             ToShell::WindowOpen { id, title, w, h, position, flags } => {
                 // no room for the window, or its id is taken: the app is told to drop it, so the two sides agree
                 if self.windows.open(&self.id, id, &title, w, h).is_err() {
                     self.early.retain(|e| e.window() != id);
+                    self.note_shell_closed(id);
                     self.send(&ToApp::WindowClosed { id });
                 } else {
+                    self.shell_closed.remove(&id);
                     if let Some((x, y)) = position {
                         self.windows.request_position(&self.id, id, x, y);
                     }
                     self.windows.set_title_double_click(&self.id, id, flags & bifrost_proto::window_flags::TITLE_DOUBLE_CLICK != 0);
+                    // a position the app asked for wins over the cascade
+                    self.windows.set_cascade(&self.id, id, position.is_none() && flags & bifrost_proto::window_flags::CASCADE != 0);
+                    self.windows.set_full_size(&self.id, id, flags & bifrost_proto::window_flags::FULL_SIZE != 0);
                     self.replay_early(id, out);
                 }
                 out.chrome();
+            }
+            // window 0 is the main window: the desk moves it on its next sync, as it does an extra window
+            ToShell::WindowMove { window: 0, x, y } => {
+                if x.is_finite() && y.is_finite() {
+                    self.main_move = Some((x, y));
+                    out.chrome();
+                }
             }
             ToShell::WindowMove { window, x, y } => {
                 // an unknown window is ignored; the desk applies the position on its next sync
@@ -1447,10 +1537,19 @@ impl AppHost {
                     out.chrome();
                 }
             }
+            ToShell::WindowRaise { window } => {
+                self.raise = Some(window);
+                out.chrome();
+            }
             ToShell::WindowCollapse { window, collapsed } => {
                 if self.windows.set_collapsed(&self.id, window, collapsed) {
                     out.chrome();
                 }
+            }
+            // window 0 is the main window: the desk orders it out on its next sync and the app keeps running
+            ToShell::WindowClose { id: 0 } => {
+                self.main_order = Some(false);
+                out.chrome();
             }
             ToShell::WindowClose { id } => {
                 self.windows.close(&self.id, id);
@@ -1473,6 +1572,9 @@ impl AppHost {
                     out.chrome();
                 }
             }
+            // sent before the app heard that the shell closed the window: nothing is left to show them in (the descriptors close
+            // as `fds` drops)
+            ToShell::WindowBuffers { id, .. } | ToShell::WindowFrame { id, .. } if self.shell_closed.contains(&id) && !self.window_open(id) => {}
             ToShell::WindowBuffers { id, w, h, generation } if !self.window_open(id) => self.keep_early(Early::Buffers { id, w, h, generation, fds }),
             ToShell::WindowFrame { id, buf, damage } if !self.window_open(id) => self.keep_early(Early::Frame { id, buf, damage }),
             ToShell::WindowBuffers { id, w, h, generation } => self.window_buffers(id, w, h, generation, fds),
@@ -1565,7 +1667,7 @@ impl AppHost {
         }
     }
 
-    fn window_open(&self, id: u32) -> bool {
+    pub fn window_open(&self, id: u32) -> bool {
         self.windows.of_app(&self.id).iter().any(|w| w.id == id)
     }
 
@@ -1620,8 +1722,18 @@ impl AppHost {
             return false;
         }
         self.window_bufs.remove(&id);
+        self.note_shell_closed(id);
         self.send(&ToApp::WindowClosed { id });
         true
+    }
+
+    /// Remembers that the shell closed (or refused) window `id`, so pixels the app still sends for it are dropped.
+    fn note_shell_closed(&mut self, id: u32) {
+        // the ids are the app's own and few; a runaway app cannot grow the set
+        if self.shell_closed.len() >= 256 {
+            self.shell_closed.clear();
+        }
+        self.shell_closed.insert(id);
     }
 
     /// The shell resized one of the app's extra windows (points). False when the window is not open.
@@ -1636,16 +1748,31 @@ impl AppHost {
 
     /// A touch inside one of the app's extra windows, with window-local coordinates in points. False when it is not open.
     #[allow(dead_code)]
-    pub fn touch_window(&mut self, id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32, mods: bifrost_proto::ModifierFlags) -> bool {
+    pub fn touch_window(&mut self, id: u32, touch: u32, kind: TouchKind, x: f32, y: f32, t_ms: u32, source: bifrost_proto::TouchSource, mods: bifrost_proto::ModifierFlags) -> bool {
         if !self.window_open(id) {
             return false;
         }
-        self.send(&ToApp::WindowTouch { id, touch, kind, x, y, t_ms, mods });
+        self.send(&ToApp::WindowTouch { id, touch, kind, x, y, t_ms, source, mods });
         true
     }
 
     /// The person dragged window `id` to (x, y) points (the shell's clamped position): the table keeps it and the app is
     /// told (`WindowMoved`). False when the window is not open.
+    /// The position the app asked its main window to move to (`ToShell::WindowMove` with window 0), once.
+    pub fn take_main_move(&mut self) -> Option<(f32, f32)> {
+        self.main_move.take()
+    }
+
+    /// The window the app asked to bring to the front (`ToShell::WindowRaise`), once.
+    pub fn take_raise(&mut self) -> Option<u32> {
+        self.raise.take()
+    }
+
+    /// Whether the app asked for its main window to be ordered out (`Some(false)`) or back in (`Some(true)`), once.
+    pub fn take_main_order(&mut self) -> Option<bool> {
+        self.main_order.take()
+    }
+
     pub fn window_dragged(&mut self, id: u32, x: f32, y: f32) -> bool {
         if !self.windows.note_position(&self.id, id, x, y) {
             return false;
@@ -1710,6 +1837,7 @@ impl AppHost {
         self.windows.close_app(&self.id);
         self.window_bufs.clear();
         self.early.clear();
+        self.shell_closed.clear();
         bifrost_core::log::shell_logger("apphost").notice(format!("app {} exited {code}", self.id));
     }
 
@@ -1864,6 +1992,13 @@ impl Route {
     }
 }
 
+/// Whether an app's order-out of its main window quits it: only the answer to the close control (`close_pending`) of an app on
+/// the direct route, whose window the shell cannot take down any other way. Everywhere else the app keeps running without
+/// a window (`desk_order_main_out`).
+pub fn order_out_quits(route: Route, close_pending: bool) -> bool {
+    route == Route::Direct && close_pending
+}
+
 /// The route for an app the shell is about to launch, pure. Direct only when the shell itself runs with
 /// `BIFROST_DIRECT=1` under `bifrost-wm` (its environment and `/etc/bifrost/compositor`); anything else is the
 /// shared-memory path, so any other session and missing switches keep the shared-memory path.
@@ -1929,6 +2064,13 @@ impl Drop for AppHost {
 /// The built-in Calculator's package id (Search answers open it when installed).
 pub const CALCULATOR: &str = "is.olibuijr.calculator";
 
+/// An app's icon at `size` px from the package icon file at `icon_path` (`App::icon_path`), for a process that scanned the
+/// store itself (the Files app's Applications place) and so has no registry to look `id` up in. Cached like `icon_image`.
+pub fn icon_image_at(id: &str, icon_path: &Path, size: usize) -> Option<std::sync::Arc<crate::gfx::Image>> {
+    let (variant, _) = bifrost_render::icon_doc::current_style();
+    bifrost_render::icon_doc::app_icon(id, icon_path, size as f32, 1.0, variant)
+}
+
 /// An installed app's icon at `size` px, from its package (`None` for built-in ids).
 pub fn icon_image(id: &str, size: usize) -> Option<crate::gfx::Image> {
     let registered = installed();
@@ -1986,7 +2128,28 @@ fn edit_command_of(name: &str) -> Option<EditShortcut> {
     Some(EditShortcut { command, key, letter, mods })
 }
 
+/// The Configure a background app gets when its window on the desk has a body of `size` px and the app was last
+/// configured to `current`: the foreground's settings at that size, with no keyboard inset (the keyboard is over the app
+/// in front only). `None` when nothing changed, the app is not running or the size is empty.
+pub fn back_configure(fg: Configure, size: (u32, u32), running: bool, current: (usize, usize)) -> Option<Configure> {
+    let (w, h) = size;
+    (running && w > 0 && h > 0 && current != (w as usize, h as usize)).then_some(Configure { w, h, safe_bottom: 0.0, ..fg })
+}
+
 impl Shell {
+    /// The body size of the window on the desk of the background app in `slot` (`fg` is the app in front): none with no
+    /// desk, for the app in front, for an app with no main window on the desk, or for a window collapsed to its title bar
+    /// (which keeps the size its app had, as `desk_layout` does).
+    fn ext_back_size(&self, slot: usize, fg: Option<u8>) -> Option<(u32, u32)> {
+        let slot = u8::try_from(slot).ok().filter(|s| fg != Some(*s))?;
+        let app = super::AppId::External(slot);
+        if self.desk.as_ref()?.is_collapsed(app) {
+            return None;
+        }
+        let (w, h) = self.desk_app_size(app)?;
+        Some((u32::try_from(w).ok()?, u32::try_from(h).ok()?))
+    }
+
     pub(super) fn ext_cfg(&self) -> Configure {
         let (w, h) = self.ext_fg.and_then(|i| self.desk_app_size(super::AppId::External(i))).unwrap_or((self.w, self.h));
         Configure {
@@ -2028,6 +2191,7 @@ impl Shell {
                 };
                 self.ext_send(slot as usize, &bifrost_proto::ToApp::ServiceReply { request, ok, body });
             }
+            ToShell::SelectionReply { request, text } => self.selection_reply(slot, request, &text, t),
             ToShell::DistPost { name, user_info } => {
                 let m = bifrost_proto::ToApp::DistNotify { name, user_info };
                 for other in 0..self.ext.len() {
@@ -2060,7 +2224,9 @@ impl Shell {
             return;
         }
         if let Some(h) = self.ext[slot].as_mut().filter(|h| h.running()) {
-            if !h.is_outdated(&app.exec_path()) {
+            // an app with unsaved changes keeps running at its old version until they are saved or closed: the restart
+            // would lose them (the update relaunch waits the same way, `Shell::app_update_relaunch`)
+            if !h.is_outdated(&app.exec_path()) || h.doc_edited {
                 return;
             }
             // The package was updated while the app was open: quit the old process and start the new version.
@@ -2257,11 +2423,15 @@ impl Shell {
             Event::Up(x, y) => (TouchKind::Up, x, y),
             _ => return,
         };
+        // the app learns whether a mouse or a finger made the touch: only a finger pans a list on a desktop. The drag
+        // emulated for a wheel notch the app did not take is a scroll, so it counts as a finger's.
+        let source = if h.pans_touch(t) { bifrost_proto::TouchSource::Finger } else { super::touch_frames::plain_source(kind, &self.touch_contacts, self.touch_source) };
+        self.touch_source = source;
         // the pointer as a touch frame, before the plain stream; a finger on the touchscreen is reported by its contact
         if let Some((raw, s)) = super::touch_frames::pointer_sample(kind, x, y, &self.touch_contacts) {
             h.feed_touch(raw, s, t);
         }
-        h.touch(kind, 0, x, y, t as u32, self.key_mods);
+        h.touch(kind, 0, x, y, t as u32, source, self.key_mods);
     }
 
     /// A touchscreen contact (`Event::Contact`) at (`x`, `y`) in screen pixels. The foreground external app gets it as a
@@ -2312,7 +2482,7 @@ impl Shell {
         match self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) {
             Some(Some(h)) => {
                 // a key equivalent of the app's own menu is a menu action, not a key (`performKeyEquivalent:`)
-                if let Some(id) = super::evkeys::char_for(key as u16, false).and_then(|c| super::desktop_bar::app_menu_chord(&h.app_menus, c, mods)) {
+                if let Some(id) = super::desktop_bar::chord_menu_id(&h.app_menus, key as u16, mods) {
                     h.input(WindowInput::MenuAction(id));
                     return true;
                 }
@@ -2352,6 +2522,8 @@ impl Shell {
             Out::Backspace => KeyInput::Code(8),
             Out::Enter => KeyInput::Code(13),
             Out::Named("Tab") => KeyInput::Code(9),
+            // Shift+Tab is the chord on Tab (evdev 15), as the SDK's views and sheets read it
+            Out::Named("BackTab") => KeyInput::chord(15, CHORD_SHIFT),
             Out::Named(name) if super::kb_input::function_key_code(name).is_some() => KeyInput::Code(u32::from(super::kb_input::function_key_code(name).unwrap_or(0))),
             Out::Named("Left") => KeyInput::Code(37),
             Out::Named("Up") => KeyInput::Code(38),
@@ -2502,6 +2674,10 @@ impl Shell {
         let mut kb = None;
         let mut traits = None;
         let cfg = self.ext_cfg();
+        // the body size of each background app's window on the desk: a window in the back is still on screen, so its app
+        // is configured to the frame the shell gives it (a restored session, an update relaunch) and draws at it now, not
+        // only once it comes to the front (0.10.39: Mail restored behind other windows drew at its launch size, black past it)
+        let back_sizes: Vec<Option<(u32, u32)>> = (0..self.ext.len()).map(|slot| self.ext_back_size(slot, fg)).collect();
         let appearance = appearance_flags();
         let japanese = super::kb_layouts::active() == super::kb_layouts::Layout::Japanese;
         // the newest clipboard text an app asked for, and whether it must stay off the disk (a secret)
@@ -2535,6 +2711,8 @@ impl Shell {
             h.sync_appearance(appearance);
             h.sync_input_source(japanese);
             if fg == Some(slot as u8) && h.running() && h.size() != (cfg.w as usize, cfg.h as usize) {
+                h.configure(cfg);
+            } else if let Some(cfg) = back_sizes.get(slot).copied().flatten().and_then(|size| back_configure(cfg, size, h.running(), h.size())) {
                 h.configure(cfg);
             }
             let p = h.pump();
@@ -2644,6 +2822,8 @@ impl Shell {
                     r @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::DistPost { .. } => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::ServiceCall { .. } => rich_msgs.push((slot as u8, r)),
+                    // the answer to a SelectionRequest (Look Up, Services); `selection_reply` drops one it did not ask for
+                    r @ ToShell::SelectionReply { .. } => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::Preview { .. } | ToShell::PreviewClose) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifySchedule { .. }) => rich_msgs.push((slot as u8, r)),
@@ -2717,7 +2897,9 @@ impl Shell {
         #[cfg(feature = "atspi")]
         {
             let chrome = super::atspi::due(t).then(|| self.ax_chrome_snap());
-            super::atspi::sync(&mut self.ext, t, chrome);
+            for id in super::atspi::sync(&mut self.ext, t, chrome) {
+                self.ax_chrome_press(id, t);
+            }
         }
     }
 
@@ -2764,10 +2946,46 @@ impl Shell {
     }
 
     pub(super) fn describe_ext(&self) -> String {
-        let run: Vec<&str> = self.ext.iter().flatten().filter(|h| h.running()).map(|h| h.id.as_str()).collect();
+        #[allow(unused_mut)]
+        let mut run: Vec<String> = self.ext.iter().flatten().filter(|h| h.running()).map(|h| h.id.clone()).collect();
+        // a native app the shell launched has no app host: its toplevels are the window server's, and it runs while it
+        // shows one (E2E N2: FilmCraft was missing from `apps_running` while it held the focus)
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(d) = self.desk.as_ref() {
+            let installed = installed();
+            let manifests: Vec<(&str, &str, &str)> = installed.iter().map(|a| (a.manifest.id.as_str(), a.manifest.window.as_str(), a.manifest.wayland_app_id.as_str())).collect();
+            for id in native_running(&manifests, d.native_windows.iter().map(|w| w.app_id.as_str())) {
+                if !run.contains(&id) { run.push(id); }
+            }
+        }
+        let run: Vec<&str> = run.iter().map(String::as_str).collect();
         let controls: Vec<(&str, usize, u32)> = self.ext.iter().flatten().map(|h| (h.id.as_str(), h.controls.len(), h.commands.0)).collect();
-        ext_state_text(&run, &controls)
+        #[allow(unused_mut)]
+        let mut text = ext_state_text(&run, &controls);
+        // every other client's window the shell lists (native and Linux apps), so a test can see which one is active
+        #[cfg(feature = "desktop-wayland")]
+        if let Some(d) = self.desk.as_ref() {
+            text.push_str(&foreign_state_line(d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a| a.windows.iter()))));
+        }
+        text
     }
+}
+
+/// The installed native apps (`window = "native"`; `manifests` is id, window, Wayland app id) with a toplevel among
+/// `window_app_ids`, by manifest id, once each in manifest order.
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+fn native_running<'a>(manifests: &[(&str, &str, &str)], window_app_ids: impl Iterator<Item = &'a str>) -> Vec<String> {
+    let shown: Vec<&str> = window_app_ids.collect();
+    manifests.iter().filter(|(_, window, app_id)| *window == "native" && !app_id.is_empty() && shown.contains(app_id)).map(|(id, ..)| id.to_string()).collect()
+}
+
+/// The `foreign_windows` line of the shell state text: each other client's window the shell lists as
+/// `app id:window id:active` (1 or 0), so a test sees which window holds the focus. Ends with a newline.
+#[cfg(feature = "desktop-wayland")]
+fn foreign_state_line<'a>(windows: impl Iterator<Item = &'a crate::bare::wayland::ForeignWindow>) -> String {
+    let mut seen = std::collections::HashSet::new();
+    let items: Vec<String> = windows.filter(|w| seen.insert(w.id)).map(|w| format!("{}:{}:{}", w.app_id, w.id, w.active as u8)).collect();
+    format!("foreign_windows={}\n", items.join(","))
 }
 
 /// The `apps_running` and `app_controls` lines of the shell state text (`controls` is app id, control count, command
@@ -2791,509 +3009,7 @@ fn exit_status_soon(c: &mut std::process::Child) -> std::io::Result<Option<std::
 
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn audio_unit_tables_declare_the_processors_an_app_ships() {
-        let m = Manifest::parse("id = \"a.synth\"\nname = \"Synth\"\nexec = \"x\"\n\n[[audio_unit]]\nname = \"Pad\"\nkind = \"aumu\"\nsub_kind = \"pads\"\nmanufacturer = \"Exmp\"\noutputs = [2]\n\n[[audio_unit]]\nname = \"Broken\"\nkind = \"aufx\"\n").unwrap();
-        assert_eq!(m.audio_units.len(), 1, "a table that fails the checks is left out");
-        assert_eq!(m.audio_units[0].name, "Pad");
-        assert_eq!(m.name, "Synth", "an audio unit table does not change the app keys");
-        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n").unwrap().audio_units.is_empty());
-    }
-    #[test]
-    fn package_types_are_declared_in_the_manifest() {
-        let m = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\npackage_types = [\"rtfd\"]\n").unwrap();
-        assert_eq!(m.package_types, vec!["rtfd".to_string()]);
-        let none = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\n").unwrap();
-        assert!(none.package_types.is_empty());
-    }
-    #[test]
-    fn records_audio_is_off_unless_declared() {
-        let m = Manifest::parse("id = \"is.a.rec\"\nname = \"Rec\"\nexec = \"x\"\nrecords_audio = true\n").unwrap();
-        assert!(m.records_audio);
-        let no = Manifest::parse("id = \"is.a.rec\"\nname = \"Rec\"\nexec = \"x\"\n").unwrap();
-        assert!(!no.records_audio);
-    }
-
-    #[test]
-    fn edit_keys_is_declared_by_text_editors_only() {
-        let m = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\nedit_keys = true\n").unwrap();
-        assert!(m.edit_keys);
-        let no = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\nedit_keys = false\n").unwrap();
-        assert!(!no.edit_keys);
-        assert!(!Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\n").unwrap().edit_keys);
-    }
-    #[test]
-    fn file_manager_extensions_declare_the_folders_they_watch() {
-        let m = Manifest::parse("id = \"is.a.cloud\"\nname = \"Cloud\"\nexec = \"x\"\nfile_manager_folders = [\"~/Cloud\", \"/mnt/sync\", \"~/\", \"/\", \"docs\", \"~/../etc\", \"/mnt/sync\"]\n").unwrap();
-        assert_eq!(m.file_manager_folders.len(), 7);
-        let home = Path::new("/home/ann");
-        assert_eq!(m.file_manager_dirs(home), vec![PathBuf::from("/home/ann/Cloud"), PathBuf::from("/mnt/sync")]);
-        let none = Manifest::parse("id = \"is.a.edit\"\nname = \"Edit\"\nexec = \"x\"\n").unwrap();
-        assert!(none.file_manager_dirs(home).is_empty());
-    }
-    #[test]
-    fn quit_plan_kills_terminable_apps_and_gives_the_rest_a_deadline() {
-        assert_eq!(super::quit_plan(true), super::QuitPlan::KillNow);
-        assert_eq!(super::quit_plan(false), super::QuitPlan::QuitThenKill(super::QUIT_GRACE_MS));
-    }
-    #[test]
-    fn entity_tables_declare_the_types_search_indexes() {
-        let m = Manifest::parse("id = \"a.b\"\nname = \"Notes\"\nexec = \"x\"\n\n[[entity]]\ntype = \"Note\"\n\n[[entity]]\ntype = \"Folder\"\nname = \"ignored\"\n\n[[intent]]\nid = \"open\"\ntitle = \"Open\"\n").unwrap();
-        assert_eq!(m.entity_types, vec!["Note", "Folder"]);
-        assert_eq!(m.name, "Notes", "an entity table does not change the app keys");
-        assert_eq!(m.intents.len(), 1);
-        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n").unwrap().entity_types.is_empty());
-    }
-
-    #[test]
-    fn control_tables_reach_the_manifest_for_control_center() {
-        let m = Manifest::parse("id = \"a.b\"\nname = \"Notes\"\nexec = \"x\"\n\n[[control]]\nkind = \"toggle\"\ntitle = \"Quiet Hours\"\nsymbol = \"moon\"\nintent = \"set-quiet\"\n").unwrap();
-        assert_eq!(m.controls.len(), 1);
-        assert_eq!((m.controls[0].title.as_str(), m.controls[0].intent.as_str()), ("Quiet Hours", "set-quiet"));
-        assert_eq!(m.name, "Notes", "a control table does not change the app keys");
-    }
-
-    #[test]
-    fn intent_tables_do_not_leak_into_the_app_keys() {
-        let m = Manifest::parse("id = \"a.b\"\nname = \"Notes\"\nexec = \"x\"\n\n[[intent]]\nid = \"new-note\"\ntitle = \"New Note\"\nshortcut = true\nparams = []\n\n[[intent]]\nid = \"find\"\ntitle = \"Find\"\nparams = [\"text:string\", \"due:date?\"]\n\n[other]\nname = \"ignored\"\n").unwrap();
-        assert_eq!((m.id.as_str(), m.name.as_str()), ("a.b", "Notes"));
-        assert_eq!(m.intents.len(), 2);
-        assert!(m.intents[0].runnable());
-        assert!(!m.intents[1].runnable());
-        assert_eq!(m.intents[1].params, vec!["text:string", "due:date?"]);
-    }
-
-    use super::*;
-
-    #[test]
-    fn the_input_source_is_sent_on_first_contact_and_on_each_change() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        let next = |peer: &Channel| match peer.recv(false).unwrap() {
-            sys::Recv::Packet(p, _) => Some(ToApp::decode(&p).unwrap()),
-            _ => None,
-        };
-        host.sync_input_source(false);
-        assert_eq!(next(&peer), Some(ToApp::InputSource { japanese: false }), "first contact sends the source");
-        host.sync_input_source(false);
-        assert_eq!(next(&peer), None, "unchanged: nothing sent");
-        host.sync_input_source(true);
-        assert_eq!(next(&peer), Some(ToApp::InputSource { japanese: true }));
-    }
-
-    #[test]
-    fn the_pasteboard_reaches_an_app_once_per_change_and_not_back_to_its_writer() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        let next = |peer: &Channel| match peer.recv(false).unwrap() {
-            sys::Recv::Packet(p, _) => Some(ToApp::decode(&p).unwrap()),
-            _ => None,
-        };
-        let text = |s: &str| vec![("public.utf8-plain-text".to_string(), s.as_bytes().to_vec())];
-        host.sync_pasteboard(0, &[]);
-        assert_eq!(next(&peer), None, "an empty board at first contact sends nothing");
-        host.sync_pasteboard(3, &text("from another app"));
-        assert_eq!(next(&peer), Some(ToApp::Pasteboard { change_count: 3, items: text("from another app") }));
-        assert_eq!(next(&peer), Some(ToApp::Clipboard { text: "from another app".into() }), "the text fields read the plain clipboard");
-        host.sync_pasteboard(3, &text("from another app"));
-        assert_eq!(next(&peer), None, "unchanged: nothing sent");
-        host.pasteboard_known(4);
-        host.sync_pasteboard(4, &text("what this app wrote"));
-        assert_eq!(next(&peer), None, "the writer has its own board");
-        host.sync_pasteboard(5, &[("public.png".to_string(), vec![1])]);
-        assert!(matches!(next(&peer), Some(ToApp::Pasteboard { change_count: 5, .. })));
-        assert_eq!(next(&peer), Some(ToApp::Clipboard { text: String::new() }), "a board without text clears the app's text");
-    }
-
-    #[test]
-    fn a_large_pasteboard_reaches_the_app_in_front_through_a_descriptor_and_is_never_cut() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        let big = vec![("public.png".to_string(), vec![9u8; 200_000]), ("public.utf8-plain-text".to_string(), b"a picture".to_vec())];
-        host.sync_pasteboard(5, &big);
-        let (packet, mut fds) = match peer.recv(false).unwrap() {
-            sys::Recv::Packet(p, fds) => (p, fds),
-            _ => panic!("nothing sent"),
-        };
-        let Ok(ToApp::PasteboardBlob { change_count, types }) = ToApp::decode(&packet) else { panic!("a blob message") };
-        assert_eq!(change_count, 5);
-        let fd = fds.pop().expect("the descriptor travels with the message");
-        assert_eq!(bifrost_proto::pbblob::read(&fd, &types).unwrap(), big, "every byte of every item");
-        assert!(matches!(peer.recv(false).unwrap(), sys::Recv::Empty), "no cut text follows");
-        host.sync_pasteboard(5, &big);
-        assert!(matches!(peer.recv(false).unwrap(), sys::Recv::Empty), "unchanged: nothing sent");
-    }
-
-    #[test]
-    fn an_app_in_the_background_hears_the_count_and_never_the_contents() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        let next = |peer: &Channel| match peer.recv(false).unwrap() {
-            sys::Recv::Packet(p, _) => Some(ToApp::decode(&p).unwrap()),
-            _ => None,
-        };
-        host.notify_pasteboard(8);
-        assert_eq!(next(&peer), Some(ToApp::PasteboardChanged { change_count: 8 }));
-        host.notify_pasteboard(8);
-        assert_eq!(next(&peer), None, "once per change");
-        // coming to the front: the contents follow, and a board the app wrote itself needs no message at all
-        host.sync_pasteboard(8, &[("public.utf8-plain-text".to_string(), b"copied elsewhere".to_vec())]);
-        assert!(matches!(next(&peer), Some(ToApp::Pasteboard { change_count: 8, .. })));
-        assert!(matches!(next(&peer), Some(ToApp::Clipboard { .. })));
-        host.pasteboard_known(9);
-        host.notify_pasteboard(9);
-        assert_eq!(next(&peer), None, "the writer is not told about its own copy");
-        // asking for the board again resets what the app is known to have
-        host.pasteboard_wanted();
-        host.sync_pasteboard(9, &[("public.utf8-plain-text".to_string(), b"again".to_vec())]);
-        assert!(matches!(next(&peer), Some(ToApp::Pasteboard { change_count: 9, .. })));
-    }
-
-    #[test]
-    fn only_an_app_in_front_or_just_left_may_write_the_clipboard() {
-        let (channel, _peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        assert!(host.may_write_clipboard(true, 1e6));
-        assert!(!host.may_write_clipboard(false, 1e6), "an app that was never in front cannot");
-        host.fg_seen_ms = 1e6;
-        assert!(host.may_write_clipboard(false, 1e6 + PB_WRITE_GRACE_MS), "a copy and a quick switch still land");
-        assert!(!host.may_write_clipboard(false, 1e6 + PB_WRITE_GRACE_MS + 1.0));
-    }
-
-    #[test]
-    fn a_pasteboard_write_through_a_descriptor_becomes_an_ordinary_write_and_a_bad_one_is_dropped() {
-        let (channel, _peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        host.pb_may_write = true;
-        let items = vec![("public.png".to_string(), vec![3u8; 100_000]), ("org.nspasteboard.ConcealedType".to_string(), Vec::new())];
-        let (fd, types) = bifrost_proto::pbblob::write(&items).unwrap();
-        let mut pumped = Pumped::default();
-        host.handle(ToShell::PasteboardBlob { types: types.clone() }, vec![fd], &mut pumped);
-        assert_eq!(pumped.requests, vec![ToShell::PasteboardSet { items }]);
-        // no descriptor, or one shorter than the layout says: nothing is written
-        let mut none = Pumped::default();
-        host.handle(ToShell::PasteboardBlob { types }, vec![], &mut none);
-        assert!(none.requests.is_empty());
-        let (short, _) = bifrost_proto::pbblob::write(&[("t".to_string(), vec![1u8; 4])]).unwrap();
-        host.handle(ToShell::PasteboardBlob { types: vec![("t".to_string(), 4000)] }, vec![short], &mut none);
-        assert!(none.requests.is_empty());
-    }
-
-    #[test]
-    fn a_background_apps_blob_is_not_read_and_only_one_blob_is_read_per_pump() {
-        let (channel, _peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        let items = vec![("public.png".to_string(), vec![3u8; 100_000])];
-        // an app that may not write: the descriptor is dropped unread, no request, no allocation for its layout
-        let (fd, types) = bifrost_proto::pbblob::write(&items).unwrap();
-        let mut pumped = Pumped::default();
-        host.handle(ToShell::PasteboardBlob { types }, vec![fd], &mut pumped);
-        assert!(pumped.requests.is_empty());
-        assert!(!pumped.blob_read);
-        // an app that may write: the first blob of a pump is read, the next ones are dropped
-        host.pb_may_write = true;
-        for _ in 0..3 {
-            let (fd, types) = bifrost_proto::pbblob::write(&items).unwrap();
-            host.handle(ToShell::PasteboardBlob { types }, vec![fd], &mut pumped);
-        }
-        assert_eq!(pumped.requests, vec![ToShell::PasteboardSet { items }]);
-    }
-
-    #[test]
-    fn a_blob_waits_for_the_backlog_and_a_full_socket_does_not_copy_the_board_again() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        let board = vec![("public.png".to_string(), vec![5u8; 100_000])];
-        // fill the socket until it refuses
-        for _ in 0..100_000 {
-            if host.chan.try_send(&[0u8; 4000], &[]).is_err() {
-                break;
-            }
-        }
-        host.sync_pasteboard(3, &board);
-        assert_eq!(host.pb_known(), None, "the socket was full: nothing was sent");
-        let first = host.pb_blob.as_ref().map(|(c, fd, _)| (*c, fd.0)).expect("the copy is kept for the retry");
-        host.sync_pasteboard(3, &board);
-        assert_eq!(host.pb_blob.as_ref().map(|(c, fd, _)| (*c, fd.0)), Some(first), "the same descriptor, not another copy");
-        // a queued older message is ahead of the blob: nothing is built while the backlog is not empty
-        host.pb_blob = None;
-        host.backlog.push_back(vec![0u8; 8]);
-        host.sync_pasteboard(4, &board);
-        assert!(host.pb_blob.is_none());
-        assert_eq!(host.pb_known(), None);
-        drop(peer);
-    }
-
-    #[test]
-    fn a_board_with_content_is_sent_on_first_contact() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        host.sync_pasteboard(7, &[("public.utf8-plain-text".to_string(), b"kept".to_vec())]);
-        let first = match peer.recv(false).unwrap() {
-            sys::Recv::Packet(p, _) => ToApp::decode(&p).unwrap(),
-            _ => panic!("nothing sent"),
-        };
-        assert!(matches!(first, ToApp::Pasteboard { change_count: 7, .. }));
-    }
-
-    #[test]
-    fn appearance_is_sent_on_first_contact_and_only_when_it_changes() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        let next = |peer: &Channel| match peer.recv(false).unwrap() {
-            sys::Recv::Packet(p, _) => Some(ToApp::decode(&p).unwrap()),
-            _ => None,
-        };
-        host.sync_appearance(0);
-        assert_eq!(next(&peer), Some(ToApp::Appearance { flags: 0 }), "first contact sends even all-off");
-        host.sync_appearance(0);
-        assert_eq!(next(&peer), None, "unchanged: nothing sent");
-        host.sync_appearance(bifrost_proto::appearance::SHOW_BORDERS);
-        assert_eq!(next(&peer), Some(ToApp::Appearance { flags: bifrost_proto::appearance::SHOW_BORDERS }));
-    }
-
-    #[test]
-    fn the_light_scheme_is_a_flag_and_the_config_dark_is_its_inverse() {
-        let _lock = crate::test_support::global_lock();
-        use bifrost_proto::appearance::LIGHT;
-        bifrost_render::appearance::jump_to(true);
-        assert_ne!(appearance_flags() & LIGHT, 0, "light scheme sends the LIGHT bit");
-        bifrost_render::appearance::jump_to(false);
-        assert_eq!(appearance_flags() & LIGHT, 0, "dark scheme clears it");
-    }
-
-    #[test]
-    fn highlight_sidebar_icons_and_scroll_bars_ride_in_the_appearance_flags() {
-        let _lock = crate::test_support::global_lock();
-        use bifrost_proto::appearance::*;
-        use bifrost_render::ui;
-        let keep = (ui::highlight_index(), ui::sidebar_icon_size(), ui::scroll_bars_mode());
-        ui::set_highlight(4);
-        ui::set_sidebar_icon_size(2);
-        ui::set_scroll_bars(2);
-        let f = appearance_flags();
-        assert_eq!(field(f, HIGHLIGHT_MASK, HIGHLIGHT_SHIFT), Some(4));
-        assert_eq!(field(f, SIDEBAR_ICON_MASK, SIDEBAR_ICON_SHIFT), Some(2));
-        assert_eq!(field(f, SCROLL_BARS_MASK, SCROLL_BARS_SHIFT), Some(2));
-        ui::set_highlight(0);
-        ui::set_sidebar_icon_size(0);
-        ui::set_scroll_bars(0);
-        let f = appearance_flags();
-        assert_eq!(field(f, HIGHLIGHT_MASK, HIGHLIGHT_SHIFT), Some(0), "follow the accent is sent, not left unsaid");
-        assert_eq!(field(f, SIDEBAR_ICON_MASK, SIDEBAR_ICON_SHIFT), Some(0));
-        assert_eq!(field(f, SCROLL_BARS_MASK, SCROLL_BARS_SHIFT), Some(0));
-        assert_eq!(field(0, HIGHLIGHT_MASK, HIGHLIGHT_SHIFT), None, "an older shell says nothing");
-        ui::set_highlight(keep.0);
-        ui::set_sidebar_icon_size(keep.1);
-        ui::set_scroll_bars(keep.2);
-    }
-
-    #[test]
-    fn the_accent_colour_rides_in_the_appearance_flags() {
-        let _lock = crate::test_support::global_lock();
-        use bifrost_proto::appearance::{ACCENT_MASK, ACCENT_SHIFT};
-        use bifrost_render::appearance::{accent, set_accent, Accent};
-        let keep = accent();
-        for a in Accent::ALL {
-            set_accent(a);
-            assert_eq!(Accent::from_wire((appearance_flags() & ACCENT_MASK) >> ACCENT_SHIFT), Some(a));
-        }
-        set_accent(keep);
-    }
-
-    #[test]
-    fn only_the_keyboard_system_app_may_type_into_the_focused_field() {
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let typed = ToShell::KeyboardOut(bifrost_proto::KeyboardOut::Text("x".into()));
-        let (channel, _peer) = sys::socketpair_pair().unwrap();
-        let mut other = AppHost::with_channel("is.olibuijr.calculator", channel, None, cfg.clone());
-        let mut pumped = Pumped::default();
-        other.handle(typed.clone(), vec![], &mut pumped);
-        assert!(pumped.requests.is_empty(), "an ordinary app cannot inject keystrokes");
-        let (channel, _peer) = sys::socketpair_pair().unwrap();
-        let mut keyboard = AppHost::with_channel(KEYBOARD_APP_ID, channel, None, cfg);
-        keyboard.handle(typed.clone(), vec![], &mut pumped);
-        assert_eq!(pumped.requests, vec![typed]);
-    }
-
-    #[test]
-    fn a_hello_from_another_protocol_marks_the_host_incompatible_instead_of_closing_it() {
-        let (channel, _peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        let mut pumped = Pumped::default();
-        host.handle(ToShell::Hello { sdk_version: SDK_VERSION + 1, app_id: "fixture".into() }, vec![], &mut pumped);
-        assert!(host.incompatible && !host.hello);
-        assert!(!pumped.died, "the window stays up to show the message");
-    }
-
-    #[test]
-    fn an_incompatible_binary_is_remembered_so_the_shell_never_respawns_it() {
-        let exec = PathBuf::from("/var/lib/springboard/apps/loop-test/1.4.1/bin");
-        assert!(!is_known_incompatible("loop-test", &exec));
-        let (channel, _peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("loop-test", channel, None, cfg);
-        host.exec = exec.clone();
-        host.handle(ToShell::Hello { sdk_version: SDK_VERSION + 1, app_id: "loop-test".into() }, vec![], &mut Pumped::default());
-        assert!(is_known_incompatible("loop-test", &exec));
-        assert!(!is_known_incompatible("loop-test", Path::new("/var/lib/springboard/apps/loop-test/1.5.0/bin")), "a new version gets a fresh try");
-    }
-
-    #[test]
-    fn a_host_is_outdated_only_when_it_runs_a_different_binary_than_the_installed_one() {
-        let (channel, _peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
-        let new = Path::new("/var/lib/springboard/apps/x/1.7.0/bin");
-        assert!(!host.is_outdated(new), "a test host has no binary of record, so it is never outdated");
-        host.exec = PathBuf::from("/var/lib/springboard/apps/x/1.6.0/bin");
-        assert!(host.is_outdated(new), "the installed version moved on");
-        host.exec = new.to_path_buf();
-        assert!(!host.is_outdated(new), "same binary: just focus it");
-    }
-
-    #[test]
-    fn resize_keeps_old_buffer_dimensions_until_replacement_arrives() {
-        let (channel,_peer)=sys::socketpair_pair().unwrap();
-        let cfg=Configure {w:4,h:3,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false};
-        let mut host=AppHost::with_channel("fixture",channel,None,cfg.clone());
-        let mut pumped=Pumped::default();
-        let buffers=|| vec![sys::shm_create("resize-a",48).unwrap(),sys::shm_create("resize-b",48).unwrap()];
-        host.handle(ToShell::Buffers{w:4,h:3,generation:1},buffers(),&mut pumped);
-        host.handle(ToShell::Frame{buf:0,damage:vec![[0,0,4,3]]},vec![],&mut pumped);
-        let mut resized=cfg; resized.w=8; resized.h=6;
-        host.configure(resized);
-        assert_eq!(host.size(),(8,6));
-        assert_eq!(host.frame().map(|(_,w,h)|(w,h)),Some((4,3)));
-        let mut pixels=vec![0;8*6];
-        host.blit(&mut Surface{w:8,h:6,stride:8,px:&mut pixels,y0:0},true);
-        host.handle(ToShell::Buffers{w:8,h:6,generation:2},vec![sys::shm_create("resize-c",192).unwrap(),sys::shm_create("resize-d",192).unwrap()],&mut pumped);
-        host.handle(ToShell::Frame{buf:0,damage:vec![[0,0,8,6]]},vec![],&mut pumped);
-        assert_eq!(host.frame().map(|(_,w,h)|(w,h)),Some((8,6)));
-    }
-
-    #[test]
-    fn a_web_link_comes_only_from_the_app_in_front_once_a_second() {
-        let mut last = None;
-        assert!(!open_url_allowed(false, &mut last, 0.), "a background app cannot open a page");
-        assert_eq!(last, None, "a refused request does not start the wait");
-        assert!(open_url_allowed(true, &mut last, 5000.));
-        assert!(!open_url_allowed(true, &mut last, 5500.), "a second request within a second is dropped");
-        assert!(open_url_allowed(true, &mut last, 6000.));
-    }
-
-    #[test]
-    fn a_buffer_is_sealed_before_its_size_is_trusted() {
-        let fd = sys::shm_create("seal-order", 4096).unwrap();
-        assert!(sealed_len_at_least(&fd, 4096));
-        assert!(sys::shm_resize(&fd, 0).is_err(), "the check sealed it: the app can no longer shrink it under the mapping");
-        let short = sys::shm_create("seal-short", 64).unwrap();
-        assert!(!sealed_len_at_least(&short, 4096), "a file shorter than the claim is refused");
-        assert!(sys::shm_resize(&short, 0).is_err(), "and it stays sealed");
-    }
-
-    #[test]
-    fn manifest_animation_behavior_parses_and_defaults() {
-        let base = "id = \"a.b\"\nname = \"A\"\nexec = \"a\"\n";
-        use super::super::window_fx::AnimationBehavior as B;
-        assert_eq!(Manifest::parse(base).unwrap().animation_behavior(), B::Default);
-        assert_eq!(Manifest::parse(&format!("{base}animation_behavior = \"none\"\n")).unwrap().animation_behavior(), B::None);
-    }
-
-    #[test]
-    fn manifest_window_size_keys_give_fixed_initial_min_and_max_sizes() {
-        let base = "id = \"a.b\"\nname = \"A\"\nexec = \"a\"\n";
-        let fixed = Manifest::parse(&format!("{base}window_size = \"fixed:320x520\"\n")).unwrap().size_limits();
-        assert_eq!(fixed, SizeLimits { initial: Some((320.0, 520.0)), min: Some((320.0, 520.0)), max: Some((320.0, 520.0)), fixed: true });
-        let free = Manifest::parse(&format!("{base}window_size = \"800x600\"\nmin_size = \"400x300\"\nmax_size = \"1200 x 900\"\n")).unwrap().size_limits();
-        assert_eq!(free, SizeLimits { initial: Some((800.0, 600.0)), min: Some((400.0, 300.0)), max: Some((1200.0, 900.0)), fixed: false });
-        let bad = Manifest::parse(&format!("{base}window_size = \"fixed:0x10\"\nmin_size = \"wide\"\n")).unwrap().size_limits();
-        assert_eq!(bad, SizeLimits::default(), "malformed sizes are ignored");
-    }
-
-    #[test]
-    fn content_limits_from_the_app_replace_the_manifest_ones_except_on_a_fixed_window() {
-        let base = "id = \"a.b\"\nname = \"A\"\nexec = \"a\"\n";
-        let free = Manifest::parse(&format!("{base}window_size = \"800x600\"\nmin_size = \"400x300\"\nmax_size = \"1200x900\"\n")).unwrap().size_limits();
-        let ours = free.with_content_limits(Some((560.0, 500.0)), None);
-        assert_eq!(ours, SizeLimits { initial: Some((800.0, 600.0)), min: Some((560.0, 500.0)), max: Some((1200.0, 900.0)), fixed: false });
-        assert_eq!(free.with_content_limits(None, None), free, "no limit of its own keeps the manifest's");
-        let fixed = Manifest::parse(&format!("{base}window_size = \"fixed:320x520\"\n")).unwrap().size_limits();
-        assert_eq!(fixed.with_content_limits(Some((10.0, 10.0)), Some((2000.0, 2000.0))), fixed);
-    }
-
-    #[test]
-    fn manifest_parses_and_rejects_unsafe_paths() {
-        let m = Manifest::parse("# c\nid = \"is.olibuijr.calculator\"\nname = \"Calculator\"\nversion = \"1.0.0\"\nexec = \"calculator\"\nicon = \"icon.png\"\npermissions = [\"storage\", \"audio\"]\n").unwrap();
-        assert_eq!((m.id.as_str(), m.exec.as_str(), m.permissions.len()), ("is.olibuijr.calculator", "calculator", 2));
-        assert!(Manifest::parse("id = \"a/b\"\nname = \"x\"\nexec = \"x\"").is_none());
-        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"../x\"").is_none());
-        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"/bin/sh\"").is_none());
-        assert!(Manifest::parse("id = \"a.b\"\nexec = \"x\"").is_none());
-        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"").is_none(), "an app needs an exec");
-        let sys = Manifest::parse("id = \"a.b\"\nname = \"x\"\nkind = \"system\"\nprovides = [\"keyboard\"]").unwrap();
-        assert!(sys.is_system() && sys.exec.is_empty() && sys.provides == ["keyboard"]);
-        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nkind = \"system\"\nexec = \"../x\"").is_none());
-    }
-
-    #[test]
-    fn the_window_style_comes_from_the_manifest_beside_the_executable() {
-        let root = std::env::temp_dir().join(format!("system-pkgs-window-style-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let write = |dir: &str, extra: &str| {
-            let d = root.join(dir);
-            std::fs::create_dir_all(&d).unwrap();
-            std::fs::write(d.join("manifest.toml"), format!("id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n{extra}")).unwrap();
-            d.join("x")
-        };
-        assert_eq!(manifest_window_style(&write("full", "window = \"full-size\"\n")).as_deref(), Some("full-size"));
-        assert_eq!(manifest_window_style(&write("classic", "")).as_deref(), Some(""), "a classic window is told apart from an unknown one");
-        assert_eq!(manifest_window_style(&root.join("none/x")), None, "no manifest: the app keeps the full-size layout");
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn privacy_location_purpose_is_read_from_its_own_table() {
-        let text = "id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n[privacy]\nlocation = \"Finna næstu stöð\"\n[[intent]]\nid = \"i\"\nlocation = \"not this\"\n";
-        let m = Manifest::parse(text).unwrap();
-        assert_eq!(m.location_purpose, "Finna næstu stöð");
-        assert!(Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"x\"").unwrap().location_purpose.is_empty());
-        let after = Manifest::parse("id = \"a.b\"\nname = \"x\"\nexec = \"x\"\n[privacy]\n[window]\nlocation = \"other table\"\n").unwrap();
-        assert!(after.location_purpose.is_empty(), "a later table ends [privacy]");
-    }
-
-    #[test]
-    fn scan_hides_system_packages_from_the_home_grid() {
-        let root = std::env::temp_dir().join(format!("system-pkgs-scan-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let mk = |id: &str, manifest: &str, exec: bool| {
-            let d = root.join("apps").join(id).join("current");
-            std::fs::create_dir_all(&d).unwrap();
-            std::fs::write(d.join("manifest.toml"), manifest).unwrap();
-            if exec {
-                std::fs::write(d.join("x"), b"ELF").unwrap();
-            }
-        };
-        mk("is.o.calc", "id = \"is.o.calc\"\nname = \"Calc\"\nexec = \"x\"\n", true);
-        mk("is.o.kb", "id = \"is.o.kb\"\nname = \"Keyboard\"\nkind = \"system\"\nprovides = [\"keyboard\"]\n", false);
-        mk("is.o.kb2", "id = \"is.o.kb2\"\nname = \"Kb2\"\nkind = \"system\"\nexec = \"x\"\n", true);
-        let ids: Vec<String> = scan(&root).into_iter().map(|a| a.manifest.id).collect();
-        assert_eq!(ids, ["is.o.calc"]);
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-}
+mod tests;
 
 /// Where a stock app kept its data while it was built into the shell, relative to the shell's
 /// data dir, and where the packaged app reads it, relative to its own data dir.
@@ -3342,490 +3058,21 @@ pub fn migrate_legacy(root: &Path, id: &str, data: &Path) {
 }
 
 #[cfg(test)]
-mod window_table_tests {
-    use super::*;
-
-    fn cfg() -> Configure {
-        Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false }
-    }
-
-    /// Every message the shell has queued for the app so far.
-    fn sent(peer: &Channel) -> Vec<ToApp> {
-        let mut out = Vec::new();
-        while let Recv::Packet(p, _) = peer.recv(false).unwrap() {
-            out.push(ToApp::decode(&p).unwrap());
-        }
-        out
-    }
-
-    #[test]
-    fn the_key_window_gets_the_input_and_the_app_hears_each_focus_change() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        host.set_key_window(4);
-        host.input(WindowInput::Command(bifrost_proto::Command::SelectAll));
-        host.key(KeyInput::Code(30));
-        host.set_key_window(4);
-        host.set_key_window(0);
-        host.key(KeyInput::Code(9));
-        assert_eq!(
-            sent(&peer),
-            vec![
-                ToApp::WindowFocus { window: 0, focused: false },
-                ToApp::WindowFocus { window: 4, focused: true },
-                ToApp::WindowInput { window: 4, input: WindowInput::Command(bifrost_proto::Command::SelectAll) },
-                ToApp::WindowInput { window: 4, input: WindowInput::Key(KeyInput::Code(30)) },
-                ToApp::WindowFocus { window: 4, focused: false },
-                ToApp::WindowFocus { window: 0, focused: true },
-                ToApp::Key(KeyInput::Code(9)),
-            ],
-            "a repeated focus sends nothing; the main window's keys keep the legacy message"
-        );
-    }
-
-    #[test]
-    fn input_to_reaches_the_named_window_whichever_is_key() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        // a dead key's mark is taken back from the window it was shown in after the focus moved on
-        host.input_to(3, WindowInput::UnmarkText { commit: false });
-        host.input_to(0, WindowInput::UnmarkText { commit: false });
-        let got = sent(&peer);
-        assert!(got.ends_with(&[
-            ToApp::WindowInput { window: 3, input: WindowInput::UnmarkText { commit: false } },
-            ToApp::UnmarkText { commit: false },
-        ]), "{got:?}");
-    }
-
-    #[test]
-    fn marked_text_and_accent_holds_follow_the_key_window() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        host.set_key_window(2);
-        host.input(super::super::textinput::to_input(super::super::keyboard::Composition::Preedit { text: "´".into(), sel_start: 2, sel_len: 0 }));
-        host.input(WindowInput::AccentHold { letter: 'a' });
-        host.set_key_window(0);
-        host.input(WindowInput::UnmarkText { commit: true });
-        host.input(WindowInput::AccentHold { letter: 'o' });
-        let got = sent(&peer);
-        assert_eq!(
-            got[2..],
-            [
-                ToApp::WindowInput { window: 2, input: WindowInput::SetMarkedText { text: "´".into(), sel_start: 2, sel_len: 0 } },
-                ToApp::WindowInput { window: 2, input: WindowInput::AccentHold { letter: 'a' } },
-                ToApp::WindowFocus { window: 2, focused: false },
-                ToApp::WindowFocus { window: 0, focused: true },
-                ToApp::UnmarkText { commit: true },
-                ToApp::AccentHold { letter: 'o' },
-            ],
-            "an extra key window's composition carries its id; the main window keeps the legacy messages"
-        );
-    }
-
-    #[test]
-    fn a_window_takes_a_position_collapses_and_opts_in_to_the_title_double_click() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        let mut out = Pumped::default();
-        let flags = bifrost_proto::window_flags::TITLE_DOUBLE_CLICK;
-        host.handle(ToShell::WindowOpen { id: 4, title: "Note".into(), w: 200.0, h: 150.0, position: Some((12.0, 40.0)), flags }, Vec::new(), &mut out);
-        assert_eq!(host.windows.take_pending_move("fixture", 4), Some((12.0, 40.0)), "the requested position is applied once");
-        host.handle(ToShell::WindowCollapse { window: 4, collapsed: true }, Vec::new(), &mut out);
-        assert!(host.windows.of_app("fixture")[0].collapsed);
-        assert!(host.window_title_double_clicked(4));
-        assert_eq!(sent(&peer), vec![ToApp::WindowTitleDoubleClick { window: 4 }]);
-        assert!(host.window_dragged(4, 100.0, 60.0));
-        assert_eq!(sent(&peer), vec![ToApp::WindowMoved { window: 4, x: 100.0, y: 60.0 }]);
-        host.handle(ToShell::WindowOpen { id: 5, title: "Plain".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        assert!(!host.window_title_double_clicked(5), "an app that did not opt in gets no message");
-        assert!(sent(&peer).is_empty());
-    }
-
-    #[test]
-    fn the_window_table_follows_the_messages_the_app_sends() {
-        let (channel, _peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        let mut out = Pumped::default();
-        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 480.0, h: 560.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        host.handle(ToShell::WindowOpen { id: 2, title: "Grace".into(), w: 480.0, h: 560.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        let ids = |h: &AppHost| h.windows.of_app("fixture").iter().map(|w| w.id).collect::<Vec<u32>>();
-        assert_eq!(ids(&host), vec![2, 1], "the newest window is in front");
-        assert!(out.frame, "a window change asks the desk for a frame");
-        host.handle(ToShell::WindowTitle { id: 1, title: "Ada L.".into() }, Vec::new(), &mut out);
-        host.handle(ToShell::WindowResize { id: 1, w: 320.0, h: 240.0 }, Vec::new(), &mut out);
-        let one = host.windows.of_app("fixture")[1];
-        assert_eq!((one.title.as_str(), one.w, one.h), ("Ada L.", 320.0, 240.0));
-        host.handle(ToShell::WindowClose { id: 2 }, Vec::new(), &mut out);
-        assert_eq!(ids(&host), vec![1]);
-    }
-
-    /// The state an app sends again unchanged is free: it asks the shell for no frame at all. Pixels alone ask for a
-    /// frame of windows (`frame`), not for the shell to draw anything itself (`chrome`).
-    #[test]
-    fn identical_state_asks_for_no_frame_and_pixels_alone_are_no_chrome_change() {
-        let (mut host, _peer) = super::route_tests::fixture_host();
-        let titles = || ToShell::UndoTitles { undo: "Undo Typing".into(), redo: String::new() };
-        let mut first = Pumped::default();
-        host.handle(titles(), Vec::new(), &mut first);
-        assert!(first.frame && first.chrome, "new titles are something the shell draws");
-        let mut again = Pumped::default();
-        host.handle(titles(), Vec::new(), &mut again);
-        assert_eq!(again, Pumped::default(), "the same titles again cost nothing");
-        host.handle(ToShell::Materials(Vec::new()), Vec::new(), &mut again);
-        host.handle(ToShell::Commands(host.commands), Vec::new(), &mut again);
-        assert_eq!(again, Pumped::default(), "nor do the same materials and commands");
-        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 480.0, h: 560.0, position: None, flags: 0 }, Vec::new(), &mut again);
-        assert!(again.chrome, "a window opening is drawn by the shell");
-        let mut same = Pumped::default();
-        host.handle(ToShell::WindowTitle { id: 1, title: "Ada".into() }, Vec::new(), &mut same);
-        host.handle(ToShell::WindowResize { id: 1, w: 480.0, h: 560.0 }, Vec::new(), &mut same);
-        assert_eq!(same, Pumped::default(), "the same title and size again cost nothing");
-        host.handle(ToShell::WindowTitle { id: 1, title: "Ada L.".into() }, Vec::new(), &mut same);
-        assert!(same.frame && same.chrome, "a new title is drawn");
-        // pixels
-        let set = |n: &str| vec![sys::shm_create(n, 48).unwrap(), sys::shm_create(n, 48).unwrap()];
-        let mut pixels = Pumped::default();
-        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 1 }, set("quiet-pixels"), &mut pixels);
-        host.handle(ToShell::Frame { buf: 0, damage: vec![[0, 0, 4, 3]] }, Vec::new(), &mut pixels);
-        assert!(pixels.frame, "new pixels are a frame");
-        assert!(!pixels.chrome, "and only a frame of windows");
-    }
-
-    #[test]
-    fn a_window_the_table_refuses_is_closed_again_for_the_app() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        let mut out = Pumped::default();
-        let refused = crate::shell::app_window_table::MAX_PER_APP as u32 + 1;
-        for id in 1..=refused {
-            host.handle(ToShell::WindowOpen { id, title: "w".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        }
-        assert_eq!(host.windows.of_app("fixture").len(), crate::shell::app_window_table::MAX_PER_APP);
-        assert_eq!(sent(&peer), vec![ToApp::WindowClosed { id: refused }]);
-    }
-
-    #[test]
-    fn a_window_gets_its_own_buffers_and_its_frame_is_given_back_once_blitted() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        let mut out = Pumped::default();
-        host.handle(ToShell::WindowOpen { id: 1, title: "Ada".into(), w: 2.0, h: 2.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        let bytes = 2 * 2 * 4;
-        let fds = vec![sys::shm_create("test-window-0", bytes).unwrap(), sys::shm_create("test-window-1", bytes).unwrap()];
-        host.handle(ToShell::WindowBuffers { id: 1, w: 2, h: 2, generation: 7 }, fds, &mut out);
-        assert!(host.window_frame(1).is_none(), "no frame before the first one");
-        host.handle(ToShell::WindowFrame { id: 1, buf: 0, damage: vec![[0, 0, 2, 2]] }, Vec::new(), &mut out);
-        assert_eq!(host.window_frame(1).map(|(_, w, h)| (w, h)), Some((2, 2)));
-        host.handle(ToShell::WindowFrame { id: 1, buf: 1, damage: vec![[0, 0, 2, 2]] }, Vec::new(), &mut out);
-        assert!(sent(&peer).is_empty(), "the replaced buffer waits until its frame is blitted");
-        host.window_blitted(1);
-        assert_eq!(sent(&peer), vec![ToApp::WindowRelease { id: 1, buf: 0, generation: 7 }]);
-        host.handle(ToShell::WindowFrame { id: 9, buf: 0, damage: vec![] }, Vec::new(), &mut out);
-        assert!(host.window_frame(9).is_none(), "a frame for a window that is not open is dropped");
-    }
-
-    /// MA6: an SDK built before the fix sent a window's buffers and first frame before its `WindowOpen` (the request waited in
-    /// the app's queue until the end of the turn). The shell dropped them, the app never sent the first frame again, and the
-    /// window stayed unmapped. They are kept and handled when the window opens.
-    #[test]
-    fn buffers_and_a_frame_that_come_before_the_window_open_are_kept_until_it_opens() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        let mut out = Pumped::default();
-        let bytes = 2 * 2 * 4;
-        let fds = vec![sys::shm_create("early-window-0", bytes).unwrap(), sys::shm_create("early-window-1", bytes).unwrap()];
-        host.handle(ToShell::WindowBuffers { id: 1, w: 2, h: 2, generation: 3 }, fds, &mut out);
-        host.handle(ToShell::WindowFrame { id: 1, buf: 0, damage: vec![[0, 0, 2, 2]] }, Vec::new(), &mut out);
-        assert!(host.window_frame(1).is_none(), "the window is not open yet");
-        host.handle(ToShell::WindowOpen { id: 1, title: "New Message".into(), w: 2.0, h: 2.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        assert_eq!(host.window_frame(1).map(|(_, w, h)| (w, h)), Some((2, 2)), "the first frame is there once the window is");
-        assert!(host.window_mapped(1));
-        assert!(sent(&peer).is_empty(), "the app is not told to drop the window");
-        // pixels for a window that never opens do not pile up, and a window the table refuses loses its pixels
-        for id in 10..40 {
-            host.handle(ToShell::WindowFrame { id, buf: 0, damage: Vec::new() }, Vec::new(), &mut out);
-        }
-        assert!(host.early.len() <= MAX_EARLY, "{} kept", host.early.len());
-        host.handle(ToShell::WindowOpen { id: 39, title: "Late".into(), w: 2.0, h: 2.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        assert!(host.early.iter().all(|e| e.window() != 39), "what was kept for a window is used up when it opens");
-        host.handle(ToShell::WindowClose { id: 1 }, Vec::new(), &mut out);
-        assert!(host.window_frame(1).is_none());
-    }
-
-    #[test]
-    fn the_shell_closing_a_window_drops_it_and_tells_the_app_once() {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        let mut out = Pumped::default();
-        host.handle(ToShell::WindowOpen { id: 3, title: "Card".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        assert!(host.configure_window(3, 20.0, 30.0));
-        assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 5, bifrost_proto::ModifierFlags::EMPTY));
-        assert!(host.close_window_from_shell(3));
-        assert!(!host.close_window_from_shell(3), "a window closes once");
-        assert!(!host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 6, bifrost_proto::ModifierFlags::EMPTY), "no touch reaches a closed window");
-        assert!(host.windows.of_app("fixture").is_empty());
-        assert_eq!(
-            sent(&peer),
-            vec![
-                ToApp::WindowConfigure { id: 3, w: 20.0, h: 30.0 },
-                ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 5, mods: bifrost_proto::ModifierFlags::EMPTY },
-                ToApp::WindowClosed { id: 3 },
-            ]
-        );
-    }
-
-    /// E2E-3: a Shift-click or Cmd-click reaches the app with its modifiers, on the main window and on an extra window.
-    #[test]
-    fn a_press_reaches_the_app_with_the_modifier_keys_held() {
-        use bifrost_proto::ModifierFlags as F;
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        let mut out = Pumped::default();
-        host.handle(ToShell::WindowOpen { id: 3, title: "Card".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        host.touch(TouchKind::Down, 0, 4.0, 5.0, 7, F::SHIFT);
-        assert!(host.touch_window(3, 1, TouchKind::Down, 1.0, 2.0, 8, F::COMMAND));
-        assert_eq!(
-            sent(&peer),
-            vec![
-                ToApp::Touch { kind: TouchKind::Down, id: 0, x: 4.0, y: 5.0, t_ms: 7, mods: F::SHIFT },
-                ToApp::WindowTouch { id: 3, touch: 1, kind: TouchKind::Down, x: 1.0, y: 2.0, t_ms: 8, mods: F::COMMAND },
-            ]
-        );
-    }
-
-    /// E2E: the wheel over an extra window reaches that window with its id, only when the app asked for the wheel and
-    /// the window is open, and the drag emulated for it is then dropped.
-    #[test]
-    fn the_wheel_over_an_extra_window_carries_the_window_id() {
-        use bifrost_ui::pointer_event::{PointerEvent, WHEEL};
-        use bifrost_ui::wheel::Phase;
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        let mut out = Pumped::default();
-        host.handle(ToShell::WindowOpen { id: 3, title: "Editor".into(), w: 10.0, h: 10.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        let wheel = PointerEvent::Wheel { x: 4.0, y: 5.0, dx: 0.0, dy: -20.0, precise: false, phase: Phase::None, momentum: Phase::None };
-        assert!(!host.pointer_window(3, wheel), "an app that did not ask for the wheel keeps the emulated drag");
-        host.handle(ToShell::PointerInterest { mask: WHEEL }, Vec::new(), &mut out);
-        assert!(host.pointer_window(3, wheel));
-        assert!(!host.pointer_window(9, wheel), "no window 9 is open");
-        assert!(host.pointer_window(0, wheel), "window 0 is the main window");
-        host.swallow_wheel_drag(100.0);
-        assert!(host.swallows_touch(100.0) && host.swallows_touch(116.0) && host.swallows_touch(132.0));
-        assert!(!host.swallows_touch(140.0), "only the three emulated touches are dropped");
-        assert_eq!(
-            sent(&peer),
-            vec![ToApp::WindowInput { window: 3, input: WindowInput::Pointer(wheel) }, ToApp::Pointer(wheel)]
-        );
-    }
-}
+mod window_table_tests;
 
 /// MA6: an app's second window (Mail's compose window) is drawn above the app's main window with the app's pixels in it,
 /// and closing it takes it off the desk.
 #[cfg(all(test, feature = "desktop-wayland"))]
-mod extra_window_frame_tests {
-    use super::*;
-    use crate::shell::{desk, AppId, Screen};
-
-    /// The colour the app paints into every window.
-    const FILL: u32 = 0xff33_6699;
-
-    /// Two buffers of `w` by `h` filled with `FILL`, handed to the host as a window's (or, with no id, the main window's).
-    fn buffers(host: &mut AppHost, window: Option<u32>, w: usize, h: usize) {
-        let bytes = w * h * 4;
-        let fds = vec![sys::shm_create("extra-window-a", bytes).unwrap(), sys::shm_create("extra-window-b", bytes).unwrap()];
-        for fd in &fds {
-            Map::new(fd, bytes).unwrap().pixels_mut().fill(FILL);
-        }
-        let (w, h) = (w as u32, h as u32);
-        let msg = match window {
-            Some(id) => ToShell::WindowBuffers { id, w, h, generation: 1 },
-            None => ToShell::Buffers { w, h, generation: 1 },
-        };
-        host.handle(msg, fds, &mut Pumped::default());
-    }
-
-    #[test]
-    fn a_second_window_is_drawn_with_pixels_above_its_app_and_closing_it_takes_it_off_the_desk() {
-        let _lock = crate::test_support::global_lock();
-        let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
-        std::env::set_var("SPRINGBOARD_WAYLAND", "1");
-        let mut sh = crate::shell::tests::desktop_shell();
-        sh.screen = Screen::Home;
-        sh.anim = None;
-        let (mine, _peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 64, h: 48, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", mine, None, cfg);
-        let mut out = Pumped::default();
-        // the order the app sends them in: its window, then the window's buffers and first frame
-        buffers(&mut host, None, 64, 48);
-        host.handle(ToShell::Frame { buf: 0, damage: vec![[0, 0, 64, 48]] }, Vec::new(), &mut out);
-        host.handle(ToShell::WindowOpen { id: 1, title: "New Message".into(), w: 40.0, h: 30.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        buffers(&mut host, Some(1), 40, 30);
-        host.handle(ToShell::WindowFrame { id: 1, buf: 0, damage: vec![[0, 0, 40, 30]] }, Vec::new(), &mut out);
-        sh.ext.push(Some(host));
-        let m = sh.desk_metrics();
-        sh.desk.as_mut().unwrap().open(&m, AppId::External(0), (600, 400));
-        sh.desk_sync_extra_windows();
-        let (main, extra) = (AppId::External(0), AppId::ExternalWindow(0, 1));
-        assert!(sh.desk.as_ref().unwrap().index_of(extra).is_some(), "the app's window is on the desk");
-        assert!(!sh.desk_window_unmapped(extra), "the app committed a frame to it");
-        let (w, h) = (sh.w as usize, sh.h as usize);
-        let mut px = vec![0u32; w * h];
-        sh.dirty = true;
-        sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1000.0);
-        let frames = sh.take_wayland_windows();
-        // an app that is not installed has no catalogue entry, so its main window has no id of its own: the desk draws it as 0
-        let id_of = |app: AppId| desk::win_id(app).unwrap_or(0);
-        let at = |app: AppId| frames.iter().position(|f| f.id == id_of(app));
-        let (parent, window) = (at(main).expect("the app's own window is drawn"), at(extra).expect("a frame is drawn for the second window"));
-        assert!(window > parent, "the second window is above its app's window");
-        assert!(frames[window].pixels.as_ref().is_some_and(|p| p.iter().any(|&c| c == FILL)), "with the app's pixels in it");
-        // closed: it is off the desk, the app is told, and the next frame has no window for it
-        sh.desk_close_extra_window(0, 1);
-        assert!(sh.desk.as_ref().unwrap().index_of(extra).is_none());
-        assert!(sh.ext[0].as_ref().unwrap().windows.of_app("fixture").is_empty(), "the app's window table dropped it");
-        sh.dirty = true;
-        sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 2000.0);
-        let after = sh.take_wayland_windows();
-        assert!(after.iter().all(|f| f.id != id_of(extra)), "no frame for the closed window");
-        assert!(after.iter().any(|f| f.id == id_of(main)), "the app's own window stays");
-        if let Some(v) = saved { std::env::set_var("SPRINGBOARD_WAYLAND", v) } else { std::env::remove_var("SPRINGBOARD_WAYLAND") };
-    }
-
-    /// E2E-11/12: an app that reallocates its buffers (every step of a live resize) keeps its window on the desk until it
-    /// draws into them: the window is not unmapped and its frame (last pixels, last size) is still sent, so the toplevel
-    /// is not destroyed under the pointer (which ended the resize) and the window behind does not take the focus.
-    #[test]
-    fn an_app_between_buffer_sets_keeps_its_window() {
-        let _lock = crate::test_support::global_lock();
-        let saved = std::env::var_os("SPRINGBOARD_WAYLAND");
-        std::env::set_var("SPRINGBOARD_WAYLAND", "1");
-        let mut sh = crate::shell::tests::desktop_shell();
-        sh.screen = Screen::Home;
-        sh.anim = None;
-        let (mine, _peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 64, h: 48, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        let mut host = AppHost::with_channel("fixture", mine, None, cfg);
-        assert!(!host.between_buffers(), "an app that never drew is not between buffers");
-        buffers(&mut host, None, 64, 48);
-        host.handle(ToShell::Frame { buf: 0, damage: vec![[0, 0, 64, 48]] }, Vec::new(), &mut Pumped::default());
-        sh.ext.push(Some(host));
-        let m = sh.desk_metrics();
-        let main = AppId::External(0);
-        sh.desk.as_mut().unwrap().open(&m, main, (600, 400));
-        let (w, h) = (sh.w as usize, sh.h as usize);
-        let mut px = vec![0u32; w * h];
-        sh.dirty = true;
-        sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1000.0);
-        let id = desk::win_id(main).unwrap_or(0);
-        let first = sh.take_wayland_windows();
-        let drawn = first.iter().find(|f| f.id == id).expect("the window is drawn");
-        let size = (drawn.width, drawn.height);
-        // the window was resized: the app sends a new buffer set and has not drawn into it yet
-        let r = sh.desk.as_ref().unwrap().wins[0].r;
-        sh.desk.as_mut().unwrap().wins[0].r.w = r.w - 40;
-        buffers(sh.ext[0].as_mut().unwrap(), None, 80, 60);
-        assert!(sh.ext[0].as_ref().unwrap().between_buffers());
-        assert!(!sh.desk_window_unmapped(main), "the window stays mapped between buffer sets");
-        sh.dirty = true;
-        sh.draw_desk_windows(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 1100.0);
-        let next = sh.take_wayland_windows();
-        let kept = next.iter().find(|f| f.id == id).expect("a frame is still sent: the toplevel is kept");
-        assert_eq!((kept.width, kept.height), size, "at the size of the pixels it last presented");
-        assert!(kept.pixels.is_none(), "the window server keeps showing the last pixels");
-        if let Some(v) = saved { std::env::set_var("SPRINGBOARD_WAYLAND", v) } else { std::env::remove_var("SPRINGBOARD_WAYLAND") };
-    }
-}
+mod extra_window_frame_tests;
 
 #[cfg(test)]
-mod ext_state_tests {
-    use super::ext_state_text;
-
-    #[test]
-    fn state_text_ends_every_line_so_the_next_section_starts_its_own() {
-        let text = ext_state_text(&["is.a.calendar"], &[("is.a.calendar", 62, 0), ("is.a.browser", 15, 0xf)]);
-        assert_eq!(text, "apps_running=is.a.calendar\napp_controls=is.a.calendar:62:0,is.a.browser:15:f\n");
-        // the shell appends the window lines straight after: each is a line of its own
-        let joined = format!("{text}window=Settings,965,306,909,846\n");
-        assert!(joined.lines().any(|l| l.starts_with("window=Settings")));
-        assert!(joined.lines().all(|l| l.matches('=').count() >= 1));
-    }
-
-    #[test]
-    fn state_text_with_no_apps_is_still_two_whole_lines() {
-        assert_eq!(ext_state_text(&[], &[]), "apps_running=\napp_controls=\n");
-    }
-}
+mod ext_state_tests;
 
 #[cfg(test)]
-mod migrate_tests {
-    use super::*;
-
-    #[test]
-    fn stock_app_data_moves_once_into_the_package_dir() {
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("target/test-migrate-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(root.join("Notes")).unwrap();
-        std::fs::write(root.join("Notes/a.txt"), "hello").unwrap();
-        std::fs::create_dir_all(root.join("Contacts")).unwrap();
-        std::fs::write(root.join("Contacts/contacts.tsv"), "x").unwrap();
-        std::fs::write(root.join("reminders.tsv"), "r").unwrap();
-        std::fs::create_dir_all(root.join("VoiceMemos")).unwrap();
-        std::fs::write(root.join("VoiceMemos/Voice Memo 1.wav"), "w").unwrap();
-        for id in ["is.olibuijr.notes", "is.olibuijr.contacts", "is.olibuijr.reminders", "is.olibuijr.voicememos"] {
-            migrate_legacy(&root, id, &root.join("appdata").join(id));
-        }
-        assert_eq!(std::fs::read_to_string(root.join("appdata/is.olibuijr.notes/a.txt")).unwrap(), "hello");
-        assert_eq!(std::fs::read_to_string(root.join("appdata/is.olibuijr.contacts/Contacts/contacts.tsv")).unwrap(), "x");
-        assert_eq!(std::fs::read_to_string(root.join("appdata/is.olibuijr.reminders/reminders.tsv")).unwrap(), "r");
-        assert_eq!(std::fs::read_to_string(root.join("appdata/is.olibuijr.voicememos/Voice Memo 1.wav")).unwrap(), "w");
-        // a second run with fresh old data does not overwrite what the app already owns
-        std::fs::write(root.join("Notes/b.txt"), "later").unwrap();
-        migrate_legacy(&root, "is.olibuijr.notes", &root.join("appdata/is.olibuijr.notes"));
-        assert!(!root.join("appdata/is.olibuijr.notes/b.txt").exists());
-        let _ = std::fs::remove_dir_all(&root);
-    }
-}
+mod migrate_tests;
 
 #[cfg(test)]
-mod registry_update_tests {
-    use super::*;
-    #[test]
-    fn review_registry_update_preserves_slots_and_old_snapshot_ownership() {
-        let app=|id:&str,version:&str| Installed {manifest:Manifest{id:id.into(),version:version.into(),exec:"app".into(),..Manifest::default()},dir:PathBuf::from(format!("/apps/{id}/{version}"))};
-        let old:std::sync::Arc<[Installed]>=vec![app("a","1"),app("b","1")].into();
-        let current=merge_installed(&old,vec![app("b","2"),app("c","1"),app("a","2")]);
-        assert_eq!(current.iter().map(|a|a.manifest.id.as_str()).collect::<Vec<_>>(),vec!["a","b","c"]);
-        assert_eq!(current[0].exec_path(),PathBuf::from("/apps/a/2/app"));
-        assert_eq!(current[1].manifest.version,"2");
-        assert_eq!(old[0].manifest.version,"1");
-        assert_eq!(merge_installed(&current,current.clone()),current);
-    }
-
-    #[test]
-    fn an_uninstalled_app_keeps_its_slot_but_loses_its_permissions() {
-        let app=|id:&str| Installed {manifest:Manifest{id:id.into(),name:id.into(),exec:"app".into(),permissions:vec!["accessibility".into(),"storage".into()],..Manifest::default()},dir:PathBuf::from(format!("/nowhere/{id}"))};
-        let old=vec![app("a"),app("b"),app("c")];
-        let now=merge_installed(&old,vec![app("a"),app("c")]);
-        assert_eq!(now.iter().map(|a|a.manifest.id.as_str()).collect::<Vec<_>>(),vec!["a","b","c"],"the slots do not move");
-        assert!(now[1].is_removed() && now[1].manifest.permissions.is_empty() && now[1].manifest.exec.is_empty());
-        assert_eq!(now[1].manifest.name,"b");
-        assert!(!now[0].is_removed() && !now[2].is_removed());
-        // installing it again fills the same slot
-        let back=merge_installed(&now,vec![app("a"),app("b"),app("c")]);
-        assert!(!back[1].is_removed() && back[1].manifest.permissions.len()==2);
-        // an entry that is already removed stays removed and is stable
-        assert_eq!(merge_installed(&now,vec![app("a"),app("c")]),now);
-    }
-
-    #[test]
-    fn packages_beyond_the_limit_are_not_added() {
-        let app=|i:usize| Installed {manifest:Manifest{id:format!("app{i}"),exec:"app".into(),..Manifest::default()},dir:PathBuf::from(format!("/nowhere/{i}"))};
-        let scanned:Vec<Installed>=(0..MAX_INSTALLED+3).map(app).collect();
-        let all=merge_installed(&[],scanned);
-        assert_eq!(all.len(),MAX_INSTALLED);
-    }
-}
+mod registry_update_tests;
 
 /// The alert title and body for an app that did not start, pure: an empty name reads as "The app".
 pub fn launch_failure_text(name: &str) -> (String, String) {
@@ -3872,239 +3119,13 @@ pub(super) fn clean_badge(raw: &str) -> String {
 }
 
 #[cfg(test)]
-mod badge_tests {
-    use super::clean_badge;
-
-    #[test]
-    fn badges_are_short_single_line_labels() {
-        assert_eq!(clean_badge("12"), "12");
-        assert_eq!(clean_badge("  7 \n"), "7");
-        assert_eq!(clean_badge("99+"), "99+");
-        assert_eq!(clean_badge("123456"), "1234");
-        assert_eq!(clean_badge("a\u{0}b\tc"), "abc");
-        assert_eq!(clean_badge(""), "");
-        assert_eq!(clean_badge("éééééé"), "éééé", "cut by characters, not bytes");
-    }
-
-    #[test]
-    fn a_failed_launch_names_the_app_and_says_to_try_again() {
-        let (title, body) = crate::shell::apphost::launch_failure_text("  Notes ");
-        assert_eq!(title, "Notes could not be opened");
-        assert!(body.contains("Try opening it again"));
-        assert_eq!(crate::shell::apphost::launch_failure_text("").0, "The app could not be opened");
-    }
-
-    #[test]
-    fn a_refused_permission_is_named_in_the_alert() {
-        let body = crate::shell::apphost::unsupported_permission_text("teleport");
-        let (title, shown) = crate::shell::apphost::launch_failure_text_for("Notes", Some(&body));
-        assert_eq!(title, "Notes could not be opened");
-        assert!(shown.contains("\"teleport\"") && !shown.contains("Try opening it again"));
-        assert!(crate::shell::apphost::launch_failure_text_for("Notes", Some("  ")).1.contains("Try opening it again"));
-    }
-}
+mod badge_tests;
 
 #[cfg(test)]
-mod route_tests {
-    use super::*;
-
-    fn cfg() -> Configure {
-        Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false }
-    }
-
-    #[test]
-    fn the_route_is_direct_only_under_bifrost_wm_with_the_switch_on() {
-        assert_eq!(route_for(Some("1"), Some("bifrost-wm")), Route::Direct);
-        assert_eq!(route_for(Some(" 1\n"), Some("bifrost-wm\n")), Route::Direct);
-        assert_eq!(route_for(Some("1"), Some("other-wm")), Route::Shm, "any other compositor keeps the shared-memory path");
-        assert_eq!(route_for(None, Some("bifrost-wm")), Route::Shm, "no switch, no direct path");
-        assert_eq!(route_for(Some("0"), Some("bifrost-wm")), Route::Shm);
-        assert_eq!(route_for(Some("1"), None), Route::Shm, "no /etc/bifrost/compositor, no direct path");
-        assert_eq!(route_for(Some("true"), Some("bifrost-wm")), Route::Shm, "only the literal 1 switches it on");
-    }
-
-    #[test]
-    fn a_direct_app_that_sends_shared_memory_buffers_falls_back() {
-        assert_eq!(route_after_message(Route::Direct, true), Route::Shm);
-        assert_eq!(route_after_message(Route::Direct, false), Route::Direct, "a frame or any other message keeps the route");
-        assert_eq!(route_after_message(Route::Shm, true), Route::Shm);
-        assert_eq!(route_after_message(Route::Shm, false), Route::Shm);
-    }
-
-    #[test]
-    fn only_the_shared_memory_route_expects_frames() {
-        assert!(Route::Shm.expects_frames());
-        assert!(!Route::Direct.expects_frames());
-    }
-
-    #[test]
-    fn the_window_of_an_app_is_its_first_toplevel_with_that_app_id() {
-        let windows = [(3, "is.a"), (7, "is.b"), (9, "is.b")];
-        assert_eq!(foreign_window_of(windows, "is.b"), Some(7), "the first listed toplevel wins");
-        assert_eq!(foreign_window_of(windows, "is.a"), Some(3));
-        assert_eq!(foreign_window_of(windows, "is.c"), None, "no window while the app is still starting");
-        assert_eq!(foreign_window_of([(1, "is.bb")], "is.b"), None, "app ids match whole, not by prefix");
-        assert_eq!(foreign_window_of(Vec::<(u32, &str)>::new(), "is.a"), None);
-    }
-
-    #[test]
-    fn a_direct_app_thumbnail_is_a_capture_once_ready_and_its_icon_before() {
-        assert_eq!(thumbnail(Route::Shm, true, false), Thumb::Frame);
-        assert_eq!(thumbnail(Route::Shm, true, true), Thumb::Frame, "the shared-memory frame is kept by the shell");
-        assert_eq!(thumbnail(Route::Shm, false, true), Thumb::Icon, "no frame yet");
-        assert_eq!(thumbnail(Route::Direct, true, true), Thumb::Capture);
-        assert_eq!(thumbnail(Route::Direct, true, false), Thumb::Icon, "the shell has no frame for a direct app");
-        assert_eq!(thumbnail(Route::Direct, false, false), Thumb::Icon);
-    }
-
-    #[test]
-    fn a_direct_host_is_demoted_by_buffers_once_and_ignores_its_frames() {
-        let (channel, _peer) = sys::socketpair_pair().unwrap();
-        let mut host = AppHost::with_channel("fixture", channel, None, cfg());
-        host.route = Route::Direct;
-        let mut out = Pumped::default();
-        host.handle(ToShell::Frame { buf: 0, damage: vec![] }, Vec::new(), &mut out);
-        assert_eq!(host.route(), Route::Direct, "a frame from a direct app does not demote it");
-        assert!(!host.take_fallback());
-        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 1 }, Vec::new(), &mut out);
-        assert_eq!(host.route(), Route::Shm);
-        assert!(host.take_fallback(), "the fallback is reported once");
-        assert!(!host.take_fallback());
-        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 1 }, Vec::new(), &mut out);
-        assert!(!host.take_fallback(), "a shared-memory app is never demoted again");
-    }
-
-    pub(super) fn fixture_host() -> (AppHost, Channel) {
-        let (channel, peer) = sys::socketpair_pair().unwrap();
-        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
-        (AppHost::with_channel("fixture", channel, None, cfg), peer)
-    }
-
-    #[test]
-    fn short_memfds_are_refused_and_good_ones_sealed() {
-        let (mut host, _peer) = fixture_host();
-        let mut out = Pumped::default();
-        host.handle(ToShell::Buffers { w: 8192, h: 8192, generation: 1 }, vec![sys::shm_create("s1", 4096).unwrap(), sys::shm_create("s2", 4096).unwrap()], &mut out);
-        assert!(host.bufs.is_empty(), "4 KiB files cannot back 8192 x 8192");
-        let a = sys::shm_create("g1", 48).unwrap();
-        let b = sys::shm_create("g2", 48).unwrap();
-        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 7 }, vec![a, b], &mut out);
-        assert_eq!(host.bufs.len(), 2);
-        assert_eq!(host.generation, 7);
-    }
-
-    #[test]
-    fn a_stale_release_never_reaches_the_new_set() {
-        let (mut host, peer) = fixture_host();
-        let mut out = Pumped::default();
-        let set = |n: &str| vec![sys::shm_create(n, 48).unwrap(), sys::shm_create(n, 48).unwrap()];
-        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 1 }, set("a"), &mut out);
-        host.handle(ToShell::Frame { buf: 0, damage: vec![[0, 0, 4, 3]] }, vec![], &mut out);
-        host.handle(ToShell::Frame { buf: 1, damage: vec![[0, 0, 4, 3]] }, vec![], &mut out);
-        host.handle(ToShell::Buffers { w: 4, h: 3, generation: 2 }, set("b"), &mut out);
-        host.handle(ToShell::Frame { buf: 0, damage: vec![[0, 0, 4, 3]] }, vec![], &mut out);
-        let mut px = vec![0; 12];
-        host.blit(&mut Surface { w: 4, h: 3, stride: 4, px: &mut px, y0: 0 }, true);
-        while let Ok(Recv::Packet(p, _)) = peer.recv(false) {
-            if let Ok(ToApp::Release { generation, .. }) = ToApp::decode(&p) {
-                assert_eq!(generation, 2, "only releases of the current set go out");
-            }
-        }
-    }
-
-    #[test]
-    fn an_app_that_never_reads_does_not_block_the_shell() {
-        let (mut host, _peer) = fixture_host();
-        for _ in 0..100_000 {
-            host.send(&ToApp::Resume);
-            if !host.running() {
-                break;
-            }
-        }
-        assert!(host.backlog.len() <= MAX_BACKLOG);
-    }
-
-    #[test]
-    fn a_flooding_app_is_read_in_bounded_passes() {
-        let (mut host, peer) = fixture_host();
-        for i in 0..10u32 {
-            peer.send(&ToShell::Notify { title: i.to_string(), body: String::new() }.encode(), &[]).unwrap();
-        }
-        let first = host.pump_up_to(3);
-        assert_eq!(first.requests.len(), 3, "one pass reads at most its budget");
-        let second = host.pump_up_to(3);
-        assert_eq!(second.requests.len(), 3);
-        let rest = host.pump_up_to(usize::MAX);
-        assert_eq!(rest.requests.len(), 4, "the rest of the flood is read on the next passes, in order");
-        assert_eq!(rest.requests.first(), Some(&ToShell::Notify { title: "6".into(), body: String::new() }));
-        assert!(matches!(peer.recv(false), Ok(Recv::Empty)));
-    }
-
-    #[test]
-    fn a_window_level_of_an_extra_window_is_kept_in_the_table() {
-        let (mut host, _peer) = fixture_host();
-        let mut out = Pumped::default();
-        host.handle(ToShell::WindowOpen { id: 2, title: "CPU".into(), w: 300.0, h: 200.0, position: None, flags: 0 }, Vec::new(), &mut out);
-        host.handle(ToShell::WindowLevelOf { id: 2, level: bifrost_proto::WindowLevel::Floating }, Vec::new(), &mut out);
-        assert_eq!(host.windows.floating_ids(&host.id), vec![2]);
-        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Normal, "the main window keeps its level");
-        host.handle(ToShell::WindowLevelOf { id: 0, level: bifrost_proto::WindowLevel::Floating }, Vec::new(), &mut out);
-        assert!(host.windows.floating_ids(&host.id).contains(&2));
-        host.kill();
-    }
-
-    #[test]
-    fn a_window_level_request_is_kept_for_the_app() {
-        let (mut host, _peer) = fixture_host();
-        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Normal);
-        let mut out = Pumped::default();
-        host.handle(ToShell::WindowLevel(bifrost_proto::WindowLevel::Floating), Vec::new(), &mut out);
-        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Floating);
-        assert!(out.requests.is_empty(), "the level is not passed on to the shell's requests");
-        host.handle(ToShell::WindowLevel(bifrost_proto::WindowLevel::Normal), Vec::new(), &mut out);
-        assert_eq!(host.window_level, bifrost_proto::WindowLevel::Normal);
-        host.kill();
-    }
-
-    #[test]
-    fn quitting_never_blocks_on_an_app_that_stopped_reading() {
-        let (mut host, _peer) = fixture_host();
-        // fill the socket: nothing reads the peer end
-        while host.chan.try_send(&[0u8; 64], &[]).is_ok() {}
-        host.sudden = false;
-        let _ = host.begin_quit(0.0);
-        host.kill();
-    }
-}
+mod route_tests;
 
 #[cfg(test)]
-mod service_manifest_tests {
-    use super::Manifest;
-
-    #[test]
-    fn service_tables_are_read_and_do_not_leak_into_the_app_keys() {
-        let m = Manifest::parse(
-            "id = \"is.olibuijr.preview.desktop\"\nname = \"Viewer\"\nversion = \"0.11.8\"\nexec = \"bifrost-viewer\"\n\n[[service]]\ntitle = \"Open Images in Viewer\"\nsend_types = [\"public.image\", \"public.pdf\"]\nreturn_types = []\nmethod = \"open_images\"\n\n[[service]]\ntitle = \"Copy Path\"\nsend_types = [\"bifrost.file-path-text\"]\nreturn_types = [\"public.utf8-plain-text\"]\nmethod = \"copy_path\"\n",
-        )
-        .unwrap();
-        assert_eq!(m.id, "is.olibuijr.preview.desktop");
-        assert_eq!(m.name, "Viewer");
-        assert!(m.intents.is_empty());
-        assert_eq!(m.services.len(), 2);
-        assert_eq!(m.services[0].title, "Open Images in Viewer");
-        assert_eq!(m.services[0].send_types, vec!["public.image".to_string(), "public.pdf".to_string()]);
-        assert!(m.services[0].return_types.is_empty());
-        assert_eq!(m.services[0].method, "open_images");
-        assert_eq!(m.services[1].return_types, vec!["public.utf8-plain-text".to_string()]);
-        assert_eq!(m.services[1].rpc_method(), "service.copy_path");
-    }
-
-    #[test]
-    fn a_manifest_without_services_has_none() {
-        let m = Manifest::parse("id = \"a.b\"\nname = \"X\"\nexec = \"x\"\n").unwrap();
-        assert!(m.services.is_empty());
-    }
-}
+mod service_manifest_tests;
 
 /// The sounds apps asked for since the shell's audio worker last looked, in order. Each is an alert tone name.
 static SYSTEM_SOUNDS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());

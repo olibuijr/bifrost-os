@@ -64,6 +64,7 @@ impl Default for Bridge {
         let (log, view, seq) = (Rc::new(RefCell::new(VecDeque::new())), Rc::new(Cell::new(0)), Rc::new(Cell::new(0)));
         let mut config = WebViewConfiguration::new();
         let _ = config.user_content_controller.add(Box::new(Recorder { log: log.clone(), view: view.clone(), seq }), HANDLER);
+        config.user_content_controller.add_user_script(crate::maskfallback::script());
         Bridge { config, lists: ContentRuleLists::new(), log, view }
     }
 }

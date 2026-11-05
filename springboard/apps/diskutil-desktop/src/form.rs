@@ -81,6 +81,9 @@ pub struct Form {
     pub rows: Vec<Row>,
     /// The row whose text field takes typing.
     pub focus: Option<usize>,
+    /// The button Tab reached after the last text field (a `FORM_*` id); the sheet draws its focus ring and Space presses
+    /// it. While it is set, typing goes nowhere.
+    pub button_focus: Option<u32>,
     /// Lines under the rows, in footnote size.
     pub notes: Vec<String>,
     /// A refusal, shown in red under the notes.
@@ -92,7 +95,7 @@ pub struct Form {
 
 impl Form {
     pub fn new(title: &str, ok_title: &str, destructive: bool) -> Form {
-        Form { title: title.to_string(), rows: Vec::new(), focus: None, notes: Vec::new(), error: None, ok_title: ok_title.to_string(), destructive }
+        Form { title: title.to_string(), rows: Vec::new(), focus: None, button_focus: None, notes: Vec::new(), error: None, ok_title: ok_title.to_string(), destructive }
     }
 
     /// Adds a text field. The first one takes the focus.
@@ -162,7 +165,7 @@ impl Form {
     pub fn sheet(&self) -> Sheet {
         let role = if self.destructive { ButtonRole::Destructive } else { ButtonRole::Default };
         let buttons = vec![SheetButton::new(FORM_OK, &self.ok_title, role), SheetButton::new(FORM_CANCEL, "Cancel", ButtonRole::Cancel)];
-        Sheet::new(&self.title, (WIDTH_PT, self.content_h() + CHROME_PT), buttons)
+        Sheet::new(&self.title, (WIDTH_PT, self.content_h() + CHROME_PT), buttons).with_focus(self.button_focus)
     }
 
     /// The rectangles for a sheet hung from the title bar (`titlebar_h` tall) of `parent`.
@@ -216,7 +219,7 @@ impl Form {
 
     /// Whether the form has a text field to type in, so the keyboard should be up.
     pub fn takes_text(&self) -> bool {
-        self.focus.is_some()
+        self.focus.is_some() && self.button_focus.is_none()
     }
 
     /// Gives the focus to the text field of `row`. False when the row has none.
@@ -241,8 +244,34 @@ impl Form {
         true
     }
 
+    /// Tab: the next text field; after the last one the focus ring walks the buttons (in the order they are drawn), and
+    /// after the last button it returns to the first text field. A form with no text field has only the buttons.
+    pub fn tab(&mut self) -> bool {
+        let sheet = self.sheet();
+        let texts: Vec<usize> = (0..self.rows.len()).filter(|&i| matches!(self.rows[i].control, Control::Text { .. })).collect();
+        let first = sheet.next_focus(None, false);
+        if let Some(b) = self.button_focus {
+            let next = sheet.next_focus(Some(b), false);
+            if next == first && !texts.is_empty() {
+                self.button_focus = None;
+                self.focus = texts.first().copied();
+            } else {
+                self.button_focus = next;
+            }
+            return true;
+        }
+        if self.focus.is_some() && self.focus != texts.last().copied() {
+            return self.focus_next();
+        }
+        self.button_focus = first;
+        first.is_some()
+    }
+
     /// Typed text goes to the focused field. True when the form changed.
     pub fn type_text(&mut self, text: &str) -> bool {
+        if self.button_focus.is_some() {
+            return false;
+        }
         let Some(row) = self.focus else { return false };
         let Some(Control::Text { field, limit, .. }) = self.rows.get_mut(row).map(|r| &mut r.control) else { return false };
         let before = field.len();
@@ -256,6 +285,9 @@ impl Form {
 
     /// Backspace in the focused field. True when the form changed.
     pub fn backspace(&mut self) -> bool {
+        if self.button_focus.is_some() {
+            return false;
+        }
         let Some(row) = self.focus else { return false };
         let Some(Control::Text { field, .. }) = self.rows.get_mut(row).map(|r| &mut r.control) else { return false };
         let before = field.len();

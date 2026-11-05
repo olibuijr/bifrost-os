@@ -39,7 +39,7 @@ impl Files {
                 format!("{} {} · {}% · Esc to cancel", work.title, work.progress.current, pct)
             };
             text(s, ui, &line, 11., LABEL.now(), w - 12. - status_w, line_y, status_w);
-            rect(s, ui, self.side(), h - 2., (w - self.side()) * work.progress.fraction(), 2., TINT);
+            rect(s, ui, self.side(), h - 2., (w - self.side()) * work.progress.fraction(), 2., accent_now());
         } else if let Some(notice) = &self.notice {
             text(s, ui, notice, 11., LABEL.now(), w - 12. - status_w, line_y, status_w);
         } else {

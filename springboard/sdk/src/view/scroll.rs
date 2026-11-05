@@ -3,6 +3,7 @@ use super::{View, ViewBase, ViewEvent};
 use crate::kit::ui::LABEL_2;
 use crate::kit::{Event, Ui};
 use bifrost_render::canvas::{Canvas, RectF};
+use bifrost_ui::scroll_position::{ScrollPosition, ScrollTarget};
 use bifrost_ui::Rect;
 
 /// Overlay scroller knob, in points (Golden Gate overlay style: thin, inset from the right edge).
@@ -30,10 +31,18 @@ pub struct ScrollView {
     last_y: f32,
     /// the touch has passed the slop and pans the content
     dragging: bool,
+    /// the touch that is down may pan (`bifrost_ui::pan`): a pointer drag on a desktop never does
+    pans: bool,
     /// frame time of the last `tick` (seconds): `ViewEvent` carries no timestamp, so touches are timed with it
     now: f64,
     doc_h: f32,
     knob: bool,
+    /// `scrollPosition(_:)`: the app's semantic position, kept up to date as the user scrolls
+    position: ScrollPosition,
+    /// `scrollTargetLayout()`: the identified items of the document, in document points
+    targets: Vec<ScrollTarget>,
+    /// a position set by the app that the next layout applies again (the first layout knows the real sizes)
+    position_pending: bool,
 }
 
 impl ScrollView {
@@ -46,10 +55,42 @@ impl ScrollView {
             down_y: None,
             last_y: 0.0,
             dragging: false,
+            pans: true,
             now: 0.0,
             doc_h: 0.0,
             knob: false,
+            position: ScrollPosition::automatic(),
+            targets: Vec::new(),
+            position_pending: false,
         }
+    }
+    /// `scrollTargetLayout()`: the identified items of the document (document points) that identity positions name
+    /// and that user scrolling reports. Replace them whenever the document's items move.
+    pub fn set_scroll_targets(&mut self, targets: Vec<ScrollTarget>) {
+        self.targets = targets;
+    }
+    pub fn scroll_targets(&self) -> &[ScrollTarget] {
+        &self.targets
+    }
+    /// The bound `ScrollPosition`: after the user scrolls it names the top-most visible target (or the bottom-most
+    /// with a `Trailing` anchor) and `is_positioned_by_user` is true. Read it back into app state after events.
+    pub fn position(&self) -> &ScrollPosition {
+        &self.position
+    }
+    /// Writes the bound position from app state (`scrollTo(id:)`, `scrollTo(edge:)`, `scrollTo(y:)`): jumps there now
+    /// and again at the next layout. An identity no target has, or an automatic position, leaves the offset alone.
+    pub fn set_position(&mut self, position: ScrollPosition) {
+        self.position = position;
+        self.position_pending = true;
+        if let Some(y) = self.position.resolve(self.content_offset(), self.base.frame.h, self.doc_h, &self.targets) {
+            self.scroll_to(y);
+        }
+    }
+    /// The user moved the content: the position follows the visible targets.
+    fn track_user(&mut self) {
+        let offset = self.content_offset();
+        self.position.user_scrolled(offset, self.base.frame.h, &self.targets);
+        self.position_pending = false;
     }
     /// `NativeClipView.bounds.origin.y`: how far the document is scrolled (may be negative or past the end mid rubber band).
     pub fn content_offset(&self) -> f32 {
@@ -77,6 +118,9 @@ impl ScrollView {
     /// The touch is at `y`: past the slop it pans the content, one to one with the finger.
     fn finger(&mut self, y: f32) {
         let Some(y0) = self.down_y else { return };
+        if !self.pans {
+            return;
+        }
         if !self.dragging {
             if (y - y0).abs() <= DRAG_SLOP_PT {
                 return;
@@ -88,6 +132,7 @@ impl ScrollView {
         // a finger moving up (smaller y) scrolls towards the end
         self.physics.drag(self.now * 1000.0, self.last_y - y);
         self.last_y = y;
+        self.track_user();
     }
     /// The touch lifted at `y`: a dragged touch starts its motion (a fling, or a spring back past an edge).
     fn lift(&mut self, y: f32) {
@@ -134,9 +179,16 @@ impl View for ScrollView {
         self.doc_h = self.kids[0].frame().h;
         self.physics.set_bounds(self.base.frame.h, self.doc_h);
         if !self.dragging && self.motion.is_none() {
-            // an idle view keeps its offset inside the new range
+            // an idle view keeps its offset inside the new range, and the bound position stays stable: an edge stays
+            // at its edge, an identity stays in view (see `ScrollPosition::stable_offset`)
             let o = self.physics.offset();
-            self.physics.set_offset(o);
+            let (vh, dh) = (self.base.frame.h, self.doc_h);
+            let to = if std::mem::take(&mut self.position_pending) {
+                self.position.resolve(o, vh, dh, &self.targets)
+            } else {
+                self.position.stable_offset(o, vh, dh, &self.targets)
+            };
+            self.physics.set_offset(to.unwrap_or(o));
         }
         self.base.dirty = true;
     }
@@ -151,6 +203,7 @@ impl View for ScrollView {
                 self.down_y = Some(*y);
                 self.last_y = *y;
                 self.dragging = false;
+                self.pans = bifrost_ui::pan::pans_now();
             }
             ViewEvent::Pointer(Event::Move(_, y)) => self.finger(*y),
             ViewEvent::Pointer(Event::Up(_, y)) => self.lift(*y),
@@ -171,6 +224,7 @@ impl View for ScrollView {
         }
         let to = self.content_offset() - dy;
         self.scroll_to(to);
+        self.track_user();
         true
     }
     fn wants_tick(&self) -> bool {
@@ -183,6 +237,7 @@ impl View for ScrollView {
                 // the content rests at the end the physics model already holds
                 self.motion = None;
             }
+            self.track_user();
         }
         let moving = self.dragging || self.motion.is_some();
         if moving || self.knob {
@@ -747,6 +802,48 @@ mod view_tests {
         assert!(!w.wheel(500.0, 500.0, 0.0, -40.0), "outside the window nothing scrolls");
     }
 
+    /// A document that holds one text field 500 pt down.
+    struct FieldDoc {
+        base: ViewBase,
+        kids: Vec<Box<dyn View>>,
+    }
+    impl View for FieldDoc {
+        crate::view_base!();
+        fn intrinsic(&self, _ui: &Ui) -> (f32, f32) {
+            (0.0, 1000.0)
+        }
+        fn children(&self) -> &[Box<dyn View>] {
+            &self.kids
+        }
+        fn children_mut(&mut self) -> &mut [Box<dyn View>] {
+            &mut self.kids
+        }
+        fn layout(&mut self, ui: &Ui, bounds: Rect) {
+            self.set_frame(bounds);
+            self.kids[0].layout(ui, Rect { x: bounds.x, y: bounds.y + 500.0, w: bounds.w, h: 22.0 });
+        }
+    }
+
+    /// E2E10: Look Up and the candidate window open at the caret the app reports, so a field in a scroll view reports
+    /// its caret where it is drawn (window points), not at its place in the document.
+    #[test]
+    fn a_text_field_in_a_scroll_view_reports_its_caret_in_window_points() {
+        let tf = crate::view::TextField::new("Name", "name");
+        let field = tf.id();
+        let sv = ScrollView::new(Box::new(FieldDoc { base: ViewBase::default(), kids: vec![Box::new(tf)] }));
+        let scroller = sv.id();
+        let mut w: crate::view::Window = crate::view::Window::new(sv, 10);
+        w.layout(&ui(), Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 });
+        assert!(w.make_first_responder(Some(field)));
+        let offset = |w: &crate::view::Window| w.view::<ScrollView>(scroller).unwrap().content_offset();
+        let (y0, o0) = (w.text_input_info().unwrap().caret.1, offset(&w));
+        assert!(y0 + o0 >= 500.0 && y0 + o0 < 522.0, "the caret sits in the field: {} at offset {}", y0, o0);
+        w.view_mut::<ScrollView>(scroller).unwrap().scroll_to(o0 + 120.0);
+        let (y1, o1) = (w.text_input_info().unwrap().caret.1, offset(&w));
+        assert!(o1 > o0, "scrolled");
+        assert!((y1 - (y0 - (o1 - o0))).abs() < 0.01, "the caret moved up with the content: {y0} -> {y1}");
+    }
+
     #[test]
     fn a_tap_moves_nothing_and_starts_no_motion() {
         let mut sv = list();
@@ -811,5 +908,61 @@ mod view_tests {
         sv.tick(3.0);
         assert!(sv.motion.is_none());
         assert_eq!(sv.content_offset(), 0.0);
+    }
+
+    /// Twenty-five rows 40 pt tall over the 1000 pt document of `list()`.
+    fn rows() -> Vec<ScrollTarget> {
+        let ids: Vec<String> = (0..25).map(|i| format!("row{i}")).collect();
+        ScrollTarget::rows(&ids, 0.0, 40.0, 0.0)
+    }
+
+    #[test]
+    fn the_bound_position_scrolls_to_an_identity_and_an_edge() {
+        use bifrost_ui::scroll::Anchor;
+        use bifrost_ui::scroll_position::Edge;
+        let mut sv = list();
+        sv.set_scroll_targets(rows());
+        sv.set_position(ScrollPosition::id("row10", Some(Anchor::Leading)));
+        assert_eq!(sv.content_offset(), 400.0);
+        sv.set_position(ScrollPosition::edge(Edge::Bottom));
+        assert_eq!(sv.content_offset(), sv.max_offset());
+        // an unknown identity leaves the offset alone
+        sv.set_position(ScrollPosition::id("nope", None));
+        assert_eq!(sv.content_offset(), sv.max_offset());
+    }
+
+    #[test]
+    fn a_position_set_before_the_first_layout_is_applied_by_it() {
+        let mut sv = ScrollView::new(Box::new(Doc { base: ViewBase::default(), h: 1000.0 }));
+        sv.set_scroll_targets(rows());
+        sv.set_position(ScrollPosition::y(250.0));
+        sv.layout(&ui(), Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 });
+        assert_eq!(sv.content_offset(), 250.0);
+    }
+
+    #[test]
+    fn user_scrolling_updates_the_bound_position() {
+        let mut sv = list();
+        sv.set_scroll_targets(rows());
+        sv.scroll_wheel(0.0, -130.0);
+        let p = sv.position();
+        assert!(p.is_positioned_by_user());
+        assert_eq!(p.view_id(), Some("row3"));
+        // a drag reports too
+        at(&mut sv, 1.0, Event::Down(10.0, 90.0));
+        at(&mut sv, 1.5, Event::Move(10.0, 40.0));
+        at(&mut sv, 2.0, Event::Move(10.0, 10.0));
+        assert!(sv.position().view_id().is_some_and(|id| id != "row3"), "{:?}", sv.position());
+    }
+
+    #[test]
+    fn a_relayout_keeps_the_bottom_edge_of_a_growing_document_in_view() {
+        use bifrost_ui::scroll_position::Edge;
+        let mut sv = list();
+        sv.set_position(ScrollPosition::edge(Edge::Bottom));
+        assert_eq!(sv.content_offset(), 900.0);
+        sv.document_view_mut::<Doc>().unwrap().h = 1500.0;
+        sv.layout(&ui(), Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 });
+        assert_eq!(sv.content_offset(), 1400.0);
     }
 }

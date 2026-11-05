@@ -27,7 +27,7 @@ Behaviour:
 - **Detail view** of the selected device: name, manufacturer and transport, then a card with the output format,
   sample rate, channels (in and out), buffer size with its range, output latency, safety offset, volume and the
   identifier (UID). Latency and buffer times are frames divided by the rate.
-- **Toolbar**: New Aggregate, New Multi-Output, Edit and Remove (the last two only for a made device with no editor
+- **Toolbar**: New Device (one +; the editor's kind switch picks Aggregate or Multi-Output; off while the server is unreachable), Edit and Remove (the last two only for a made device with no editor
   open), Refresh.
 - **Editor**: a name field, a kind switch (Aggregate or Multi-Output), the member card (click a row to add or remove a
   device; "Set as Clock" on a member row sets the clock), and Create or Save and Cancel. Return saves, Escape cancels,
@@ -105,7 +105,7 @@ These need the server (tasks 05, 06 and 11) on Midget. Run from Titan.
    pcm=3 should appear. Note the UIDs.
 3. Open the app: `bifrost pc midget open-app is.olibuijr.audiosetup.desktop`, then `bifrost pc midget state`.
    Confirm the sidebar lists the hardware devices and that selecting one shows its format and rate.
-4. Create an aggregate: tap New Aggregate (`bifrost pc midget tap-window "Audio Setup" X Y`, using the toolbar
+4. Create an aggregate: tap New Device (+) (`bifrost pc midget tap-window "Audio Setup" X Y`, using the toolbar
    position from the screenshot). Type a name with `bifrost pc midget key` (one key at a time). Tap the two member
    rows (analog and HDMI/DP pcm=3), set the clock on one, and tap Create.
 5. Check the aggregate: `bifrost pc audio ls` lists a new device with transport `aggregate` and the two members, and

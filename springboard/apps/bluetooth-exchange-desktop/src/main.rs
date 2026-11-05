@@ -16,6 +16,10 @@ use bifrost_core::json::Json;
 use window::{BluetoothExchange, Target};
 
 impl App for BluetoothExchange {
+    /// A single-window utility: the red light quits it (`applicationShouldTerminateAfterLastWindowClosed:`).
+    fn terminates_after_last_window_closed(&self) -> bool {
+        true
+    }
     fn id(&self) -> &str {
         "is.olibuijr.bluetoothexchange.desktop"
     }

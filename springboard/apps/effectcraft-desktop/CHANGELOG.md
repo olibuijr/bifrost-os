@@ -4,6 +4,60 @@
 
 # Changelog
 
+## 0.21.0
+
+- Upstream effectcraft v0.21.0.
+  ## What's Changed
+  * Export: write a colr atom in ProRes MOVs (#2801) by @JonRC in https://github.com/storytold/effectcraft/pull/2804
+  * Shortcuts: panel and context scopes, one chord per scope by @pravdomil in https://github.com/storytold/effectcraft/pull/1266
+  * PDF import: the encryption pre-scan reads a bounded window after each trailer (#2142) by @becauseno7 in https://github.com/storytold/effectcraft/pull/2679
+  * i18n(ja): the animator pop-up reads its own catalog rows by @zitann2020 in https://github.com/storytold/effectcraft/pull/2742
+
+## 0.20.0
+
+- Upstream effectcraft v0.20.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/effectcraft/pull/2718
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/effectcraft/pull/2717
+  * i18n: Swedish (sv) interface translation by @kler in https://github.com/storytold/effectcraft/pull/1541
+  * comp.deleteAllMarkers: add Delete All Markers for composition markers by @maxaeexe in https://github.com/storytold/effectcraft/pull/2169
+
+## 0.19.0
+
+- Upstream effectcraft v0.19.0.
+  ## What's Changed
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2555
+  * Export: convert H.264 frames to YUV 4:2:0 on the GPU by @MatejKozlovsky in https://github.com/storytold/effectcraft/pull/1631
+  * Face tracker: find polygon crossings once per window row by @vangel76 in https://github.com/storytold/effectcraft/pull/2334
+  * Camera tracking: validate solver input and bound workspaces by @vangel76 in https://github.com/storytold/effectcraft/pull/2341
+
+## 0.18.0
+
+- Upstream effectcraft v0.18.0.
+  ## What's Changed
+  * Migrate EffectCraft to egui 0.37 by @skylartaylor in https://github.com/storytold/effectcraft/pull/2367
+  * feat: startup update prompt modal and direct self-updating by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2420
+  * build: pin craft-update to craft-libs main (db19c37) by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2435
+  * sonar: method paths instead of closures (rust:S1612) by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2274
+
+## 0.17.0
+
+- Upstream effectcraft v0.17.0.
+  ## What's Changed
+  * svg: bound raster surfaces and handle duplicate gradient stops by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2190
+  * ui: bound queued synthetic input gestures by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2197
+  * text: bound layout and variable font metadata by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2193
+  * pdf: bound image sample and mask allocations by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2191
+
+## 0.16.0
+
+- Upstream effectcraft v0.16.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * security: use crypto.randomUUID for temp file suffix (SonarCloud S2245) by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2061
+  * fix: JS reliability bugs (SonarCloud S1764/S9383/S4275) by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2062
+
 ## 0.15.0
 
 - Upstream effectcraft v0.15.0.

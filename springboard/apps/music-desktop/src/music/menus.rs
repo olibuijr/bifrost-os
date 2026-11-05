@@ -256,12 +256,12 @@ pub fn window_menu(mini_open: bool, on_top: bool) -> AppMenu {
 
 pub fn build(s: &MenuState) -> Vec<AppMenu> {
     let song = s.has_song;
-    let mut add_to = vec![AppMenuItem::submenu("Add to Playlist"), item(Command::NewPlaylist, "New Playlist", "").depth(1).enabled(song)];
+    let mut add_to = vec![AppMenuItem::submenu("Add to Playlist").enabled(song), item(Command::NewPlaylist, "New Playlist", "").depth(1).enabled(song)];
     if !s.playlists.is_empty() {
         add_to.push(AppMenuItem::separator().depth(1));
     }
     add_to.extend(s.playlists.iter().enumerate().map(|(i, name)| item(Command::AddTo(i), name, "").depth(1).enabled(song)));
-    let mut rate = vec![AppMenuItem::submenu("Rating")];
+    let mut rate = vec![AppMenuItem::submenu("Rating").enabled(song)];
     rate.extend((0..=RATE_MAX).map(|n| {
         let title = super::stats::rating_text(n);
         item(Command::Rate(n), &title, "").depth(1).enabled(song).checked(s.rating == n)
@@ -430,7 +430,7 @@ mod tests {
     fn the_song_menu_acts_on_the_playing_song_and_shows_its_rating() {
         let song = |s: &MenuState| build(s).remove(1).items;
         let none = song(&MenuState::default());
-        assert!(none.iter().filter(|i| i.id != 0).all(|i| !i.enabled), "no song, nothing to act on");
+        assert!(none.iter().filter(|i| !i.separator).all(|i| !i.enabled), "no song, nothing to act on, submenus included");
         let items = song(&full());
         let rating: Vec<(&str, bool)> = items.iter().filter(|i| (RATE_BASE..=RATE_BASE + 5).contains(&i.id)).map(|i| (i.title.as_str(), i.checked)).collect();
         assert_eq!(rating, [("None", false), ("1 Star", false), ("2 Stars", false), ("3 Stars", true), ("4 Stars", false), ("5 Stars", false)]);

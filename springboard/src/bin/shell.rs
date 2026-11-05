@@ -189,8 +189,8 @@ fn run() -> std::io::Result<()> {
     let mono = bifrost_render::fontprefs::map_font(&dir, bifrost_render::fontprefs::FontRole::Mono)?;
     let font = Font::parse(font_data).ok_or_else(|| std::io::Error::other("bad font"))?;
     // characters the UI font lacks draw from the other fonts in the library, then from the script fonts the
-    // packages install (Noto scripts, CJK, symbols), instead of .notdef
-    bifrost_render::fontfallback::install_with_system(&bifrost_render::fontprefs::library(&dir), "en");
+    // packages install (Noto scripts, CJK, symbols), instead of .notdef; loaded on the first such character
+    bifrost_render::fontfallback::install_with_system_lazy(&bifrost_render::fontprefs::library(&dir), &bifrost_render::fontfallback::system_lang());
     // the shell owns settings.ini from here on; the bin only reads start-up values
     let mut prefs = springboard::shell::prefs::Prefs::load(format!("{dir}/settings.ini"));
     // the volume is the default output device's volume control on the audio server (connected lazily), and key
@@ -452,6 +452,8 @@ fn run() -> std::io::Result<()> {
     let mut jank = springboard::bare::jank::Jank::default();
     // `touch $dir/trace` (or `trace on` over the control socket) logs input
     let mut trace = std::path::Path::new(&format!("{dir}/trace")).exists();
+    // the same switch logs the window focus decisions (`bare::focus_trace`)
+    springboard::bare::focus_trace::set(trace);
     let control = springboard::bare::control::Server::bind().map_err(|e| eprintln!("springboard: control socket: {e}")).ok();
     // synthetic touches from the control socket: (due ms, phase, x, y)
     let mut synthetic: std::collections::VecDeque<(f64, u8, f32, f32)> = Default::default();
@@ -467,6 +469,8 @@ fn run() -> std::io::Result<()> {
     let mut power_key = PowerKey::default();
     let mut hw_keys = springboard::shell::hwkeys::HwKeys::default();
     hw_keys.set_layout(springboard::installer::keymaps::configured_layout());
+    // type-select, menu key equivalents and synthesized character events read keys on the same layout
+    springboard::shell::evkeys::set_layout(springboard::installer::keymaps::configured_layout());
     // a lone Cmd press is the Home key of a tablet only; on the desktop it does nothing
     hw_keys.set_desktop(bifrost_ui::form_factor::FormFactor::current().is_desktop());
     // the input source the hardware layout last followed; the configured layout holds until it changes
@@ -568,7 +572,9 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         if wayland {
             // the wallpaper stays pending until the presenter reports the blur landed (a failed rebuild is retried)
-            let live = shell.live_look().animated();
+            // the animated look a frame belongs to: its blur is built once per look and size, not per frame
+            let look = shell.live_look();
+            let live = look.animated().then_some(look as u8);
             let uploaded = match shell.desktop_wallpaper_once() {
                 Some((wp, x)) => disp.wayland_wallpaper(wp, x, live),
                 None => disp.wayland_gpu_active(),
@@ -679,7 +685,7 @@ fn run() -> std::io::Result<()> {
             disp.wayland_inputs(&mut events);
             // the buttons come from evdev (`InputSet::buttons`); the compositor's copy of them would count twice
             if inputs.has_buttons() {
-                events.retain(|e| !matches!(e, input::Event::Key { code, .. } if matches!(*code, input::KEY_POWER | input::KEY_VOLUMEUP | input::KEY_VOLUMEDOWN)));
+                events.retain(|e| !matches!(e, input::Event::Key { code, .. } if input::is_button_key(*code)));
             }
             for batch in disp.wayland_input_method_batches() { shell.input_method_batch(batch, t); }
             if let Some(windows)=disp.wayland_foreign_windows() { shell.wayland_foreign_windows(windows); }
@@ -901,6 +907,11 @@ fn run() -> std::io::Result<()> {
                         effects.extend(shell.hw_shortcut(springboard::shell::hwkeys::Shortcut::LogOut, t));
                         b"ok\n".to_vec()
                     }
+                    // Ctrl+Cmd+arrows, taken by the window server: the shell arranges the window it shows as front
+                    Ok(Request::Tile(key)) => {
+                        effects.extend(shell.hw_shortcut(springboard::shell::hwkeys::Shortcut::tile(key), t));
+                        b"ok\n".to_vec()
+                    }
                     Ok(Request::Overview) => {
                         shell.overview_toggle(t);
                         b"ok\n".to_vec()
@@ -932,6 +943,7 @@ fn run() -> std::io::Result<()> {
                     Ok(Request::Perf) => jank.describe().into_bytes(),
                     Ok(Request::Trace(on)) => {
                         trace = on;
+                        springboard::bare::focus_trace::set(on);
                         b"ok\n".to_vec()
                     }
                     Err(e) => format!("error: {e}\n").into_bytes(),
@@ -969,6 +981,11 @@ fn run() -> std::io::Result<()> {
                 Posted::Context(x, y) => shell.desktop_pointer(x, y, true, t),
             }
         }
+        // the session was restored: modifiers counted before it were pressed for the login window (E2E3 F1)
+        if shell.take_key_reset() {
+            hw_keys.reset();
+            shell.set_key_mods(hw_keys.modifier_flags());
+        }
         let orientation = shell.orientation();
         let map = |x: f32, y: f32| orientation.to_logical(x, y, w as i32, h as i32);
         for ev in &events {
@@ -995,8 +1012,9 @@ fn run() -> std::io::Result<()> {
                 // the wheel goes to an app that asked for it; the drag emulated for it (the next three events) is then
                 // dropped for that app (`pointer_wheel`)
                 // the Apps grid pages with the wheel (a wheel turned down is the next page: `dy` is the content's travel, so both are negated) and
-                // Overview swallows it
-                input::Event::Wheel{x,y,dx,dy,..}=>{let (x,y)=map(x,y);if shell.quicksearch_wheel(dy,t) {continue;}if shell.overview_scroll(-dx,-dy,t) {continue;}shell.pointer_wheel(x,y,dx,dy,t);continue;},
+                // Overview swallows it; the desk notes it first, so the emulated press never grabs a window edge, title bar,
+                // traffic light or Dock icon (N1)
+                input::Event::Wheel{x,y,dx,dy,..}=>{let (x,y)=map(x,y);shell.desk_wheel(t);if shell.quicksearch_wheel(dy,t) {continue;}if shell.overview_scroll(-dx,-dy,t) {continue;}shell.pointer_wheel(x,y,dx,dy,t);continue;},
                 input::Event::Context{x,y,..}=>{let (x,y)=map(x,y);shell.desktop_pointer(x,y,true,t);continue;},
                 input::Event::Switch { .. } => continue,
                 // per-finger contacts run on the gesture recognizers; the first finger also arrives as Down/Move/Up,
@@ -1029,10 +1047,31 @@ fn run() -> std::io::Result<()> {
                     }
                     continue;
                 }
+                // the window server's modifier state corrects a counter whose press or release never came here (E2E3 F1: a
+                // Shift released in another client left every later click a Shift-click)
+                input::Event::Modifiers { held, caps } => {
+                    let kp = springboard::shell::kb_input::get();
+                    let (held, unsure, caps) = kp.remap.modifier_sync(held, caps, slow_keys.enabled());
+                    if hw_keys.sync_modifiers(&held, &unsure, caps) {
+                        if trace {
+                            eprintln!("springboard: modifiers corrected to {:?}", hw_keys.modifier_flags());
+                        }
+                        shell.set_photos_shift(hw_keys.shift_held());
+                        shell.set_key_mods(hw_keys.modifier_flags());
+                        if !hw_keys.mods_held() {
+                            shell.cmdtab_release(t);
+                        }
+                    }
+                    continue;
+                }
                 input::Event::Key { code: input::KEY_WAKEUP, down: true } => Event::Wake,
                 input::Event::Key { code, down } => {
                     // Switch Control: while it is on, the switch keys step the panel and are used up here; any other key goes on
+                    // a modifier press used up or replaced here is never counted: `note_tap` keeps the window server's
+                    // modifier sync from pressing it over the tap until its release
+                    let sent = springboard::shell::kb_input::get().remap.apply(code);
                     if let Some(fx) = shell.switch_control_key(code, down, t) {
+                        hw_keys.note_tap(sent, down, true);
                         if down {
                             hw_keys.cancel_lone_meta();
                         }
@@ -1040,12 +1079,15 @@ fn run() -> std::io::Result<()> {
                         continue;
                     }
                     // session event taps see the key first and may drop or replace it
-                    let Some(code) = shell.tap_key(code, down) else {
+                    let Some(tapped) = shell.tap_key(code, down) else {
+                        hw_keys.note_tap(sent, down, true);
                         if down {
                             hw_keys.cancel_lone_meta();
                         }
                         continue;
                     };
+                    hw_keys.note_tap(sent, down, tapped != code);
+                    let code = tapped;
                     // Settings > Keyboard: modifier keys remapped, the repeat timing, and the shortcuts switched off
                     let kp = springboard::shell::kb_input::get();
                     // Settings > Accessibility > Sticky Keys: the key path follows the saved switch
@@ -1140,7 +1182,9 @@ fn run() -> std::io::Result<()> {
                     if source != seen_source {
                         seen_source = source;
                         bifrost_ui::compose_method::set_japanese_source(source == springboard::shell::kb_layouts::Layout::Japanese);
-                        hw_keys.set_layout(springboard::installer::keymaps::layout_index(source.keymap()).unwrap_or(0));
+                        let layout = springboard::installer::keymaps::layout_index(source.keymap()).unwrap_or(0);
+                        hw_keys.set_layout(layout);
+                        springboard::shell::evkeys::set_layout(layout);
                         // a layout switch drops a pending dead key
                         dead = None;
                         springboard::shell::fcitx_bridge::follow(source);
@@ -1260,6 +1304,8 @@ fn run() -> std::io::Result<()> {
         }
         effects.extend(shell.tick(vt));
         #[cfg(feature = "desktop-wayland")]
+        effects.extend(shell.take_native_minimizes().into_iter().map(|id| Effect::ForeignWindowAction(id, true)));
+        #[cfg(feature = "desktop-wayland")]
         effects.extend(shell.take_native_activations().into_iter().map(Effect::ActivateForeign));
         // pictures of windows asked for this round go out before the frames are published, while the window server still has
         // a window that is being minimized or closed
@@ -1296,6 +1342,10 @@ fn run() -> std::io::Result<()> {
         for index in shell.take_popup_earcons() {
             let _ = audio_tx.send(AudioJob::Sound(Sound::Earcon(index)));
         }
+        // the audio graph the app in front asked for (`services::audio_graph`) plays on the sound-effects role
+        if let Some(tones) = springboard::shell::services::audio_graph::take() {
+            let _ = audio_tx.send(AudioJob::Graph(springboard::shell::audio_graph::pcm(&tones, 1.0)));
+        }
         for fx in effects {
             match fx {
                 Effect::Brightness(f) => {
@@ -1323,6 +1373,8 @@ fn run() -> std::io::Result<()> {
                 #[cfg(feature = "desktop-wayland")]
                 #[cfg(feature="desktop-wayland")]
                 Effect::ForeignWindowMaximize(id,maximized)=>{if let Err(e)=disp.wayland_foreign_maximize(id,maximized){eprintln!("desktop maximize: {e}");}}
+                #[cfg(feature="desktop-wayland")]
+                Effect::ForeignWindowTile(id,placement)=>{if let Err(e)=disp.wayland_foreign_tile(id,placement){eprintln!("desktop window tile: {e}");}}
                 #[cfg(feature="desktop-wayland")]
                 Effect::ForeignWindowAction(id,minimize)=>{if let Err(e)=disp.wayland_foreign_action(id,minimize){eprintln!("desktop window command: {e}");}}
                 #[cfg(feature="desktop-wayland")]
@@ -1948,6 +2000,7 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         if wayland && last_present != previous_present {
             if shell.take_raise_front() { disp.wayland_raise_front(); }
+            disp.wayland_restack(shell.take_wayland_restack());
             let pt = shell.points_px();
             if pt != presenter_scale { presenter_scale = pt; disp.wayland_set_scale(pt); }
             disp.wayland_window_materials(shell.take_wayland_materials());
@@ -2010,6 +2063,8 @@ fn wifi_settled(wifi: &springboard::net::wifi::Wifi) -> bool {
 enum AudioJob {
     Volume(springboard::media::volume::Volume),
     Sound(Sound),
+    /// an app's audio graph, rendered (`shell::audio_graph::pcm`, mono i16)
+    Graph(Vec<i16>),
 }
 
 /// A sound the shell plays on the sound-effects role: a key click, or the alert tone at this index into
@@ -2044,6 +2099,7 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
         let mut player: Option<SoundPlayer> = None;
         while let Ok(first) = rx.recv() {
             let (mut volume, mut alert, mut click, mut cue, mut earcon, mut ui) = (None, None, None, None, None, None);
+            let mut graph: Option<Vec<i16>> = None;
             let mut next = Some(first);
             while let Some(job) = next {
                 match job {
@@ -2053,12 +2109,27 @@ fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
                     AudioJob::Sound(Sound::Cue(c)) => cue = Some(c),
                     AudioJob::Sound(Sound::Earcon(i)) => earcon = Some(i),
                     AudioJob::Sound(Sound::Ui(i)) => ui = Some(i),
+                    AudioJob::Graph(pcm) => graph = Some(pcm),
                 }
                 next = rx.try_recv().ok();
             }
             // newest level wins: a slider drag while the server is slow collapses to one write
             if let Some(v) = volume {
                 apply_volume(v, &mut dev, &mut at);
+            }
+            // the newest audio graph plays first; a graph that is still waiting is replaced, never queued behind
+            if let Some(pcm) = graph.take() {
+                if player.is_none() {
+                    player = SoundPlayer::on_sound_effects().map_err(|e| eprintln!("springboard: sound: {e}")).ok();
+                }
+                if let Some(p) = player.as_mut() {
+                    if let Err(e) = p.audio_graph(&pcm, 1.0) {
+                        eprintln!("springboard: audio graph: {e}");
+                        if !springboard::media::system_sound::keeps_player(&e) {
+                            player = None;
+                        }
+                    }
+                }
             }
             let Some(sound) = alert
                 .map(Sound::Alert)

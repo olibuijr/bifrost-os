@@ -1702,7 +1702,7 @@ impl Shortcuts {
                         self.reorder = Some(Reorder { to, ..r });
                     }
                     self.dirty = true;
-                } else if self.dragging {
+                } else if self.dragging && bifrost_app::pans_now() {
                     let max = self.max_scroll(ui);
                     self.scroll = (self.scroll - (y - self.last_y)).clamp(0.0, max);
                     self.dirty = true;

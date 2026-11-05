@@ -5,7 +5,7 @@
 /// What the info sheet shows about a picture.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Exif {
-    /// the raw maker note (Exif MakerNote, tag 0x927C), as the camera wrote it; Apple's holds the Live Photo identifier
+    /// the raw maker note (Exif MakerNote, tag 0x927C), as the camera wrote it; the reference vendor's holds the Live Photo identifier
     pub maker_note: Option<Vec<u8>>,
     pub make: Option<String>,
     pub model: Option<String>,

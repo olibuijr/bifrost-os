@@ -4,6 +4,60 @@
 
 # Changelog
 
+## 0.17.1
+
+- Upstream designcraft v0.17.1.
+  ## What's Changed
+  * Assets: index placed files by content so importing many graphics stays linear by @dylanmtaylor in https://github.com/storytold/designcraft/pull/2181
+  * type.char: warn when the font family or style isn't available (#2189) by @JonRC in https://github.com/storytold/designcraft/pull/2190
+  * Space dotted paragraph border dots evenly by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2176
+  * Keep style export tags and classes on IDML import and export by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2174
+
+## 0.17.0
+
+- Upstream designcraft v0.17.0.
+  ## What's Changed
+  * Drop text variable markers in Text Only and RTF story export by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2098
+  * Skip children of hidden groups in EPUB/HTML export by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2097
+  * Match placed SVG font-family against legacy family and full names by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2094
+  * Drop XML-forbidden control characters from math SVG text by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2092
+
+## 0.16.0
+
+- Upstream designcraft v0.16.0.
+  ## What's Changed
+  * Separate the CJK commands from Insert Math Expression in the Type menu (#2043) by @MarekSpodBiedry in https://github.com/storytold/designcraft/pull/2048
+  * Add File > Quit to the in-window menu on Windows and Linux (#2044) by @MarekSpodBiedry in https://github.com/storytold/designcraft/pull/2049
+  * Spellcheck squiggles follow the text frame rotation (#2042) by @MarekSpodBiedry in https://github.com/storytold/designcraft/pull/2047
+  * macOS: Finder opens .indd and .indt files with DesignCraft by @texjer in https://github.com/storytold/designcraft/pull/2053
+
+## 0.15.2
+
+- Upstream designcraft v0.15.2.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/designcraft/pull/1954
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/designcraft/pull/1959
+  * Show file and message dialogs without blocking the frame (fixes macOS crash) by @aiongg in https://github.com/storytold/designcraft/pull/1961
+  * packaging: Flatpak finds and prints to CUPS printers by @dylanmtaylor in https://github.com/storytold/designcraft/pull/2012
+
+## 0.14.0
+
+- Upstream designcraft v0.14.0.
+  ## What's Changed
+  * Application bar: use craft-window's shared title bar by @aiongg in https://github.com/storytold/designcraft/pull/1811
+  * Fix ruler major tick spacing skipping the 10x step by @Silvertree2010 in https://github.com/storytold/designcraft/pull/1808
+  * Reply with a parse error on non-UTF-8 lines in MCP serve by @Silvertree2010 in https://github.com/storytold/designcraft/pull/1803
+  * Preflight: the missing-link test makes the temporary folder absolute by @dotCooCoo in https://github.com/storytold/designcraft/pull/1796
+
+## 0.13.0
+
+- Upstream designcraft v0.13.0.
+  ## What's Changed
+  * CI: one test binary per crate, nextest, line tables only by @aiongg in https://github.com/storytold/designcraft/pull/1642
+  * fix: keep package temp files owner-writable (SonarCloud rust:S2612) by @dylanmtaylor in https://github.com/storytold/designcraft/pull/1658
+  * web: let the browser zoom the page (SonarCloud Web:S7926) by @dylanmtaylor in https://github.com/storytold/designcraft/pull/1641
+  * packaging: harden shell scripts (SonarCloud S7688/S7679/S7682/S131) by @dylanmtaylor in https://github.com/storytold/designcraft/pull/1640
+
 ## 0.12.0
 
 - Upstream designcraft v0.12.0.

@@ -4,6 +4,51 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream soundcraft v0.17.0.
+  ## What's Changed
+  * Keep score export notes when bars are shorter than a sixteenth by @Silvertree2010 in https://github.com/storytold/soundcraft/pull/1234
+  * Export only the MIDI notes a trimmed clip still plays by @Silvertree2010 in https://github.com/storytold/soundcraft/pull/1032
+  * AIFF: test that a negative channel count is rejected by @TheGalitube in https://github.com/storytold/soundcraft/pull/1223
+  * Accept VST3 multi-out instruments with up to 64 audio buses by @Silvertree2010 in https://github.com/storytold/soundcraft/pull/1248
+
+## 0.16.0
+
+- Upstream soundcraft v0.16.0.
+  ## What's Changed
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/soundcraft/pull/1219
+  * docs: tidy agent, contributor and release docs by @aiongg in https://github.com/storytold/soundcraft/pull/1218
+  * Clip menu: act on the whole edit selection when the right-clicked clip is part of it by @ydking0911 in https://github.com/storytold/soundcraft/pull/1196
+  * Zoom Toggle: Alt+Shift+E and Alt-click cancel it and keep the current view by @dotCooCoo in https://github.com/storytold/soundcraft/pull/1101
+
+## 0.15.0
+
+- Upstream soundcraft v0.15.0.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/1163
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/1167
+  * Reject out-of-range timecode fields so Min:Secs strings fall through by @Silvertree2010 in https://github.com/storytold/soundcraft/pull/1024
+  * Count only audio-track clips in session text export by @Silvertree2010 in https://github.com/storytold/soundcraft/pull/1025
+
+## 0.14.0
+
+- Upstream soundcraft v0.14.0.
+  ## What's Changed
+  * Migrate SoundCraft to egui 0.37 by @skylartaylor in https://github.com/storytold/soundcraft/pull/1063
+  * Follow-ups to #1058: Auto Pan keeps the stereo image, paste and Strip Silence fixes by @aiongg in https://github.com/storytold/soundcraft/pull/1060
+  * Meters: keep every block's peak until the UI takes it by @forwardaudio in https://github.com/storytold/soundcraft/pull/1045
+  * feat: startup update prompt modal and direct self-updating by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/1073
+
+## 0.13.1
+
+- Upstream soundcraft v0.13.1.
+  ## What's Changed
+  * chore(deps): bump the cargo-dependencies group across 1 directory with 11 updates by @dependabot[bot] in https://github.com/storytold/soundcraft/pull/767
+  * style: normalize the prores DCT basis literals (SonarCloud rust:S7454) by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/962
+  * style: use [[ ]], named locals and explicit returns in packaging scripts (SonarCloud S7688/S7679/S7682) by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/950
+  * Use chrono instead of hand-rolled UTC conversion by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/844
+
 ## 0.12.1
 
 - Upstream soundcraft v0.12.1.

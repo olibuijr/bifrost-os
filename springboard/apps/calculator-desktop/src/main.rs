@@ -134,6 +134,10 @@ impl CalculatorApp {
 }
 
 impl App for CalculatorApp {
+    /// A single-window utility: the red light quits it (`applicationShouldTerminateAfterLastWindowClosed:`).
+    fn terminates_after_last_window_closed(&self) -> bool {
+        true
+    }
     fn id(&self) -> &str {
         "is.olibuijr.calculator.desktop"
     }

@@ -330,10 +330,8 @@ impl NativeFileManager {
             Ok(()) => Ok(()),
             Err(e) if e.raw_os_error() == Some(EXDEV) => {
                 let m = fs::symlink_metadata(src)?;
-                if let Err(e) = copy_tree(src, dst, &m) {
-                    let _ = self.remove_item(dst);
-                    return Err(e);
-                }
+                // `copy_tree` removes its own partial output when it fails.
+                copy_tree(src, dst, &m)?;
                 self.remove_item(src)
             }
             Err(e) => Err(e),
@@ -572,22 +570,38 @@ fn refuse_existing(dst: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Copies the item `src` (whose metadata is `m`, not followed) to `dst`, which must not exist.
+/// Copies the item `src` (whose metadata is `m`, not followed) to `dst`, which must not exist. All or nothing: when
+/// the copy fails, everything this call created under `dst` is removed again (nothing that was there before is
+/// touched, because `dst` itself is only removed once this call has made it) and the original error is returned.
 fn copy_tree(src: &Path, dst: &Path, m: &fs::Metadata) -> io::Result<()> {
     match kind_of(m) {
         ItemKind::File => {
-            fs::copy(src, dst)?;
+            let mut from = fs::File::open(src)?;
+            // `create_new` fails on an existing path, so a file made by someone else is never overwritten.
+            let mut to = fs::OpenOptions::new().write(true).create_new(true).open(dst)?;
+            let copied = io::copy(&mut from, &mut to).and_then(|_| to.set_permissions(m.permissions()));
+            if let Err(e) = copied {
+                drop(to);
+                let _ = fs::remove_file(dst);
+                return Err(e);
+            }
         }
         ItemKind::Symlink => std::os::unix::fs::symlink(fs::read_link(src)?, dst)?,
         ItemKind::Directory => {
             fs::create_dir(dst)?;
-            for name in read_names(src)? {
-                let from = src.join(&name);
-                let child = fs::symlink_metadata(&from)?;
-                copy_tree(&from, &dst.join(&name), &child)?;
+            let filled = (|| -> io::Result<()> {
+                for name in read_names(src)? {
+                    let from = src.join(&name);
+                    let child = fs::symlink_metadata(&from)?;
+                    copy_tree(&from, &dst.join(&name), &child)?;
+                }
+                // Permissions last, so a read-only directory still takes its children.
+                fs::set_permissions(dst, m.permissions())
+            })();
+            if let Err(e) = filled {
+                let _ = fs::remove_dir_all(dst);
+                return Err(e);
             }
-            // Permissions last, so a read-only directory still takes its children.
-            fs::set_permissions(dst, m.permissions())?;
         }
     }
     Ok(())
@@ -639,6 +653,32 @@ mod tests {
         assert_eq!(fs::read_to_string(s.0.join("b/x.txt")).unwrap(), "x");
         assert_eq!(fs::read_to_string(s.0.join("b/sub/y.txt")).unwrap(), "yy");
         assert!(s.0.join("a/sub/y.txt").exists(), "the source stays");
+    }
+
+    #[test]
+    fn a_failed_directory_copy_removes_what_it_created_and_keeps_pre_existing_files() {
+        let s = Scratch::new();
+        // A tree whose last entry cannot be read, so the copy fails after it has written the entries before it.
+        touch(&s.0.join("a/one.txt"), "1");
+        touch(&s.0.join("a/sub/two.txt"), "2");
+        touch(&s.0.join("a/zz.txt"), "locked");
+        fs::set_permissions(s.0.join("a/zz.txt"), fs::Permissions::from_mode(0o000)).unwrap();
+        if fs::File::open(s.0.join("a/zz.txt")).is_ok() {
+            return; // running as root: permissions do not stop the read, so there is no failure to simulate
+        }
+        touch(&s.0.join("keep/existing.txt"), "mine");
+        let fm = NativeFileManager;
+
+        let err = fm.copy_item(&s.0.join("a"), &s.0.join("keep/b")).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied, "the original error comes back");
+        assert!(fs::symlink_metadata(s.0.join("keep/b")).is_err(), "the partial destination is gone");
+        assert_eq!(fs::read_to_string(s.0.join("keep/existing.txt")).unwrap(), "mine", "pre-existing files survive");
+        assert!(s.0.join("a/sub/two.txt").exists(), "the source is untouched");
+
+        // A refused copy (destination exists) never removes the existing destination.
+        let err = fm.copy_item(&s.0.join("a"), &s.0.join("keep")).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(s.0.join("keep/existing.txt")).unwrap(), "mine");
     }
 
     #[test]

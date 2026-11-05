@@ -500,7 +500,7 @@ fn paint_into(c: &mut dyn Canvas, state: &DockState, lay: &Layout, now_s: f64) {
             let track = Rect::new(rr.x + rr.w * 0.15, rr.bottom() - 12.0, rr.w * 0.7, 4.0);
             c.fill_rrect(to_rectf(track), 2.0, ui::FILL_GRAY);
             if let Some(fill) = progress_fill(track, Some(item.progress), now_s, PROGRESS_PERIOD_S) {
-                c.fill_rrect(to_rectf(fill), 2.0, ui::TINT);
+                c.fill_rrect(to_rectf(fill), 2.0, ui::accent_now());
             }
         }
     }
@@ -518,7 +518,7 @@ pub fn paint_menu(entries: &[MenuEntry], hover: Option<usize>, size: (u32, u32),
         let row = Rect::new(MENU_PAD, MENU_PAD + i as f32 * MENU_ROW_H, w - 2.0 * MENU_PAD, MENU_ROW_H);
         let selected = hover == Some(i) && e.enabled;
         if selected {
-            c.fill_rrect(to_rectf(row), 5.0, ui::MENU_HIGHLIGHT);
+            c.fill_rrect(to_rectf(row), 5.0, ui::menu_highlight());
         }
         let color = if selected {
             ui::MENU_HIGHLIGHT_TEXT
@@ -579,13 +579,17 @@ pub fn run() -> Result<(), String> {
         let now = started.elapsed().as_secs_f64();
         let wait = if state.animating(now) { 16 } else { -1 };
         let events = display.dispatch(wait, Some(link.fd()))?;
+        // a new scheme or accent repaints the Dock and its open menu
+        let mut appearance_changed = false;
         for m in link.recv().map_err(|e| format!("shell link: {e}"))? {
-            if let ToChrome::Dock(model) = m {
+            if crate::model::apply_appearance(&m) {
+                appearance_changed = true;
+            } else if let ToChrome::Dock(model) = m {
                 state.set_model(model);
             }
         }
-        let mut dirty = false;
-        let mut menu_dirty = false;
+        let mut dirty = appearance_changed;
+        let mut menu_dirty = appearance_changed;
         for ev in events {
             match ev {
                 Event::Configured { surface: s, width, height, scale: sc } => {

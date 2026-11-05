@@ -17,7 +17,7 @@ use crate::gfx::{Image, Surface};
 use crate::layout::Rect;
 
 /// The chrome surface id the open card is exported as.
-pub const CHROME_ID: u32 = 14;
+pub const CHROME_ID: u32 = super::chrome_ids::UTILITY;
 
 /// Which card is up.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

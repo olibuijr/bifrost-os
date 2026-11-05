@@ -2,6 +2,247 @@
 
 ## Unreleased
 
+## 0.10.45 — 2026-10-29
+
+- Require signed system updates after importing the repository key, and sign published packages and repository metadata.
+- Avoid an extra display mode change during boot when the kernel command line specifies a display mode.
+
+## 0.10.44 — 2026-10-27
+
+Fixes from the backlog waves and the owner's reports, with every app rebuilt.
+
+- Mouse and finger: every touch now says whether a mouse or a finger made it. On the desktop a mouse drag no longer scrolls a list (Mail's inbox, Settings, the Photos sidebar, Overview and the app lists); the wheel, trackpad and scroll bar do. A finger on a touchscreen and the tablet still pan. Apps must be rebuilt with this release (the touch message changed).
+- Files: dragging a file onto a folder moves it again (a slow, mostly vertical drag never began); a drag that ends outside the window no longer leaves Files stuck dragging.
+- TextEdit: Cmd+Q asks about every edited document (Save, Don't Save, Cancel) instead of quitting; Cancel keeps the document edited; after Replace All typing continues after the last replacement.
+- Mail: an HTML message that starts with a large inline image shows its text, not pages of image data.
+- Red close: closing an app's last window keeps the app running in the Dock with its menu bar; a Dock click opens a window again. Twelve single-window utilities still quit.
+- Accent colour: focus rings, selections, filled controls and progress in 13 more apps, the menu bar highlight and the Dock follow Settings > Appearance > Accent.
+- Now Playing shows PNG and JPEG album art. Terminal gets the back-tab sequence for Shift+Tab. Overview shows live window contents on the Vulkan renderer.
+- Tools: tools/midget.py keeps one input session (keys about 9x faster), adds press-and-hold, a relative mouse, guarded clicks and zoomed crops; tools/midget-scan.py.
+
+## 0.10.43 — 2026-10-26
+
+The open items of the handoff list, fixed by nine fixers and checked on Midget.
+
+- Windows: the close animation plays again (the closing window keeps its last presented frame); no window draws as active while an app with no window is in front.
+- Keyboard: Shift+Tab and Cmd+Delete reach apps with their modifiers, so Shift+Tab steps a sheet's focus ring back and Cmd+Delete is Don't Save in a close alert; Tab in Settings moves through the detail pane's controls (Space and Return press them, arrows step sliders and segments).
+- Sheets: `bifrost_app::document::sheet_key` gives an app's own sheets Cmd+., Cmd+D, the Tab focus ring and Space; Disk Utility, Notes, Stickies, TextEdit and Reminders use it.
+- Accent colour: focus rings, selections, checked controls, progress fills and the menu highlight follow Settings > Appearance > Accent; in Light the default blue is the light systemBlue.
+- Now Playing shows artwork an app sends (Music's album art, Voice Memos' icon) in Control Center, the menu bar and on the lock screen.
+- Files: Open With > Other… lists every installed app; Undo restores tag colours. The SDK's `copy_item` removes a partial copy when it fails.
+- Clean names: the name guard reports no platform or product names in the code. Steadier media player tests.
+
+## 0.10.42 — 2026-10-26
+
+Fixes from five bug-fix waves on Midget: the shell and built-in apps, the core apps in depth, cross-app workflows, a regression pass in Light and Dark, and keyboard-only use.
+
+- Closing: the red button asks an app that opts in (`App::handles_close_request`, `window_close_requested`) instead of quitting it, so an edited document or message gets "Save changes?" from the red button on any of its windows. Quit and shutdown are never vetoed.
+- Menus: an app can declare it has nothing to print (`AppMenuItem::no_print`); an app's own Settings… (Cmd+,) moves to the application menu; Edit keeps Undo, Cut, Copy, Paste and Select All first.
+- Keyboard: Spotlight's Up and Down move the highlighted result (Cmd+Up/Down jump categories); Settings' sidebar follows Up and Down, and Tab moves a focus ring between it and the search field; save sheets take Cmd+D for Don't Save, and Tab and Space reach every button.
+- Windows: an app with only an extra window keeps its Dock tile; a closed window leaves no pixels for the next one; a file drag leaves no image trail on the desktop.
+- Spotlight shows one result per Settings pane; Esc closes Notification Center; the Dock's hover label clears after a click; Quick Look reads escaped file names and shows RTF text.
+- Settings: Appearance tiles no longer cover their labels, the auto-hide caption sits under its switch, About gives long values room.
+- Photos: View > Favorites opens the Favorites album; empty states say click. Magnifier and Terminal polish.
+- Networking: e1000e network cards ship with TSO and GSO off (NetworkManager default and the installer's lab keyfile).
+- Ships with the app fixes of the round: Files, Calendar, Contacts, Mail, Notes, Reminders, TextEdit, Script Editor, Archive, Disk Utility, Colour Utility, Audio Setup, Grapher and News.
+
+## 0.10.41 — 2026-10-26
+
+Fixes from three app-by-app test waves on Midget (every system app not covered before).
+
+- Open and Save panels use the window background instead of a pure black list.
+- A window closed while in full screen reopens at its windowed frame; the Applications grid's Calendar icon shows today's date.
+- System Information may read the hardware facts (new first-party `hardware-info` entitlement: `/sys` read-only), so Graphics, Storage and the Overview are filled in.
+- SDK: `item_sheet`, a small add-item sheet (Keychain Access and Passwords use it).
+- Chess symbols draw from the symbol font (`Symbols::render_char`).
+- The installer writes the interrupt-priority unit with `$$` (no journal warning at boot) and the lab NIC's wake-on-lan as the keyfile integer.
+- Ships with the app fixes of the round: TextEdit, Activity Monitor, Journal, Freeform, Stocks, Maps, Clock, Photo Booth, Viewer, Sticky Notes, Screenshot, Archive, Disk Utility, System Information, Grapher, Keychain Access, Passwords, Locate, Colour Utility, Digital Color Meter, Wireless Diagnostics, News, Browser, Fonts, Dictionary, Weather, Audio Setup, Script Editor, Folder Actions Setup, Chess, Messages, Assistant, Remote and Voice Memos.
+
+## 0.10.40 — 2026-10-25
+
+- Background windows: an app behind other windows is told its new window size and redraws at it (also while suspended), the shell never paints black past an app's frame, and a window that was in full screen at shutdown comes back at its normal frame instead of filling the screen.
+- A window that changes size while covered keeps the size of the pixels it holds, so the presenter never reads past a buffer.
+- Every BifrOSt app is rebuilt with the new SDK.
+
+## 0.10.39 — 2026-10-25
+
+- Full screen: when the pointer reaches the top edge, the menu bar slides in and the window's toolbar appears directly below it with its traffic lights (green leaves full screen), instead of the menu bar covering the toolbar. Clicks on the revealed toolbar reach the app. Windows from other toolkits are unchanged.
+- Typing: a keyboard that reports each key on two interfaces (such as some gaming keyboards) no longer types every letter twice. The window server merges all keyboards into one seat keyboard, and the shell reads only the hardware button keys itself under the window server.
+
+## 0.10.38 — 2026-10-25
+
+Fixes from the 0.10.37 end-to-end pass on Midget.
+
+- An app that closes its last window keeps its Dock icon and running dot, stays in Cmd+Tab and stays the active app with its menu bar; activating it reopens a window.
+- After lock and unlock the windows are stacked in the shell's order again, and the window server's focus changes under the lock no longer reorder them.
+- Light/Dark switches reach every window at once: the window server follows the scheme for window materials, and cached windows redraw during the fade (in a few steps, to keep the cost bounded).
+- Spotlight's strict sections match only from a word start ("words" no longer finds "Open Passwords"); a query of digits finds a contact by any part of its phone number.
+- Settings: Back returns from a pane opened by Search to the pane open before; the first hit is highlighted before Return.
+- Ships with Reminders 1.20.6 (smart-list tile names wrap instead of being cut).
+
+## 0.10.37 — 2026-10-25
+
+Fixes from the 0.10.36 end-to-end pass on Midget.
+
+- Spotlight: Shortcuts, Clock, Contacts, Files and Calendar results need a real match (a prefix, a word start or a run of the text), and a shortcut run from Spotlight shows its result, or the error, in a banner.
+- Apps can close their main window and keep running; activating such an app again tells it to reopen (new ToApp::Reopen). Only an app that closed its own window is asked to reopen.
+- Heading markers are hidden at every level in markdown text, and typing over or deleting a selection that starts in a hidden marker keeps the heading; Return in an empty heading opens the line below.
+- Ships with TextEdit 1.13.6 (closing the last document closes its window; activating TextEdit again opens a new Untitled; requires shell 0.10.37) and Notes 1.24.8 (headings show no markers, list snippets drop markdown, Delete Permanently asks in an alert sheet).
+- Tests share fonts and wallpaper fixtures instead of leaking a copy per test shell, so the shell test suite fits the build host's memory again.
+
+## 0.10.36 — 2026-10-25
+
+Fixes from the 0.10.35 end-to-end pass on Midget, a security review of the shell's connections to apps, and every BifrOSt app rebuilt.
+
+- Shell actions reach sandboxed apps: the shell connects to an app's control socket with the account's effective credentials (apps see their own account, nothing else changes in the shell), so Spotlight dictionary hits, Look Up's Open in Dictionary and Services work. The connection never follows links (the socket is opened and checked first, then connected through that handle), replies are limited to 1 MiB with one deadline, the switch back is checked and aborts on failure, and a shell without an account only connects to root's own sockets. Apps accept root only outside a user namespace.
+- An app redraws after a request from the shell, without waiting for the pointer.
+- Services > Look Up in Dictionary opens Dictionary on the selection; Ctrl+Cmd+D keeps the popover.
+- Spotlight no longer matches indexed titles by scattered letters, and the Top Hit gets its own filter chip.
+- Window-level protocol version 9: the shell can move a window that is already on screen (a document window keeps its place when another closes). The window server and the shell ship together.
+- The App Store decodes its icons off the interface thread and revalidates cached icons in the background.
+- Ships with TextEdit 1.13.5 (Undo of Make Plain Text restores rich text; its confirmation is a sheet), Dictionary 0.6.7 (Cmd+A and the other editing keys in the search field) and Notes 1.24.7 (a heading line never shows a checklist marker as raw text); the other apps are rebuilt.
+
+## 0.10.35 — 2026-10-25
+
+Fixes from the 0.10.34 end-to-end pass on Midget, and every BifrOSt app rebuilt.
+
+- Shell actions reach apps again: Spotlight dictionary hits, Look Up's Open in Dictionary and Services. The shell and the apps share one rule for an app's control socket (in the app's data folder, as the sandbox binds it), and apps accept the shell (root) as well as their own account.
+- Spotlight: Settings panes need a real match (no more panes found by scattered letters), an exact dictionary word outranks a loose match but not an app found by its common name, and body matches show the text around the match.
+- Cmd+Tab switches between apps (one entry per app, most recent first) and brings all of an app's windows forward. New document windows cascade down and to the right.
+- Alerts are sheets attached under the window's title bar, with full-width stacked buttons.
+- Vibrant text draws inside clipped areas (Dictionary's sidebar shows every match).
+- The App Store shows real app icons and no longer wakes on every pass while an icon retry is pending. Settings > Appearance footers sit under their rows.
+- Ships with TextEdit 1.13.4 (Make Plain Text asks first, uses the plain-text font and undoes cleanly; plain files open in the plain font; closing the main document keeps the other window where it was) and Dictionary 0.6.6 (arrow keys move through the matches); the other apps are rebuilt.
+
+## 0.10.34 — 2026-10-25
+
+Fixes from the 0.10.33 end-to-end pass on Midget.
+
+- Look Up opens next to the selection: apps report their caret in window points (the SDK text controls do it for every rebuilt app), and the shell places the popover at it, in the app's front window too.
+- Spotlight finds the built-in Terminal and Viewer by their common names (terminal, preview), shows Mail results with decoded subjects, and a dictionary hit opens Dictionary on that word even when Dictionary was not running.
+- Opening a running app brings all of its windows forward in their order; an app whose main window was closed opens it again.
+- The Services menu lists Look Up in Dictionary once.
+- Extra app windows can be full-size, so a second document window has one title row.
+- Ships with TextEdit 1.13.3 (the save alert is a sheet under the title bar with a blue default button and the whole document name; the Window menu shows Edited; plain text has no format bar; Look Up opens at the caret), Notes 1.24.5 (Look Up and Services use the note's selection) and Dictionary 0.6.5 (first match shown while typing, sidebar clipped below the title area, a word from Spotlight or Services shown on a cold start).
+
+## 0.10.33 — 2026-10-25
+
+Fixes from the 0.10.32 end-to-end pass on Midget.
+
+- Look Up (Ctrl+Cmd+D) and Services use the front app's selection, or the word at its caret, instead of the clipboard. Apps answer a new selection request; the Look Up popover floats above app windows at the caret, with link-blue actions.
+- Type-select in menus and the Downloads stack, and menu key equivalents, follow the session keyboard layout (on Icelandic, "-" is the "-" key).
+- Line wrapping breaks between Chinese, Japanese and Korean characters (never before closing or after opening punctuation) and splits a word longer than the line, across the shell and apps.
+- The Dock's label is hidden while the Downloads stack is open. Settings > Displays no longer repeats the Appearance setting.
+- Ships with Mail 0.17.8 (Chinese paragraphs wrap inside the pane), Clock 1.6.3 (a short hour hand and a long minute hand; world-map labels avoid each other), Files 1.34.2 (image thumbnails in its views), TextEdit 1.13.2 (New opens a second window; reports its selection; asks before closing an edited document) and Dictionary 0.6.4 (a sidebar of matches, a toolbar search field, plain definitions with cross-reference links only).
+- The desktop's overlay surfaces (menus and their submenus, panels, Look Up, banners, the accessibility caption and focus ring) each keep their own surface id: submenus have a reserved range, so a deep submenu can no longer take over another surface.
+- Settings rows whose label is cut to two lines keep the text as written in the last line: no spaces appear inside Chinese, Japanese or Korean labels or inside a word broken at a hyphen.
+
+## 0.10.32 — 2026-10-25
+
+Fixes from the 0.10.31 end-to-end pass on Midget, and every BifrOSt app rebuilt.
+
+- A file opened with its default app (Files, the Downloads stack) opens as a document in apps that use the document controller, such as TextEdit, and brings an already open copy to the front; files you own open read-write, so they save in place.
+- The Downloads stack closes when a shortcut opens something else (Spotlight, the app switcher), keeps the keys you type (type-select by name prefix), and shows thumbnails.
+- Dictionary and Look Up have an English dictionary: WordNet 3.0, under its licence, installed as a system StarDict dictionary. Look Up no longer reads the dictionaries on the interface thread.
+- Camera's not-available screen wraps its reason above Try Again.
+- The menu bar's type-select pauses after one second, as it should.
+- Every BifrOSt app (56) is rebuilt with the current renderer and SDK, so Chinese, Japanese and Korean text draws whole in apps too. Clock gains a day and night world map with sunrise and sunset per city; Files follows deletions while in the background; Reminders keeps smart-list tile names on one line.
+
+## 0.10.31 — 2026-10-25
+
+- Whatever Spotlight, the Applications grid, the Dock or the open-app control opens becomes the front window with the keyboard, whether it is a built-in or an app, and whatever was in front before. For three seconds after an open the shell ignores focus the window server hands to other windows on its own (a keyboard hand-back when Search closes, its own pick of a next window) and activates the opened window again when it maps; a click on another window ends this at once, and so does the opened app exiting.
+- Window focus decisions are written to the journal while tracing is on (`springboard: focus` lines).
+
+## 0.10.30 — 2026-10-25
+
+Fixes from the 0.10.29 end-to-end pass on Midget.
+
+- An app opened from Spotlight or the Applications grid comes to the front; the keyboard hand-back after Search or the grid closes no longer raises the previous window over it. A click on another window during the launch still raises that window.
+- A pointer that lands on a surface by an absolute jump (tablet, remote control) hovers where it landed.
+- The Applications grid's Dock icon is labelled Applications, and the open grid dims the whole desktop, other apps' windows included.
+- Chinese, Japanese and Korean text draws whole: CID-keyed fonts use each glyph's own font dictionary (local subroutines and widths).
+- The Downloads stack opens above the Dock as a fan or a grid of its newest items with Open in Files; arrows, Return and typing select, other keys and clicks pass through, and files open in their default app, including Photos.
+- The Photos empty state wraps and stays centred in a narrow window.
+
+## 0.10.29 — 2026-10-25
+
+Fixes from the 0.10.28 end-to-end pass on Midget.
+
+- Windows brought back by closing the Applications grid, Overview or showing a hidden app return in their order above other apps' windows (window-level protocol version 8, stack ranks; the window server and shell ship together). Showing an app brings all of its windows forward.
+- Shell surfaces stack by a fixed rank (sheets, Dock, grid and Overview, menus, banners, captions and the focus ring), so menus open over the grid with their items, and drawing and clicks agree.
+- The menu bar keeps the front app while Overview is open.
+- The Dock magnifies about the pointer, and hover, labels, clicks and the context menu use the icons as they are drawn.
+- Chinese, Japanese and Korean text draws from the Noto Sans CJK collection instead of missing-glyph boxes (font collections are now read; apps get it when rebuilt).
+- Photos on the desktop is a full-size sidebar window with a scrolling source list, and its content follows Light and Dark.
+- Spotlight shows its placeholder without a caret until you type.
+- Ships with Mail 0.17.6 (a message opened in its own window is marked read; CJK text) and Notes 1.24.3 (alerts wrap).
+
+## 0.10.28 — 2026-10-25
+
+Fixes from the 0.10.27 end-to-end pass on Midget, a parity wave across nine frameworks, and system appearance for apps built with other toolkits.
+
+- Apps updated while they run (an OS update's restored session, an App Store update) relaunch at the new version with their window frames, unless they have unsaved changes or are in use in front; a half-installed package is never launched.
+- Hiding and showing an app keeps its windows' stacking and focus (Cmd+W closes the window you see in front). Dock clicks between two icons open the nearer app; hover, labels and the context menu use the same areas. Restored windows open where they were, and a native window recreated after Show Desktop comes back at its old frame.
+- The menu bar keeps the front app while the Applications grid is open, its menus draw over the grid, and Escape closes an open menu first.
+- The App Store is a full-size sidebar window with the sidebar material. Alert sheets wrap their title and message and size themselves from the wrapped text.
+- Control characters and line or paragraph separators in one-line text lay out as a space instead of a missing-glyph box (the thick bar seen for "|" in mail subjects).
+- The Window menu lists a hosted app's main window by the title the app gave it, such as Mail's mailbox.
+- Third-party apps follow Light and Dark: the settings portal reports Increase Contrast and the Auto switch on time, Qt apps use a theme that follows the portal, and GTK 3 apps get the dark-theme setting at start.
+- Developer kit, measured against the reference platform: Core Image (compositing and blend modes, perspective and Lanczos scaling, five barcode generators, lens distortions, temperature and tint), Core Graphics (shadings with alpha, font variations, every PDF text drawing mode), AppKit colour and printing (semantic colours, colour panel modes, colour well, printer capabilities), declarative views (baselines, button styles, scroll position, group box, control group, tab view), Core Animation (media timing, springs, transitions), widgets for assistive technology, Contacts (full records, more fields, address formats), Image I/O (WebP read and write with metadata, thumbnails, region decode) and accessibility custom actions and hover speech.
+- Ships with Mail 0.17.5 (own File menu, Mark as Read toggle, window titled by mailbox, the new contacts save format) and Reminders 1.20.2 (Delete Permanently acts on the right reminder; Undo takes it out of Recently Deleted).
+
+## 0.10.27 — 2026-10-24
+
+Fixes from the second 0.10.25 end-to-end pass on Midget.
+
+- Playback started by an app (Music radio, Podcasts) stops, and its network stream closes, when that app quits or its connection ends.
+- An app's pop-up menu takes clicks over its whole area, including the part that extends past the app's window; a click there no longer falls through to the window behind.
+- Show Desktop also puts other apps' windows aside and brings them back; Bring All to Front brings back the active app's windows.
+- Clock alerts on the desktop banner have Stop and Repeat (timers) or Stop and Snooze (alarms).
+- The Drift wallpaper no longer re-blurs the whole wallpaper twice a second.
+- Shared text editing hides markdown style markers, so bold and italic show as styled text (with Notes 1.24.2).
+- Ships with Notes 1.24.2 (bold without visible markers, confirmed deletion in Recently Deleted), Reminders 1.20.1 (Cmd+Backspace deletes only a visible reminder; Delete Permanently and Delete All in Recently Deleted), Calendar 1.19.1 (the hour grid keeps its scroll; the system double-click interval), Mail 0.17.4 (Mark as Unread shows the dot at once) and Maps 0.7.1 (zooming out shows scaled tiles instead of black).
+
+- Quitting Music (or any app that started playback) stops it: the audio service gives playback to the connection that set the queue, and when that app quits, crashes or is killed the queue is cleared and a radio station's network connection closes, instead of the station playing on with no app.
+
+## 0.10.26 — 2026-10-24
+
+- Modifier keys stay in step with the keyboard: the shell follows the window server's modifier state when keyboard focus enters or leaves it and on every modifier change, so a Shift or Cmd release that went to another window can no longer leave the key held (which turned every click in Mail into a range selection). Right Alt keeps working as AltGr on layouts where the window server reports it as Alt, and modifiers taken by event taps or Switch Control stay taken. The state report gains a `key_mods=` line.
+- Apps can ask for a window cascaded from their other windows (`WindowSpec::cascaded`, after AppKit's `cascadeTopLeftFromPoint:`). The shell places such a window once; a window the person moved keeps its place when it is shown again.
+- Ships with Mail 0.17.3: switching mailboxes shows the last listing at once and refreshes it in place, and message viewer windows open cascaded beside the main window instead of over its list.
+
+## 0.10.25 — 2026-10-24
+
+Fixes from the 0.10.24 end-to-end pass on Midget.
+
+- Locking the desktop (Ctrl+Cmd+Q, the menu, a hot corner or AssistiveTouch) keeps the display on and always opens the login window. The lock screen takes the keyboard before menus, sheets, Overview and other layers, and a key wakes a locked display that went dark.
+- Typing `exit` in Terminal closes only its window. Show Desktop toggles back, and Bring All to Front returns windows that Show Desktop put aside. Overview ends Show Desktop, leaves out minimised windows and shows covered windows' contents.
+- Window arrangement (Fill, halves, Center, Return to Previous Size and Ctrl+Cmd+arrows) acts on the window in front, including other apps' windows, and works under Terminal Secure Keyboard Entry. Requires the matching window server, version 7 of the window-level protocol.
+- Clock alerts on the desktop ring as a banner with Stop instead of taking over the screen. The desktop repaints completely after a full-screen alert.
+- The scroll wheel no longer resizes a window when the pointer is at a window edge, and the click after a wheel notch over Settings is no longer lost. Viewing Settings or Overview no longer changes preferences.
+- The translucent backdrop behind the app grid and other glass panels lines up with the panel.
+- Settings: Return in Search opens the highlighted result, and Up and Down step through results. The sidebar keeps its scroll position across resizes, applies a new icon size immediately, and shows scroll bars when they are set to Always.
+- The CPU and RAM menu bar panels no longer list apps that have quit.
+- Notes Cmd+B on a selection spanning several lines styles each line (with Notes 1.24.1). Also shipping: Clock 1.6.1 (timer presets select a duration; Start starts it) and Mail 0.17.2 (the main window takes back its own size after a compose window; compose errors appear in the compose window).
+
+## 0.10.24 — 2026-10-23
+
+- Dock changes from Settings use the full output after window-local input handling finishes. A filled Settings window no longer loses space repeatedly when moving the Dock between edges or toggling auto-hide.
+- Auto-hide keeps the Dock visible while the pointer rests on a magnified icon above the plate.
+
+## 0.10.23 — 2026-10-23
+
+- The Dock sits close to its selected screen edge with a consistent inset instead of floating half its own height above it. The complete row, including Downloads and Trash, shrinks to fit smaller screens.
+- Magnified icons, launch bounce, hover labels and shadows have room on the Dock surface. The visible icon takes input above the resting plate, and context menus target its current position.
+- The Dock reserves the resting plate's space independently of its transparent animation area; the compositor no longer counts the edge gap twice. Auto-hide reserves no space, and Left and Right reserve their own edge.
+- Filled windows follow Dock size, position and auto-hide changes; ordinary windows keep their chosen size. Apps receive the same visible work area through the screens service.
+
+## 0.10.22 — 2026-10-23
+
+- Text rendering no longer draws missing-glyph boxes for invisible formatting characters; soft hyphens stay invisible except at line breaks. Apps receive this fix when rebuilt with the updated renderer.
+- Scrolling app context menus stay within the desktop work area without rounding one pixel under the Dock.
+- Corrected the new soft-hyphen regression test to cover its entire input.
+
 ## 0.10.21 — 2026-10-23
 
 Five rounds of end-to-end testing on Midget, each followed by fixes.

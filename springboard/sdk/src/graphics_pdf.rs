@@ -30,6 +30,21 @@ use bifrost_render::gfx::Image;
 
 use crate::graphics_quartz_filter::QuartzFilter;
 
+/// The PDF page context: a drawing context (paths, clipping, the transform, colours, alpha and blend modes, gradients
+/// and shadings, images, standard-face text, links, named destinations, an outline and document information) whose
+/// pages are written as PDF vector content. Use it to make a PDF from the same drawing calls a bitmap context takes;
+/// [`PdfWriter`] stays for the simple page calls of the print pipeline.
+///
+/// ```ignore
+/// let mut cx = graphics_pdf::PdfContext::new(None, graphics_pdf::PdfInfo { title: "Report".into(), ..Default::default() });
+/// cx.begin_page(None);
+/// cx.set_fill_rgb(0.0, 0.48, 1.0, 1.0);
+/// cx.fill_rect(bifrost_render::cg::context::Rect::new(72.0, 72.0, 200.0, 100.0));
+/// cx.set_url_for_rect("https://example.org/", bifrost_render::cg::context::Rect::new(72.0, 72.0, 200.0, 100.0));
+/// let pdf_bytes = cx.close();
+/// ```
+pub use bifrost_render::cg::pdf::context::{PageBoxes, PdfContext, PdfInfo, PdfOutlineItem, StandardFace, DEFAULT_MEDIA};
+
 /// One occurrence of a search string on a page (`PDFSelection`): the zero based page, the line of the page's text it
 /// sits on, its character range in that line, the text as written in the document, and the line's baseline and font
 /// size in page points (the vertical extent a highlight spans).

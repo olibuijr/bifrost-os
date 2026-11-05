@@ -181,6 +181,15 @@ fn change_colour(pct: f64) -> u32 {
     if pct < 0.0 { SYSTEM_RED } else { SYSTEM_GREEN }
 }
 
+/// The colour of the price chart: that of the quote's change since the previous close, so the chart, the sparkline and
+/// the change text agree; without a quote, the trend across the chart's own closes.
+fn chart_colour(quote: Option<&Quote>, closes: &[f64]) -> u32 {
+    match quote {
+        Some(q) => change_colour(q.change()),
+        None => change_colour(closes.last().copied().unwrap_or(0.0) - closes.first().copied().unwrap_or(0.0)),
+    }
+}
+
 /// "+4.23" or "-0.57": a change with its sign.
 fn signed(value: f64) -> String {
     format!("{value:+.2}")
@@ -393,7 +402,7 @@ impl Stocks {
             put(&mut self.labels, s, ui, &last_bar.date, MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Right, plot_x1, plot_y1 + ui.pt(SPACE_L));
         }
         let points = plot(&values, (plot_x0, plot_y0, plot_w, plot_h));
-        let line = if values.last() >= values.first() { SYSTEM_GREEN } else { SYSTEM_RED };
+        let line = chart_colour(quote.as_ref(), &values);
         polyline(s, &points, ui.pt(1.5), line);
     }
 }
@@ -407,6 +416,15 @@ mod tests {
         assert_eq!(age_text(5.0), "just now");
         assert_eq!(age_text(90.0), "1 min ago");
         assert_eq!(age_text(3.0 * 3600.0 + 5.0), "3 h ago");
+    }
+
+    #[test]
+    fn the_chart_follows_the_sign_of_the_quotes_change() {
+        let falling = Quote { symbol: "AAPL".into(), name: String::new(), stamp: String::new(), open: 100.0, close: 99.5, spark: vec![] };
+        // the history rose over the window, yet the day fell: the chart is red like the change text
+        assert_eq!(chart_colour(Some(&falling), &[90.0, 99.5]), SYSTEM_RED);
+        assert_eq!(chart_colour(None, &[90.0, 99.5]), SYSTEM_GREEN);
+        assert_eq!(chart_colour(None, &[99.5, 90.0]), SYSTEM_RED);
     }
 
     #[test]

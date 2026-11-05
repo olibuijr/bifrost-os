@@ -439,22 +439,33 @@ pub fn header_rows(p: &Profile) -> Vec<(&'static str, String)> {
         ("Version", h.version_text()),
         ("Device class", format!("{} ({})", class_name(&h.class), h.class.trim_end())),
         ("Colour space", format!("{} ({})", space_name(&h.space), h.space.trim_end())),
-        ("Connection space", h.pcs.trim_end().to_string()),
+        ("Connection space", sig_text(&h.pcs)),
         (
             "Created",
             format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", created[0], created[1], created[2], created[3], created[4], created[5]),
         ),
-        ("CMM", h.cmm.trim_end().to_string()),
-        ("Platform", h.platform.trim_end().to_string()),
+        ("CMM", sig_text(&h.cmm)),
+        ("Platform", sig_text(&h.platform)),
         ("Flags", format!("{:#010x}", h.flags)),
-        ("Manufacturer", h.manufacturer.trim_end().to_string()),
-        ("Model", h.model.trim_end().to_string()),
-        ("Creator", h.creator.trim_end().to_string()),
+        ("Manufacturer", sig_text(&h.manufacturer)),
+        ("Model", sig_text(&h.model)),
+        ("Creator", sig_text(&h.creator)),
         ("Rendering intent", intent.to_string()),
         ("PCS illuminant", format!("X {x:.4}, Y {y:.4}, Z {z:.4}")),
         ("Profile ID", id),
         ("Description", p.title().unwrap_or_else(|| "None".to_string())),
     ]
+}
+
+/// A header signature as text: trailing spaces and NUL padding removed, and a dash when nothing is left (a field the
+/// profile leaves unset reads as four NUL bytes).
+fn sig_text(sig: &str) -> String {
+    let t = sig.trim_end_matches(|c: char| c == '\0' || c.is_whitespace());
+    if t.is_empty() {
+        "\u{2014}".to_string()
+    } else {
+        t.to_string()
+    }
 }
 
 /// The name of a device class signature, or "Unknown class".
@@ -792,5 +803,13 @@ mod tests {
         assert!(rows.iter().any(|(k, v)| *k == "Device class" && v == "Display device (mntr)"));
         assert!(rows.iter().any(|(k, v)| *k == "Description" && v == "sRGB test"));
         assert!(rows.iter().any(|(k, v)| *k == "Profile ID" && v == "Not set"));
+    }
+
+    #[test]
+    fn unset_signatures_read_as_a_dash() {
+        assert_eq!(sig_text("\0\0\0\0"), "\u{2014}");
+        assert_eq!(sig_text("    "), "\u{2014}");
+        assert_eq!(sig_text("lcms"), "lcms");
+        assert_eq!(sig_text("ab\0\0"), "ab");
     }
 }

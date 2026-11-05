@@ -4,6 +4,60 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream cadcraft v0.17.0.
+  ## What's Changed
+  * -ATTDEF at the command line: attribute modes, AFLAGS, and the text's prompts by @2ez4gcx in https://github.com/storytold/cadcraft/pull/2597
+  * -WBLOCK at the command line, as AutoCAD runs it by @2ez4gcx in https://github.com/storytold/cadcraft/pull/2594
+  * LEADER at the command line, as AutoCAD runs it by @2ez4gcx in https://github.com/storytold/cadcraft/pull/2596
+  * Thai text: stacked marks, Thai fonts first, MTEXT word wrap by @awillfox in https://github.com/storytold/cadcraft/pull/2591
+
+## 0.16.0
+
+- Upstream cadcraft v0.16.0.
+  ## What's Changed
+  * Validate new linetype names in the rename command by @Silvertree2010 in https://github.com/storytold/cadcraft/pull/2519
+  * Updates: shared check-result dialog from craft-update by @aiongg in https://github.com/storytold/cadcraft/pull/2530
+  * docs: tidy agent, contributor and asset docs by @aiongg in https://github.com/storytold/cadcraft/pull/2527
+  * Backups of drawings sharing a name no longer overwrite each other by @tanish2k09 in https://github.com/storytold/cadcraft/pull/2537
+
+## 0.15.1
+
+- Upstream cadcraft v0.15.1.
+  ## What's Changed
+  * Grant network access so update checks can reach GitHub by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/2413
+  * Honor CARGO_BUILD_TARGET in FreeBSD packaging for aarch64 release builds by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/2425
+  * PEDIT Multiple at the command line by @aldozar in https://github.com/storytold/cadcraft/pull/2225
+  * Reject out-of-range LUNITS, LUPREC, AUNITS and AUPREC in SETVAR by @Silvertree2010 in https://github.com/storytold/cadcraft/pull/2269
+
+## 0.14.0
+
+- Upstream cadcraft v0.14.0.
+  ## What's Changed
+  * Migrate CADCraft to egui 0.37 by @skylartaylor in https://github.com/storytold/cadcraft/pull/2119
+  * craft-pdf and its PDF backends back at craft-libs 6e7f285 by @aiongg in https://github.com/storytold/cadcraft/pull/2147
+  * macOS menu choices and their shortcuts run at once by @aiongg in https://github.com/storytold/cadcraft/pull/2140
+  * "Save changes?" and Drawing Recovery appear at once by @aiongg in https://github.com/storytold/cadcraft/pull/2144
+
+## 0.13.0
+
+- Upstream cadcraft v0.13.0.
+  ## What's Changed
+  * docs: document security limits and regression guarantees by @skylartaylor in https://github.com/storytold/cadcraft/pull/1963
+  * chore(deps): bump the cargo-dependencies group across 1 directory with 17 updates by @dependabot[bot] in https://github.com/storytold/cadcraft/pull/1957
+  * web: allow browser zoom in the viewport meta (SonarCloud Web:S7926) by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/1974
+  * packaging: use [[ ]] tests, named locals and explicit returns in shell scripts (SonarCloud S7688/S7679/S7682) by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/1972
+
+## 0.12.0
+
+- Upstream cadcraft v0.12.0.
+  > [!NOTE]
+  > **FreeBSD aarch64 is dropped from this release.** We had to cut releases, and we cannot build this target within the 5-hour CI limit for any of the Craft apps, so we are dropping it for now. This is a known blocker, flagged for a future fix in storytold/craft-common-actions#39. FreeBSD x86_64 and every other platform are included.
+  ## What's Changed
+  * security: write files atomically through an exclusive temp file (CWE-59) by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/1840
+  * security: do not follow directory symlinks in cargo xtask stats (CWE-400) by @dylanmtaylor in https://github.com/storytold/cadcraft/pull/1845
+
 ## 0.11.0
 
 - Upstream cadcraft v0.11.0.

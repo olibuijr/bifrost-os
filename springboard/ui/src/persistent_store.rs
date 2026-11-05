@@ -1,4 +1,4 @@
-//! A file-backed store for a [`ManagedContext`] (`NSPersistentStore` over one file). The file holds the saved state
+//! A file-backed store for a [`ManagedContext`] (the reference persistent store over one file). The file holds the saved state
 //! only: working changes are never written, so a context is saved first and then written. The file is one header
 //! line, a `next <id>` line with the identity counter, and one `<id><TAB><record>` line per saved object. A record
 //! comes from its [`Codec`] and must not contain a line break. Tabs are allowed: the line is split at its first tab, so a

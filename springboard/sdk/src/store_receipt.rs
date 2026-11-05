@@ -1,5 +1,5 @@
 //! Purchase receipts for apps sold through the PC App Store. The store signs each purchase record; an app checks the
-//! receipt before it unlocks a product. There are no Apple payments here: the signer is the BifrOSt store, and the
+//! receipt before it unlocks a product. There are no reference-vendor payments here: the signer is the BifrOSt store, and the
 //! signature check is supplied by the caller (a verifier over the canonical payload and the signature bytes), so the
 //! key stays with whoever holds the store's trust root. This module fixes the shape: the canonical payload, the
 //! signature format (a 64-byte Ed25519 signature as 128 lowercase hex digits) and the order of the checks.

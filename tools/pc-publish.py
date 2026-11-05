@@ -9,10 +9,12 @@ Packages and the pacman database are also exported to ~/Projects/bifrost-site/si
 served at https://bifrost.olibuijr.com/arch/$arch (override the site root with BIFROST_PUBLIC_SITE).
 Installed systems use that repository from /etc/pacman.conf. Version = Cargo version + epoch seconds,
 so every publish is newer than the last.
-Signing (docs/installer-and-boot.md, "Package signing"): with BIFROST_REPO_SIGN_KEY set (a key id or fingerprint in the GnuPG
-home BIFROST_REPO_GNUPGHOME, default out/lab/gnupg, which is never in git) every package and the repository database are
-signed (makepkg --sign, repo-add --sign) and the .sig files are published next to them. Without a key the publish still
-works, unsigned, with a loud warning; a configured key that cannot sign stops the publish.
+Signing (docs/installer-and-boot.md, "Package signing"): the repository key is the one packaging/arch/keys/bifrost-repo.gpg
+names (BIFROST_REPO_SIGN_KEY may name it too, and must be that same key); its secret half lives in the GnuPG home
+BIFROST_REPO_GNUPGHOME, default out/lab/repo-signing, which is never in git. Every package and the repository database are
+signed (makepkg --sign, repo-add --sign) and the .sig files are published next to them. A configured key that cannot sign,
+or a signature missing afterwards, stops the publish; it never falls back to unsigned. The one way to publish unsigned is
+the explicit --bootstrap-unsigned (the release that brings the key to machines that do not trust it yet).
 The package carries only BifrOSt's own and openly licensed files: tools/check-package-licenses.py inspects it
 before it enters the repo, and a failing package is deleted and the publish stops.
 The system assets (UI fonts, app icons, wallpapers) ship in it too, at /usr/share/springboard/system-assets: they are
@@ -92,23 +94,56 @@ PUBLIC_SITE = os.path.abspath(os.path.expanduser(os.environ.get(
 ASSETS_SRC = os.path.join(REPO, "springboard/assets")
 _h, _, _p = os.environ.get("BIFROST_REPO_BIND", "192.168.1.12:8079").partition(":")
 BIND = (_h, int(_p or 8079))
-DEFAULT_GNUPGHOME = os.path.join(REPO, "out/lab/gnupg")
+DEFAULT_GNUPGHOME = os.path.join(REPO, "out/lab/repo-signing")
+PUBLIC_KEY = os.path.join(REPO, "packaging/arch/keys/bifrost-repo.gpg")
 
 
 def run(cmd, **kw):
+    t = time.time()
     r = subprocess.run(cmd, **kw)
     if r.returncode:
         sys.exit(f"failed: {' '.join(map(str, cmd))}")
+    # per-step timings, to see where a publish spends its time (owner, 2026-10-25: faster iterations)
+    print(f"pc-publish: {time.time() - t:.1f}s  {' '.join(map(str, cmd[:6]))}", file=sys.stderr)
     return r
 
 
-def signing_config(env=None):
-    """The repository signing setup from the environment, or None when no key is configured:
-    {"key": id, "gnupghome": dir}. The key lives in a GnuPG home under out/lab (BIFROST_REPO_GNUPGHOME overrides), never in git."""
-    env = os.environ if env is None else env
-    key = env.get("BIFROST_REPO_SIGN_KEY", "").strip()
-    if not key:
+def key_fingerprint(path, runner=subprocess.run):
+    """The primary-key fingerprint of the exported public key file `path`, or None when absent or unreadable."""
+    if not os.path.isfile(path):
         return None
+    r = runner(["gpg", "--batch", "--show-keys", "--with-colons", path], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    if r.returncode:
+        return None
+    for line in (r.stdout or "").splitlines():
+        f = line.split(":")
+        if f[0] == "fpr" and len(f) > 9 and f[9]:
+            return f[9].upper()
+    return None
+
+
+def key_matches(fingerprint, key):
+    """Whether a key id (long or short) or full fingerprint `key` names the key with `fingerprint`."""
+    k = key.strip().upper().replace(" ", "")
+    k = k[2:] if k.startswith("0X") else k
+    return bool(k) and fingerprint.upper().endswith(k)
+
+
+def signing_config(env=None, public_key=PUBLIC_KEY, fingerprint_of=key_fingerprint):
+    """The repository signing setup: {"key": id, "gnupghome": dir}.
+    Signing is configured by shipping the public key (packaging/arch/keys/bifrost-repo.gpg): its fingerprint is the key that
+    signs. BIFROST_REPO_SIGN_KEY may name the key instead, but then it must be that same key, or no installed system would
+    trust the result. The secret half lives in a GnuPG home under out/lab (BIFROST_REPO_GNUPGHOME overrides), never in git."""
+    env = os.environ if env is None else env
+    shipped = fingerprint_of(public_key)
+    if not shipped:
+        sys.exit(f"pc-publish: repository public key {public_key} is missing or unreadable; "
+                 "the release must carry a valid key even when bootstrapping")
+    key = env.get("BIFROST_REPO_SIGN_KEY", "").strip()
+    if key and not key_matches(shipped, key):
+        sys.exit(f"pc-publish: BIFROST_REPO_SIGN_KEY={key} is not the key in {os.path.relpath(public_key, REPO)} "
+                 f"({shipped}); installed systems would refuse what it signs")
+    key = shipped
     home = os.path.abspath(os.path.expanduser(env.get("BIFROST_REPO_GNUPGHOME", "") or DEFAULT_GNUPGHOME))
     return {"key": key, "gnupghome": home}
 
@@ -124,18 +159,31 @@ def signing_args(cfg):
 
 
 def check_signing_key(cfg, runner=subprocess.run):
-    """Stop early when a configured key is not usable, instead of publishing unsigned by accident."""
+    """Stop early when the configured key is not usable, instead of publishing unsigned by accident."""
     r = runner(["gpg", "--batch", "--list-secret-keys", cfg["key"]], env={**os.environ, **signing_env(cfg)},
                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if r.returncode:
-        sys.exit(f"pc-publish: BIFROST_REPO_SIGN_KEY={cfg['key']} has no secret key in {cfg['gnupghome']}; "
-                 "create it (packaging/arch/keys/README.md) or unset BIFROST_REPO_SIGN_KEY to publish unsigned")
+        sys.exit(f"pc-publish: the repository signing key {cfg['key']} has no secret key in {cfg['gnupghome']}; "
+                 "create or restore it (packaging/arch/keys/README.md), or pass --bootstrap-unsigned for the one release "
+                 "that only brings the public key to machines that do not trust it yet")
 
 
-def unsigned_warning():
-    return ("pc-publish: WARNING: BIFROST_REPO_SIGN_KEY is not set; the packages and the repository database are published "
-            "UNSIGNED. Installed systems only trust a signed repository once the key is generated and shipped "
-            "(packaging/arch/keys/README.md).")
+def require_signatures(cfg, files):
+    """After a signed run every file in `files` must have a non-empty detached signature next to it."""
+    if not cfg:
+        return
+    missing = [f for f in files if not os.path.isfile(f + ".sig") or os.path.getsize(f + ".sig") == 0]
+    if missing:
+        sys.exit("pc-publish: signing was configured but these have no signature: "
+                 + ", ".join(os.path.basename(f) for f in missing))
+
+
+def unsigned_warning(bootstrap=False):
+    if bootstrap:
+        return ("pc-publish: WARNING: --bootstrap-unsigned: the packages and the repository database are published UNSIGNED. "
+                "Use it only for the release that ships the repository key; the next publish must be signed.")
+    return ("pc-publish: WARNING: no repository key is configured (packaging/arch/keys/bifrost-repo.gpg is absent); the packages "
+            "and the repository database are published UNSIGNED. See packaging/arch/keys/README.md.")
 
 
 def license_status(package):
@@ -272,25 +320,44 @@ def stage_system_assets(work, assets=ASSETS_SRC):
     return {"PC_SYSTEM_ASSETS": dest}
 
 
+def stage_dictionaries(work):
+    """Build the system English dictionary (WordNet 3.0 as StarDict, tools/build-wordnet-stardict.py; the tarball is
+    pinned in packaging/arch/dictionaries/wordnet.json and cached in out/upstream; the built files are cached in
+    out/dictionaries/wordnet and rebuilt only when the pin or the converter changes) into `work`/dictionaries and return
+    the environment for the package build ({"PC_DICTIONARIES": dir}). When it cannot be built (a needed download
+    failed) the publish stops: a package must not lose its dictionary quietly."""
+    dest = os.path.join(work, "dictionaries")
+    r = subprocess.run([sys.executable, os.path.join(REPO, "tools/build-wordnet-stardict.py"), dest])
+    if r.returncode:
+        sys.exit("pc-publish: the WordNet dictionary could not be built (see above)")
+    return {"PC_DICTIONARIES": dest}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--release", action="store_true")
     ap.add_argument("--skip-build", action="store_true")
     ap.add_argument("--no-serve", action="store_true")
     ap.add_argument("--skip-mirror-sync", action="store_true", help="only check the 8079 mirror, do not download")
+    ap.add_argument("--bootstrap-unsigned", action="store_true",
+                    help="publish without signatures, once, so machines that do not trust the repository key yet can install "
+                         "the package that brings it (docs/installer-and-boot.md, Package signing)")
     ap.add_argument("--skip-apps", action="store_true", help="do not publish the apps that are newer than the store")
     a = ap.parse_args()
     prof = "release" if a.release else "fast"
     t0 = time.time()
-    sign = signing_config()
+    configured = signing_config()
+    sign = None if a.bootstrap_unsigned else configured
     if sign:
         check_signing_key(sign)
     else:
-        print(unsigned_warning(), file=sys.stderr)
+        print(unsigned_warning(a.bootstrap_unsigned), file=sys.stderr)
     # the 8079 mirror must hold every package the new springboard-shell depends on, or Midget's update 404s and rolls back
     if not a.skip_mirror_sync:
         try:
+            ts = time.time()
             pc_mirror.sync()
+            print(f"pc-publish: {time.time() - ts:.1f}s  mirror sync", file=sys.stderr)
         except Exception as e:  # offline titan: the check below still decides
             print(f"pc-mirror: sync failed ({e}); checking what is there", file=sys.stderr)
     pc_mirror.check()
@@ -335,7 +402,8 @@ def main():
     for f in ("fast/PKGBUILD", "fast/springboard.install"):
         shutil.copy(os.path.join(src, f), work)
     assets_env = stage_system_assets(work)
-    env = {**os.environ, **assets_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_SVC_AUDIOD": svc_audiod, "PC_SVC_NETD": svc_netd, "PC_SVC_UPDATED": svc_updated, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst", **signing_env(sign)}
+    dict_env = stage_dictionaries(work)
+    env = {**os.environ, **assets_env, **dict_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_SVC_AUDIOD": svc_audiod, "PC_SVC_NETD": svc_netd, "PC_SVC_UPDATED": svc_updated, "PC_AUDIO_BENCH": audio_bench, "PC_MIDID": midid, "PC_ALSA_PLUGIN": alsa_plugin, "PC_CMD_DIR": tdir, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst", **signing_env(sign)}
     run(["makepkg", "-f", "--nodeps", "--skipinteg", "--nocheck", *signing_args(sign)], cwd=work, env=env, stdout=subprocess.DEVNULL)
     pkg = sorted(glob.glob(os.path.join(POOL, f"springboard-shell-{ver}-1-x86_64.pkg.tar.zst")))[-1]
     # licence guard: the package may carry only BifrOSt's own and openly licensed files. A failing package is deleted
@@ -365,6 +433,7 @@ def main():
                 os.unlink(os.path.join(POOL, stale))
     run(["repo-add", "-q", *signing_args(sign), "-R", os.path.join(POOL, "bifrost.db.tar.zst"), pkg],
         env={**os.environ, **signing_env(sign)}, stdout=subprocess.DEVNULL)
+    require_signatures(sign, [pkg, os.path.join(POOL, "bifrost.db.tar.zst")])
     public_dir, public_files = publish_public_repo(POOL)
     pid = None if a.no_serve else serve()
     print(f"build {built_at - t0:.1f}s; package/publish {time.time() - built_at:.1f}s")

@@ -643,6 +643,24 @@ fn read_file(path: &str) -> Option<String> {
     fs::read_to_string(path).ok()
 }
 
+/// The longest process name the kernel keeps in `/proc/<pid>/stat` (`TASK_COMM_LEN` less the terminator).
+const COMM_MAX: usize = 15;
+
+/// The full name of a process whose kernel name `comm` was cut at `COMM_MAX` characters: the program name in
+/// `cmdline` (its first argument, last path part) when that starts with `comm`. A shorter `comm` is already whole.
+pub fn full_name(comm: &str, cmdline: &str) -> String {
+    if comm.chars().count() < COMM_MAX {
+        return comm.to_string();
+    }
+    let program = cmdline.split('\0').next().unwrap_or("").split_whitespace().next().unwrap_or("");
+    let base = program.rsplit('/').next().unwrap_or("");
+    if base.len() > comm.len() && base.starts_with(comm) {
+        base.to_string()
+    } else {
+        comm.to_string()
+    }
+}
+
 /// Keeps the previous readings and turns the counters into rates.
 #[derive(Default)]
 pub struct Sampler {
@@ -812,6 +830,8 @@ impl Sampler {
                 let base = format!("/proc/{pid}");
                 let Some(stat) = read_file(&format!("{base}/stat")).and_then(|t| parse_stat(&t)) else { continue };
                 let uid = read_file(&format!("{base}/status")).and_then(|t| parse_uid(&t)).unwrap_or(u32::MAX);
+                // the kernel cuts the name at 15 characters, so a longer program name is read from its command line
+                let name = if stat.name.chars().count() >= COMM_MAX { full_name(&stat.name, &read_file(&format!("{base}/cmdline")).unwrap_or_default()) } else { stat.name.clone() };
                 let ports = self.scan_ports.then(|| count_sockets(pid)).flatten();
                 // one read of smaps_rollup serves Private Memory, Real Mem and Purgeable
                 let rollup = (self.scan_private || self.scan_real || self.scan_purgeable).then(|| read_rollup(pid)).flatten();
@@ -866,7 +886,7 @@ impl Sampler {
                 procs.push(ProcSample {
                     pid,
                     ppid: stat.ppid,
-                    name: stat.name,
+                    name,
                     user,
                     uid,
                     cpu,
@@ -1009,6 +1029,15 @@ mod tests {
         let ifaces = parse_netdev(text);
         assert_eq!(ifaces.len(), 2);
         assert_eq!(ifaces[1], Iface { name: "eth0".into(), rx: 1000, tx: 500, rx_packets: 3, tx_packets: 4 });
+    }
+
+    #[test]
+    fn a_name_the_kernel_cut_at_fifteen_characters_is_read_from_the_command_line() {
+        assert_eq!(full_name("bifrost-activit", "/usr/bin/bifrost-activity\0--flag\0"), "bifrost-activity");
+        assert_eq!(full_name("bifrost-activit", "bifrost-activity"), "bifrost-activity");
+        assert_eq!(full_name("bifrost-activit", "other\0"), "bifrost-activit", "not the same program");
+        assert_eq!(full_name("bifrost-activit", ""), "bifrost-activit", "no command line");
+        assert_eq!(full_name("sh", "/bin/sh-longer\0"), "sh", "a short name is whole");
     }
 
     #[test]

@@ -185,48 +185,6 @@ impl Category {
         }
     }
 
-    /// The sidebar symbol (a generic symbol name, not a product mark).
-    pub fn symbol(self) -> &'static str {
-        match self {
-            Category::Overview => "desktopcomputer",
-            Category::Processor => "cpu",
-            Category::Memory => "memorychip",
-            Category::Graphics => "display",
-            Category::Pci => "square.stack.3d.up",
-            Category::Usb => "cable.connector",
-            Category::Displays => "display.2",
-            Category::Audio => "speaker.wave.2",
-            Category::Bluetooth => "antenna.radiowaves.left.and.right",
-            Category::Camera => "camera",
-            Category::CardReader => "sdcard",
-            Category::Controller => "gearshape.2",
-            Category::Printers => "printer",
-            Category::Thunderbolt => "bolt",
-            Category::Power => "battery.100",
-            Category::Storage => "internaldrive",
-            Category::Nvme => "internaldrive",
-            Category::Sata => "internaldrive",
-            Category::Sas => "server.rack",
-            Category::FibreChannel => "point.3.connected.trianglepath.dotted",
-            Category::DiscBurning => "opticaldisc",
-            Category::Diagnostics => "stethoscope",
-            Category::Wifi => "wifi",
-            Category::Ethernet => "cable.connector",
-            Category::Wwan => "antenna.radiowaves.left.and.right",
-            Category::Firewall => "lock.shield",
-            Category::Volumes => "externaldrive",
-            Category::System => "gearshape",
-            Category::Apps => "app.badge",
-            Category::Installations => "shippingbox",
-            Category::PrinterSoftware => "printer.filled.and.paper",
-            Category::Extensions => "puzzlepiece.extension",
-            Category::StartupItems => "power",
-            Category::Fonts => "textformat",
-            Category::Logs => "doc.text",
-            Category::Language => "globe",
-        }
-    }
-
     /// One line under the title, in the window's detail view.
     pub fn blurb(self) -> &'static str {
         match self {

@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.6.8
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 1.6.7
+
+- The Add Alarm sheet hangs centred from the toolbar; world map labels no longer overlap.
+
+## 1.6.6
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 1.6.5
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
+## 1.6.4
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 1.6.3
+
+- World Clock faces draw the hands as the reference does: a short thick hour hand, a long minute hand that reaches the
+  hour ticks and a thin second hand. The hour and minute hands were the same width and hard to tell apart.
+- Map labels no longer print over each other: each city's name and time try the right of its dot, then the left,
+  above and below, and a label with no free place is left out (London and Paris overlapped).
+
+## 1.6.2
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
+## Unreleased
+
+- World Clock shows a day and night map above the city cards: the land outline (Natural Earth 1:110m, public domain),
+  the night side shaded behind the terminator computed from the sun's position, and each city as a dot with its name
+  and local time. Each card adds the city's sunrise and sunset.
+
+## 1.6.1 — 2026-10-24
+
+- A timer preset sets the duration pickers; Start starts the timer.
+- While a timer runs the right button pauses and resumes it; Add Timer in the toolbar sets up another one, so the
+  picker no longer comes back over the running timer.
+
 ## 1.6.0 — 2026-10-23
 
 - Alarm cards with the time, label and switch; delete with right-click or Delete.

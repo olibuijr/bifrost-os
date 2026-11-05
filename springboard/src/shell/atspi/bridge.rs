@@ -68,6 +68,8 @@ struct Info {
     editable: bool,
     actionable: bool,
     numeric: bool,
+    /// the element's named custom actions, listed after the standard ones
+    actions: Vec<String>,
 }
 
 impl Obj {
@@ -90,6 +92,7 @@ impl Obj {
                 editable: false,
                 actionable: false,
                 numeric: false,
+                actions: Vec::new(),
             }),
             Key::App(slot) => {
                 let (i, a) = apps.iter().enumerate().find(|(_, a)| a.slot == slot)?;
@@ -109,6 +112,7 @@ impl Obj {
                     editable: false,
                     actionable: false,
                     numeric: false,
+                    actions: Vec::new(),
                 })
             }
             Key::Node(slot, id) => {
@@ -132,6 +136,7 @@ impl Obj {
                     editable: n.role == bifrost_proto::Role::TextField,
                     actionable: n.enabled && !matches!(n.role, bifrost_proto::Role::StaticText | bifrost_proto::Role::Window),
                     numeric: n.role == bifrost_proto::Role::Slider,
+                    actions: n.actions.clone(),
                 })
             }
         }
@@ -234,7 +239,7 @@ impl Accessible {
 fn interfaces(o: &Obj) -> Vec<String> {
     let mut v = vec!["org.a11y.atspi.Accessible".to_string(), "org.a11y.atspi.Component".to_string()];
     if let Some(i) = o.info() {
-        if i.actionable {
+        if i.actionable || !i.actions.is_empty() {
             v.push("org.a11y.atspi.Action".into());
         }
         if i.numeric {
@@ -304,16 +309,27 @@ impl Action {
         self.names().len() as i32
     }
     fn do_action(&self, index: i32) -> bool {
-        let act = match self.names().get(index.max(0) as usize).copied() {
-            Some("press") if index == 0 && self.0.info().is_some_and(|i| i.actionable) => AxAction::Press,
-            Some("increment") => AxAction::Increment,
-            Some("decrement") => AxAction::Decrement,
-            _ => return false,
+        let Some(i) = self.0.info() else { return false };
+        let Ok(at) = usize::try_from(index) else { return false };
+        let standard = bifrost_ui::ax_action::standard_count(i.numeric);
+        let act = if at >= standard {
+            // a named custom action: the app gets its own spelling back (`AxAction::Custom`)
+            match i.actions.get(at - standard) {
+                Some(name) => AxAction::Custom(name.clone()),
+                None => return false,
+            }
+        } else {
+            match self.names().get(at).map(String::as_str) {
+                Some("press") if i.actionable => AxAction::Press,
+                Some("increment") => AxAction::Increment,
+                Some("decrement") => AxAction::Decrement,
+                _ => return false,
+            }
         };
         self.0.act(act)
     }
     fn get_name(&self, index: i32) -> String {
-        self.names().get(index.max(0) as usize).map_or_else(String::new, |n| n.to_string())
+        self.names().get(index.max(0) as usize).cloned().unwrap_or_default()
     }
     fn get_localized_name(&self, index: i32) -> String {
         self.get_name(index)
@@ -325,14 +341,15 @@ impl Action {
         String::new()
     }
     fn get_actions(&self) -> Vec<(String, String, String)> {
-        self.names().into_iter().map(|n| (n.into(), String::new(), String::new())).collect()
+        self.names().into_iter().map(|n| (n, String::new(), String::new())).collect()
     }
 }
 
 impl Action {
-    /// `press`, plus `increment` and `decrement` on a numeric element (`accessibilityPerformIncrement/Decrement`).
-    fn names(&self) -> Vec<&'static str> {
-        action_names(self.0.info().is_some_and(|i| i.numeric))
+    /// `press`, plus `increment` and `decrement` on a numeric element (`accessibilityPerformIncrement/Decrement`), then the
+    /// element's named custom actions (`accessibilityCustomActions`).
+    fn names(&self) -> Vec<String> {
+        self.0.info().map_or_else(|| action_names(false).into_iter().map(String::from).collect(), |i| bifrost_ui::ax_action::names_with_standard(i.numeric, &i.actions))
     }
 }
 
@@ -474,7 +491,7 @@ impl Bridge {
         server.at(&path, Accessible(self.obj(key)))?;
         server.at(&path, Component(self.obj(key)))?;
         if let Some(i) = self.obj(key).info() {
-            if i.actionable {
+            if i.actionable || !i.actions.is_empty() {
                 server.at(&path, Action(self.obj(key)))?;
             }
             if i.numeric {
@@ -518,7 +535,7 @@ impl Bridge {
             self.unregister(k);
         }
         for k in &want {
-            // an object whose capabilities changed (a node that became actionable) is re-registered
+            // an object whose capabilities changed (a node that became actionable or gained custom actions) is re-registered
             let old_caps = self.last_caps(*k);
             if !self.registered.contains(k) || old_caps != self.caps(*k) {
                 if self.registered.contains(k) {
@@ -534,7 +551,7 @@ impl Bridge {
     }
 
     fn caps(&self, k: Key) -> (bool, bool, bool) {
-        self.obj(k).info().map_or((false, false, false), |i| (i.actionable, i.numeric, i.editable))
+        self.obj(k).info().map_or((false, false, false), |i| (i.actionable || !i.actions.is_empty(), i.numeric, i.editable))
     }
 
     fn last_caps(&self, k: Key) -> (bool, bool, bool) {
@@ -544,7 +561,7 @@ impl Bridge {
             .iter()
             .find(|a| a.slot == slot)
             .and_then(|a| a.nodes.iter().find(|n| n.id == id))
-            .map_or((false, false, false), |n| (n.enabled && !matches!(n.role, Role::StaticText | Role::Window), n.role == Role::Slider, n.role == Role::TextField))
+            .map_or((false, false, false), |n| ((n.enabled && !matches!(n.role, Role::StaticText | Role::Window)) || !n.actions.is_empty(), n.role == Role::Slider, n.role == Role::TextField))
     }
 
     fn emit_changes(&self, apps: &[AppSnap]) {

@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.19.11
+
+- Cmd+A selects the event title; a clicked event shows its selection and a right click offers Open and Delete Event; the Day and Week grid opens with the 8 AM label clear of the all-day band.
+
+## 1.19.10
+
+- Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).
+
+## 1.19.9
+
+- Cmd+Z restores a deleted event for five minutes after the Undo bar fades.
+
+## 1.19.8
+
+- After picking a day of a neighbouring month, a click selects the day drawn in its cell, and Cmd+Z restores a deleted event.
+
+## 1.19.7
+
+- Cmd+Z restores a deleted event while the Undo bar is shown.
+
+## 1.19.6
+
+- Clicking a day from a neighbouring month in the month grid keeps the shown month.
+
+## 1.19.5
+
+- Rebuilt with the 0.10.40 SDK: a background app redraws at its new size after a resize.
+
+## 1.19.4
+
+- Rebuilt with the current SDK: the app redraws after an action from the shell (Look Up, Services, Spotlight) and accepts the shell's account-credential connections.
+
+## 1.19.3
+
+- Rebuilt with the current SDK and renderer: shell actions such as Look Up and Services reach the app, and vibrant text draws inside clipped areas.
+
+## 1.19.2
+
+- Rebuilt with the current renderer and SDK: Chinese, Japanese and Korean text draws whole, and a file opened with this app from Files or the Dock opens as a document.
+
+## 1.19.1 — 2026-10-24
+
+- The hour grid keeps its scroll when the quick-event popover opens and closes (8 AM at the top no longer jumps to midnight).
+- A double-click on an event or an empty slot uses the system double-click interval and distance, counted from the presses, so two quick clicks open the editor.
+
 ## 1.19.0 — 2026-10-23
 
 - Day view shows one day; a selected event is deleted with Backspace/Delete or Event > Delete Event, with Undo.

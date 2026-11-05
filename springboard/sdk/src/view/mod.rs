@@ -44,7 +44,9 @@ pub mod action;
 mod animation;
 mod app;
 mod autolayout;
+mod button_style;
 mod context;
+mod groupings;
 mod controls;
 mod forms;
 mod layer_backed;
@@ -62,8 +64,9 @@ mod sprite_widget;
 mod drag;
 mod content_unavailable;
 mod large_content;
+mod transition_view;
 pub use keyanim::ViewState;
-pub use animation::{mix_color, Prop, Timing, Transaction, DEFAULT_DURATION, REDUCED_DURATION};
+pub use animation::{mix_color, Prop, Timing, Transaction, DEFAULT_DURATION, REDUCED_DURATION, SPRING_DAMPING, SPRING_MASS, SPRING_STIFFNESS};
 pub use app::{action_for, ControllerHost, MenuEntry, ViewApp, ViewController};
 pub use forms::{Checkbox, Form, PopUpButton, ProgressIndicator, ProgressStyle, Section, Stepper, TextField};
 pub use autolayout::{anchors, solve as solve_constraints, Anchor, Anchors, Attr, Constraints, Item, Solution, Spec, ViewInfo};
@@ -73,6 +76,8 @@ pub use scroll::ScrollView;
 pub use layer_views::{EmitterView, GradientView, ReplicaSource, ReplicatorView, ScrollLayerView, ShapeView, TextLayerView, TiledView};
 pub use context::with_context;
 pub use controls::{Align, Button, Label, Segmented, Slider, Stack, Switch};
+pub use button_style::{Bordered, BorderedProminent, Borderless, ButtonConfiguration, ButtonRole, ButtonStyle, LinkStyle, Plain};
+pub use groupings::{ControlGroup, ControlGroupStyle, GroupBox, TabView};
 pub use overlay::{Columns, Grid, ViewThatFits, ZStack};
 pub use picker::PickerView;
 pub use local_auth_view::{kind_label, LocalAuthenticationView};
@@ -86,6 +91,7 @@ pub use security_views::{
 pub use content_unavailable::ContentUnavailableView;
 pub use drag::{accepts_items, pick_operation, DragSpec, DRAG_SLOP};
 pub use large_content::LargeContentView;
+pub use transition_view::{Transition, TransitionEase, TransitionKind, TransitionSubtype, TransitionView};
 
 /// What a text-editing view tells the shell about itself while it is first responder (`NativeTextInputClient`,
 /// `NativeTextInput`): the text around the caret, the caret rectangle in window points `(x, y, w, h)` and the traits.
@@ -199,6 +205,12 @@ pub trait View: 'static {
     /// `contentCompressionResistancePriority(for:)`: how strongly the view resists shrinking below its `intrinsic` size.
     fn compression(&self, _axis: bifrost_ui::stack::Axis) -> u16 {
         750
+    }
+    /// `firstBaselineOffsetFromTop` and `lastBaselineOffsetFromBottom` (as offsets from the top): the first and last
+    /// text baselines in points below the top of the view's current frame, for `.firstTextBaseline` and
+    /// `.lastTextBaseline` alignment. `None` for a view without text; a stack then aligns it by its bottom edge.
+    fn baselines(&self, _ui: &Ui) -> Option<(f32, f32)> {
+        None
     }
     /// `layoutSubtreeIfNeeded`: given the rectangle assigned by the parent, set the own frame and place children.
     /// The default fills `bounds` and gives every child the same rectangle.
@@ -315,7 +327,7 @@ pub trait View: 'static {
     fn dirty_rect(&self) -> Rect {
         self.base().frame
     }
-    /// Drag source (`NSDraggingSource`): `Some` when a press on this view (or a view inside it that does not take
+    /// Drag source (the reference dragging source): `Some` when a press on this view (or a view inside it that does not take
     /// the press) that moves past [`DRAG_SLOP`] begins a drag session with these items. The window cancels the control
     /// that held the press, and `ViewApp` starts the session ([`ViewApp::event`]).
     fn dnd_source(&self) -> Option<DragSpec> {
@@ -789,6 +801,7 @@ impl<S: Responder> Window<S> {
                     intrinsic: v.intrinsic(ui),
                     hugging: (v.hugging(Axis::Horizontal), v.hugging(Axis::Vertical)),
                     compression: (v.compression(Axis::Horizontal), v.compression(Axis::Vertical)),
+                    baselines: v.baselines(ui),
                 });
             }
         }
@@ -1010,11 +1023,19 @@ impl<S: Responder> Window<S> {
         std::mem::take(&mut self.sent)
     }
 
-    /// The first responder's `NativeTextInputClient` state, when it edits text.
+    /// The first responder's `NativeTextInputClient` state, when it edits text. Its caret rectangle is in window points:
+    /// a field inside a scroll view reports where it is drawn, its content position less the scrolled offset.
     pub fn text_input_info(&self) -> Option<TextInputInfo> {
         let id = self.first?;
         let mut p = Vec::new();
-        path_to(self.root(), id, &mut p).then(|| at(self.root(), &p).text_input_info()).flatten()
+        if !path_to(self.root(), id, &mut p) {
+            return None;
+        }
+        let mut info = at(self.root(), &p).text_input_info()?;
+        let (ox, oy) = path_offset(self.root(), &p);
+        info.caret.0 -= ox;
+        info.caret.1 -= oy;
+        Some(info)
     }
     /// Offers an IME event to the first responder; queued change actions are sent. True when handled.
     pub fn apply_text_input(&mut self, ev: &crate::proto::ToApp, state: &mut S) -> bool {
@@ -1246,6 +1267,8 @@ mod tests_layer_views;
 
 #[cfg(test)]
 mod tests_controls;
+#[cfg(test)]
+mod tests_groupings;
 #[cfg(test)]
 mod tests_overlay;
 

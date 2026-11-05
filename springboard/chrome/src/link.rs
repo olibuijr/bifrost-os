@@ -48,7 +48,8 @@ impl Link {
         Link::connect_to(&socket_path(), client)
     }
 
-    fn connect_to(server: &Path, client: &str) -> io::Result<Link> {
+    /// As `connect`, to the shell socket at `server` (the shell's own tests bind one in a temp directory).
+    pub fn connect_to(server: &Path, client: &str) -> io::Result<Link> {
         let own_path = client_path(server.parent().unwrap_or(Path::new("/tmp")), client, std::process::id());
         let _ = std::fs::remove_file(&own_path);
         let socket = UnixDatagram::bind(&own_path)?;

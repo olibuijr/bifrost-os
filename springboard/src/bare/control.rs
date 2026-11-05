@@ -126,6 +126,9 @@ pub enum Request {
     ForceQuit,
     /// `logout`: the Log Out card opens (Shift+Cmd+Q, taken by the window server)
     LogOut,
+    /// `tile left|right|fill|center`: arranges the front window (Ctrl+Cmd+arrows, taken by the window server and sent
+    /// here so the shell's front window is the one arranged, not the window server's focus)
+    Tile(TileKey),
     Lock,
     /// `term <verb> key=value ...` (values percent-encoded): Term agent control, see `shell/terminal/control.rs`.
     Term(String, Vec<(String, String)>),
@@ -136,6 +139,15 @@ pub enum Request {
     ImageAttach { read_only: bool, path: String },
     /// `image-detach <loop device or mount folder>`: unmounts the image and releases its loop device.
     ImageDetach(String),
+}
+
+/// The arrange command of a `tile` request: the Window menu's Left Half, Right Half, Fill and Center.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TileKey {
+    Left,
+    Right,
+    Fill,
+    Center,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -288,6 +300,13 @@ pub fn parse(line: &str) -> Result<Request, String> {
         Some("appgrid") if w.len() == 1 => Ok(Request::AppGrid),
         Some("forcequit") if w.len() == 1 => Ok(Request::ForceQuit),
         Some("logout") if w.len() == 1 => Ok(Request::LogOut),
+        Some("tile") if w.len() == 2 => match w[1] {
+            "left" => Ok(Request::Tile(TileKey::Left)),
+            "right" => Ok(Request::Tile(TileKey::Right)),
+            "fill" => Ok(Request::Tile(TileKey::Fill)),
+            "center" => Ok(Request::Tile(TileKey::Center)),
+            _ => Err("usage: tile left|right|fill|center".into()),
+        },
         Some("lock") if w.len() == 1 => Ok(Request::Lock),
         c => Err(format!("unknown command {c:?}")),
     }
@@ -611,6 +630,20 @@ mod tests {
         assert!(parse("logout now").is_err());
         assert!(!allowed_while_locked(&Request::ForceQuit), "Force Quit waits for a login");
         assert!(!allowed_while_locked(&Request::LogOut), "Log Out waits for a login");
+    }
+
+    #[test]
+    fn tile_lines_from_the_window_server_parse_and_wait_for_a_login() {
+        assert_eq!(parse("tile left"), Ok(Request::Tile(TileKey::Left)));
+        assert_eq!(parse("tile right\n"), Ok(Request::Tile(TileKey::Right)));
+        assert_eq!(parse("tile fill"), Ok(Request::Tile(TileKey::Fill)));
+        assert_eq!(parse("tile center"), Ok(Request::Tile(TileKey::Center)));
+        assert!(parse("tile").is_err());
+        assert!(parse("tile up").is_err());
+        assert!(parse("tile left now").is_err());
+        assert!(!allowed_while_locked(&Request::Tile(TileKey::Fill)), "no arranging behind the lock screen");
+        // the window server runs as the account, like the other chords it forwards
+        assert!(!privileged_only(&Request::Tile(TileKey::Fill)));
     }
 
     #[test]

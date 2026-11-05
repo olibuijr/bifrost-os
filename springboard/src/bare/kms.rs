@@ -881,7 +881,7 @@ impl Display {
     pub fn wayland_take_gpu_fallback(&mut self) -> bool {self.wayland.as_mut().is_some_and(|w| w.take_gpu_fallback())}
     #[cfg(feature = "desktop-wayland")]
     /// Returns true when the presenter holds the blurred wallpaper now (false: no GPU presenter, or the blur did not land).
-    pub fn wayland_wallpaper(&mut self, wp: crate::gfx::View, x: i32, live: bool) -> bool {if let Some(w)=&mut self.wayland {w.wallpaper(wp,x,live)} else {false}}
+    pub fn wayland_wallpaper(&mut self, wp: crate::gfx::View, x: i32, live: Option<u8>) -> bool {if let Some(w)=&mut self.wayland {w.wallpaper(wp,x,live)} else {false}}
     /// Night Shift through the GPU presenter's final pass (`wayland::Display::night`): true while its fade runs.
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_night(&mut self, m: Option<[u32; 3]>) -> io::Result<bool> {if let Some(w)=&mut self.wayland {w.night(m)} else {Ok(false)}}
@@ -899,6 +899,12 @@ impl Display {
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_window_tile(&mut self, id: u32, placement: super::window_level_client::Placement) -> io::Result<()> {
         if let Some(w) = &mut self.wayland { w.tile_window(id, placement)?; }
+        Ok(())
+    }
+    /// Asks the window server to place another client's window `id` (see `wayland::Display::tile_foreign`).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_foreign_tile(&mut self, id: u32, placement: super::window_level_client::Placement) -> io::Result<()> {
+        if let Some(w) = &mut self.wayland { w.tile_foreign(id, placement)?; }
         Ok(())
     }
     #[cfg(feature = "desktop-wayland")]
@@ -938,6 +944,9 @@ impl Display {
     }
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_raise_front(&mut self) { if let Some(w)=&mut self.wayland { w.raise_front(); } }
+    /// The shell brought windows `ids` forward together: the window server stacks them in its order (`Wayland::restack`).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_restack(&mut self, ids: Vec<u32>) { if ids.is_empty() { return; } if let Some(w)=&mut self.wayland { w.restack(ids); } }
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_activate_foreign(&mut self,id:u32) -> io::Result<()> {
         if let Some(w)=&mut self.wayland { w.activate_foreign(id)?; } Ok(())

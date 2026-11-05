@@ -189,7 +189,7 @@ impl<'a> Reader<'a> {
 }
 
 /// Writes a whole binary property list (`bplist00`). Every value gets its own object (no sharing), so the output is
-/// larger than Apple's but reads back to the same value. Dates must be `YYYY-MM-DDTHH:MM:SSZ` (whole seconds, years from
+/// larger than the reference's but reads back to the same value. Dates must be `YYYY-MM-DDTHH:MM:SSZ` (whole seconds, years from
 /// 0000), the form the reader gives; any other date text is refused rather than written wrong.
 pub fn write(root: &Plist) -> Result<Vec<u8>, String> {
     let mut objects: Vec<Obj> = Vec::new();

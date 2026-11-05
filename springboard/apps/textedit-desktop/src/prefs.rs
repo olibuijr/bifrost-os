@@ -1,4 +1,4 @@
-//! Text Editor's settings: the options the Preferences menu and the Edit, Format and View menus toggle, kept in the app's
+//! TextEdit's settings: the options the Preferences menu and the Edit, Format and View menus toggle, kept in the app's
 //! preferences so they hold the next time the app starts. Pure: reading takes a lookup and writing gives the pairs, so
 //! the rules are tested without a runtime.
 

@@ -113,7 +113,7 @@ mod tests {
     use super::*;
 
     fn mono() -> Font<'static> {
-        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUIMono.ttf")).unwrap().into_boxed_slice());
+        let data: &'static [u8] = crate::test_support::sfui_mono();
         Font::parse(data).unwrap()
     }
 

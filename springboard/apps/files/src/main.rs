@@ -27,7 +27,7 @@ use springboard::files::{
 use springboard::shell::clock::Wall;
 
 use springboard::shell::ui::{
-    Ui, Weight, CARD_BG, DETAIL_BG, LABEL, LABEL_2, LINK, SELECTION, SEPARATOR_C, TINT, WHITE,
+    Ui, Weight, CARD_BG, DETAIL_BG, LABEL, LABEL_2, LINK, SELECTION, SEPARATOR_C, WHITE, accent_now,
     CONTENT_BG,
 };
 use std::{
@@ -133,7 +133,12 @@ struct Files {
     controls: Controls,
     searching: bool,
     scroll: f32,
+    /// How far the sidebar list is scrolled (points): a drag that starts in the sidebar moves it.
+    side_scroll: f32,
+    /// Where the press landed (x, y in points) and when. Never moves: a drag starts from it and a click ends on it.
     down: Option<(f32, f32, f64)>,
+    /// The y the last pointer move left the finger at: the list scrolls by the difference to the next one.
+    pan_y: f32,
     last_click: Option<(usize, f64)>,
     preview: Option<(String, String)>,
     w: f32,
@@ -260,7 +265,9 @@ impl Files {
             controls: Controls::default(),
             searching: false,
             scroll: 0.,
+            side_scroll: 0.,
             down: None,
+            pan_y: 0.,
             last_click: None,
             preview: None,
             w: 960.,
@@ -304,22 +311,59 @@ impl Files {
         f
     }
 }
+impl Files {
+    /// The items Files adds to the File menu (the shell merges them into its own).
+    pub(crate) fn file_menu_items(&self) -> Vec<bifrost_app::AppMenuItem> {
+        // File > Preview (the same panel as the context menu's Preview): the shell merges an app menu titled File
+        // into its own File menu, and the item needs a selection
+        // File > Open (Cmd+O) and Preview (Space), with their key equivalents as the reference's File menu shows them
+        let open = bifrost_app::AppMenuItem::new(MENU_OPEN, "Open").key("cmd+o").enabled(self.selection.len() == 1 && self.naming.is_none());
+        let quick_look = bifrost_app::AppMenuItem::new(MENU_QUICK_LOOK, "Preview").key("space").enabled(!self.selected_paths().is_empty());
+        // File > New Folder (Shift+Cmd+N): the toolbar has no New Folder button; the folder menus have it too
+        let new_folder = bifrost_app::AppMenuItem::new(MENU_NEW_FOLDER, "New Folder").key("cmd+shift+n").enabled(!self.in_recents() && !self.in_bin());
+        // the item actions of the context menu, with the same keys (the reference file manager's File menu lists them too); not while a name
+        // is being typed, where the chords are the field's
+        let (has, single, typing) = (!self.selection.is_empty(), self.selection.len() == 1, self.naming.is_some());
+        let (in_bin, in_recents) = (self.in_bin(), self.in_recents());
+        let files_ok = has && !typing && !in_bin && !in_recents;
+        let trash = if in_bin {
+            bifrost_app::AppMenuItem::new(MENU_PUT_BACK, "Put Back").enabled(has && !typing)
+        } else {
+            bifrost_app::AppMenuItem::new(MENU_TRASH, "Move to Trash").key("cmd+backspace").enabled(has && !typing)
+        };
+        vec![
+            new_folder,
+            bifrost_app::AppMenuItem::separator(),
+            open,
+            quick_look,
+            bifrost_app::AppMenuItem::new(MENU_INFO, "Get Info").key("cmd+i").enabled(single && !typing),
+            bifrost_app::AppMenuItem::new(MENU_RENAME, "Rename").enabled(single && !typing && !in_bin),
+            bifrost_app::AppMenuItem::new(MENU_DUPLICATE, "Duplicate").key("cmd+d").enabled(files_ok),
+            bifrost_app::AppMenuItem::new(MENU_ALIAS, "Make Alias").key("ctrl+cmd+a").enabled(files_ok),
+            bifrost_app::AppMenuItem::separator(),
+            trash,
+        ]
+    }
+}
 impl App for Files {
     fn id(&self) -> &str {
         "is.olibuijr.files.desktop"
     }
     fn main_menu(&self, _ctx: &Ctx) -> Vec<bifrost_app::AppMenu> {
-        // File > Quick Look (the same panel as the context menu's Preview): the shell merges an app menu titled File
-        // into its own File menu, and the item needs a selection
-        let quick_look = bifrost_app::AppMenuItem::new(MENU_QUICK_LOOK, "Quick Look").enabled(!self.selected_paths().is_empty());
-        // File > New Folder (Shift+Cmd+N): the toolbar has no New Folder button; the folder menus have it too
-        let new_folder = bifrost_app::AppMenuItem::new(MENU_NEW_FOLDER, "New Folder").key("cmd+shift+n").enabled(!self.in_recents() && !self.in_bin());
-        vec![bifrost_app::AppMenu { title: "File".into(), items: vec![new_folder, quick_look] }]
+        vec![bifrost_app::AppMenu { title: "File".into(), items: self.file_menu_items() }]
     }
-    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         match id {
+            MENU_OPEN => if let Some(i) = self.focus() { self.open(i) },
             MENU_QUICK_LOOK => self.quick_look(),
             MENU_NEW_FOLDER if !self.in_recents() && !self.in_bin() => self.new_folder(),
+            MENU_INFO | MENU_RENAME | MENU_DUPLICATE | MENU_ALIAS | MENU_TRASH | MENU_PUT_BACK => {
+                let changed = self.context_action(id);
+                // Get Info from the menu bar (cmd+i) opens its own window here; only `event` did, so the panel
+                // stayed in the browser window until the next click
+                self.open_info_window(ctx);
+                return changed;
+            }
             _ => return false,
         }
         true
@@ -372,9 +416,6 @@ impl App for Files {
         self.service_answer(request, result)
     }
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &bifrost_core::json::Json) -> bool {
-        if let Some(reply) = bifrost_app::thumbnails::event(service, event, body) {
-            return self.thumb_answer(&reply);
-        }
         if !bifrost_app::quick_look::is_quick_look(service) {
             return false;
         }
@@ -419,7 +460,7 @@ impl App for Files {
             return self.draw(ctx, s, t);
         }
         match self.windows.iter_mut().find(|e| e.id == window) {
-            Some(e) => e.files.draw(ctx, s, t),
+            Some(e) => e.draw(ctx, s, t),
             None => Damage::new(s.w, s.h),
         }
     }
@@ -427,8 +468,15 @@ impl App for Files {
         self.close_extra(window)
     }
     fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
-        self.request_thumbnails(ctx);
-        let mut changed = self.poll_search();
+        // the pictures the thumbnail workers finished, for this window and the New Window ones
+        let mut changed = self.vo.poll_thumbs();
+        for e in &mut self.windows {
+            if e.files.vo.poll_thumbs() {
+                e.files.revision += 1;
+                changed = true;
+            }
+        }
+        changed |= self.poll_search();
         // the shell would not open an app from the Applications place (not installed any more, or not an app)
         if let Some(name) = self.sys.take_app_open_failure() {
             self.notice = Some(format!("\u{201C}{name}\u{201D} can\u{2019}t be opened."));
@@ -556,18 +604,40 @@ impl App for Files {
     /// No timer: jobs and searches wake the loop through their `Feed`, and Show in Files through the data-folder watch.
     fn next_wake(&self, t: f64) -> Option<f64> {
         // a drag hovering over a folder opens it; a batch of folder events matures; otherwise the loop sleeps
-        let spring = self.fx.spring.as_ref().map(|_| t + 0.1);
-        let events = self.watch.as_ref().and_then(|w| w.next_deadline(Instant::now())).map(|d| t + d.as_secs_f64());
-        match (spring, events) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
+        let events = self.watch.as_ref().and_then(|w| w.next_deadline(Instant::now()));
+        let wake = wake_at(t, self.fx.spring.is_some(), events);
+        // a thumbnail being drawn is taken by the next tick
+        if self.vo.thumbs_pending() || self.windows.iter().any(|e| e.files.vo.thumbs_pending()) {
+            let soon = t + THUMB_POLL_MS;
+            return Some(wake.map_or(soon, |w| w.min(soon)));
         }
+        wake
     }
     fn wake_fd(&self) -> Option<i32> {
         self.watch.as_ref().and_then(|w| w.fd())
     }
+    /// A background Files window stays on screen: it follows the open folder (files added, removed or renamed by
+    /// another app or a shell) instead of showing the listing it had when it lost focus.
+    fn ticks_in_background(&self) -> bool {
+        true
+    }
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _: f64) -> Damage {
         self.render(&ctx.ui,s)
+    }
+}
+/// How often a drag hovering over a folder is checked for its spring-loaded open (ms).
+const SPRING_POLL_MS: f64 = 100.0;
+/// How soon the loop wakes to take a thumbnail the workers are drawing.
+const THUMB_POLL_MS: f64 = 50.0;
+
+/// When the loop wakes, in ms like `t`: soon while a drag hovers (spring-loading), when the next batch of folder events
+/// matures (`events` from now), else never.
+fn wake_at(t: f64, spring: bool, events: Option<Duration>) -> Option<f64> {
+    let spring = spring.then_some(t + SPRING_POLL_MS);
+    let events = events.map(|d| t + d.as_secs_f64() * 1000.0);
+    match (spring, events) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
     }
 }
 impl Files {
@@ -631,7 +701,11 @@ impl Files {
                 ..
             } => {
                 self.notice = None;
+                // a press while a drag is still held means the release of that drag never came (the shell owned the
+                // pointer and ended the session elsewhere): the old drag is over, it must not drop on this press
+                self.cancel_drag();
                 self.down = Some((x / ctx.ui.s, y / ctx.ui.s, t));
+                self.pan_y = y / ctx.ui.s;
             }
             Input::Touch {
                 kind: TouchKind::Move,
@@ -668,22 +742,27 @@ impl Files {
                         self.drop_target = target;
                         self.revision += 1;
                     }
-                } else if let Some((_, old, _)) = self.down {
-                    let new = y;
-                    let visible = self.visible().len();
-                    let columns = ((self.w - (self.side() + 16.)) / self.grid_w()).floor().max(1.) as usize;
-                    let total = if self.vo.gallery {
-                        0.
-                    } else if self.grid {
-                        visible.div_ceil(columns) as f32 * self.grid_h()
+                } else if self.down.is_some() && bifrost_app::pans_now() {
+                    let (old, new) = (self.pan_y, y);
+                    if self.down.is_some_and(|(sx, _, _)| sx < self.side()) {
+                        // a drag that began in the sidebar scrolls the source list, not the listing
+                        self.side_scroll = (self.side_scroll + old - new).clamp(0., self.side_scroll_max());
                     } else {
-                        visible as f32 * 32.
-                    };
-                    self.scroll =
-                        (self.scroll + old - new).clamp(0., (total - (self.h - self.rows_top() - 70.)).max(0.));
-                    if let Some((_, old, _)) = &mut self.down {
-                        *old = new
+                        let visible = self.visible().len();
+                        let columns = ((self.w - (self.side() + 16.)) / self.grid_w()).floor().max(1.) as usize;
+                        let total = if self.vo.gallery {
+                            0.
+                        } else if self.grid {
+                            visible.div_ceil(columns) as f32 * self.grid_h()
+                        } else {
+                            visible as f32 * 32.
+                        };
+                        self.scroll =
+                            (self.scroll + old - new).clamp(0., (total - (self.h - self.rows_top() - 70.)).max(0.));
                     }
+                    // the press point stays where it was: a drag that has not begun yet is measured from it, and the
+                    // release is a click only if it ends near it
+                    self.pan_y = new;
                 }
             }
             Input::Touch {
@@ -789,13 +868,12 @@ impl Files {
                             self.query.pop();
                             self.query_changed();
                         }
-                        37 | 39 if self.vo.gallery => self.move_focus(code == 39),
-                        8 | 37 => self.go_back(),
+                        8 => self.go_back(),
                         // Return in the search field opens the hit; on an item it renames (Cmd+O and Cmd+Down open)
                         13 if self.searching => self.open_selected(),
                         13 => self.start_rename(),
                         32 => self.quick_look(),
-                        38 | 40 => self.move_focus(code == 40),
+                        37..=40 => self.arrow(code),
                         _ => {}
                     }
                 }
@@ -847,13 +925,22 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_background_window_wakes_in_milliseconds_not_every_millisecond() {
+        // `t` is in ms: a batch maturing in 250 ms wakes 250 ms on, and a hovering drag polls every 100 ms
+        assert_eq!(wake_at(1000.0, false, Some(Duration::from_millis(250))), Some(1250.0));
+        assert_eq!(wake_at(1000.0, true, None), Some(1100.0));
+        assert_eq!(wake_at(1000.0, true, Some(Duration::from_millis(40))), Some(1040.0));
+        assert_eq!(wake_at(1000.0, false, None), None);
+    }
     pub(crate) fn fixture(rows: Vec<Entry>) -> Files {
         Files {
             scope_bar: ScopeBar::default(),
             dnd: Default::default(), windows: Vec::new(), info_window: false, info_wanted: false, home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
             tabs: tabs::TabStrip::new(tabs::TabState { path: "/fixture".into(), history: vec![], at: 0 }),
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
-            query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,
+            query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,side_scroll:0.,down:None,pan_y:0.,last_click:None,preview:None,
             w:960.,h:630.,painted_state:String::new(),painted_selection:vec![],revision:0,
             show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),row_text:Default::default(),sys:SystemState::default(),ext:Default::default(),
         }
@@ -989,6 +1076,24 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]
+    fn the_file_menu_lists_the_item_actions_with_their_keys() {
+        let dir = temp("filemenu");
+        std::fs::write(dir.join("notes.txt"), "hello").unwrap();
+        let mut files = fixture(fs::list(&dir).unwrap());
+        files.select_only(0);
+        let row = |files: &Files, title: &str| files.file_menu_items().into_iter().find(|i| i.title == title).map(|i| (i.key, i.enabled));
+        assert_eq!(row(&files, "Open"), Some(("cmd+o".into(), true)));
+        assert_eq!(row(&files, "Preview"), Some(("space".into(), true)));
+        assert_eq!(row(&files, "Move to Trash"), Some(("cmd+backspace".into(), true)));
+        assert_eq!(row(&files, "Get Info"), Some(("cmd+i".into(), true)));
+        assert_eq!(row(&files, "Duplicate"), Some(("cmd+d".into(), true)));
+        assert_eq!(row(&files, "Make Alias"), Some(("ctrl+cmd+a".into(), true)));
+        assert_eq!(row(&files, "Rename"), Some((String::new(), true)));
+        files.selection.clear();
+        assert_eq!(row(&files, "Move to Trash").map(|r| r.1), Some(false), "nothing selected, nothing to trash");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
     fn get_info_describes_the_focused_file() {
         let dir = temp("info");
         std::fs::write(dir.join("notes.txt"), "hello").unwrap();
@@ -999,6 +1104,7 @@ mod tests {
         assert_eq!(info.name, "notes.txt");
         assert!(info.rows.contains(&("Kind", "Plain Text".to_string())));
         assert!(info.rows.iter().any(|(label, value)| *label == "Size" && value.contains("5 bytes")));
+        assert!(files.info_wanted, "Get Info asks for its own window; the entry points open it with a Ctx");
         // the chord opens it too, and a click closes it
         files.info = None;
         assert!(files.chord(23, CHORD_META));
@@ -1060,6 +1166,33 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]
+    fn undo_restores_the_tags_an_edit_changed() {
+        let dir = temp("tagundo");
+        std::fs::write(dir.join("a.txt"), "a").unwrap();
+        let mut files = fixture(vec![]);
+        files.home = dir.clone();
+        files.path = dir.clone();
+        files.rows = fs::list(&dir).unwrap();
+        files.listing = files.rows.clone();
+        files.select_only(0);
+        let a = dir.join("a.txt");
+        files.toggle_tag(Tag::Red);
+        files.toggle_tag(Tag::Blue);
+        assert_eq!(files.file_undo_titles().0, "Undo Tags");
+        // Cmd+Z takes Blue off again, then Red; the sidecar follows
+        files.undo_file_op();
+        assert_eq!(files.tag_index.tags(&a), vec![Tag::Red]);
+        assert_eq!(TagIndex::load(&sidecar_path(&dir)).tags(&a), vec![Tag::Red]);
+        files.undo_file_op();
+        assert!(files.tag_index.tags(&a).is_empty());
+        assert!(files.undo.is_empty());
+        assert!(files.notice.is_none());
+        // a change that changes nothing records nothing
+        files.edit_tags(&[a.clone()], |_| {});
+        assert!(files.undo.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
     fn tagged_listing_and_drop_targets() {
         let dir = temp("drop");
         std::fs::create_dir_all(dir.join("Documents")).unwrap();
@@ -1100,6 +1233,64 @@ mod tests {
         assert_eq!(files.drop_target_at(80., row(&dir.join("Documents"))), Some(dir.join("Documents")));
         assert_eq!(files.drop_target_at(80., row(&files.bin())), None);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+    fn pointer(kind: TouchKind, x: f32, y: f32, t: f64) -> Input {
+        Input::Touch { kind, id: 0, x, y, t, source: bifrost_app::TouchSource::Pointer, mods: bifrost_app::proto::ModifierFlags::EMPTY }
+    }
+    fn test_ctx() -> Ctx {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = bifrost_app::proto::Configure { w: 960, h: 630, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: false, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(springboard::font::Font::parse(data).unwrap(), 1.0), cfg)
+    }
+    /// A one-column icon grid with the folder A above the folder B: the x of the column and the y of each cell's centre.
+    fn stacked_folders() -> (Files, f32, f32, f32) {
+        let mut files = fixture(vec![folder("A"), folder("B")]);
+        files.w = files.side() + 16. + 1.5 * files.grid_w();
+        let x = files.side() + 16. + 0.5 * files.grid_w();
+        let a = files.rows_top() + 16. + 0.5 * files.grid_h();
+        let b = files.rows_top() + 16. + 1.5 * files.grid_h();
+        (files, x, a, b)
+    }
+    #[test]
+    fn a_slow_vertical_drag_onto_the_folder_below_moves_the_item() {
+        // the real stream: a press on A, many small moves straight down, a release over B. A relative mouse reports a point
+        // or two per move, an absolute pointer a few more; none is ever 12 points (the drag slop) from the one before. The
+        // pan of an unmoved list must not take the press point along, or the drag never begins and the release is read as
+        // a click.
+        let ctx = test_ctx();
+        for step in [1., 3., 7.] {
+            let (mut files, x, a, b) = stacked_folders();
+            files.route_input(&ctx, pointer(TouchKind::Down, x, a, 0.));
+            let mut y = a;
+            let mut t = 0.;
+            while y < b {
+                y = (y + step).min(b);
+                t += 16.;
+                files.route_input(&ctx, pointer(TouchKind::Move, x, y, t));
+            }
+            assert!(files.dragging, "step {step}: the drag began from the press point");
+            assert_eq!(files.fx.drag_paths, vec![PathBuf::from("/fixture/A")]);
+            assert_eq!(files.drop_target, Some(PathBuf::from("/fixture/B")), "step {step}: B is lit under the pointer");
+            files.route_input(&ctx, pointer(TouchKind::Up, x, b, t + 16.));
+            assert!(!files.dragging);
+            assert!(matches!(files.work.as_ref().map(|w| w.kind), Some(JobKind::Transfer(Op::Move))), "step {step}: the release moves A into B");
+            assert_eq!(files.work.as_ref().map(|w| w.dest.clone()), Some(PathBuf::from("/fixture/B")));
+        }
+    }
+    #[test]
+    fn a_press_ends_a_drag_whose_release_never_came() {
+        // the shell owned the pointer for the session and ended it without a drop here: the next press must not drop
+        let ctx = test_ctx();
+        let (mut files, x, a, _) = stacked_folders();
+        files.dragging = true;
+        files.fx.drag_paths = vec![PathBuf::from("/fixture/A")];
+        files.drop_target = Some(PathBuf::from("/fixture/B"));
+        files.route_input(&ctx, pointer(TouchKind::Down, x, a, 0.));
+        assert!(!files.dragging);
+        assert!(files.drop_target.is_none());
+        assert!(files.fx.drag_paths.is_empty());
+        files.route_input(&ctx, pointer(TouchKind::Up, x, a, 40.));
+        assert!(files.work.is_none(), "the click moved nothing");
     }
     #[test]
     fn columns_click_the_folders_above_and_the_open_one() {

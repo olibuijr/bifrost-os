@@ -79,6 +79,12 @@ impl FileThumbs {
         self.kept.get(&(path.to_path_buf(), px)).and_then(Option::as_ref)
     }
 
+    /// Forgets the answer for `path` at `px`, so the next `want` draws it again (the file changed). A drawing still
+    /// running keeps its place and its answer arrives as usual.
+    pub fn forget(&mut self, path: &Path, px: usize) {
+        self.kept.remove(&(path.to_path_buf(), px));
+    }
+
     /// True while a picture is being drawn or waits for a worker (the card keeps ticking).
     pub fn pending(&self) -> bool {
         !self.asked.is_empty()
@@ -191,6 +197,23 @@ mod tests {
         settle(&mut t);
         assert!(t.ready(&bad, 32).is_none());
         assert!(t.ready(&good, 32).is_some());
+    }
+
+    #[test]
+    fn a_forgotten_picture_is_drawn_again() {
+        let dir = scratch("forget");
+        let file = dir.join("a.png");
+        png(&file);
+        let mut t = FileThumbs::with_cache(dir.join("cache"));
+        t.want(&file, 32);
+        settle(&mut t);
+        assert!(t.ready(&file, 32).is_some());
+        t.forget(&file, 32);
+        assert!(t.ready(&file, 32).is_none(), "the answer is gone");
+        t.want(&file, 32);
+        assert!(t.pending(), "a want after forget asks again");
+        settle(&mut t);
+        assert!(t.ready(&file, 32).is_some());
     }
 
     #[test]

@@ -1,7 +1,8 @@
 //! The menu bar's Now Playing extra. It shows while an app has a Now Playing session published
 //! (`services/now_playing.rs`): the title and artist, the position, and Previous, Play or Pause, Next rows. A row sends
-//! its remote command to the session's owner, and a row the owner did not enable is greyed out. The menu has no
-//! artwork: the service carries none (see `docs/parity/wire6-menubar-now-playing.md`).
+//! its remote command to the session's owner, and a row the owner did not enable is greyed out. When the owner published
+//! artwork (`services::now_playing::artwork`) the title row is a taller row with the cover beside the title
+//! (`Panel::artwork`); without one the menu is the plain rows, as before (see `docs/parity/wire6-menubar-now-playing.md`).
 //!
 //! The extra exists only with the desktop menu bar (`desktop-wayland`), so the module is built only with it.
 #![cfg(feature = "desktop-wayland")]
@@ -17,6 +18,8 @@ pub(crate) struct Panel {
     pub label: String,
     /// The title, then ` - ` and the artist and album when there are any.
     pub title: String,
+    /// True when the owner published a cover: the title row shows it beside the title.
+    pub artwork: bool,
     /// `1:05 of 3:20`, `1:05` for an open item, or `Live`.
     pub position: String,
     /// Previous, Play or Pause (the playback state picks which), Next. The flag is whether the owner enabled it.
@@ -53,14 +56,16 @@ pub(crate) fn panel_for(session: &MediaSession, progress: Progress) -> Option<Pa
         (toggle, toggle_label, enabled(toggle)),
         (RemoteCommand::Next, "Next", enabled(RemoteCommand::Next)),
     ];
-    Some(Panel { label: title, title: heading, position, transport })
+    Some(Panel { label: title, title: heading, artwork: false, position, transport })
 }
 
 /// The panel for the session an app has published, or None when no app has one.
 pub(crate) fn panel() -> Option<Panel> {
     let session = now_playing::current()?;
     let progress = now_playing::progress()?;
-    panel_for(&session, progress)
+    let mut panel = panel_for(&session, progress)?;
+    panel.artwork = now_playing::artwork().is_some();
+    Some(panel)
 }
 
 #[cfg(test)]
@@ -123,6 +128,20 @@ mod tests {
         session.set_content(Some(MediaContent::new("talk", "Talk", MediaType::Audio, MediaDuration::Continuous).expect("content")));
         let progress = Progress { playing: true, position_ms: 9_000, duration_ms: None };
         assert_eq!(panel_for(&session, progress).expect("a panel").position, "0:09");
+    }
+
+    #[test]
+    fn the_panel_shows_the_cover_row_only_while_the_owner_published_artwork() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let mut publish = |body: &str| sh.service_call("is.a.music", "now_playing", "publish", body, 0.0).expect("published");
+        publish(r#"{"title":"Song","state":"playing"}"#);
+        assert!(!panel().expect("a panel").artwork, "no cover: the plain rows");
+        publish(r#"{"title":"Song","state":"playing","artwork":{"w":1,"h":1,"rgba":"/wAA/w=="}}"#);
+        assert!(panel().expect("a panel").artwork, "a published cover adds the cover row");
+        publish(r#"{"title":"Song","state":"playing","artwork":{"w":2,"h":2,"rgba":"AAAA"}}"#);
+        assert!(!panel().expect("a panel").artwork, "an unreadable cover falls back to the plain rows");
+        publish(r#"{"title":"Song","state":"playing"}"#);
+        assert!(!panel().expect("a panel").artwork, "the next publish without a cover drops it");
     }
 
     #[test]

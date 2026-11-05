@@ -239,6 +239,14 @@ Owner report: boot blinked and was not smooth. Midget's journal (2560x1440 DP mo
 - 5.5 s Bootweave chose the fastest refresh (165 Hz) and modeset away from the firmware's 60 Hz mode. `select_mode` now picks the preferred mode (the firmware's), so `keeps_inherited` keeps it and no modeset happens. `refresh=max` in `/etc/bifrost/display.conf` restores the fastest refresh (the session script reads the same switch). Inherited and selected modes count as equal when their timings match, since `vrefresh` rounds 59.951 to 60.
 - 6.9 s the compositor (then labwc/wlroots) took the connector's preferred mode. Bootweave ends on that same mode, so the compositor's first commit is not a modeset. `bifrost-wm` keeps whatever mode the CRTC already shows (`docs/window-server.md`, "Boot"), so the two stages no longer have to agree by luck. (History: wlroots always applied the preferred one.) unless an output configuration says otherwise, which is why both stages must agree on the preferred mode.
 
+- Two changes when `video=` is learned (2026-10-27): the default is the panel's fastest refresh (165 Hz), which `video-arg` keeps in
+  the command line as `video=OUT:WxH@R`. The firmware only offers 60 Hz, so the kernel's display driver must change the mode once
+  to reach it. If the loader had also switched the firmware to its largest GOP mode, the monitor retrained its link twice
+  (loader, then kernel). The loader now reads the line first (`cmdline::video_size`) and keeps the firmware's mode when `video=`
+  names a size (`cmdline::should_set_native_mode`); the boot frame is resolution independent, so it is drawn at that mode.
+  Without a `video=` token (first boot, `refresh=firmware`, Settings refresh `native`) the loader's switch to the largest
+  mode is still the boot's one change. Not changed: the drawn progress bar stays dropped (owner, 2026-10-12, "only show this boot loading").
+
 ### Symmetric shutdown
 
 Done (docs/boot/12). Shutdown and restart fade the desktop back to the boot frame, stop services under a 2 s budget, and

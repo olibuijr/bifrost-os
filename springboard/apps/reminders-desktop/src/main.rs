@@ -60,6 +60,7 @@ const MENU_SAVE_AS: u32 = 25;
 const MENU_BOLD: u32 = 26;
 const MENU_BULLETS: u32 = 27;
 const MENU_NUMBERS: u32 = 28;
+const MENU_DELETE_LIST: u32 = 29;
 /// Item ids of the menus that list things: the base plus the position in the list.
 const MENU_MARK_BASE: u32 = 20;
 const MENU_SORT_BASE: u32 = 30;
@@ -236,7 +237,8 @@ impl App for RemindersApp {
         let mut reminder = vec![
             AppMenuItem::new(MENU_NEW, "New Reminder").key("cmd+n").enabled(on_items),
             AppMenuItem::separator(),
-            AppMenuItem::new(MENU_DELETE, "Delete Reminder").key("cmd+backspace").enabled(selected),
+            // on Recently Deleted it is Delete Permanently for the selected kept reminder (asks first)
+            AppMenuItem::new(MENU_DELETE, "Delete Reminder").key("cmd+backspace").enabled(selected || (on_items && a.kept_selected().is_some())),
             AppMenuItem::new(MENU_COMPLETE, "Mark as Completed").enabled(selected),
             AppMenuItem::new(MENU_URGENT, if a.selected_urgent() { "Remove Urgent Mark" } else { "Mark as Urgent" }).enabled(selected),
             AppMenuItem::separator(),
@@ -274,6 +276,8 @@ impl App for RemindersApp {
         lists.push(AppMenuItem::new(MENU_NEW_SECTION, "New Section").enabled(list));
         lists.push(AppMenuItem::new(MENU_AUTOCATEGORIZE, "Auto-Categorize").enabled(list));
         lists.push(AppMenuItem::separator());
+        lists.push(AppMenuItem::new(MENU_DELETE_LIST, "Delete List...").key("cmd+shift+backspace").enabled(a.can_delete_list()));
+        lists.push(AppMenuItem::separator());
         lists.push(AppMenuItem::new(MENU_SAVE_TEMPLATE, "Save List as Template").enabled(list));
         lists.extend(from_template);
         lists.extend(delete_template);
@@ -299,7 +303,8 @@ impl App for RemindersApp {
                     AppMenuItem::new(MENU_NEW_SMART, "New Smart List...").enabled(on_items),
                     AppMenuItem::new(MENU_IMPORT, "Import List...").key("cmd+o").enabled(on_items),
                     AppMenuItem::new(MENU_SAVE_AS, "Save List As...").enabled(list),
-                    AppMenuItem::new(MENU_PRINT, "Print List...").key("cmd+p").enabled(a.can_print()),
+                    // the app's own Print replaces the shell's File > Print row, so the menu has one Cmd+P item
+                    AppMenuItem::print(MENU_PRINT).enabled(a.can_print()),
                 ],
             },
             AppMenu { title: "View".into(), items: view },
@@ -370,6 +375,7 @@ impl App for RemindersApp {
                 true
             }
             MENU_DELETE => a.delete_selected(ui, t),
+            MENU_DELETE_LIST => a.delete_open_list(ui, t),
             MENU_FIND => {
                 a.find(ui, t);
                 true
@@ -574,12 +580,16 @@ impl App for RemindersApp {
             },
             Input::ContextAction(id) => a.context_action(&ctx.ui, id, bifrost_proto::sys::now_ms()),
             Input::Key(k) => {
+                // the Clear and purge alerts take the sheet keys
+                if let Some(used) = a.alert_key(&ctx.ui, &k, bifrost_proto::sys::now_ms()) {
+                    return used;
+                }
                 if let Some((key, mods)) = k.as_chord() {
                     a.chord(&ctx.ui, key, mods, bifrost_proto::sys::now_ms());
                     self.sync_keyboard(ctx);
                     return true;
                 }
-                if k == KeyInput::Code(1) {
+                if matches!(k, KeyInput::Code(1) | KeyInput::Code(27)) {
                     let used = a.escape(&ctx.ui, bifrost_proto::sys::now_ms());
                     self.sync_keyboard(ctx);
                     return used;
@@ -588,6 +598,7 @@ impl App for RemindersApp {
                     KeyInput::Text(s) => Some(Out::Text(s)),
                     KeyInput::Code(8) => Some(Out::Backspace),
                     KeyInput::Code(13) => Some(Out::Enter),
+                    KeyInput::Code(46) => Some(Out::Named("Delete")),
                     KeyInput::Code(37) => Some(Out::Named("Left")),
                     KeyInput::Code(38) => Some(Out::Named("Up")),
                     KeyInput::Code(39) => Some(Out::Named("Right")),

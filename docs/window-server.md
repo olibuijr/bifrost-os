@@ -266,8 +266,15 @@ desktop a lone Cmd does nothing (`HwKeys::set_desktop`), so such a chord no long
 | F4 | sends `appgrid` to the shell control socket (the Apps grid opens or closes) |
 | Alt+Tab | focuses the lowest shown window, so repeated presses walk the stack |
 | Alt+F4 | closes the focused toplevel |
-| Ctrl+Super+Left / Right | tiles to a half |
-| Ctrl+Super+Up / Down | maximizes / centres at the previous size |
+| Ctrl+Super+Left / Right | sends `tile left` / `tile right` to the shell control socket: the shell tiles the window it shows as front to a half |
+| Ctrl+Super+Up / Down | sends `tile fill` / `tile center`: the shell fills its front window / centres it at the previous size |
+
+The shell, not the focus, picks the window the Ctrl+Super arrows arrange (E2E N2, 2026-10-24): the Window menu's
+Left Half, Right Half, Fill, Center and Return to Previous Size act on the same window. That is the other client's
+window the window server reports active (a native app's), else the shell's top window. A shell window is placed with
+`bifrost_window_level_v1` `tile`; another client's window with `tile_toplevel` (version 7), named by the
+wlr-foreign-toplevel handle the shell holds. The window server places the focused window itself only when the
+shell's control socket does not answer.
 | Ctrl+Super+F | full screen on / off for the focused window |
 
 ## Window frames reported to the shell (2026-10-19)
@@ -456,7 +463,8 @@ window out of the composed screen, so a window overlapping it showed in the pict
   on wlr-screencopy and ext-image-copy-capture.
 - **Access.** Privileged clients only (above). A request from any other client is also answered `failed(denied)`.
 - **Performance.** A request renders the window alone into a texture of the fitted size (`capture::capture_window`, GLES; on the
-  Vulkan scanout `failed(unsupported)`), once, never per frame. Every commit of a window's surface tree advances its content
+  Vulkan scanout `render_server::window_shot`, the window's dma-buf nodes composited by the render server into an offscreen target;
+  `failed(unsupported)` only for a window with no dma-buf), once, never per frame. Every commit of a window's surface tree advances its content
   serial (`WindowCapture::touch`); a request that quotes the serial the shell already holds is answered `unchanged` and draws
   nothing. The shell rate-limits: Mission Control refreshes the tiles it shows at most 5 times a second while it is open, the Dock
   asks once when a window is minimized, a screenshot asks once (`window_shots`).
@@ -474,8 +482,8 @@ window out of the composed screen, so a window overlapping it showed in the pict
   `capture::tests` (material plates), and in the shell `window_shots::tests`, `overview::tests`, `desk::tests`,
   `capture_flow::tests`.
 - **Not done.** Window mode of the screenshot toolbar picks windows by the rectangles the desk holds, so a window of another client
-  cannot be picked in it yet (the window server's `frame` event reports only a client's own toplevels). Windows that the
-  Vulkan scanout composes cannot be captured. Not run on Midget.
+  cannot be picked in it yet (the window server's `frame` event reports only a client's own toplevels). Shm-only windows on the
+  Vulkan scanout cannot be captured (the scene builder samples dma-bufs only). Not run on Midget with the Vulkan renderer.
 
 ## Text input, input method and virtual keyboard
 

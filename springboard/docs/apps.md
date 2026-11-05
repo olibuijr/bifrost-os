@@ -41,7 +41,7 @@ memfd FFI; round-trip unit tests). Tags: shell->app 1..9 in the order listed abo
 bumps on breaking change.
 
 ## Control endpoint (PC, 2026-10-08)
-Apps on the PC also serve JSON-RPC 2.0 on `$XDG_RUNTIME_DIR/bifrost/apps/<id>.sock` (see
+Apps on the PC also serve JSON-RPC 2.0 on `appdata/<id>/control.sock` in their data directory (see
 `docs/bifrost-pc-workflow.md`, "App control endpoint"). It lives in `sdk/src/control.rs`,
 and `sdk/src/runtime.rs` polls it with the shell channel (`Channel::wait_with`, `proto/src/sys.rs`).
 The app implements `App::rpc_methods` and `App::rpc(ctx, data_dir, method, params)`; the SDK

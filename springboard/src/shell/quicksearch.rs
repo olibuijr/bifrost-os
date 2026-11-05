@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[path = "quicksearch_dict.rs"]
-mod dict;
+pub(super) mod dict;
 #[path = "quicksearch_files.rs"]
 mod files_walk;
 
@@ -74,6 +74,74 @@ const USAGE_FILE: &str = "search-usage.txt";
 const LAUNCHES_FILE: &str = "app-launches.txt";
 /// The opens of indexed results, read by the Documents section; loaded by `QuickSearch::load`.
 static OPENS: std::sync::Mutex<Option<bifrost_ui::search_rank::Usage>> = std::sync::Mutex::new(None);
+
+/// A shortcut run from Search (`Hit::Shortcut`) that finished on its thread: the app's slot, the shortcut's title and
+/// what the run gave (its dialog text, or why it failed).
+struct ShortcutRun {
+    slot: u8,
+    title: String,
+    outcome: Result<Option<String>, String>,
+}
+
+/// The shortcut runs still on their threads, and the finished ones whose banner the shell has not posted yet
+/// (`Shell::shortcut_results_tick`).
+static SHORTCUT_RUNS: std::sync::Mutex<(usize, Vec<ShortcutRun>)> = std::sync::Mutex::new((0, Vec::new()));
+
+fn shortcut_runs() -> std::sync::MutexGuard<'static, (usize, Vec<ShortcutRun>)> {
+    SHORTCUT_RUNS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// One shortcut run counted in `SHORTCUT_RUNS` from before its thread starts until the thread ends, however it ends: a
+/// panic in the app's intent call unwinds through the drop, and a thread that could not be started drops its closure
+/// (and the guard in it) at once. A count that never dropped kept `next_wake` polling every 50 ms forever.
+struct ShortcutRunGuard;
+
+impl ShortcutRunGuard {
+    fn new() -> ShortcutRunGuard {
+        shortcut_runs().0 += 1;
+        ShortcutRunGuard
+    }
+}
+
+impl Drop for ShortcutRunGuard {
+    fn drop(&mut self) {
+        let mut g = shortcut_runs();
+        g.0 = g.0.saturating_sub(1);
+    }
+}
+
+/// Runs `f` on a thread of its own, counted as a shortcut run while it is out (`ShortcutRunGuard`). False when the
+/// thread could not be started (the count is back where it was).
+fn spawn_shortcut_run(f: impl FnOnce() + Send + 'static) -> bool {
+    let guard = ShortcutRunGuard::new();
+    let started = std::thread::Builder::new().name("intent-retry".into()).spawn(move || {
+        let _guard = guard;
+        f();
+    });
+    match started {
+        Ok(_) => true,
+        Err(e) => {
+            bifrost_core::log::shell_logger("quicksearch").error(format!("shortcut run thread: {e}"));
+            false
+        }
+    }
+}
+
+/// True while a shortcut run from Search is out or its result is not shown yet: the shell polls for it.
+pub(super) fn shortcut_runs_pending() -> bool {
+    let g = shortcut_runs();
+    g.0 > 0 || !g.1.is_empty()
+}
+
+/// The banner of a finished shortcut, as the reference shows a shortcut's result: its name over its output, "Done" when
+/// it gave none, or the problem when it failed.
+fn shortcut_banner(title: &str, outcome: &Result<Option<String>, String>) -> (String, String) {
+    match outcome {
+        Ok(Some(said)) if !said.trim().is_empty() => (title.to_string(), said.trim().to_string()),
+        Ok(_) => (title.to_string(), "Done".to_string()),
+        Err(e) => (title.to_string(), format!("There was a problem running the shortcut: {e}")),
+    }
+}
 /// How long a scan of the Files root is reused by later opens before the next opening scans again.
 const FILES_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(20);
 const QUERY_MAX: usize = 64;
@@ -182,8 +250,6 @@ const MAC_PLATE_R_PT: f32 = 12.0;
 const MAC_DOCK_MARGIN_PT: f32 = 12.0;
 /// Golden Gate: the most result rows built for the scrolling list; the rest of the ranking is not shown
 const MAC_MAX_ROWS: usize = 30;
-/// How long after a wheel notch the touches the window server emulates for it (a down, a move, an up) are dropped
-const WHEEL_DRAG_MS: f64 = 250.0;
 
 const fn rgba_const(r: u8, g: u8, b: u8, a: u8) -> u32 {
     let k = a as u32;
@@ -223,24 +289,15 @@ pub enum Hit {
     /// Sent to the session's owner; no window opens.
     MediaTransport { command: bifrost_ui::media_session::RemoteCommand, title: String },
     /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
-    /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir.
-    Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String },
+    /// `kind` is the file type's name ("PDF document", "" when unknown); `thumb` the thumbnail path in the app's data dir;
+    /// `snippet` the indexed text around the match when the title does not match (a mail found by its body), else "".
+    Indexed { app_id: String, unique_id: String, domain: String, title: String, kind: String, thumb: String, snippet: String },
     /// a calendar event: opens the Calendar app
     Event { title: String },
 }
 
 #[cfg(test)]
-mod app_section_title_tests {
-    use super::app_section_title;
-
-    #[test]
-    fn an_app_section_is_titled_by_the_app_name_and_the_name_is_kept_once() {
-        let a = app_section_title("Notes");
-        assert_eq!(a, "Notes");
-        assert!(std::ptr::eq(a, app_section_title("Notes")), "the same name is kept once");
-        assert_eq!(app_section_title("Mail"), "Mail");
-    }
-}
+mod app_section_title_tests;
 
 /// The label of an indexed result: its title, then its content type when it has one ("Q1 report · PDF document").
 fn indexed_label(title: &str, kind: &str) -> String {
@@ -252,15 +309,7 @@ fn indexed_label(title: &str, kind: &str) -> String {
 }
 
 #[cfg(test)]
-mod indexed_label_tests {
-    use super::indexed_label;
-
-    #[test]
-    fn an_indexed_result_shows_its_content_type_after_the_title() {
-        assert_eq!(indexed_label("Q1 report", "PDF document"), "Q1 report · PDF document");
-        assert_eq!(indexed_label("Notes", ""), "Notes");
-    }
-}
+mod indexed_label_tests;
 
 /// The symbol a Settings result draws: the tile its pane has in the Settings list, so a row in Search and the row in
 /// Settings read as the same thing.
@@ -369,16 +418,63 @@ fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String, (now, offset): (i64,
         Hit::SettingsIntent { id, title } => (title.to_string(), super::settings_intents::find(id).map_or("Settings", |i| i.description).to_string()),
         Hit::SettingsAction { intent, title } => (title.clone(), action_line(intent).to_string()),
         Hit::MediaTransport { title, .. } => (title.clone(), "Control the playing media".to_string()),
+        // a match in the body shows the text around it, so the row says why it is listed
+        Hit::Indexed { title, snippet, .. } if !snippet.is_empty() => (title.clone(), snippet.clone()),
         Hit::Indexed { title, kind, .. } => (title.clone(), kind.clone()),
     }
 }
 
-/// The filter chips of a result list: the title of each group that is a kind of result, once each, in list order.
+/// The filter chips of a result list: the title of each group that is a kind of result, once each, in list order. The
+/// Top Hit counts as its own kind ("settings" with the Settings app on top shows an Applications chip, as in the
+/// reference), since the row is taken out of its section.
 fn chips_of(groups: &[Group]) -> Vec<&'static str> {
     let mut out: Vec<&'static str> = vec![];
     for g in groups {
-        if !NOT_A_KIND.contains(&g.title) && !out.contains(&g.title) && !g.hits.is_empty() {
-            out.push(g.title);
+        let kind = if g.title == "Top Hit" { g.hits.first().and_then(kind_of_hit) } else { Some(g.title) };
+        let Some(kind) = kind else { continue };
+        if !NOT_A_KIND.contains(&kind) && !out.contains(&kind) && !g.hits.is_empty() {
+            out.push(kind);
+        }
+    }
+    out
+}
+
+/// The section a hit is listed in when it is not the Top Hit (the group titles `build_tables` and the other sources
+/// give), or None for a hit whose section is not fixed (an app's indexed items are titled with the app's name).
+fn kind_of_hit(hit: &Hit) -> Option<&'static str> {
+    Some(match hit {
+        Hit::App(_) => "Applications",
+        Hit::Settings(_) => "Settings",
+        Hit::Contact { .. } => "Contacts",
+        Hit::City(_) => "Clock",
+        Hit::Deildu(_) => "Deildu",
+        Hit::File { .. } => "Files",
+        Hit::Event { .. } => "Calendar",
+        Hit::Definition { .. } => "Dictionary",
+        Hit::Answer(_) => "Calculator",
+        Hit::Shortcut { .. } | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } | Hit::MediaTransport { .. } => "Shortcuts",
+        _ => return None,
+    })
+}
+
+/// The list filtered to the chip `chip`: that kind's sections, with the Top Hit leading them when it is of that kind
+/// (it was taken out of its section, so the filtered list would miss its best row otherwise).
+fn filter_to_chip(groups: Vec<Group>, chip: &'static str) -> Vec<Group> {
+    let mut lead: Vec<Hit> = vec![];
+    let mut out: Vec<Group> = vec![];
+    for g in groups {
+        if g.title == "Top Hit" && g.hits.first().and_then(kind_of_hit) == Some(chip) {
+            lead.extend(g.hits);
+        } else if g.title == chip {
+            out.push(g);
+        }
+    }
+    if !lead.is_empty() {
+        if let Some(first) = out.first_mut() {
+            lead.append(&mut first.hits);
+            first.hits = lead;
+        } else {
+            out.push(Group { title: chip, hits: lead });
         }
     }
     out
@@ -396,10 +492,12 @@ fn shortcut_items() -> Vec<(Hit, String)> {
         .collect()
 }
 
-/// The Settings intents as Shortcuts rows: each opens its pane. Searched by title, listed with its description.
+/// The Settings intents as Shortcuts rows: each opens its pane. Searched by title, listed with its description. A pane
+/// that already has its own Settings row (`settings::PAGES`) gets no second, intent row for the same target.
 fn settings_intent_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
     super::settings_intents::CATALOGUE
         .iter()
+        .filter(|intent| !settings::PAGES.iter().any(|name| settings::named_page(name) == Some(intent.page)))
         .map(|intent| table_row(hits, format!("settings-intent:{}", intent.id), intent.title, intent.description.to_string(), search_rank::Kind::Settings, Hit::SettingsIntent { id: intent.id, title: intent.title }, fuzzy::fold(intent.title)))
         .collect()
 }
@@ -462,98 +560,10 @@ fn step_row(rows: &[(usize, usize)], cur: Option<(usize, usize)>, step: isize) -
 }
 
 #[cfg(test)]
-mod step_row_tests {
-    use super::step_row;
-
-    #[test]
-    fn arrows_walk_the_rows_and_stop_at_the_ends() {
-        let rows = [(0, 0), (0, 1), (1, 0)];
-        assert_eq!(step_row(&rows, None, 1), Some((0, 0)));
-        assert_eq!(step_row(&rows, None, -1), Some((1, 0)));
-        assert_eq!(step_row(&rows, Some((0, 0)), 1), Some((0, 1)));
-        assert_eq!(step_row(&rows, Some((1, 0)), 1), Some((1, 0)));
-        assert_eq!(step_row(&rows, Some((0, 0)), -1), Some((0, 0)));
-    }
-
-    #[test]
-    fn no_rows_means_no_selection() {
-        assert_eq!(step_row(&[], None, 1), None);
-        assert_eq!(step_row(&[], Some((0, 0)), -1), None);
-    }
-}
+mod step_row_tests;
 
 #[cfg(test)]
-mod symbol_and_line_tests {
-    use super::*;
-    use super::super::settings_actions::SettingsIntent as Action;
-    /// A fixed "now" for the row lines (seconds, UTC offset): 2026-10-22 22:13 UTC.
-    const W: (i64, i32) = (1_792_707_200, 0);
-
-    #[test]
-    fn settings_results_draw_the_symbol_their_pane_has_in_settings() {
-        assert_eq!(result_symbol(&Hit::Settings("Wi-Fi")), Some(Symbol::Tile(Icon::Wifi)));
-        assert_eq!(result_symbol(&Hit::Settings("About")), Some(Symbol::Glyph(Glyph::About)));
-        assert_eq!(result_symbol(&Hit::Settings("Do Not Disturb")), Some(Symbol::Tile(Icon::Focus)));
-        assert_eq!(pane_symbol(PageId::Wallpaper), Symbol::Tile(Icon::Wallpaper));
-        assert_eq!(pane_symbol(PageId::Keyboard), Symbol::Glyph(Glyph::Keyboard));
-        assert_eq!(pane_symbol(PageId::Appearance), Symbol::Tile(Icon::Appearance), "Appearance has its own tile");
-        assert_eq!(pane_symbol(PageId::Root), Symbol::Tile(Icon::General), "an unnamed pane keeps the general symbol");
-        // every Settings page and every Settings intent has a symbol: no blank square is left
-        for page in settings::PAGES {
-            assert!(result_symbol(&Hit::Settings(page)).is_some(), "{page}");
-        }
-        for intent in super::super::settings_intents::CATALOGUE {
-            assert!(result_symbol(&Hit::SettingsIntent { id: intent.id, title: intent.title }).is_some(), "{}", intent.id);
-        }
-    }
-
-    #[test]
-    fn actions_and_transport_commands_have_a_symbol_and_other_results_use_their_app() {
-        let wallpaper = Hit::SettingsAction { intent: Action::SetWallpaper("dusk".into()), title: "Set Wallpaper to Dusk".into() };
-        assert_eq!(result_symbol(&wallpaper), Some(Symbol::Tile(Icon::Wallpaper)));
-        assert_eq!(result_symbol(&Hit::SettingsAction { intent: Action::WifiPower(true), title: "x".into() }), Some(Symbol::Tile(Icon::Wifi)));
-        assert_eq!(result_symbol(&Hit::SettingsAction { intent: Action::LockScreen, title: "x".into() }), Some(Symbol::Tile(Icon::Passcode)));
-        assert!(result_symbol(&Hit::App(AppId::Files)).is_none(), "an app result is drawn with the app's icon");
-        assert!(result_symbol(&Hit::Terminal("x".into())).is_none());
-    }
-
-    #[test]
-    fn rows_have_a_title_and_a_second_line_saying_what_they_are() {
-        let name = |_: AppId| "Files".to_string();
-        assert_eq!(row_text(&Hit::App(AppId::Files), name, W), ("Files".to_string(), "Application".to_string()));
-        assert_eq!(row_text(&Hit::Settings("Wi-Fi"), name, W), ("Wi-Fi".to_string(), "Settings".to_string()));
-        let file = Hit::File { path: PathBuf::from("/home/u/Downloads/photo.jpg"), name: "photo.jpg".into(), modified: 0 };
-        assert_eq!(row_text(&file, name, W), ("photo.jpg".to_string(), "Image \u{b7} Downloads".to_string()));
-        // a file row says when the file last changed
-        let dated = Hit::File { path: PathBuf::from("/home/u/Documents/e2e.txt"), name: "e2e.txt".into(), modified: W.0 - 60 };
-        let (_, line) = row_text(&dated, name, W);
-        assert!(line.contains(" \u{b7} Documents \u{b7} "), "kind, folder, then the date: {line}");
-        assert!(line.ends_with(&crate::files::fs::date_text(W.0 - 60, W.0, 0)), "{line}");
-        assert!(line.contains("Today at"), "{line}");
-        let def = Hit::Definition { word: "weather".into(), dictionary: "Test".into(), preview: "n. the state of the atmosphere".into() };
-        assert_eq!(row_text(&def, name, W), ("weather".to_string(), "n. the state of the atmosphere".to_string()));
-        let look = Hit::Definition { word: "zyx".into(), dictionary: String::new(), preview: String::new() };
-        assert_eq!(row_text(&look, name, W), ("zyx".to_string(), "Look up in Dictionary".to_string()));
-        let shortcut = Hit::Shortcut { app_id: "a.b".into(), app_name: "Notes".into(), intent: "new".into(), title: "New Note".into() };
-        assert_eq!(row_text(&shortcut, name, W), ("New Note".to_string(), "Shortcut \u{b7} Notes".to_string()));
-        let wallpaper = Hit::SettingsAction { intent: Action::SetWallpaper("dusk".into()), title: "Set Wallpaper to Dusk".into() };
-        assert_eq!(row_text(&wallpaper, name, W).1, "Use this picture as the desktop wallpaper");
-        assert_eq!(row_text(&Hit::Answer("4".into()), name, W), ("= 4".to_string(), "Calculator".to_string()));
-        assert_eq!(row_text(&Hit::Terminal("ls".into()), name, W), ("Search in Terminal".to_string(), "ls".to_string()));
-        let indexed = Hit::Indexed { app_id: "a".into(), unique_id: "1".into(), domain: String::new(), title: "Q1 report".into(), kind: "PDF document".into(), thumb: String::new() };
-        assert_eq!(row_text(&indexed, name, W), ("Q1 report".to_string(), "PDF document".to_string()));
-        let intent = Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" };
-        assert_eq!(row_text(&intent, name, W), ("Open Keyboard".to_string(), "Show the keyboard settings".to_string()));
-    }
-
-    #[test]
-    fn one_chip_per_kind_of_result_and_none_for_the_best_match_or_the_actions() {
-        let g = |title: &'static str, n: usize| Group { title, hits: (0..n).map(|i| Hit::City(if i == 0 { "A" } else { "B" })).collect() };
-        let groups = vec![g("Top Hit", 1), g("Applications", 2), g("Settings", 1), g("Shortcuts", 3), g("Applications", 1), g("Files", 0), g("Show in Folder", 1), g("Search in Apps", 1)];
-        assert_eq!(chips_of(&groups), vec!["Applications", "Settings", "Shortcuts"]);
-        assert!(chips_of(&[]).is_empty());
-    }
-}
+mod symbol_and_line_tests;
 
 /// A titled section of results.
 #[derive(Clone, Debug, PartialEq)]
@@ -642,6 +652,38 @@ const SYNC_DEADLINE: std::time::Duration = std::time::Duration::from_millis(300)
 struct Table {
     name: &'static str,
     rows: Vec<(search_rank::Item, String)>,
+    /// Per row (same index): folded other names the row is found by only when the query starts one of their words (an
+    /// app's aliases, `apps::search_aliases`), never by the fuzzy matcher's initials or scattered letters, so "wi" does
+    /// not find the browser through "web internet" and "se" does not find Term through "shell". Empty: none.
+    prefixes: Vec<String>,
+    /// Per row (same index): the digits of its phone number (`phone_digits`), which a query of digits alone finds
+    /// anywhere inside, as a number is searched by any part of it ("1234" finds 555 1234). Empty: none.
+    phones: Vec<String>,
+    /// Rows match only when the query is contiguous in their text or starts one of its words, never by scattered
+    /// letters: every section but Applications and Deildu. The Settings panes' text carries many keyword aliases, so
+    /// "lantern" does not find "Display & Brightness" through letters spread over them, and "aapl" does not find the
+    /// Shortcuts row "Set Wallpaper to ..." (E2E12 1).
+    strict: bool,
+}
+
+/// Whether the folded query `q` matches folded `text` well enough for a strict table: a contiguous run of the text
+/// that starts at a word start (the text's start or after a non-alphanumeric character), so a prefix ("bright"), a
+/// later word ("wallp") and a run over words ("dark m" in "... dark mode ...") match, but a run inside a word does
+/// not ("words" does not find "Open Passwords", E2E13 4).
+fn strict_match(q: &str, text: &str) -> bool {
+    !q.is_empty()
+        && text.char_indices().any(|(i, _)| text[i..].starts_with(q) && text[..i].chars().next_back().is_none_or(|c| !c.is_alphanumeric()))
+}
+
+/// The digits of a phone number, its spaces, `+`, `-` and other punctuation dropped.
+fn phone_digits(s: &str) -> String {
+    s.chars().filter(char::is_ascii_digit).collect()
+}
+
+/// The digits of a query made only of digits, spaces, `+` and `-` (with at least one digit): a phone number search.
+fn phone_query(q: &str) -> Option<String> {
+    let q = q.trim();
+    (q.chars().any(|c| c.is_ascii_digit()) && q.chars().all(|c| c.is_ascii_digit() || matches!(c, ' ' | '+' | '-'))).then(|| phone_digits(q))
 }
 
 impl search_rank::Source for Table {
@@ -651,8 +693,25 @@ impl search_rank::Source for Table {
 
     fn search(&self, query: &str) -> Vec<search_rank::Item> {
         let m = fuzzy::Matcher::new(query);
-        self.rows.iter().filter(|(_, folded)| m.rank_folded(folded).is_some()).map(|(item, _)| item.clone()).collect()
+        let q = fuzzy::fold(query.trim());
+        let digits = phone_query(query);
+        self.rows
+            .iter()
+            .enumerate()
+            .filter(|(i, (_, folded))| {
+                let hit = if self.strict { strict_match(&q, folded) } else { m.rank_folded(folded).is_some() };
+                hit || self.prefixes.get(*i).is_some_and(|p| starts_a_word(p, &q))
+                    || digits.as_deref().is_some_and(|d| self.phones.get(*i).is_some_and(|p| !p.is_empty() && p.contains(d)))
+            })
+            .map(|(_, (item, _))| item.clone())
+            .collect()
     }
+}
+
+/// Whether `q` (folded) is the start of a word of `words` (folded, space separated), running on over later words
+/// ("font b" starts "font book").
+fn starts_a_word(words: &str, q: &str) -> bool {
+    !q.is_empty() && (words.starts_with(q) || words.match_indices(' ').any(|(i, _)| words[i + 1..].starts_with(q)))
 }
 
 /// One row of a section: its item, and the hit it opens (kept under the item's id).
@@ -666,7 +725,16 @@ fn table_row(hits: &mut BTreeMap<String, Hit>, key: String, title: &str, text: S
 fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
     let mut hits: BTreeMap<String, Hit> = BTreeMap::new();
     let fx = fixed();
-    let apps_rows = apps().iter().map(|a| table_row(&mut hits, app_usage_key(a.id), a.name, String::new(), search_rank::Kind::App, Hit::App(a.id), fuzzy::fold(a.name))).collect();
+    // an app is found by its name (fuzzy) and by its aliases ("terminal" for Term, "preview" for Viewer) as word prefixes
+    let mut app_prefixes = Vec::new();
+    let apps_rows = apps()
+        .iter()
+        .map(|a| {
+            let aliases = super::apps::search_aliases(a.icon);
+            app_prefixes.push(fuzzy::fold(aliases));
+            table_row(&mut hits, app_usage_key(a.id), a.name, aliases.to_string(), search_rank::Kind::App, Hit::App(a.id), fuzzy::fold(a.name))
+        })
+        .collect();
     let settings_rows = settings::PAGES
         .iter()
         .map(|&page| {
@@ -679,6 +747,7 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
         .collect();
     let city_rows = CITIES.iter().map(|city| table_row(&mut hits, format!("city:{}", city.name), city.name, String::new(), search_rank::Kind::Other, Hit::City(city.name), fuzzy::fold(city.name))).collect();
     let deildu_rows = c.deildu.iter().zip(c.deildu_folded).map(|(title, f)| table_row(&mut hits, format!("deildu:{title}"), title, String::new(), search_rank::Kind::Other, Hit::Deildu(title.clone()), f.clone())).collect();
+    let contact_phones = c.contacts.iter().map(|contact| phone_digits(&contact.phone)).collect();
     let contact_rows = c
         .contacts
         .iter()
@@ -704,15 +773,18 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
             table_row(&mut hits, format!("event:{}", e.id), &e.title, text, search_rank::Kind::Other, Hit::Event { title: e.title.clone() }, folded)
         })
         .collect();
+    // only an app's name is matched by scattered letters (its aliases by word prefix); Settings, Clock, Contacts,
+    // Shortcuts, Files and Calendar need a prefix, a word start or a contiguous run, so "aapl" does not list
+    // "Set Wallpaper to ..." in Shortcuts (E2E12 1)
     let tables = vec![
-        Table { name: "Applications", rows: apps_rows },
-        Table { name: "Settings", rows: settings_rows },
-        Table { name: "Clock", rows: city_rows },
-        Table { name: "Deildu", rows: deildu_rows },
-        Table { name: "Contacts", rows: contact_rows },
-        Table { name: "Shortcuts", rows: shortcut_rows },
-        Table { name: "Files", rows: file_rows },
-        Table { name: "Calendar", rows: event_rows },
+        Table { name: "Applications", rows: apps_rows, prefixes: app_prefixes, phones: Vec::new(), strict: false },
+        Table { name: "Settings", rows: settings_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
+        Table { name: "Clock", rows: city_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
+        Table { name: "Deildu", rows: deildu_rows, prefixes: Vec::new(), phones: Vec::new(), strict: false },
+        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new(), phones: contact_phones, strict: true },
+        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
+        Table { name: "Files", rows: file_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
+        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
     ];
     (tables, hits)
 }
@@ -759,12 +831,43 @@ fn dictionary_group(query: &str) -> Option<(Group, bool)> {
     dict::lookup(query).map(|(d, explicit)| (Group { title: "Dictionary", hits: vec![Hit::Definition { word: d.word, dictionary: d.dictionary, preview: d.preview }] }, explicit))
 }
 
+/// Whether the definition group `g` is for the query's own word (an exact headword) while the Top Hit `top` was
+/// matched only by scattered letters: the headword ranks first then. A Top Hit found by an alias (an app's
+/// `search_aliases`, a Settings pane's keywords), a prefix, a word start or a contiguous run of its title keeps its
+/// place, so "terminal" stays the Term app and "preview" the Viewer.
+fn headword_beats_top(query: &str, g: &Group, top: Option<&Group>) -> bool {
+    let q = fuzzy::fold(query.trim());
+    let exact = g.hits.iter().any(|h| matches!(h, Hit::Definition { word, dictionary, .. } if !dictionary.is_empty() && fuzzy::fold(word) == q));
+    let Some(top_hit) = top.and_then(|t| t.hits.first()) else { return false };
+    exact && !top_matched_well(&q, top_hit)
+}
+
+/// Whether the folded query `q` matches `hit` better than by scattered letters: its title by a contiguous run from a
+/// word start (`strict_match`), or one of its aliases (an app's aliases as word prefixes, a Settings pane's keywords strictly).
+fn top_matched_well(q: &str, hit: &Hit) -> bool {
+    if q.is_empty() {
+        return false;
+    }
+    let name_of = |app: AppId| apps().iter().find(|a| a.id == app).map_or(String::new(), |a| a.name.to_string());
+    let (title, _) = row_text(hit, name_of, (0, 0));
+    if strict_match(q, &fuzzy::fold(&title)) {
+        return true;
+    }
+    match hit {
+        Hit::App(id) => apps().iter().find(|a| a.id == *id).is_some_and(|a| starts_a_word(&fuzzy::fold(super::apps::search_aliases(a.icon)), q)),
+        Hit::Settings(page) => fixed().aliases.iter().any(|(h, k)| *h == Hit::Settings(*page) && strict_match(q, k)),
+        _ => false,
+    }
+}
+
 /// The groups in display order: the calculator answer, the Top Hit, the sections, the Documents, the files, and the
-/// "Search in Apps" action last. A definition the query asked for ("define x") comes first, so Return opens it; the
+/// "Search in Apps" action last. A definition the query asked for ("define x") comes first, so Return opens it, and so
+/// does the exact headword of a plain word when the Top Hit matched only loosely (`headword_beats_top`); any other
 /// definition of a plain word follows the sections.
 fn compose(query: &str, calc: Option<Group>, top: Option<Group>, sections: Vec<Group>, documents: Vec<Group>, files: Vec<Group>) -> Vec<Group> {
     let (asked, plain) = match dictionary_group(query) {
         Some((g, true)) => (Some(g), None),
+        Some((g, false)) if headword_beats_top(query, &g, top.as_ref()) => (Some(g), None),
         Some((g, false)) => (None, Some(g)),
         None => (None, None),
     };
@@ -774,13 +877,13 @@ fn compose(query: &str, calc: Option<Group>, top: Option<Group>, sections: Vec<G
     groups.extend(documents);
     groups.extend(files);
     groups.push(Group { title: "Search in Apps", hits: vec![Hit::Terminal(query.to_string())] });
-    scoped(groups, &super::spotlight_scope::current())
+    scoped(groups, &super::search_scope::current())
 }
 
 /// The category a hit is listed under in Settings > Search, and the path it names when it is a file. `None` for
 /// the hits that no switch controls (the Search in Apps action, the Top Hit's own kind, the calculator answer).
-fn hit_category(hit: &Hit) -> (Option<super::spotlight_scope::Category>, Option<&Path>) {
-    use super::spotlight_scope::Category as C;
+fn hit_category(hit: &Hit) -> (Option<super::search_scope::Category>, Option<&Path>) {
+    use super::search_scope::Category as C;
     match hit {
         Hit::App(_) | Hit::Shortcut { .. } => (Some(C::Applications), None),
         Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } | Hit::MediaTransport { .. } => (Some(C::Settings), None),
@@ -797,7 +900,7 @@ fn hit_category(hit: &Hit) -> (Option<super::spotlight_scope::Category>, Option<
 
 /// Drops the hits Settings > Search hides, and any group left empty. A group with no hits stays only when it was
 /// empty to begin with (the "Search in Apps" action is never hidden).
-fn scoped(groups: Vec<Group>, scope: &super::spotlight_scope::Scope) -> Vec<Group> {
+fn scoped(groups: Vec<Group>, scope: &super::search_scope::Scope) -> Vec<Group> {
     groups
         .into_iter()
         .filter_map(|mut g| {
@@ -964,6 +1067,7 @@ fn indexed_groups(query: &str) -> Vec<Group> {
             unique_id: f.unique_id,
             domain: f.domain,
             title: f.title,
+            snippet: f.snippet,
         };
         match groups.iter_mut().find(|g| g.title == title) {
             Some(g) => {
@@ -1146,8 +1250,6 @@ pub struct QuickSearch {
     /// Golden Gate: how far the rows are scrolled up inside the card, in px, and the query the offset belongs to
     scroll: f32,
     scroll_query: String,
-    /// touches of the drag emulated for a wheel notch that are still to be dropped: (count, until ms)
-    wheel_swallow: (u8, f64),
     deildu_titles: Vec<String>,
     /// `fuzzy::fold` of each Deildu title, kept so keystrokes do not re-fold them
     deildu_folded: Vec<String>,
@@ -1219,7 +1321,8 @@ impl QuickSearch {
         self.mac = mac;
         self.made_k = k;
         self.chip = None;
-        self.field = if mac { TextField::new(ui, "Search", MAC_LARGE_TITLE_PT * k, false, QUERY_MAX) } else { TextField::new(ui, "Search", FIELD_TEXT_PT, false, QUERY_MAX) };
+        // Golden Gate: the empty field shows only its "Search" placeholder; the caret appears with the first character
+        self.field = if mac { TextField::new(ui, "Search", MAC_LARGE_TITLE_PT * k, false, QUERY_MAX).without_empty_caret() } else { TextField::new(ui, "Search", FIELD_TEXT_PT, false, QUERY_MAX) };
         self.search_imgs.clear();
     }
 
@@ -1272,7 +1375,6 @@ impl QuickSearch {
             max_bottom: f32::MAX,
             scroll: 0.0,
             scroll_query: String::new(),
-            wheel_swallow: (0, 0.0),
             thumbs: vec![],
             file_thumbs: super::search_thumbs::FileThumbs::default(),
             deildu_titles: vec![],
@@ -1727,8 +1829,23 @@ impl QuickSearch {
     /// Moves the keyboard selection one row down (`step` 1) or up (-1) through the shown rows.
     fn move_selection(&mut self, ui: &Ui, step: isize) {
         let rows: Vec<(usize, usize)> = self.rows().into_iter().map(|(si, ri, _)| (si, ri)).collect();
-        self.selected = step_row(&rows, self.selected, step);
+        // Golden Gate: the Top Hit is highlighted before any arrow key, so Down leaves it for the second row
+        let cur = self.selected.or_else(|| rows.first().copied().filter(|_| self.mac));
+        self.selected = step_row(&rows, cur, step);
         self.reveal_selected(ui);
+    }
+
+    /// Cmd+Down / Cmd+Up: jumps to the first row of the next (`step` 1) or previous (-1) section, clamped to the ends.
+    /// True when Search is showing rows to jump through.
+    pub fn jump_section(&mut self, ui: &Ui, step: isize) -> bool {
+        let rows = self.rows();
+        let Some(&(first, _, _)) = rows.first() else { return false };
+        let cur = self.selected.map_or(first, |(si, _)| si);
+        let last = rows.last().map_or(first, |r| r.0);
+        let to = if step > 0 { rows.iter().map(|r| r.0).find(|&si| si > cur).unwrap_or(last) } else { rows.iter().map(|r| r.0).rev().find(|&si| si < cur).unwrap_or(first) };
+        self.selected = rows.iter().find(|r| r.0 == to).map(|r| (r.0, r.1));
+        self.reveal_selected(ui);
+        true
     }
 
     /// Golden Gate: scrolls the list the least that brings the selected row fully into the card.
@@ -1780,16 +1897,6 @@ impl QuickSearch {
         false
     }
 
-    /// True for each touch of the drag emulated for a wheel notch Search took already.
-    fn swallows_touch(&mut self, t: f64) -> bool {
-        if self.wheel_swallow.0 == 0 || t > self.wheel_swallow.1 {
-            self.wheel_swallow = (0, 0.0);
-            return false;
-        }
-        self.wheel_swallow.0 -= 1;
-        true
-    }
-
     /// The first result: what Return opens.
     pub fn top_hit(&self) -> Option<Hit> {
         self.sections.first().and_then(|s| s.rows.first()).map(|(h, _)| h.clone())
@@ -1809,7 +1916,7 @@ impl QuickSearch {
             }
             self.chips = kinds.into_iter().map(|t| (t, ui.text(t, MAC_BODY_PT * k, Weight::Regular, WHITE))).collect();
             if let Some(c) = self.chip {
-                groups.retain(|g| g.title == c);
+                groups = filter_to_chip(groups, c);
             }
         } else {
             self.chips.clear();
@@ -1876,6 +1983,7 @@ impl QuickSearch {
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
                     Hit::SettingsIntent { title, .. } => title.to_string(),
                     Hit::SettingsAction { title, .. } | Hit::MediaTransport { title, .. } => title.clone(),
+                    Hit::Indexed { title, snippet, .. } if !snippet.is_empty() => indexed_label(title, snippet),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                     Hit::Definition { word, preview, .. } if !preview.is_empty() => format!("{word}: {preview}"),
                     Hit::Definition { word, .. } => format!("Look up \u{201c}{word}\u{201d}"),
@@ -1890,8 +1998,9 @@ impl QuickSearch {
             }
         }
         self.sections = sections;
-        self.selected = keep.and_then(|wanted| self.sections.iter().enumerate().find_map(|(si, s)| s.rows.iter().position(|(r, _)| *r == wanted).map(|ri| (si, ri))));
-        self.selected = None;
+        // a new query puts the highlight back on the Top Hit; a rebuild for the same query (late rows, another Dock) keeps
+        // the row the arrow keys are on
+        self.selected = keep.filter(|_| self.scroll_query == query).and_then(|wanted| self.sections.iter().enumerate().find_map(|(si, s)| s.rows.iter().position(|(r, _)| *r == wanted).map(|ri| (si, ri))));
         // a new query starts at the top; the same one (late rows, another Dock) keeps its place within the new bounds
         if self.scroll_query != query {
             self.scroll = 0.0;
@@ -2361,7 +2470,8 @@ impl QuickSearch {
                         y += rh;
                         continue;
                     }
-                    let top = self.mac && si == 0 && ri == 0;
+                    // the Top Hit's plate gives way to the row the arrow keys are on
+                    let top = self.mac && si == 0 && ri == 0 && self.selected.map_or(true, |at| at == (0, 0));
                     if top {
                         let pi = self.px(ui, MAC_PLATE_INSET_PT);
                         s.fill_rrect(cx + pi, y, cw - 2.0 * pi, rh, self.px(ui, MAC_PLATE_R_PT), a(SIDEBAR_PLATE.now())); // the reference: a neutral plate, not the accent
@@ -2457,10 +2567,6 @@ impl Shell {
     pub(super) fn quicksearch_event(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
         let range = self.ui.pt(REVEAL_PT);
         let (w, h) = (self.w, self.h);
-        // the touches the window server emulates after a wheel notch must not tap the row under the pointer
-        if matches!(self.quicksearch.state, State::Shown) && matches!(ev, Event::Down(..) | Event::Move(..) | Event::Up(..)) && self.quicksearch.swallows_touch(t) {
-            return Some(vec![]);
-        }
         match (self.quicksearch.state, ev) {
             (State::Hidden, Event::Down(x, y)) => {
                 let zone = y >= self.layout.status_h as f32 && y < self.h as f32 - home_zone(&self.ui);
@@ -2534,7 +2640,7 @@ impl Shell {
         if self.quicksearch.scroll_by(&self.ui, -dy) {
             self.dirty = true;
         }
-        self.quicksearch.wheel_swallow = (3, t + WHEEL_DRAG_MS);
+        self.swallow_wheel_drag(t);
         true
     }
 
@@ -2639,7 +2745,7 @@ impl Shell {
             Hit::Definition { word, .. } => {
                 if std::mem::take(&mut self.quicksearch.space_preview) {
                     // Space: the whole definition in the Look Up popover
-                    self.open_look_up(word);
+                    self.open_look_up(word, None);
                 } else {
                     self.run_intent(bifrost_ui::services_menu::DICTIONARY_APP, "look-up", "word", &word, t);
                 }
@@ -2668,14 +2774,19 @@ impl Shell {
                     return self.open_settings_intent_page(page, t);
                 }
             }
-            Hit::Shortcut { app_id, intent, .. } => {
+            Hit::Shortcut { app_id, intent, title, .. } => {
                 if let Some(n) = super::apphost::slot_of(&app_id) {
                     self.open(AppId::External(n as u8), t);
-                    // the app may still be starting: retry the connection for a few seconds, off the UI thread
-                    crate::bare::sys::spawn_named("intent-retry", move || {
-                        if let Err(e) = super::intents::run(&app_id, &intent, std::time::Duration::from_secs(8)) {
-                            eprintln!("quicksearch: intent {intent} of {app_id}: {e}");
+                    // the app may still be starting: retry the connection for a few seconds, off the UI thread; the
+                    // result comes back as a banner with the shortcut's name (E2E12 5)
+                    // counted while it is out, also when the intent call panics (`ShortcutRunGuard`)
+                    spawn_shortcut_run(move || {
+                        let outcome = super::intents::run(&app_id, &intent, std::time::Duration::from_secs(8));
+                        match &outcome {
+                            Ok(_) => bifrost_core::log::shell_logger("quicksearch").info(format!("shortcut {intent} of {app_id} ran")),
+                            Err(e) => bifrost_core::log::shell_logger("quicksearch").error(format!("shortcut {intent} of {app_id}: {e}")),
                         }
+                        shortcut_runs().1.push(ShortcutRun { slot: n as u8, title, outcome });
                     });
                 }
             }
@@ -2732,6 +2843,16 @@ impl Shell {
         }
     }
 
+    /// Cmd+Down / Cmd+Up in Search: jumps between the result categories. True when Search took the chord.
+    pub(super) fn quicksearch_jump(&mut self, step: isize) -> bool {
+        if !self.quicksearch.is_shown() {
+            return false;
+        }
+        self.quicksearch.jump_section(&self.ui, step);
+        self.dirty = true;
+        true
+    }
+
     /// Cmd+Return in Search: shows the selected (or first) file in its folder in Files, as "Show in Folder" does. True
     /// when Search was open and took the chord (it does even with no file listed, so the app behind never gets it).
     pub(super) fn quicksearch_reveal(&mut self, t: f64) -> bool {
@@ -2752,7 +2873,25 @@ impl Shell {
             let dock_top = self.quicksearch_dock_top();
             self.quicksearch.set_dock_top(&self.ui, self.h, dock_top)
         };
-        self.quicksearch.tick(&self.ui, self.h, t) || moved
+        let posted = self.shortcut_results_tick();
+        self.quicksearch.tick(&self.ui, self.h, t) || moved || posted
+    }
+
+    /// Posts the banner of every shortcut run from Search that finished since the last tick, through the ordinary
+    /// notification path (the app's notification settings apply). True when one was posted.
+    pub(super) fn shortcut_results_tick(&mut self) -> bool {
+        let done = std::mem::take(&mut shortcut_runs().1);
+        self.post_shortcut_runs(done)
+    }
+
+    fn post_shortcut_runs(&mut self, done: Vec<ShortcutRun>) -> bool {
+        let posted = !done.is_empty();
+        for run in done {
+            let (title, body) = shortcut_banner(&run.title, &run.outcome);
+            let time = self.notify.now();
+            self.notify(super::notify::Notification::new(AppId::External(run.slot), title, body, time));
+        }
+        posted
     }
 
     /// The home screen with the card and keyboard over it; the keyboard
@@ -2768,610 +2907,7 @@ impl Shell {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::super::tests::{settle, shell, swipe, unlock};
-    use super::super::{AppId, Effect, Event, Screen, Shell, WifiAction};
-    use super::*;
-    use crate::gfx::Surface;
-
-    fn ui() -> Ui {
-        super::super::tests::ui()
-    }
-
-    /// A finger moving from y0 to y1 at x in ten steps `step_ms` apart.
-    fn drag(sh: &mut Shell, x: f32, y0: f32, y1: f32, t: f64, step_ms: f64) -> f64 {
-        sh.event(Event::Down(x, y0), t);
-        for i in 1..=10 {
-            sh.event(Event::Move(x, y0 + (y1 - y0) * i as f32 / 10.0), t + step_ms * i as f64);
-        }
-        let end = t + step_ms * 10.0 + 200.0;
-        sh.event(Event::Up(x, y1), end);
-        end
-    }
-
-    fn tap(sh: &mut Shell, x: f32, y: f32, t: f64) -> Vec<Effect> {
-        let mut fx = sh.event(Event::Down(x, y), t);
-        fx.extend(sh.event(Event::Up(x, y), t + 30.0));
-        fx
-    }
-
-    fn open(sh: &mut Shell, t: f64) -> f64 {
-        let end = drag(sh, 600.0, 800.0, 800.0 + sh.ui.pt(60.0), t, 20.0);
-        assert_eq!(sh.quicksearch.describe(), "opening");
-        settle(sh, end);
-        assert!(sh.quicksearch.is_shown());
-        end + 1000.0
-    }
-
-    fn type_text(sh: &mut Shell, text: &str, t: f64) {
-        sh.quicksearch.key(&sh.ui, sh.h, Out::Text(text.into()), t);
-    }
-
-    #[test]
-    fn pull_decides_direction_once_past_the_slop() {
-        let p = PullDown::new(100.0, 100.0);
-        assert_eq!(p.moved(103.0, 105.0, 10.0), Pull::Undecided);
-        assert_eq!(p.moved(100.0, 112.0, 10.0), Pull::Down);
-        assert_eq!(p.moved(108.0, 112.0, 10.0), Pull::Down, "45 degrees still counts as a pull");
-        assert_eq!(p.moved(114.0, 112.0, 10.0), Pull::Page, "more sideways than down pages");
-        assert_eq!(p.moved(100.0, 88.0, 10.0), Pull::Page, "upwards is never a pull");
-        assert_eq!(p.moved(-20.0, 100.0, 10.0), Pull::Page);
-    }
-
-    #[test]
-    fn results_rank_a_top_hit_then_each_source_and_the_terminal_last() {
-        let titles = vec!["Severance".to_string(), "Sex Education".to_string(), "Seinfeld".to_string(), "Secret Invasion".to_string()];
-        let g = results("se", &titles);
-        assert_eq!(g[0], Group { title: "Top Hit", hits: vec![Hit::App(AppId::Settings)] });
-        assert_eq!(g[1].title, "Applications");
-        assert!(g[1].hits.is_empty() || g[1].hits != vec![Hit::App(AppId::Settings)], "the top hit is not listed twice");
-        let deildu = g.iter().find(|g| g.title == "Deildu").unwrap();
-        assert_eq!(deildu.hits.len(), PER_GROUP, "each source stops at three");
-        assert_eq!(deildu.hits[0], Hit::Deildu("Seinfeld".into()), "shorter prefix matches first");
-        assert_eq!(g.last().unwrap(), &Group { title: "Search in Apps", hits: vec![Hit::Terminal("se".into())] });
-        assert!(results("", &titles).is_empty());
-        assert!(results("  ", &titles).is_empty());
-        assert_eq!(results("wi", &[])[0].hits, vec![Hit::Settings("Wi-Fi")]);
-        assert_eq!(results("tok", &[])[0].hits, vec![Hit::City("Tokyo")]);
-        assert_eq!(results("francisco", &[])[0].hits, vec![Hit::City("San Francisco")]);
-        let none = results("zzzz", &[]);
-        assert_eq!(none.len(), 1, "only the terminal action: {none:?}");
-        assert_eq!(none[0].hits, vec![Hit::Terminal("zzzz".into())]);
-    }
-
-    #[test]
-    fn settings_intents_are_found_as_shortcuts_and_open_their_pane() {
-        let groups = results("open keyboard", &[]);
-        let wanted = Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" };
-        assert!(groups.iter().flat_map(|g| g.hits.iter()).any(|h| *h == wanted), "{groups:?}");
-        assert!(super::super::settings_intents::page_for("open-keyboard").is_some());
-        assert!(super::super::settings_intents::page_for("no-such-intent").is_none());
-    }
-
-    #[test]
-    fn wifi_action_intents_are_found_and_run_their_effect_without_a_window() {
-        use super::super::settings_actions::SettingsIntent;
-        let groups = results("turn wi-fi off", &[]);
-        let wanted = Hit::SettingsAction { intent: SettingsIntent::WifiPower(false), title: "Turn Wi-Fi Off".into() };
-        assert!(groups.iter().flat_map(|g| g.hits.iter()).any(|h| *h == wanted), "{groups:?}");
-        let scan = Hit::SettingsAction { intent: SettingsIntent::WifiScan, title: "Scan for Wi-Fi Networks".into() };
-        assert!(results("scan for wi-fi", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == scan));
-        set_wallpaper_catalogue(vec![("kirkjufell_dusk".into(), "Kirkjufell Dusk".into())]);
-        let picture = Hit::SettingsAction { intent: SettingsIntent::SetWallpaper("kirkjufell_dusk".into()), title: "Set Wallpaper to Kirkjufell Dusk".into() };
-        assert!(results("kirkjufell", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == picture));
-        set_wallpaper_catalogue(Vec::new());
-        let lock = Hit::SettingsAction { intent: SettingsIntent::LockScreen, title: "Lock Screen".into() };
-        assert!(results("lock screen", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == lock));
-        let next = Hit::MediaTransport { command: bifrost_ui::media_session::RemoteCommand::Next, title: "Next Track".into() };
-        assert!(results("next track", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == next));
-    }
-
-    #[test]
-    fn spotlight_scope_hides_switched_off_kinds_and_excluded_folders() {
-        use super::super::spotlight_scope::{Category, Scope};
-        let mut scope = Scope::default();
-        scope.set_allowed(Category::Settings, false);
-        scope.exclude(Path::new("/home/u/Private"));
-        let groups = vec![Group {
-            title: "Top Hit",
-            hits: vec![
-                Hit::SettingsIntent { id: "open-keyboard", title: "Open Keyboard" },
-                Hit::File { path: PathBuf::from("/home/u/Private/a.txt"), name: "a.txt".into(), modified: 0 },
-                Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into(), modified: 0 },
-            ],
-        }, Group { title: "Settings", hits: vec![Hit::SettingsIntent { id: "open-sound", title: "Open Sound" }] }, Group { title: "Search in Apps", hits: vec![Hit::Terminal("x".into())] }];
-        let kept = scoped(groups, &scope);
-        assert_eq!(kept.len(), 2, "the Settings group empties and goes: {kept:?}");
-        assert_eq!(kept[0].hits, vec![Hit::File { path: PathBuf::from("/home/u/Work/b.txt"), name: "b.txt".into(), modified: 0 }]);
-        assert_eq!(kept[1].title, "Search in Apps", "the action is never hidden");
-    }
-
-    /// A one-piece torrent named `name`.
-    fn torrent(name: &str) -> Vec<u8> {
-        let mut b = format!("d4:infod6:lengthi1e4:name{}:{name}12:piece lengthi16384e6:pieces20:", name.len()).into_bytes();
-        b.extend([7u8; 20]);
-        b.extend(b"ee");
-        b
-    }
-
-    #[test]
-    fn cached_titles_come_from_the_torrents_on_disk() {
-        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-quicksearch-cache"));
-        let _ = std::fs::remove_dir_all(&dir);
-        assert!(cached_titles(&dir).is_empty(), "no cache yet");
-        std::fs::create_dir_all(dir.join("cache")).unwrap();
-        std::fs::write(dir.join("cache/1.torrent"), torrent("The.Movie.2024.1080p.WEB-DL.x264")).unwrap();
-        std::fs::write(dir.join("cache/2.torrent"), torrent("Another_Show_S01E02_720p")).unwrap();
-        std::fs::write(dir.join("cache/3.torrent"), torrent("The.Movie.2024.720p")).unwrap();
-        std::fs::write(dir.join("cache/4.torrent"), b"not a torrent").unwrap();
-        std::fs::write(dir.join("cache/5.img"), b"art").unwrap();
-        let titles = cached_titles(&dir);
-        assert_eq!(titles, ["Another Show S01E02", "The Movie 2024"]);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn recents_persist_newest_first_and_stop_at_six() {
-        let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-quicksearch-recents/quicksearch.ini"));
-        let _ = std::fs::remove_file(&path);
-        let ui = ui();
-        let mut sp = QuickSearch::new(&ui, 1200.0, ui.s);
-        sp.load(&path);
-        assert!(sp.recents().is_empty());
-        for app in [AppId::Settings, AppId::Files, AppId::Settings, AppId::Terminal, AppId::Deildu, AppId::Files] {
-            sp.note_launch(app);
-        }
-        assert_eq!(sp.recents(), [AppId::Files, AppId::Deildu, AppId::Terminal, AppId::Settings]);
-        let mut again = QuickSearch::new(&ui, 1200.0, ui.s);
-        again.load(&path);
-        assert_eq!(again.recents(), [AppId::Files, AppId::Deildu, AppId::Terminal, AppId::Settings]);
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "recents=files,deildu,terminal,settings\n");
-        std::fs::write(&path, "recents=files,bogus,settings\n").unwrap();
-        again.load(&path);
-        assert_eq!(again.recents(), [AppId::Files, AppId::Settings], "unknown names are skipped");
-    }
-
-    #[test]
-    fn launches_are_kept_and_predict_the_next_app() {
-        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-quicksearch-launches"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("quicksearch.ini");
-        let ui = ui();
-        let mut sp = QuickSearch::new(&ui, 1200.0, ui.s);
-        sp.load(&path);
-        assert!(sp.predicted_apps(1_000_000, 0, 3).is_empty(), "no history, no prediction");
-        for app in [AppId::Files, AppId::Files, AppId::Terminal] {
-            sp.note_launch(app);
-        }
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 60;
-        // the last app used (Terminal) is already open, so Files is the prediction
-        assert_eq!(sp.predicted_apps(now, 0, 3), [AppId::Files]);
-        let mut again = QuickSearch::new(&ui, 1200.0, ui.s);
-        again.load(&path);
-        assert_eq!(again.launches.count("files"), 2, "the history survives a restart");
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_vertical_pull_opens_quicksearch_and_a_page_swipe_does_not() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        // sideways: the pager's, nothing opens
-        drag(&mut sh, 900.0, 800.0, 800.0, 1000.0, 20.0);
-        sh.event(Event::Down(900.0, 800.0), 2000.0);
-        sh.event(Event::Move(700.0, 830.0), 2050.0);
-        assert_eq!(sh.quicksearch.describe(), "hidden");
-        sh.event(Event::Up(600.0, 840.0), 2100.0);
-        settle(&mut sh, 2100.0);
-        assert!(!sh.quicksearch.active());
-        // a short slow pull springs back
-        sh.event(Event::Down(600.0, 800.0), 3000.0);
-        sh.event(Event::Move(600.0, 800.0 + sh.ui.pt(20.0)), 3300.0);
-        assert_eq!(sh.quicksearch.describe(), "dragging");
-        sh.event(Event::Move(600.0, 800.0 + sh.ui.pt(30.0)), 3600.0);
-        sh.event(Event::Up(600.0, 800.0 + sh.ui.pt(30.0)), 3900.0);
-        assert_eq!(sh.quicksearch.describe(), "closing");
-        settle(&mut sh, 3900.0);
-        assert!(!sh.quicksearch.active());
-        // a pull past 40 pt opens, even when released slowly
-        sh.event(Event::Down(600.0, 800.0), 5000.0);
-        sh.event(Event::Move(600.0, 800.0 + sh.ui.pt(25.0)), 5300.0);
-        sh.event(Event::Move(600.0, 800.0 + sh.ui.pt(50.0)), 5600.0);
-        sh.event(Event::Up(600.0, 800.0 + sh.ui.pt(50.0)), 5900.0);
-        assert_eq!(sh.quicksearch.describe(), "opening");
-        assert!(sh.needs_frame());
-        settle(&mut sh, 5900.0);
-        assert!(sh.quicksearch.is_shown());
-        assert!(sh.describe().contains("quicksearch=shown"));
-        assert_eq!(sh.screen, Screen::Home);
-        // the sideways drag paged to the App Library, the page after the last home page
-        assert_eq!(sh.pager.page(), 1);
-    }
-
-    #[test]
-    fn pulls_from_the_status_bar_the_home_zone_or_the_lock_screen_do_nothing() {
-        let mut sh = shell();
-        drag(&mut sh, 600.0, 800.0, 900.0, 0.0, 20.0);
-        assert!(!sh.quicksearch.active(), "locked");
-        unlock(&mut sh);
-        drag(&mut sh, 300.0, 5.0, 300.0, 2000.0, 20.0);
-        assert!(!sh.quicksearch.active(), "from the status bar");
-        swipe(&mut sh, 600.0, 1915.0, 1500.0, 3000.0);
-        settle(&mut sh, 3200.0);
-        assert!(!sh.quicksearch.active(), "the home zone is the go-home swipe's");
-        sh.open(AppId::Files, 4000.0);
-        settle(&mut sh, 4000.0);
-        drag(&mut sh, 600.0, 800.0, 900.0, 5000.0, 20.0);
-        assert!(!sh.quicksearch.active(), "not inside an app");
-    }
-
-    #[test]
-    fn typing_lists_results_and_rows_hit_test_in_order() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        let t = open(&mut sh, 1000.0);
-        assert!(sh.quicksearch.rows().is_empty(), "empty query lists nothing");
-        type_text(&mut sh, "fil", t);
-        assert_eq!(sh.quicksearch.query(), "fil");
-        let rows = sh.quicksearch.rows();
-        assert_eq!(rows[0], (0, 0, Hit::App(AppId::Files)));
-        assert_eq!(rows.last().unwrap().2, Hit::Terminal("fil".into()));
-        assert_eq!(sh.quicksearch.top_hit(), Some(Hit::App(AppId::Files)));
-        let rects = sh.quicksearch.row_rects(&sh.ui, sh.w);
-        assert_eq!(rects.len(), rows.len());
-        for (i, (at, (x, y, w, h))) in rects.iter().enumerate() {
-            assert_eq!(sh.quicksearch.hit(&sh.ui, sh.w, sh.h, x + w / 2.0, y + h / 2.0), Target::Row(at.0, at.1));
-            if i > 0 {
-                assert!(*y >= rects[i - 1].1 .1 + rects[i - 1].1 .3, "rows run top to bottom");
-            }
-        }
-        let (_, _, _, ch) = sh.quicksearch.card(&sh.ui, sh.w);
-        let last = rects.last().unwrap().1;
-        assert!(last.1 + last.3 <= sh.ui.pt(CARD_TOP_PT) + ch, "the card covers every row");
-        assert!(sh.ui.pt(CARD_TOP_PT) + ch < sh.quicksearch.keyboard_top(&sh.ui, sh.h), "and stops above the keyboard");
-        let kb = sh.quicksearch.keyboard_top(&sh.ui, sh.h) + 10.0;
-        assert_eq!(sh.quicksearch.hit(&sh.ui, sh.w, sh.h, 600.0, kb), Target::Keyboard);
-        let (fx, fy, fw, fh) = sh.quicksearch.field_rect(&sh.ui, sh.w);
-        assert_eq!(sh.quicksearch.hit(&sh.ui, sh.w, sh.h, fx + fw / 2.0, fy + fh / 2.0), Target::Field);
-        let (kx, ky) = sh.quicksearch.clear_centre(&sh.ui, sh.w);
-        assert_eq!(sh.quicksearch.hit(&sh.ui, sh.w, sh.h, kx, ky), Target::Clear);
-        assert_eq!(sh.quicksearch.hit(&sh.ui, sh.w, sh.h, 600.0, 1300.0), Target::Outside);
-        // a long list is cut to what fits above the keyboard
-        let titles: Vec<String> = (0..30).map(|i| format!("Clone Wars {i}")).collect();
-        sh.quicksearch.set_deildu_titles(titles);
-        type_text(&mut sh, "n", t + 10.0);
-        let rects = sh.quicksearch.row_rects(&sh.ui, sh.w);
-        let last = rects.last().unwrap().1;
-        assert!(last.1 + last.3 < sh.quicksearch.keyboard_top(&sh.ui, sh.h));
-        // clear empties the query and brings the suggestions back
-        sh.quicksearch.note_launch(AppId::Files);
-        tap(&mut sh, kx, ky, t + 100.0);
-        assert_eq!(sh.quicksearch.query(), "");
-        assert_eq!(sh.quicksearch.hit(&sh.ui, sh.w, sh.h, kx, ky), Target::Field, "no clear button without text");
-        let (sx, sy, sw, shh) = sh.quicksearch.suggestion_rect(&sh.ui, sh.w, 0);
-        assert_eq!(sh.quicksearch.hit(&sh.ui, sh.w, sh.h, sx + sw / 2.0, sy + shh / 2.0), Target::Suggestion(0));
-    }
-
-    #[test]
-    fn tapping_a_row_or_return_opens_the_hit_and_records_it() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        let t = open(&mut sh, 1000.0);
-        type_text(&mut sh, "fil", t);
-        let (_, (x, y, w, h)) = sh.quicksearch.row_rects(&sh.ui, sh.w)[0];
-        sh.event(Event::Down(x + w / 2.0, y + h / 2.0), t + 100.0);
-        assert!(sh.event(Event::Up(x + w / 2.0, y + 400.0), t + 130.0).is_empty(), "slid off the row");
-        assert!(sh.quicksearch.is_shown());
-        tap(&mut sh, x + w / 2.0, y + h / 2.0, t + 200.0);
-        assert!(!sh.quicksearch.active());
-        settle(&mut sh, t + 300.0);
-        assert_eq!(sh.screen, Screen::App(AppId::Files));
-        assert_eq!(sh.quicksearch.recents(), [AppId::Files]);
-        swipe(&mut sh, 600.0, 1915.0, 1500.0, t + 2000.0);
-        settle(&mut sh, t + 2200.0);
-        let t = open(&mut sh, t + 4000.0);
-        assert_eq!(sh.quicksearch.hit(&sh.ui, sh.w, sh.h, 600.0, 1300.0), Target::Outside);
-        type_text(&mut sh, "wi", t);
-        let (kx, ky) = sh.quicksearch.keyboard.centre("return").unwrap();
-        let top = sh.quicksearch.keyboard_top(&sh.ui, sh.h);
-        let fx = tap(&mut sh, kx, top + ky, t + 100.0);
-        assert_eq!(fx, vec![Effect::Wifi(WifiAction::Scan)], "return opens the top hit: Settings › Wi-Fi");
-        settle(&mut sh, t + 200.0);
-        assert_eq!(sh.screen, Screen::App(AppId::Settings));
-        assert_eq!(sh.settings.as_ref().unwrap().page(), crate::shell::pages::PageId::Wifi);
-        assert_eq!(sh.quicksearch.recents(), [AppId::Settings, AppId::Files]);
-    }
-
-    #[test]
-    fn keyboard_types_into_the_field_and_hide_keeps_the_card() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        let t = open(&mut sh, 1000.0);
-        let top = sh.quicksearch.keyboard_top(&sh.ui, sh.h);
-        for (i, k) in ["s", "e"].iter().enumerate() {
-            let (x, y) = sh.quicksearch.keyboard.centre(k).unwrap();
-            tap(&mut sh, x, top + y, t + 100.0 * i as f64);
-        }
-        assert_eq!(sh.quicksearch.query(), "se");
-        assert_eq!(sh.quicksearch.top_hit(), Some(Hit::App(AppId::Settings)));
-        let (x, y) = sh.quicksearch.keyboard.centre("hide").unwrap();
-        tap(&mut sh, x, top + y, t + 500.0);
-        assert!(sh.quicksearch.is_shown() && !sh.quicksearch.keyboard.shown());
-        assert!(sh.needs_frame(), "the keyboard slides out");
-        settle(&mut sh, t + 500.0);
-        assert_eq!(sh.quicksearch.hit(&sh.ui, sh.w, sh.h, 600.0, top + 10.0), Target::Outside, "no keyboard to hit");
-        let (fx, fy, fw, fh) = sh.quicksearch.field_rect(&sh.ui, sh.w);
-        tap(&mut sh, fx + fw / 2.0, fy + fh / 2.0, t + 2000.0);
-        assert!(sh.quicksearch.keyboard.shown(), "tapping the field brings it back");
-        assert!(sh.next_wake(t + 2001.0).is_some(), "the caret blinks");
-    }
-
-    #[test]
-    fn tap_outside_swipe_up_power_and_launch_dismiss() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        let t = open(&mut sh, 1000.0);
-        tap(&mut sh, 600.0, 1300.0, t);
-        assert_eq!(sh.quicksearch.describe(), "closing");
-        settle(&mut sh, t + 30.0);
-        assert!(!sh.quicksearch.active());
-        let t = open(&mut sh, t + 2000.0);
-        drag(&mut sh, 600.0, 1300.0, 700.0, t, 15.0);
-        assert_eq!(sh.quicksearch.describe(), "closing");
-        settle(&mut sh, t + 400.0);
-        assert!(!sh.quicksearch.active());
-        // a short tug snaps back
-        let t = open(&mut sh, t + 3000.0);
-        sh.event(Event::Down(600.0, 1300.0), t);
-        sh.event(Event::Move(600.0, 1280.0), t + 200.0);
-        assert!(sh.quicksearch.progress(t + 200.0) < 1.0);
-        sh.event(Event::Up(600.0, 1280.0), t + 500.0);
-        settle(&mut sh, t + 500.0);
-        assert!(sh.quicksearch.is_shown());
-        // the go-home swipe from the indicator dismisses too
-        swipe(&mut sh, 600.0, 1915.0, 1400.0, t + 1000.0);
-        assert_eq!(sh.quicksearch.describe(), "closing");
-        settle(&mut sh, t + 1200.0);
-        assert!(!sh.quicksearch.active() && sh.screen == Screen::Home);
-        let t = open(&mut sh, t + 3000.0);
-        assert_eq!(sh.event(Event::Power, t), vec![Effect::ScreenOff]);
-        assert!(!sh.quicksearch.active() && sh.is_locked());
-    }
-
-    #[test]
-    fn golden_gate_panel_is_centred_near_the_top_with_no_suggestions() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        sh.quicksearch.note_launch(AppId::Deildu);
-        sh.desk = Some(crate::shell::desk::Desk::new());
-        open(&mut sh, 2000.0);
-        let (x, y, w, h) = sh.quicksearch.card(&sh.ui, sh.w);
-        let k = sh.quicksearch.k(&sh.ui);
-        assert!((1.0..=MAC_K_MAX).contains(&k));
-        assert_eq!(w, sh.ui.pt(520.0 * k), "520 pt, grown with the screen so the card is 0.37 of its width");
-        assert!(w >= sh.ui.pt(520.0) && (w >= sh.w as f32 * 0.37 - 1.0 || k == MAC_K_MAX));
-        assert!((x - (sh.w as f32 - w) / 2.0).abs() < 1.0);
-        assert_eq!(y, sh.ui.pt(139.0 * k));
-        assert_eq!(h, sh.ui.pt(sh.quicksearch.m().field * k), "the empty Golden Gate field shows no Assistant Suggestions, only the field");
-    }
-
-    #[test]
-    fn golden_gate_card_grows_with_a_wide_screen_and_the_bifrost_does_not() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        sh.desk = Some(crate::shell::desk::Desk::new());
-        open(&mut sh, 2000.0);
-        sh.quicksearch.resize(sh.ui.pt(520.0) * 4.0);
-        assert_eq!(sh.quicksearch.k(&sh.ui), MAC_K_MAX.min(0.37 * sh.quicksearch.screen_w / sh.ui.pt(520.0)));
-        assert!(sh.quicksearch.k(&sh.ui) > 1.0, "a screen four card widths wide enlarges the card");
-        sh.quicksearch.resize(sh.ui.pt(520.0));
-        assert_eq!(sh.quicksearch.k(&sh.ui), 1.0, "a narrow screen keeps the point size");
-        sh.quicksearch.mac = false;
-        sh.quicksearch.resize(sh.ui.pt(520.0) * 4.0);
-        assert_eq!(sh.quicksearch.k(&sh.ui), 1.0, "the bifrost layout never scales");
-    }
-
-    #[test]
-    fn golden_gate_results_have_chips_two_line_rows_and_filter_by_kind() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        sh.desk = Some(crate::shell::desk::Desk::new());
-        let t = open(&mut sh, 2000.0);
-        assert!(sh.quicksearch.chip_rects(&sh.ui, sh.w).is_empty(), "no chips before anything is typed");
-        type_text(&mut sh, "se", t);
-        let qs = &sh.quicksearch;
-        assert!(!qs.chips.is_empty(), "one chip per kind of result");
-        assert!(qs.chips.iter().all(|(title, _)| !NOT_A_KIND.contains(title)), "the best match and the actions are not kinds");
-        assert!(qs.sections.iter().all(|sec| sec.subs.len() == sec.rows.len()));
-        assert!(qs.sections[0].subs[0].is_some(), "the top row has a second line");
-        // the rows start under the chips, as drawn, and are the Golden Gate row height tall
-        let chips = qs.chip_rects(&sh.ui, sh.w);
-        assert_eq!(chips.len(), qs.chips.len());
-        let rows = qs.row_rects(&sh.ui, sh.w);
-        assert!(rows[0].1 .1 >= chips[0].1 + chips[0].3, "the first row is under the chips");
-        assert_eq!(rows[0].1 .3, qs.px(&sh.ui, qs.m().row));
-        let (cx, cy, cw, ch) = chips[0];
-        assert_eq!(qs.hit(&sh.ui, sh.w, sh.h, cx + cw / 2.0, cy + ch / 2.0), Target::Chip(0));
-        let title = qs.chips[0].0;
-        let (x, y) = (cx + cw / 2.0, cy + ch / 2.0);
-        // a tap on the chip narrows the list to that kind
-        sh.quicksearch.down(&sh.ui, sh.w, sh.h, (x, y), t + 10.0, 0.0);
-        assert_eq!(sh.quicksearch.up(&sh.ui, sh.w, sh.h, x, y, t + 40.0), None);
-        assert_eq!(sh.quicksearch.chip, Some(title));
-        assert_eq!(sh.quicksearch.sections.len(), 1, "one kind of result");
-        // the same chip again shows every kind
-        sh.quicksearch.down(&sh.ui, sh.w, sh.h, (x, y), t + 100.0, 0.0);
-        sh.quicksearch.up(&sh.ui, sh.w, sh.h, x, y, t + 130.0);
-        assert_eq!(sh.quicksearch.chip, None);
-        assert!(sh.quicksearch.sections.len() >= 1);
-    }
-
-    #[test]
-    fn golden_gate_card_is_drawn_with_chips_and_symbols_without_panicking() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        sh.desk = Some(crate::shell::desk::Desk::new());
-        let t = open(&mut sh, 2000.0);
-        type_text(&mut sh, "wi", t);
-        let (w, h) = (sh.w as usize, sh.h as usize);
-        let mut px = vec![0u32; w * h];
-        let mut s = Surface { w, h, stride: w, px: &mut px, y0: 0 };
-        sh.quicksearch.draw(&mut s, &sh.ui, sh.w, sh.h, t + 5000.0);
-        let (cx, cy, cw, _) = sh.quicksearch.card(&sh.ui, sh.w);
-        assert!(px.iter().any(|&p| p >> 24 != 0), "something was drawn over {cx} {cy} {cw}");
-    }
-
-    #[test]
-    fn suggestions_show_the_recents_and_open_them() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        sh.quicksearch.note_launch(AppId::Deildu);
-        let t = open(&mut sh, 2000.0);
-        assert_eq!(sh.quicksearch.recents(), [AppId::Deildu]);
-        let (x, y, w, h) = sh.quicksearch.suggestion_rect(&sh.ui, sh.w, 0);
-        assert!((x - (sh.quicksearch.card_x(&sh.ui, sh.w) + sh.ui.pt(SUGGEST_INSET_PT))).abs() < 1.0);
-        let (_, _, _, ch) = sh.quicksearch.card(&sh.ui, sh.w);
-        assert_eq!(ch, sh.ui.pt(FIELD_PT + HEADER_PT + SUGGEST_PT));
-        sh.deildu_transport = crate::deildu::http::tests::Fake::new(vec![]);
-        sh.deildu_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-quicksearch-deildu").into();
-        tap(&mut sh, x + w / 2.0, y + h / 2.0, t);
-        settle(&mut sh, t + 100.0);
-        assert_eq!(sh.screen, Screen::App(AppId::Deildu));
-        let _ = std::fs::remove_dir_all(&sh.deildu_dir);
-    }
-
-    #[test]
-    fn deildu_city_and_terminal_hits_open_their_apps() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        sh.term_cmd = &["/bin/sh"];
-        sh.deildu_transport = crate::deildu::http::tests::Fake::new(vec![]);
-        sh.deildu_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-quicksearch-hits").into();
-        let _ = std::fs::remove_dir_all(&sh.deildu_dir);
-        let t = open(&mut sh, 1000.0);
-        assert!(sh.quicksearch_act(Hit::City("Tokyo"), t).is_empty());
-        settle(&mut sh, t);
-        sh.go_home(t + 1000.0);
-        settle(&mut sh, t + 1000.0);
-        sh.quicksearch_act(Hit::Deildu("Severance".into()), t + 2000.0);
-        settle(&mut sh, t + 2000.0);
-        assert_eq!(sh.screen, Screen::App(AppId::Deildu));
-        assert!(sh.deildu.as_ref().unwrap().describe().contains("deildu_screen=library"));
-        sh.go_home(t + 3000.0);
-        settle(&mut sh, t + 3000.0);
-        sh.quicksearch_act(Hit::Terminal("ls -la".into()), t + 4000.0);
-        settle(&mut sh, t + 4000.0);
-        assert_eq!(sh.screen, Screen::App(AppId::Terminal));
-        assert!(sh.term.is_some() && sh.keyboard.shown());
-        assert_eq!(sh.quicksearch.recents(), [AppId::Terminal, AppId::Deildu]);
-        let _ = std::fs::remove_dir_all(&sh.deildu_dir);
-    }
-
-    #[test]
-    fn draws_every_phase() {
-        let mut sh = shell();
-        unlock(&mut sh);
-        let mut buf = vec![0u32; 1200 * 1920];
-        let mut draw = |sh: &mut Shell, t: f64| {
-            sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, t);
-            buf.clone()
-        };
-        sh.event(Event::Down(600.0, 800.0), 1000.0);
-        sh.event(Event::Move(600.0, 850.0), 1050.0);
-        let mid = draw(&mut sh, 1050.0);
-        assert!(sh.quicksearch.active());
-        sh.event(Event::Move(600.0, 900.0), 1100.0);
-        sh.event(Event::Up(600.0, 900.0), 1120.0);
-        draw(&mut sh, 1200.0);
-        settle(&mut sh, 1120.0);
-        sh.quicksearch.note_launch(AppId::Files);
-        let shown = draw(&mut sh, 3000.0);
-        let (cx, cy, _, _) = sh.quicksearch.card(&sh.ui, sh.w);
-        let at = |buf: &[u32], x: f32, y: f32| buf[y as usize * 1200 + x as usize];
-        assert_ne!(at(&shown, cx + 30.0, cy + 30.0), at(&mid, cx + 30.0, cy + 30.0), "the card settles into place");
-        let kb_y = sh.quicksearch.keyboard_top(&sh.ui, sh.h) + 5.0;
-        assert_ne!(at(&shown, 600.0, kb_y), at(&mid, 600.0, kb_y), "the keyboard is up");
-        type_text(&mut sh, "se", 3000.0);
-        sh.event(Event::Down(cx + 200.0, cy + sh.ui.pt(FIELD_PT + HEADER_PT + 10.0)), 3100.0);
-        let pressed = draw(&mut sh, 3100.0);
-        assert_ne!(pressed, shown);
-        sh.event(Event::Up(cx + 200.0, cy + 2000.0), 3130.0);
-        tap(&mut sh, 600.0, 1300.0, 3200.0);
-        draw(&mut sh, 3300.0);
-        settle(&mut sh, 3300.0);
-        assert!(draw(&mut sh, 5000.0) != shown);
-    }
-    #[test]
-    fn contact_results_match_names_phone_email_and_fold_icelandic_without_duplicates() {
-        use super::super::contactstore::Contact;
-        let people = vec![
-            Contact { id: 7, name: "Þór Árnason".into(), phone: "5551234".into(), email: "thor@example.org".into(), notes: "private-only-value".into(), ..Contact::default() },
-            Contact { id: 8, name: "Ægir".into(), phone: "5559876".into(), ..Contact::default() },
-        ];
-        for (query, id) in [("thor", 7), ("5551234", 7), ("example.org", 7), ("aegir", 8)] {
-            let groups = results_with_contacts(query, &[], &people);
-            assert_eq!(groups.first().unwrap().title, "Top Hit");
-            assert!(matches!(groups[0].hits[0], Hit::Contact { id: got, .. } if got == id));
-            assert_eq!(groups.iter().flat_map(|g| &g.hits).filter(|hit| matches!(hit, Hit::Contact { id: got, .. } if *got == id)).count(), 1);
-        }
-        assert!(results_with_contacts("", &[], &people).is_empty());
-        assert!(!results_with_contacts("private-only-value", &[], &people).iter().flat_map(|g| &g.hits).any(|hit| matches!(hit, Hit::Contact { .. })));
-    }
-
-    #[test]
-    fn a_contact_is_found_by_company_but_not_by_address_or_notes() {
-        use super::super::contactstore::Contact;
-        let people = vec![Contact {
-            id: 9,
-            name: "Ada King".into(),
-            company: "Analytical Engines".into(),
-            address: "12 Bryn Road".into(),
-            notes: "private-only-value".into(),
-            ..Contact::default()
-        }];
-        let found = |q: &str| results_with_contacts(q, &[], &people).iter().flat_map(|g| &g.hits).any(|hit| matches!(hit, Hit::Contact { id: 9, .. }));
-        assert!(found("analytical"));
-        assert!(!found("bryn road"));
-        assert!(!found("private-only-value"));
-    }
-
-    #[test]
-    fn quicksearch_refreshes_saved_contacts_and_opens_the_selected_person() {
-        use super::super::contactstore::{self, Contact};
-        let mut sh = shell();
-        unlock(&mut sh);
-        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("target/test-quicksearch-contacts-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let path = dir.join("appdata/is.olibuijr.contacts/Contacts/contacts.tsv");
-        let person = Contact { id: 42, name: "Þór".into(), phone: "5551234".into(), ..Contact::default() };
-        contactstore::save(&path, &[person]).unwrap();
-        sh.data_dir = dir.clone();
-        let t = open(&mut sh, 1000.0);
-        type_text(&mut sh, "thor", t);
-        let mut image = crate::gfx::Image::new(sh.w as usize, sh.h as usize);
-        sh.draw(&mut Surface { w: image.w, h: image.h, stride: image.w, px: &mut image.px, y0: 0 }, t);
-        std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/target/quicksearch-contacts.png"), super::super::screenshot::encode(&image)).unwrap();
-        // contacts are read on a worker (`refresh_sources`): let the read land, as the frames would
-        let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while !matches!(sh.quicksearch.top_hit(), Some(Hit::Contact { .. })) && std::time::Instant::now() < end {
-            let h = sh.h as i32;
-            sh.quicksearch.tick(&sh.ui, h, t);
-            std::thread::sleep(std::time::Duration::from_millis(2));
-        }
-        let hit = sh.quicksearch.top_hit().unwrap();
-        assert!(matches!(hit, Hit::Contact { id: 42, .. }));
-        sh.quicksearch_act(hit, t + 50.0);
-        sh.go_home(t + 50.0);
-        settle(&mut sh, t + 50.0);
-        sh.go_home(t + 1000.0);
-        settle(&mut sh, t + 1000.0);
-        let t = open(&mut sh, t + 2000.0);
-        type_text(&mut sh, "5551234", t);
-        assert!(matches!(sh.quicksearch.top_hit(), Some(Hit::Contact { id: 42, .. })));
-        let _ = std::fs::remove_dir_all(dir);
-    }
-}
+mod tests;
 
 /// The desktop Search material: the shared `HudWindow` material request (the presenter's blur under the named
 /// menu tint, the solid colour with Reduce Transparency, the tint alone without a GPU presenter). The panel
@@ -3403,272 +2939,10 @@ pub(super) fn panel_glass(s: &mut Surface, surface: bifrost_ui::material_request
 }
 
 #[cfg(test)]
-mod desktop_tests {
-    use crate::shell::hwkeys::Shortcut;
-    use crate::shell::keyboard::Out;
-    use crate::shell::{AppId, Screen};
-
-    /// Cmd+Space on the desktop opens Search over the app in front, and the keyboard types into it.
-    #[test]
-    fn cmd_space_opens_quicksearch_over_an_app_and_takes_typing() {
-        let mut sh = crate::shell::tests::desktop_shell();
-        sh.screen = Screen::App(AppId::Settings);
-        sh.hw_shortcut(Shortcut::QuickSearch, 1000.0);
-        sh.quicksearch_tick(2000.0);
-        assert!(sh.quicksearch.is_shown(), "Search opens over an app");
-        sh.hw_type(Out::Text("cl".into()), 2100.0);
-        assert_eq!(sh.quicksearch.query(), "cl");
-    }
-
-    /// Cmd+Space opens Search over an app the shell does not draw (an external window in front), and a second press closes it.
-    #[test]
-    fn cmd_space_opens_and_closes_quicksearch_over_an_external_app() {
-        let mut sh = crate::shell::tests::desktop_shell();
-        sh.screen = Screen::App(AppId::External(3));
-        sh.hw_shortcut(Shortcut::QuickSearch, 1000.0);
-        sh.quicksearch_tick(2000.0);
-        assert!(sh.quicksearch.is_shown(), "Search opens over an external app");
-        sh.hw_shortcut(Shortcut::QuickSearch, 3000.0);
-        assert!(!sh.quicksearch.active(), "the same chord closes it");
-    }
-
-    /// The Cmd release that ends the chord is not Home on the desktop: Search stays open and the app stays in front.
-    #[test]
-    fn a_lone_cmd_does_not_close_search_or_go_home_on_the_desktop() {
-        let mut sh = crate::shell::tests::desktop_shell();
-        sh.screen = Screen::App(AppId::Settings);
-        sh.hw_shortcut(Shortcut::QuickSearch, 1000.0);
-        sh.quicksearch_tick(2000.0);
-        assert!(sh.quicksearch.is_shown());
-        sh.hw_shortcut(Shortcut::Home, 2100.0);
-        assert!(sh.quicksearch.is_shown(), "Home from a stray Cmd release does not hide Search");
-        assert_eq!(sh.screen, Screen::App(AppId::Settings), "and the windows stay where they are");
-    }
-}
+mod desktop_tests;
 
 #[cfg(test)]
-mod file_actions_tests {
-    use super::*;
-    use crate::files::fs::{kind_of, Entry};
-
-    fn ui() -> Ui {
-        super::super::tests::ui()
-    }
-
-    fn entry(dir: &str, name: &str) -> Entry {
-        Entry { kind: kind_of(name, false), name: name.into(), path: PathBuf::from(dir).join(name), is_dir: false, size: 1, mtime: 0, items: None }
-    }
-
-    /// The Files and Show in Folder groups of `query` over `files`, merged the way the panel merges them.
-    fn file_groups(query: &str, files: &[crate::files::fs::Entry]) -> Vec<Group> {
-        let folded: Vec<String> = files.iter().map(|e| fuzzy::fold(&e.name)).collect();
-        let corpus = Corpus { deildu: &[], deildu_folded: &[], contacts: &[], contacts_folded: &[], files, files_folded: &folded, events: &[] };
-        let (tables, hits) = build_tables(&corpus);
-        let mut run = search_rank::Query::start(query, &sources_of(tables), SYNC_DEADLINE);
-        run.wait();
-        let merged = run.merge(PER_GROUP, &search_rank::Usage::default(), 0, &search_rank::NoSemantic);
-        split_merged(&merged, &hits, None).2
-    }
-
-    #[test]
-    fn groups_that_arrive_late_follow_the_ones_on_screen() {
-        let u = ui();
-        let mut q = QuickSearch::new(&u, 800.0, 1.0);
-        q.shown = vec!["Applications", "Files"];
-        let g = |title: &'static str| Group { title, hits: vec![] };
-        let out = q.keep_shown_order(vec![g("Search in Apps"), g("Settings"), g("Applications"), g("Files")]);
-        let titles: Vec<&str> = out.iter().map(|g| g.title).collect();
-        assert_eq!(titles, vec!["Applications", "Files", "Settings", "Search in Apps"]);
-    }
-
-    #[test]
-    fn a_file_match_comes_with_show_in_folder_for_the_top_match() {
-        let files = vec![entry("/home/me/Docs", "Q1 report.pdf"), entry("/home/me/Pics", "Beach.png")];
-        let groups = file_groups("report", &files);
-        assert_eq!(groups.len(), 2, "{groups:?}");
-        assert_eq!(groups[0].title, "Files");
-        assert_eq!(groups[0].hits, vec![Hit::File { path: PathBuf::from("/home/me/Docs/Q1 report.pdf"), name: "Q1 report.pdf".into(), modified: 0 }]);
-        assert_eq!(groups[1], Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: PathBuf::from("/home/me/Docs"), name: "Q1 report.pdf".into() }] });
-        assert!(file_groups("zzz", &files).is_empty());
-        assert!(file_groups("  ", &files).is_empty());
-    }
-
-    #[test]
-    fn space_previews_an_arrow_selected_file_and_types_otherwise() {
-        let u = ui();
-        let mut q = QuickSearch::new(&u, 800.0, 1.0);
-        let file = Hit::File { path: PathBuf::from("/home/me/a.txt"), name: "a.txt".into(), modified: 0 };
-        let section = |u: &Ui| Section { header: u.text("Files", 20.0, Weight::Semibold, WHITE), rows: vec![(file.clone(), u.text("a.txt", 13.0, Weight::Regular, WHITE))], subs: vec![None] };
-        q.sections = vec![section(&u)];
-        assert_eq!(q.key(&u, 800, Out::Text(" ".into()), 0.0), None, "no row selected: the space is typed");
-        assert_eq!(q.query(), " ");
-        q.sections = vec![section(&u)];
-        q.selected = Some((0, 0));
-        assert_eq!(q.key(&u, 800, Out::Text(" ".into()), 0.0), Some(file), "Space previews the selected file");
-        assert_eq!(q.query(), " ", "the query is untouched by the preview");
-    }
-
-    #[test]
-    fn space_on_a_definition_asks_for_the_whole_definition() {
-        let u = ui();
-        let mut q = QuickSearch::new(&u, 800.0, 1.0);
-        let def = Hit::Definition { word: "weather".into(), dictionary: "Test".into(), preview: "n. air".into() };
-        q.sections = vec![Section { header: u.text("Dictionary", 20.0, Weight::Semibold, WHITE), rows: vec![(def.clone(), u.text("weather", 13.0, Weight::Regular, WHITE))], subs: vec![None] }];
-        q.selected = Some((0, 0));
-        assert_eq!(q.key(&u, 800, Out::Text(" ".into()), 0.0), Some(def));
-        assert!(q.space_preview, "the act shows the definition instead of opening Dictionary");
-    }
-
-    #[test]
-    fn cmd_return_reveals_the_selected_file_or_else_the_first_one() {
-        let u = ui();
-        let mut q = QuickSearch::new(&u, 800.0, 1.0);
-        assert_eq!(q.reveal_hit(), None, "no file listed");
-        let file = |p: &str| Hit::File { path: PathBuf::from(p), name: Path::new(p).file_name().unwrap().to_string_lossy().into_owned(), modified: 0 };
-        let row = |h: Hit| (h, u.text("x", 13.0, Weight::Regular, WHITE));
-        q.sections = vec![
-            Section { header: Image::new(1, 1), rows: vec![row(Hit::App(AppId::Files))], subs: vec![None] },
-            Section { header: Image::new(1, 1), rows: vec![row(file("/home/me/Docs/a.txt")), row(file("/home/me/Pics/b.png"))], subs: vec![None, None] },
-        ];
-        assert_eq!(q.reveal_hit(), Some(Hit::Reveal { folder: PathBuf::from("/home/me/Docs"), name: "a.txt".into() }), "the first file");
-        q.selected = Some((1, 1));
-        assert_eq!(q.reveal_hit(), Some(Hit::Reveal { folder: PathBuf::from("/home/me/Pics"), name: "b.png".into() }), "the selected file");
-        q.selected = Some((0, 0));
-        assert_eq!(q.reveal_hit(), Some(Hit::Reveal { folder: PathBuf::from("/home/me/Docs"), name: "a.txt".into() }), "an app row is not revealed");
-    }
-
-    #[test]
-    fn define_puts_a_dictionary_row_first_and_a_word_with_no_definition_gets_none() {
-        // no dictionary defines this word: "define" still offers to look it up, first, so Return opens Dictionary
-        let groups = results("define zqxjvw", &[]);
-        assert_eq!(groups[0], Group { title: "Dictionary", hits: vec![Hit::Definition { word: "zqxjvw".into(), dictionary: String::new(), preview: String::new() }] });
-        // a plain word is only defined when a dictionary has it
-        assert!(results("zqxjvw", &[]).iter().all(|g| g.title != "Dictionary"));
-        assert!(results("e2e", &[]).iter().all(|g| g.title != "Dictionary"));
-    }
-}
+mod file_actions_tests;
 
 #[cfg(test)]
-mod dock_and_scroll_tests {
-    use super::*;
-    use crate::shell::keyboard::Out;
-    use crate::shell::Event;
-
-    /// A desktop shell with Search open and "se" typed (several kinds of result).
-    fn typed() -> Shell {
-        let mut sh = crate::shell::tests::desktop_shell();
-        sh.anim = None;
-        sh.screen = Screen::Home;
-        sh.open_quicksearch_hw(1000.0);
-        sh.quicksearch_tick(2000.0);
-        assert!(sh.quicksearch.is_shown());
-        sh.quicksearch.key(&sh.ui, sh.h, Out::Text("se".into()), 2100.0);
-        sh
-    }
-
-    /// The Dock top that leaves room for exactly `rows` result rows under the chips.
-    fn dock_for_rows(sh: &Shell, rows: f32) -> f32 {
-        let qs = &sh.quicksearch;
-        let m = qs.m();
-        qs.px(&sh.ui, m.card_top + m.field) + qs.list_fixed(&sh.ui) + rows * qs.px(&sh.ui, m.row) + sh.ui.pt(MAC_DOCK_MARGIN_PT)
-    }
-
-    fn row_h(sh: &Shell) -> f32 {
-        sh.quicksearch.px(&sh.ui, sh.quicksearch.m().row)
-    }
-
-    #[test]
-    fn the_dock_limits_the_card_on_the_desktop_and_the_screen_otherwise() {
-        let mut sh = crate::shell::tests::desktop_shell();
-        let top = sh.quicksearch_dock_top().expect("the Dock stands along the bottom and shows");
-        assert!(top > 0.0 && top < sh.h as f32, "the Dock's top is on the screen");
-        sh.desk.as_mut().unwrap().dock_preferences.position = crate::shell::desktop_dock::Position::Left;
-        assert_eq!(sh.quicksearch_dock_top(), None, "a Dock on a side does not limit the height");
-    }
-
-    #[test]
-    fn the_results_card_stays_above_the_dock_however_many_results() {
-        let mut sh = typed();
-        let dock = sh.quicksearch_dock_top().unwrap();
-        let h = sh.h;
-        let margin = sh.ui.pt(MAC_DOCK_MARGIN_PT);
-        // from the real Dock to one that leaves four rows, three rows and one row
-        for floor in [dock, dock_for_rows(&sh, 4.0), dock_for_rows(&sh, 3.0), dock_for_rows(&sh, 1.0)] {
-            sh.quicksearch.set_dock_top(&sh.ui, h, Some(floor));
-            let (_, cy, _, ch) = sh.quicksearch.card(&sh.ui, sh.w);
-            assert!(cy + ch <= floor - margin + 0.5, "the card ends {} px above the Dock's top {floor}", floor - cy - ch);
-            for (_, (_, ry, _, rh)) in sh.quicksearch.row_rects(&sh.ui, sh.w) {
-                assert!(ry + rh <= cy + ch, "a row shows only inside the card");
-            }
-        }
-        // the Dock hiding gives the screen's bottom back
-        sh.quicksearch.set_dock_top(&sh.ui, h, None);
-        let (_, cy, _, ch) = sh.quicksearch.card(&sh.ui, sh.w);
-        assert!(cy + ch <= h as f32 - margin + 0.5);
-    }
-
-    #[test]
-    fn rows_beyond_the_card_scroll_with_the_wheel_and_do_not_tap_through() {
-        let mut sh = typed();
-        let floor = dock_for_rows(&sh, 3.0);
-        sh.quicksearch.set_dock_top(&sh.ui, sh.h, Some(floor));
-        let row = row_h(&sh);
-        let qs = &sh.quicksearch;
-        assert!(qs.rows_h(&sh.ui) > qs.viewport_h(&sh.ui) + row, "more results than the card shows");
-        assert!((qs.viewport_h(&sh.ui) - 3.0 * row).abs() < 1.0, "the card shows three rows");
-        assert!(qs.row_rects(&sh.ui, sh.w).len() < qs.rows().len(), "rows below the card's edge cannot be hit");
-        assert_eq!(qs.scroll, 0.0);
-        // a wheel turned down (negative content travel) scrolls the list
-        assert!(sh.quicksearch_wheel(-row, 3000.0));
-        assert!((sh.quicksearch.scroll - row).abs() < 0.5);
-        // the drag emulated for the notch lands on a row and must not open it
-        let (_, (x, y, w, rh)) = sh.quicksearch.row_rects(&sh.ui, sh.w)[0];
-        sh.event(Event::Down(x + w / 2.0, y + rh / 2.0), 3000.0);
-        sh.event(Event::Move(x + w / 2.0, y + rh / 2.0 - 3.0), 3016.0);
-        sh.event(Event::Up(x + w / 2.0, y + rh / 2.0 - 3.0), 3032.0);
-        assert!(sh.quicksearch.is_shown(), "the emulated drag is dropped");
-        // far past the end stops at the last row
-        sh.quicksearch_wheel(-100_000.0, 4000.0);
-        let qs = &sh.quicksearch;
-        assert!((qs.scroll - qs.max_scroll(&sh.ui)).abs() < 0.5);
-        let last = qs.row_rects(&sh.ui, sh.w).last().unwrap().0;
-        assert_eq!(last, (qs.sections.len() - 1, qs.sections.last().unwrap().rows.len() - 1), "the last result shows at the end");
-        // and back to the top
-        sh.quicksearch_wheel(100_000.0, 5000.0);
-        assert_eq!(sh.quicksearch.scroll, 0.0);
-    }
-
-    #[test]
-    fn the_arrow_keys_keep_the_selected_row_in_view() {
-        let mut sh = typed();
-        let floor = dock_for_rows(&sh, 3.0);
-        sh.quicksearch.set_dock_top(&sh.ui, sh.h, Some(floor));
-        let (all, row) = (sh.quicksearch.rows().len(), row_h(&sh));
-        for i in 0..all {
-            sh.quicksearch.key(&sh.ui, sh.h, Out::Named("Down"), 3000.0 + i as f64);
-            let qs = &sh.quicksearch;
-            let at = qs.selected.expect("Down selects a row");
-            let rect = qs.row_rects(&sh.ui, sh.w).into_iter().find(|(a, _)| *a == at).expect("the selected row is in view").1;
-            assert!((rect.3 - row).abs() < 0.5, "the selected row shows whole");
-        }
-        assert!(sh.quicksearch.scroll > 0.0, "the list followed the selection down");
-        for i in 0..all {
-            sh.quicksearch.key(&sh.ui, sh.h, Out::Named("Up"), 4000.0 + i as f64);
-            let qs = &sh.quicksearch;
-            let at = qs.selected.expect("Up keeps a row selected");
-            assert!(qs.row_rects(&sh.ui, sh.w).iter().any(|(a, r)| *a == at && (r.3 - row).abs() < 0.5), "the selected row shows whole");
-        }
-        assert_eq!(sh.quicksearch.scroll, 0.0, "the first row is back at the top");
-    }
-
-    #[test]
-    fn a_new_query_scrolls_back_to_the_top() {
-        let mut sh = typed();
-        let floor = dock_for_rows(&sh, 3.0);
-        sh.quicksearch.set_dock_top(&sh.ui, sh.h, Some(floor));
-        sh.quicksearch_wheel(-200.0, 3000.0);
-        assert!(sh.quicksearch.scroll > 0.0);
-        sh.quicksearch.key(&sh.ui, sh.h, Out::Text("t".into()), 3100.0);
-        assert_eq!(sh.quicksearch.scroll, 0.0);
-    }
-}
+mod dock_and_scroll_tests;
