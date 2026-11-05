@@ -78,8 +78,13 @@ const DOUBLE_CLICK_MS: f64 = 450.0;
 /// One line of notes or transcript text, and the top of the episode page's buttons, in points.
 const LINE_PT: f32 = 20.0;
 const DETAIL_BUTTONS_PT: f32 = 64.0;
-/// Time interval for checking the playback service clock while connected; this is media polling, not window geometry.
-const AUDIO_WAKE_INTERVAL_S: f64 = 1.0;
+/// Time interval for checking the playback service clock while connected (milliseconds, the loop clock's unit); this is media polling, not window geometry.
+const AUDIO_WAKE_INTERVAL_MS: f64 = 1000.0;
+
+/// The next time to read the audio service socket while it is connected and nothing is playing.
+fn audio_listen_wake(t: f64) -> f64 {
+    t + AUDIO_WAKE_INTERVAL_MS
+}
 const BAR_TITLE: u32 = 1;
 const BAR_ADD: u32 = 2;
 const BAR_REMOVE: u32 = 3;
@@ -2587,7 +2592,7 @@ impl Podcasts {
         let hold = self.hold.as_ref().map(|(_, at, _)| at + HOLD_MS);
         // the service socket is only read between frames: once a second while idle, to notice an episode playing
         // This wake is a one-second media-service clock interval, not a layout/resolution constant.
-        let listening = if self.audio.connected() { Some(t + AUDIO_WAKE_INTERVAL_S) } else { self.audio.next_wake(t) };
+        let listening = if self.audio.connected() { Some(audio_listen_wake(t)) } else { self.audio.next_wake(t) };
         due = [due, listening].into_iter().flatten().reduce(f64::min);
         let refresh = self.last_refresh.zip(self.prefs.settings.refresh_ms()).map(|(at, ms)| at + ms);
         let search = if self.view == View::Search { self.search_field.as_ref().and_then(|f| f.next_wake(t)) } else { None };
@@ -3140,6 +3145,11 @@ mod tests {
         fn get(&self, _: &str, _: usize) -> io::Result<Vec<u8>> {
             Err(io::Error::other("offline"))
         }
+    }
+
+    #[test]
+    fn the_idle_audio_check_is_one_second_on_the_millisecond_clock() {
+        assert_eq!(audio_listen_wake(5000.0), 6000.0, "1 s on a millisecond clock is 1000 ms away");
     }
 
     fn scratch(name: &str) -> PathBuf {
