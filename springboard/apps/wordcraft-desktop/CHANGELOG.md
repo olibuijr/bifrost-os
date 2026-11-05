@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.15.1
+
+- Upstream wordcraft v0.15.1.
+  ## What's Changed
+  * Read Aloud: look citations up by binary search, not a scan per character by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/5335
+  * Language packs 2: 75 packs and the merged craft-proof (compounding, en-AU); #5208 review follow-ups by @benandez in https://github.com/storytold/wordcraft/pull/5224
+  * Pictures: refuse a TIFF whose first image names its compression twice by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/5337
+  * Fonts: cut names read from a font's name table to 128 characters by @dylanmtaylor in https://github.com/storytold/wordcraft/pull/5333
+
 ## 0.15.0
 
 - Upstream wordcraft v0.15.0.
