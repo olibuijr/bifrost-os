@@ -1343,6 +1343,8 @@ mod appearance_guard {
         ("shell/rotate.rs", "letterbox bars"),
         ("shell/mod.rs", "backdrop shown before an app's first frame"),
         ("shell/desk.rs", "desktop backdrop and dock placeholder tiles"),
+        ("shell/desk/dock.rs", "dock placeholder tile (the Apps grid tile behind its dots)"),
+        ("shell/desk/draw.rs", "fallback icon tile for an app without an icon"),
         ("shell/desktop_bar.rs", "blur base under translucent materials"),
         ("shell/camera/", "camera viewfinder is always black"),
         ("apps/photobooth-desktop/", "camera viewfinder is always black"),
