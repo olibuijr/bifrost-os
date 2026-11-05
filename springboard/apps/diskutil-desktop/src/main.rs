@@ -23,7 +23,7 @@ use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, TouchKin
 use crate::actions::Action;
 use bifrost_core::disk_format::Personality;
 use bifrost_core::json::Json;
-use window::{Ask, DiskUtility, Target, B_DETACH, REFRESH_S};
+use window::{Ask, DiskUtility, Target, B_DETACH, REFRESH_MS};
 
 /// Menu item ids.
 const MENU_DETACH: u32 = 1;
@@ -184,13 +184,13 @@ impl App for DiskUtility {
         draw::controls(self, &ctx.ui)
     }
 
-    /// Polls a running action and re-reads the disks every `REFRESH_S` seconds, so attached and removed devices show up.
+    /// Polls a running action and re-reads the disks every `REFRESH_MS` milliseconds, so attached and removed devices show up.
     /// A finished image write is committed (or thrown away) here.
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         self.now = t;
         let finished = self.poll(t) | self.take_probes();
         self.flush(ctx);
-        if t - self.last_refresh >= REFRESH_S {
+        if t - self.last_refresh >= REFRESH_MS {
             let changed = self.refresh(t, false);
             self.ask_shell(ctx);
             changed || finished
@@ -202,7 +202,7 @@ impl App for DiskUtility {
     /// compliance-allow: RES-02 A 2-second external-volume refresh catches removable-device changes; it is not worker polling.
     fn next_wake(&self, _t: f64) -> Option<f64> {
         if self.last_refresh.is_finite() {
-            Some(self.last_refresh + REFRESH_S)
+            Some(self.last_refresh + REFRESH_MS)
         } else {
             None
         }
@@ -327,6 +327,18 @@ mod tests {
         let file = menus.iter().find(|m| m.title == "File").expect("File menu");
         assert!(file.items.iter().any(|i| i.no_print), "no Print… for a disk tool");
         assert!(!menus.iter().flat_map(|m| m.items.iter()).any(|i| i.prints), "and no print command of its own");
+    }
+
+    #[test]
+    fn the_disks_are_re_read_two_seconds_on_the_millisecond_clock() {
+        let ctx = test_ctx();
+        let mut app = DiskUtility::new();
+        app.last_refresh = 1000.0;
+        assert_eq!(app.next_wake(1000.0), Some(3000.0), "2 s on a millisecond clock is 2000 ms away");
+        // two ticks a few milliseconds apart do not rescan
+        app.tick(&ctx, 1005.0);
+        app.tick(&ctx, 1010.0);
+        assert_eq!(app.last_refresh, 1000.0, "no refresh before the interval has passed");
     }
 
     #[test]
