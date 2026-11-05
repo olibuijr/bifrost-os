@@ -1,7 +1,8 @@
 //! Where the Color Meter's pixels come from. The app reads the display through `ScreenSource` and never talks to the
 //! compositor. `ShellSource` asks the shell's `screen` service for the display size, the pointer and a square of
 //! pixels around the pointer. It keeps at most one request of each kind in flight: the app sends what [`ScreenSource::wants`]
-//! returns, reports each request id with [`ScreenSource::track`], and passes every reply to [`ScreenSource::answer`].
+//! returns, reports each request id with [`ScreenSource::track`], and collects the replies with [`ScreenSource::collect`].
+//! Replies are taken in the app's tick, not in `service_reply`, so a reply that changes nothing costs no frame.
 //! `read` serves pixels from the last square that came back, so the readout never waits for the shell.
 
 use crate::color::Rgb8;
@@ -46,8 +47,19 @@ pub trait ScreenSource {
     /// Records that the request `request` was sent for `ask`.
     fn track(&mut self, _request: u32, _ask: Ask) {}
 
-    /// Takes the reply to `request` when it was one of ours. True when it was, and a frame is then needed.
+    /// Takes the reply to `request` when it was one of ours. True when it changed what the window shows.
     fn answer(&mut self, _request: u32, _result: &Result<Json, String>) -> bool {
+        false
+    }
+
+    /// Takes every reply that has arrived for a request in flight, through `take`. True when any changed what the window
+    /// shows.
+    fn collect(&mut self, _take: &mut dyn FnMut(u32) -> Option<Result<Json, String>>) -> bool {
+        false
+    }
+
+    /// Whether the shell refused or failed the last display or pixel request. The app then retries only now and then.
+    fn refused(&self) -> bool {
         false
     }
 }
@@ -67,6 +79,8 @@ pub struct ShellSource {
     loupe: Option<(PixelRect, Vec<Rgb8>)>,
     /// Requests sent and not yet answered, with what each one asked for.
     in_flight: Vec<(u32, Ask)>,
+    /// The last display or pixel reply was an error, or came back unusable.
+    refused: bool,
 }
 
 /// Whether two asks are the same kind, whatever their rectangle.
@@ -130,18 +144,44 @@ impl ScreenSource for ShellSource {
         let Some(i) = self.in_flight.iter().position(|(r, _)| *r == request) else { return false };
         let (_, ask) = self.in_flight.remove(i);
         match ask {
-            Ask::Display => self.display = result.as_ref().ok().and_then(screen_sample::decode_size),
-            Ask::Pointer => self.pointer = result.as_ref().ok().and_then(screen_sample::decode_point),
+            Ask::Display => {
+                let size = result.as_ref().ok().and_then(screen_sample::decode_size);
+                self.refused = size.is_none();
+                std::mem::replace(&mut self.display, size) != size
+            }
+            // the app takes the pointer on its next turn, which draws when it moved: no frame is needed for it here
+            Ask::Pointer => {
+                self.pointer = result.as_ref().ok().and_then(screen_sample::decode_point);
+                false
+            }
             Ask::Loupe(rect) => {
-                self.loupe = result
+                let got = result
                     .as_ref()
                     .ok()
                     .and_then(screen_sample::decode)
                     .filter(|(w, h, _)| *w == rect.w && *h == rect.h)
-                    .map(|(_, _, bytes)| (rect, bytes.chunks_exact(3).map(|c| Rgb8::new(c[0], c[1], c[2])).collect()));
+                    .map(|(_, _, bytes)| (rect, bytes.chunks_exact(3).map(|c| Rgb8::new(c[0], c[1], c[2])).collect::<Vec<_>>()));
+                self.refused = got.is_none();
+                let changed = got != self.loupe;
+                self.loupe = got;
+                changed
             }
         }
-        true
+    }
+
+    fn collect(&mut self, take: &mut dyn FnMut(u32) -> Option<Result<Json, String>>) -> bool {
+        let ids: Vec<u32> = self.in_flight.iter().map(|(r, _)| *r).collect();
+        let mut changed = false;
+        for id in ids {
+            if let Some(result) = take(id) {
+                changed |= self.answer(id, &result);
+            }
+        }
+        changed
+    }
+
+    fn refused(&self) -> bool {
+        self.refused
     }
 }
 
@@ -208,6 +248,7 @@ mod tests {
         // nothing in flight of these kinds is asked again
         assert!(s.wants((50, 40), 11).is_empty());
         assert!(s.answer(1, &Ok(size(100, 80))));
+        assert!(!s.answer(2, &Ok(point(50, 40))));
         let next = s.wants((50, 40), 11);
         assert_eq!(next, vec![Ask::Loupe(PixelRect { x: 43, y: 33, w: 15, h: 15 })]);
     }
@@ -217,7 +258,9 @@ mod tests {
         let mut s = ShellSource::default();
         s.track(7, Ask::Pointer);
         assert!(!s.answer(8, &Ok(Json::Null)));
-        assert!(s.answer(7, &Err("the Screen permission is not granted".into())));
+        assert_eq!(s.in_flight.len(), 1);
+        s.answer(7, &Err("the Screen permission is not granted".into()));
+        assert!(s.in_flight.is_empty());
         assert_eq!(s.pointer(), None);
     }
 
@@ -240,6 +283,59 @@ mod tests {
         let reply = Json::Obj(vec![("w".into(), Json::Num(1.0)), ("h".into(), Json::Num(1.0)), ("rgb".into(), Json::Arr(vec![Json::Num(0.0); 3]))]);
         s.answer(5, &Ok(reply));
         assert_eq!(s.read(PixelRect { x: 0, y: 0, w: 1, h: 1 }), None);
+    }
+
+    fn point(x: u32, y: u32) -> Json {
+        Json::Obj(vec![("x".into(), Json::Num(x as f64)), ("y".into(), Json::Num(y as f64))])
+    }
+
+    fn square(w: u32, h: u32, v: u8) -> Json {
+        let rgb = vec![Json::Num(v as f64); (w * h * 3) as usize];
+        Json::Obj(vec![("w".into(), Json::Num(w as f64)), ("h".into(), Json::Num(h as f64)), ("rgb".into(), Json::Arr(rgb))])
+    }
+
+    #[test]
+    fn a_refused_reply_marks_the_source_and_a_good_one_clears_it() {
+        let mut s = ShellSource::default();
+        s.track(1, Ask::Display);
+        assert!(!s.answer(1, &Err("denied".into())));
+        assert!(s.refused());
+        s.track(2, Ask::Display);
+        assert!(s.answer(2, &Ok(size(10, 10))));
+        assert!(!s.refused());
+        // a pixel reply that is refused marks it again
+        s.track(3, Ask::Loupe(PixelRect { x: 0, y: 0, w: 2, h: 2 }));
+        s.answer(3, &Err("denied".into()));
+        assert!(s.refused());
+    }
+
+    #[test]
+    fn replies_that_change_nothing_ask_for_no_frame() {
+        let mut s = ShellSource::default();
+        let rect = PixelRect { x: 0, y: 0, w: 2, h: 2 };
+        s.track(1, Ask::Display);
+        s.track(2, Ask::Loupe(rect));
+        assert!(s.answer(1, &Ok(size(10, 10))) && s.answer(2, &Ok(square(2, 2, 9))));
+        // the same size and the same pixels again
+        s.track(3, Ask::Display);
+        s.track(4, Ask::Loupe(rect));
+        assert!(!s.answer(3, &Ok(size(10, 10))));
+        assert!(!s.answer(4, &Ok(square(2, 2, 9))));
+        // other pixels do
+        s.track(5, Ask::Loupe(rect));
+        assert!(s.answer(5, &Ok(square(2, 2, 8))));
+    }
+
+    #[test]
+    fn collect_takes_the_replies_that_arrived_and_leaves_the_rest_in_flight() {
+        let mut s = ShellSource::default();
+        s.track(1, Ask::Display);
+        s.track(2, Ask::Pointer);
+        let mut mailbox = vec![(1, Ok(size(10, 10)))];
+        let changed = s.collect(&mut |id| mailbox.iter().position(|(r, _)| *r == id).map(|i| mailbox.remove(i).1));
+        assert!(changed);
+        assert_eq!(s.display_size(), Some((10, 10)));
+        assert_eq!(s.in_flight, vec![(2, Ask::Pointer)]);
     }
 
     fn size(w: u32, h: u32) -> Json {
