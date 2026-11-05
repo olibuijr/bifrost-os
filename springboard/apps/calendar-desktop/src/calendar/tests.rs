@@ -2669,7 +2669,7 @@ fn a_selected_event_is_deleted_with_backspace_delete_and_the_event_menu() {
     let mut c = week_calendar(&ui, temp.file());
     assert!(!c.enabled(Command::Delete), "nothing selected");
     c.tap_event(1, 1);
-    assert!(!c.enabled(Command::Delete), "a click selects without a visible mark: Event > Delete Event stays off");
+    assert!(c.enabled(Command::Delete), "Event > Delete Event is on for the selected event");
     c.key(&ui, Out::Backspace, 1000.0);
     assert!(!c.events.iter().any(|e| e.id == 1), "Backspace deleted it");
     assert!(c.undo.is_some(), "with the Undo bar");
@@ -2677,8 +2677,6 @@ fn a_selected_event_is_deleted_with_backspace_delete_and_the_event_menu() {
     c.key(&ui, Out::Named("Delete"), 2100.0);
     assert!(!c.events.iter().any(|e| e.id == 2), "the Delete key too");
     c.tap_event(3, 1);
-    c.open(&ui, Some(3));
-    assert!(c.enabled(Command::Delete), "Event > Delete Event is on for the open event");
     assert!(c.perform(&ui, Command::Delete, 3100.0));
     assert!(c.events.is_empty(), "and the menu");
     assert_eq!(store::load(&temp.file()).unwrap(), vec![]);
@@ -2718,26 +2716,12 @@ fn deleting_the_event_of_an_editor_window_closes_that_window() {
     assert!(c.open_pane(&ui, 7, 1));
     assert!(c.editor.is_none(), "the main window has no form");
     c.picked = Some(1);
-    assert!(!c.enabled(Command::Delete), "the main window has no form, so the menu does not delete from it");
-    assert!(!c.perform(&ui, Command::Delete, 200.0));
-    assert_eq!(c.events.len(), 1);
-    // the window's own form deletes its event, and the window closes with the form
-    assert_eq!(c.with_pane(7, |c| c.perform(&ui, Command::Delete, 200.0)), Some((true, false)));
+    assert!(c.enabled(Command::Delete), "Event > Delete Event works while the editor window is open");
+    assert!(c.perform(&ui, Command::Delete, 200.0));
     assert!(c.events.is_empty());
+    assert_eq!(c.take_closed_windows(), vec![7], "the app closes the editor window");
     assert!(!c.editing_in_window(1));
-}
-
-#[test]
-fn a_click_alone_does_not_enable_the_event_menu_delete() {
-    // the calendar's selection is not drawn, so Event > Delete Event waits for an open event form
-    let temp = Temp::new();
-    let ui = crate::test_ui();
-    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
-    let mut c = week_calendar(&ui, temp.file());
-    c.tap_event(1, 1);
-    assert!(!c.enabled(Command::Delete));
-    assert!(!c.perform(&ui, Command::Delete, 100.0));
-    assert_eq!(c.events.len(), 1, "nothing is deleted from the menu");
+    assert!(c.take_closed_windows().is_empty());
 }
 
 #[test]
