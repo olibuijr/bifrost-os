@@ -135,8 +135,13 @@ const WELCOME_SIZE_PT: (f32, f32) = (260.0, 320.0);
 /// Stacking offset of each new note, so new notes do not land on each other.
 const CASCADE_PT: f32 = 24.0;
 const CASCADE_STEPS: usize = 8;
-/// Two presses on the same note within this many seconds are a double press.
-const DOUBLE_PRESS_S: f64 = 0.4;
+/// Two presses on the same note within this many milliseconds (the touch clock's unit) are a double press.
+const DOUBLE_PRESS_MS: f64 = 400.0;
+
+/// True when a press on `id` at `t` follows the last press (note and time) closely enough to be its double.
+fn is_double_press(last: Option<(u64, f64)>, id: u64, t: f64) -> bool {
+    last.is_some_and(|(note, at)| note == id && t - at < DOUBLE_PRESS_MS)
+}
 
 /// A pointer gesture in progress.
 #[derive(Clone, Copy, Debug)]
@@ -495,7 +500,7 @@ impl StickiesApp {
             board.focus = None;
             return had;
         };
-        let double = self.last_press.is_some_and(|(note, at)| note == id && t - at < DOUBLE_PRESS_S);
+        let double = is_double_press(self.last_press, id, t);
         self.last_press = if double { None } else { Some((id, t)) };
         let snapshot = board.clone();
         board.raise(id);
@@ -1653,6 +1658,14 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_second_press_within_400_ms_on_the_touch_clock_is_a_double_press() {
+        assert!(is_double_press(Some((1, 1000.0)), 1, 1250.0), "250 ms apart");
+        assert!(!is_double_press(Some((1, 1000.0)), 1, 1500.0), "500 ms apart");
+        assert!(!is_double_press(Some((1, 1000.0)), 2, 1100.0), "another note");
+        assert!(!is_double_press(None, 1, 1100.0), "no earlier press");
+    }
 
     fn app_with(texts: &[&str]) -> StickiesApp {
         let mut app = StickiesApp::new();
