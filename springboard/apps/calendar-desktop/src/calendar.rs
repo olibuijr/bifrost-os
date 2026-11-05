@@ -2152,8 +2152,9 @@ impl Calendar {
         match cmd {
             Command::Save | Command::Duplicate => editing,
             Command::ExportEvent => editing && saved && self.file_export,
-            // the open event, or with no form open the event selected with a click (E2E W2-16)
-            Command::Delete => (editing && saved) || (!busy && self.picked_event().is_some()),
+            // a click selects an event without showing it, so the menu deletes only the open event; Backspace and Delete
+            // still delete the clicked one (E2E W2-16)
+            Command::Delete => editing && saved,
             Command::WeekNumbers | Command::ExportCalendar => !busy && self.file_export,
             Command::ZoomIn => !busy && self.time_view() && self.prefs.hour_h < prefs::HOUR_H_MAX,
             Command::ZoomOut => !busy && self.time_view() && self.prefs.hour_h > prefs::HOUR_H_MIN,
