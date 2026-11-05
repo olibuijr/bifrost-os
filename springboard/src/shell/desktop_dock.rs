@@ -195,7 +195,7 @@ pub fn magnify_factor(dist:f32,radius:f32)->f32{if radius<=0.||dist>=radius{0.}e
 /// Scales a premultiplied colour (all four channels) by `k`, for fades.
 pub(super) fn fade(c:u32,k:f32)->u32{let k=k.clamp(0.,1.);let m=|shift:u32|((((c>>shift)&255) as f32*k).round() as u32)<<shift;m(0)|m(8)|m(16)|m(24)}
 /// Magnifies a row of equal square icon `rects` around `ptr` (a coordinate along the dock axis: x unless `vertical`).
-/// Sizes follow `magnify_factor` between the base size and `max`, quantised to 2 px so scaled icons cache well; gaps are
+/// Sizes follow `magnify_factor` between the base size and `max`; gaps are
 /// kept, and icons keep their far edge (`far`: bottom or right) or near edge, so they grow into the screen.
 ///
 /// The row grows about the pointer, as the reference Dock does: the point of the resting row under the pointer (a
@@ -208,28 +208,33 @@ pub fn magnified_rects(rects:&[Rect],vertical:bool,far:bool,ptr:f32,max:i32,radi
  if rects.is_empty()||amount<=0.{return rects.to_vec();}
  let (start,len):(fn(&Rect)->i32,fn(&Rect)->i32)=if vertical{(|r|r.y,|r|r.h)}else{(|r|r.x,|r|r.w)};
  let base=len(&rects[0]);
- let sizes:Vec<i32>=rects.iter().map(|r|{let c=start(r) as f32+len(r) as f32/2.;let f=magnify_factor((c-ptr).abs(),radius)*amount.min(1.);base+(((max-base).max(0) as f32*f/2.).round() as i32)*2}).collect();
- let gaps:Vec<i32>=rects.windows(2).map(|w|start(&w[1])-start(&w[0])-len(&w[0])).collect();
+ // the row is laid out in fractional px and each icon's edges are rounded once, at the end: sizes rounded (to 2 px)
+ // before they were summed into positions let one size step shift every icon past it by 2-4 px, back and forth, as the
+ // pointer moved 1 px along the Dock (the zoom jittered under a real mouse, whose motion comes in sub-icon steps)
+ let sizes:Vec<f32>=rects.iter().map(|r|{let c=start(r) as f32+len(r) as f32/2.;let f=magnify_factor((c-ptr).abs(),radius)*amount.min(1.);base as f32+(max-base).max(0) as f32*f}).collect();
+ let gaps:Vec<f32>=rects.windows(2).map(|w|(start(&w[1])-start(&w[0])-len(&w[0])) as f32).collect();
  // the magnified row laid out from 0
- let mut at=0;let mut starts=Vec::with_capacity(rects.len());
- for (i,sz) in sizes.iter().enumerate(){starts.push(at);at+=sz+gaps.get(i).copied().unwrap_or(0);}
+ let mut at=0.;let mut starts=Vec::with_capacity(rects.len());
+ for (i,sz) in sizes.iter().enumerate(){starts.push(at);at+=sz+gaps.get(i).copied().unwrap_or(0.);}
  // the anchor: a resting coordinate `a` and where the same point lies in the magnified row (`q`)
  let n=rects.len();let last=&rects[n-1];
  let (a,q)=if ptr<=start(&rects[0]) as f32{(start(&rects[0]) as f32,0.)}
-  else if ptr>=(start(last)+len(last)) as f32{((start(last)+len(last)) as f32,(starts[n-1]+sizes[n-1]) as f32)}
+  else if ptr>=(start(last)+len(last)) as f32{((start(last)+len(last)) as f32,starts[n-1]+sizes[n-1])}
   else{
-   let mut anchor=(ptr,(starts[n-1]+sizes[n-1]) as f32);
+   let mut anchor=(ptr,starts[n-1]+sizes[n-1]);
    for (i,r) in rects.iter().enumerate(){
     let (s0,l)=(start(r) as f32,len(r) as f32);
-    if ptr<s0+l{anchor=(ptr,starts[i] as f32+(ptr-s0).max(0.)/l.max(1.)*sizes[i] as f32);break;}
-    let g=gaps.get(i).copied().unwrap_or(0) as f32;
+    if ptr<s0+l{anchor=(ptr,starts[i]+(ptr-s0).max(0.)/l.max(1.)*sizes[i]);break;}
+    let g=gaps.get(i).copied().unwrap_or(0.);
     // gaps keep their width, so the pointer keeps its distance past the icon before it
-    if ptr<s0+l+g{anchor=(ptr,(starts[i]+sizes[i]) as f32+(ptr-s0-l));break;}
+    if ptr<s0+l+g{anchor=(ptr,starts[i]+sizes[i]+(ptr-s0-l));break;}
    }
    anchor
   };
- let offset=(a-q).round() as i32;
- rects.iter().enumerate().map(|(i,r)|{let sz=sizes[i];let at=starts[i]+offset;if vertical{let x=if far{r.x+r.w-sz}else{r.x};Rect{x,y:at,w:sz,h:sz}}else{let y=if far{r.y+r.h-sz}else{r.y};Rect{x:at,y,w:sz,h:sz}}}).collect()
+ let offset=a-q;
+ // both edges rounded on their own: each stays within half a px of where the row puts it, so it moves with the pointer
+ rects.iter().enumerate().map(|(i,r)|{let lo=(starts[i]+offset).round() as i32;let sz=(starts[i]+sizes[i]+offset).round() as i32-lo;
+  if vertical{let x=if far{r.x+r.w-sz}else{r.x};Rect{x,y:lo,w:sz,h:sz}}else{let y=if far{r.y+r.h-sz}else{r.y};Rect{x:lo,y,w:sz,h:sz}}}).collect()
 }
 impl Shell {
  /// Where a dock list entry sits in the section order: 0 kept in the Dock, 1 recents (running, not kept), 2 minimized windows and the Trash.
@@ -637,6 +642,41 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
     assert_eq!(press.iter().position(|r|r.contains(x,y)),hov,"a press resolves the slot the label names");
    }
   }}
+ }
+ /// Owner report (0.10.45): the zoom jittered while a real mouse moved along the Dock. A relative mouse moves the pointer
+ /// in steps far smaller than an icon; each 1 px step must move every drawn icon edge by at most 1 px (the Dock's own
+ /// growth is slower than the pointer), never the 2-4 px back-and-forth jumps that rounding each size before summing the
+ /// row gave.
+ #[test]fn the_magnified_row_follows_a_sub_icon_pointer_stream_without_jumps(){
+  let row:Vec<Rect>=(0..12).map(|i|Rect{x:300+i*116,y:1300,w:96,h:96}).collect();
+  let edges=|out:&[Rect]|out.iter().flat_map(|r|[r.x,r.x+r.w]).collect::<Vec<_>>();
+  for frac in[0.,0.37,0.5]{
+   let mut prev:Option<Vec<i32>>=None;
+   for p in (row[0].x-40)..(row[11].x+row[11].w+40){
+    let ptr=p as f32+frac;let now=edges(&magnified_rects(&row,false,true,ptr,160,256.,1.));
+    if let Some(prev)=&prev{for (k,(a,b)) in prev.iter().zip(&now).enumerate(){
+     assert!((b-a).abs()<=1,"edge {k} jumped {a} -> {b} as the pointer moved 1 px to {ptr}");
+    }}
+    prev=Some(now);
+   }
+  }
+ }
+ /// The same stream through the shell, as the window server delivers a relative mouse (fractional, accelerated steps):
+ /// the drawn row moves smoothly and the hovered icon is the one that rests under the pointer, never a neighbour.
+ #[test]fn a_mouse_moving_along_the_dock_moves_the_zoom_smoothly_and_keeps_the_hovered_icon(){
+  let mut sh=desktop(2560,1440);sh.desk.as_mut().unwrap().dock_preferences.position=Position::Bottom;
+  let m=sh.desk_metrics();let(_,bar,rest)=sh.desk_dock(&m);
+  let y=(rest[0].y+rest[0].h/2) as f32;let (from,to)=(rest[1].x as f32+0.3,(rest[rest.len()-2].x+rest[rest.len()-2].w) as f32);
+  sh.desktop_pointer(from,y,false,1000.);
+  let (mut x,mut t,mut prev)=(from,3000.,None::<Vec<i32>>);
+  while x<to{
+   sh.desktop_pointer(x,y,false,t);sh.dock_tick(t);
+   let live=sh.dock_live(bar,&rest,t/1000.).1;let now:Vec<i32>=live.iter().flat_map(|r|[r.x,r.x+r.w]).collect();
+   if let Some(prev)=&prev{for(k,(a,b))in prev.iter().zip(&now).enumerate(){assert!((b-a).abs()<=2,"edge {k} jumped {a} -> {b} at x {x}");}}
+   prev=Some(now);
+   if let Some(k)=rest.iter().position(|r|(r.x as f32)<x&&x<(r.x+r.w) as f32){assert_eq!(sh.desk.as_ref().unwrap().dock_hover,Some(k),"x {x}: the icon resting under the pointer");}
+   x+=1.9;t+=6.;
+  }
  }
  /// W2-24: the plate grows along the axis with the magnified row and keeps the end padding; at rest it is the capsule.
  #[test]fn the_plate_grows_with_the_magnified_row(){
