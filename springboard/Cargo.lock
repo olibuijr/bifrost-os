@@ -444,7 +444,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-audio-setup"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "bifrost-app",
  "bifrost-audio-hal",
@@ -601,7 +601,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-colormeter"
-version = "0.5.11"
+version = "0.5.12"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-daw"
-version = "0.5.12"
+version = "0.5.13"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-diskutil"
-version = "0.8.8"
+version = "0.8.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -674,7 +674,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-files"
-version = "1.34.12"
+version = "1.34.13"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -726,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-grapher"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "bifrost-app",
  "springboard",
@@ -904,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-podcasts"
-version = "1.14.5"
+version = "1.14.6"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stickies"
-version = "0.10.7"
+version = "0.10.8"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1082,7 +1082,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.11.7"
+version = "1.11.8"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.13
+
+- A folder that is gone opens the nearest folder above it with a plain notice, instead of an OS error.
+
 ## 1.34.12
 
 - The Tags panel shows which tags are on, in its own card; the sidebar scrolls to every tag; tag dots sit on the icon; File has Open (Cmd+O) and Preview shows Space.

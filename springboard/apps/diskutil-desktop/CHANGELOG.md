@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.9
+
+- Idle at 0% CPU: the volume list refreshes every 2 s and usage every 10 s, not every few milliseconds.
+
 ## 0.8.8
 
 - Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).

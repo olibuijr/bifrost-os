@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.13
+
+- Standard toolbar in every view; New Song is a proper button and nothing is clipped at the window edge (default window 960x600).
+
 ## 0.5.12
 
 - Text links follow the selected accent.
