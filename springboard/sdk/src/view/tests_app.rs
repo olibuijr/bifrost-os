@@ -409,3 +409,23 @@ fn a_jump_stops_a_fling_in_progress() {
     sv.tick(1.0);
     assert_eq!(sv.content_offset(), 500.0);
 }
+
+#[test]
+fn draw_at_takes_the_loop_clock_in_milliseconds() {
+    use bifrost_ui::anim::Curve;
+    let mut root = Container::new(vec![Box::new(Container::default())]);
+    root.set_frame(rect(0.0, 0.0, 4.0, 4.0));
+    let mut a = ViewApp::new(root, Model::default());
+    let id = a.window.root().children()[0].id();
+    a.window.root_mut().children_mut()[0].set_frame(rect(0.0, 0.0, 2.0, 4.0));
+    a.window.set_reduce_motion(Some(false));
+    a.window.animate(Timing::new(1.0, Curve::Linear), |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(2.0, 0.0, 2.0, 4.0)));
+    let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+    let cfg = crate::proto::Configure { w: 4, h: 4, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+    let ctx = crate::Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg);
+    let mut px = vec![0xff00_0000u32; 16];
+    let mut s = Surface { w: 4, h: 4, stride: 4, px: &mut px, y0: 0 };
+    a.draw_at(&ctx, &mut s, 0.0);
+    a.draw_at(&ctx, &mut s, 500.0);
+    assert_eq!(a.window.view::<Container>(id).unwrap().base().frame.x, 1.0, "500 ms into a 1 s animation is its midpoint");
+}
