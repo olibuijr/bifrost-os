@@ -40,6 +40,32 @@ def norm(line):
     return re.sub(r"\d+(\.\d+)?", "N", line).strip()
 
 
+IDLE_CPU_ALERT = 15.0  # % of one core: a process this busy with every app quit is spinning
+APP_CPU_ALERT = 20.0   # % for an app a few seconds after it opened with no input
+
+
+def idle_alerts(idle, notes):
+    """Lines for the top of the digest: processes busy at idle (from the second top sample) and apps busy after
+    settling. The shell at 98% idle CPU went unnoticed for nine days because the number sat deep in the digest."""
+    alerts = []
+    for line in idle.splitlines():
+        f = line.split()
+        if len(f) >= 12 and f[0].isdigit():
+            try:
+                cpu = float(f[8].replace(",", "."))
+            except ValueError:
+                continue
+            if cpu >= IDLE_CPU_ALERT:
+                alerts.append(f"idle CPU {cpu:.0f}%: {f[11]} (pid {f[0]}, user {f[1]}) with every scanned app quit")
+    for name, note in notes.items():
+        m = re.search(r"cpu=([\d.]+)%", note)
+        if m and float(m.group(1)) >= APP_CPU_ALERT:
+            alerts.append(f"app CPU {float(m.group(1)):.0f}% after settling: {name}")
+        if " rc=0 " not in f" {note} ":
+            alerts.append(f"open failed: {name}: {note}")
+    return alerts
+
+
 def main(argv):
     if not argv or argv[0].startswith("-"):
         print(__doc__)
@@ -80,13 +106,17 @@ def main(argv):
     # idle footprint of the system with every scanned app quit: two top samples 3 s apart, the second is the real one
     idle = ssh("sleep 5; top -b -n 2 -d 3 -o %CPU | awk '/^top -/{n++} n==2' | sed -n '1,4p;7,14p'; free -m | sed -n 1,2p")
     cores = ssh(f"coredumpctl list --since '{since}' --no-pager 2>/dev/null | tail -n +2").strip()
+    alerts = idle_alerts(idle, notes)
+    # slow frames are logged per shell screen (app:external(N)); name the app that had that screen
+    screen_app = {m.group(1): name for name, note in notes.items() for m in [re.search(r"screen=(\S+)", note)] if m}
     with open(os.path.join(out, "digest.md"), "w") as f:
         f.write(f"# Midget scan {since}\n\nApps opened: {len(apps)}. Screenshots: shots/<app>.png.\n\n")
+        f.write("## Alerts\n\n" + ("".join(f"- {a}\n" for a in alerts) or "none\n") + "\n")
         f.write("## Core dumps\n\n" + (cores or "none") + "\n\n")
         f.write("## Distinct error/warning messages (count, most frequent first, max 40)\n\n")
         for msg, n in errs.most_common(40):
             f.write(f"- {n}x {msg[:240]}\n")
-        f.write("\n## Slow frames per screen\n\n" + ("".join(f"- {s}: {n}\n" for s, n in slow.most_common()) or "none\n"))
+        f.write("\n## Slow frames per screen\n\n" + ("".join(f"- {s}{' (' + screen_app[s] + ')' if s in screen_app else ''}: {n}\n" for s, n in slow.most_common()) or "none\n"))
         f.write("\n## Idle footprint (all scanned apps quit)\n\n```\n" + idle.strip() + "\n```\n")
         f.write("\n## Per app (open result, shell screen after open, footprint after settling)\n\n")
         for name, note in notes.items():
