@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.20.2
+
+- Upstream photocraft v0.20.2.
+  **Full Changelog**: https://github.com/storytold/photocraft/compare/v0.20.1...v0.20.2
+
 ## 0.20.1
 
 - Upstream photocraft v0.20.1.
