@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.15.1
+
+- Upstream deckcraft v0.15.1.
+  **Full Changelog**: https://github.com/storytold/deckcraft/compare/v0.15.0...v0.15.1
+
 ## 0.15.0
 
 - Upstream deckcraft v0.15.0.
