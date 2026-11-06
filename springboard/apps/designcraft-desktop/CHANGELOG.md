@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.17.2
+
+- Upstream designcraft v0.17.2.
+  **Full Changelog**: https://github.com/storytold/designcraft/compare/v0.17.1...v0.17.2
+
 ## 0.17.1
 
 - Upstream designcraft v0.17.1.
