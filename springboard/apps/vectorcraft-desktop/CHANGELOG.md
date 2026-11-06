@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.21.1
+
+- Upstream vectorcraft v0.21.1.
+  **Full Changelog**: https://github.com/storytold/vectorcraft/compare/v0.21.0...v0.21.1
+
 ## 0.21.0
 
 - Upstream vectorcraft v0.21.0.
