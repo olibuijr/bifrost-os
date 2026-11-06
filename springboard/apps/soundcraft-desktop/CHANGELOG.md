@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.17.1
+
+- Upstream soundcraft v0.17.1.
+  **Full Changelog**: https://github.com/storytold/soundcraft/compare/v0.17.0...v0.17.1
+
 ## 0.17.0
 
 - Upstream soundcraft v0.17.0.
