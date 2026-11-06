@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.16.1
+
+- Upstream gridcraft v0.16.1.
+  **Full Changelog**: https://github.com/storytold/gridcraft/compare/v0.16.0...v0.16.1
+
 ## 0.16.0
 
 - Upstream gridcraft v0.16.0.
