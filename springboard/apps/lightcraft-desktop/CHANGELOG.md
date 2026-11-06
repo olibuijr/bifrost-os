@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.18.1
+
+- Upstream lightcraft v0.18.1.
+  **Full Changelog**: https://github.com/storytold/lightcraft/compare/v0.18.0...v0.18.1
+
 ## 0.18.0
 
 - Upstream lightcraft v0.18.0.
