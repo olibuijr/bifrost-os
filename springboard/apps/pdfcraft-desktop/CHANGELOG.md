@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.18.2
+
+- Upstream pdfcraft v0.18.2.
+  **Full Changelog**: https://github.com/storytold/pdfcraft/compare/v0.18.1...v0.18.2
+
 ## 0.18.1
 
 - Upstream pdfcraft v0.18.1.
