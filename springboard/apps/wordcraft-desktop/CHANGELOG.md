@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.15.2
+
+- Upstream wordcraft v0.15.2.
+  **Full Changelog**: https://github.com/storytold/wordcraft/compare/v0.15.1...v0.15.2
+
 ## 0.15.1
 
 - Upstream wordcraft v0.15.1.
