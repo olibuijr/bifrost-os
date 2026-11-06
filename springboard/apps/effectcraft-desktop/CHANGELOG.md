@@ -4,6 +4,11 @@
 
 # Changelog
 
+## 0.21.1
+
+- Upstream effectcraft v0.21.1.
+  **Full Changelog**: https://github.com/storytold/effectcraft/compare/v0.21.0...v0.21.1
+
 ## 0.21.0
 
 - Upstream effectcraft v0.21.0.
