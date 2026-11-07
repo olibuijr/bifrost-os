@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.22.0
+
+- Upstream vectorcraft v0.22.0.
+  ## What's Changed
+  * Affinity import: bound archive index names and charge failed entry extraction by @dylanmtaylor in https://github.com/storytold/vectorcraft/pull/5291
+  * Native format: document.save can write path coordinates at a fixed precision by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/3990
+  * Drop invalid XML characters from SVG link URLs and aria-labels by @Silvertree2010 in https://github.com/storytold/vectorcraft/pull/5279
+  * Fix #5312: EPS files written by Ghostscript's eps2write open by @JonRC in https://github.com/storytold/vectorcraft/pull/5314
+
 ## 0.21.1
 
 - Upstream vectorcraft v0.21.1.
