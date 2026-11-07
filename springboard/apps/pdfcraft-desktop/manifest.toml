@@ -1,6 +1,6 @@
 id = "ai.storyteller.pdfcraft"
 name = "PDFCraft"
-version = "0.18.2"
+version = "0.19.0"
 exec = "pdfcraft"
 icon = "icon.png"
 min_shell = "0.4.97"
