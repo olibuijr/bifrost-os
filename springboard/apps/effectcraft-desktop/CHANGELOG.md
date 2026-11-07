@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.22.0
+
+- Upstream effectcraft v0.22.0.
+  ## What's Changed
+  * OCIO config: a mismatched closing bracket ends a flow collection; multiline flows parse in linear time by @dylanmtaylor in https://github.com/storytold/effectcraft/pull/2939
+  * Roto Brush: keep frozen mattes in a session without their model (#2833) by @JonRC in https://github.com/storytold/effectcraft/pull/2834
+  * Import: EDL source timecodes land on each file's own time (#2832) by @JonRC in https://github.com/storytold/effectcraft/pull/2835
+  * Lottie: read the closed flag older Bodymovin files keep outside the path by @JonRC in https://github.com/storytold/effectcraft/pull/2842
+
 ## 0.21.1
 
 - Upstream effectcraft v0.21.1.
