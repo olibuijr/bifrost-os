@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.18.0
+
+- Upstream cadcraft v0.18.0.
+  ## What's Changed
+  * Autosave: failures are shown, and a crash is recovered at the first relaunch by @tanish2k09 in https://github.com/storytold/cadcraft/pull/2670
+  * A panic in the interface saves the work and reports it (E4) by @tanish2k09 in https://github.com/storytold/cadcraft/pull/2671
+  * Add a security policy (E33) by @tanish2k09 in https://github.com/storytold/cadcraft/pull/2672
+  * DWG reader and writer run in a child process (E7) by @tanish2k09 in https://github.com/storytold/cadcraft/pull/2673
+
 ## 0.17.1
 
 - Upstream cadcraft v0.17.1.
