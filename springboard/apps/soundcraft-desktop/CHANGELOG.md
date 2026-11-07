@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.18.0
+
+- Upstream soundcraft v0.18.0.
+  ## What's Changed
+  * clap-host tests: load plugins only from a freshly created private temp directory by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/1295
+  * MIDI: index controller dedup by channel and kind by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/1298
+  * Mixer: match automation lanes to insert parameters in one merge by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/1299
+  * Mixer: compute cyclic aux depths in one pass per hop by @dylanmtaylor in https://github.com/storytold/soundcraft/pull/1306
+
 ## 0.17.1
 
 - Upstream soundcraft v0.17.1.
