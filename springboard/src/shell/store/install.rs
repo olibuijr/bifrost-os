@@ -241,6 +241,10 @@ pub fn validate(m: &Manifest, files: &[TarEntry], shell: &str) -> Result<(), Str
     if !valid_id(&m.id) {
         return Err(format!("invalid app id {:?}", m.id));
     }
+    // the shell's own keychain stores used to be app stores under these ids: no package may carry one
+    if crate::keychain::reserved_id(&m.id) {
+        return Err(format!("app id {:?} is reserved for the shell", m.id));
+    }
     if m.name.trim().is_empty() {
         return Err("manifest has no name".into());
     }
@@ -956,6 +960,16 @@ pub mod tests {
         bad = m;
         bad.id = "nodots".into();
         assert!(validate(&bad, &files, "0.1.0").is_err());
+    }
+
+    #[test]
+    fn a_package_cannot_carry_the_id_of_a_shell_keychain_store() {
+        let files = read_tar(&pkg(MANIFEST)).unwrap();
+        let mut m = parse_manifest(MANIFEST).unwrap();
+        for id in ["bifrost.screentime", "bifrost.backup", "bifrost.quicksearch"] {
+            m.id = id.into();
+            assert!(validate(&m, &files, "0.1.0").unwrap_err().contains("reserved"), "{id}");
+        }
     }
 
     #[test]

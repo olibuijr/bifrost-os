@@ -57,13 +57,13 @@ pub const MAX_APPS: usize = 64;
 /// save.
 const SEALED_MAGIC: &[u8] = b"SQIX2\n";
 const NONCE_LEN: usize = 24;
-/// The keychain entry that holds the key of the index files (`<root>/keychain/bifrost.quicksearch.kc`).
+/// The keychain entry that holds the key of the index files (`<root>/keychain/system/bifrost.quicksearch.kc`).
 const KEY_APP: &str = "bifrost.quicksearch";
 const KEY_ACCOUNT: &str = "index-key";
 
 /// The index key: read from the keychain, or created on first use from `/dev/urandom`.
 fn index_key(root: &Path) -> io::Result<[u8; 32]> {
-    let store = Store::open(root, KEY_APP).map_err(|e| io::Error::other(e.to_string()))?;
+    let store = Store::open_system(root, KEY_APP).map_err(|e| io::Error::other(e.to_string()))?;
     match store.get(KEY_APP, KEY_ACCOUNT) {
         Ok(bytes) => bytes.as_slice().try_into().map_err(|_| io::Error::other("the index key has the wrong length")),
         Err(crate::keychain::Error::ItemNotFound) => {
