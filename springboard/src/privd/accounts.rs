@@ -396,12 +396,18 @@ fn set_names(p: &Json) -> Result<Json, PErr> {
         return Err(PErr::bad("invalid local host name"));
     }
     if let Some(c) = computer {
-        run(&strs(&["hostnamectl", "set-hostname", "--pretty", c.trim()]), None)?;
+        run(&pretty_name_argv(c), None)?;
     }
     if let Some(l) = local {
-        run(&strs(&["hostnamectl", "set-hostname", "--static", "--transient", l]), None)?;
+        run(&strs(&["hostnamectl", "set-hostname", "--static", "--transient", "--", l]), None)?;
     }
     Ok(obj(vec![]))
+}
+
+/// The command that sets the computer name people see. The name is free text, so it follows `--`: one that starts with
+/// a hyphen is the name, not an option.
+fn pretty_name_argv(name: &str) -> Vec<String> {
+    strs(&["hostnamectl", "set-hostname", "--pretty", "--", name.trim()])
 }
 
 fn service_set(p: &Json) -> Result<Json, PErr> {
@@ -509,6 +515,12 @@ fn screen_sharing_configure(p: &Json) -> Result<Json, PErr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_computer_name_that_starts_with_a_hyphen_is_passed_as_the_name() {
+        assert!(valid_computer_name("-=Studio=-"));
+        assert_eq!(pretty_name_argv(" -=Studio=- "), ["hostnamectl", "set-hostname", "--pretty", "--", "-=Studio=-"]);
+    }
 
     const PASSWD: &str = "root:x:0:0:root:/root:/bin/bash\nnobody:x:65534:65534:Nobody:/:/usr/bin/nologin\nolof:x:1000:1000:Olof Dev,,,:/home/olof:/bin/bash\nkid:x:1001:1001:Kid:/home/kid:/bin/bash\nsvc:x:970:970::/var/svc:/usr/bin/nologin\nbad line\n";
     const GROUP: &str = "root:x:0:\nwheel:x:998:olof\naudio:x:996:olof,kid\nolof:x:1000:\nkid:x:1001:\nfriends:x:1002:kid\n";

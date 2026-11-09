@@ -145,7 +145,8 @@ pub fn dispatch(gate: &dyn Gate, exec: &dyn Exec, peer: Peer, method: &str, para
     }
     if method == "account.set_password" {
         // before the token check: the first password of a fresh account needs no token (the gate decides
-        // from the hash and the peer, and only an empty hash from the console shell qualifies)
+        // from the hash and the peer: an empty hash from the console shell qualifies, and so does the root socket,
+        // whose peer still gives the old password)
         let new = params.get("new").and_then(Json::as_str).ok_or_else(|| PErr::bad("new"))?;
         let old = params.get("old").and_then(Json::as_str).unwrap_or("");
         return gate.set_password(token, peer, old, new).map(|_| obj(vec![]));

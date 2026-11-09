@@ -367,6 +367,16 @@ pub fn write_nofollow(file: &str, text: &str) -> std::io::Result<()> {
     f.write_all(text.as_bytes())
 }
 
+/// [`write_nofollow`] for a file that a service without root must read: the open file gets `mode` before the text is
+/// written, whatever mode an older copy had.
+fn write_nofollow_mode(file: &str, text: &str, mode: u32) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).custom_flags(O_NOFOLLOW).open(file)?;
+    f.set_permissions(std::fs::Permissions::from_mode(mode))?;
+    f.write_all(text.as_bytes())
+}
+
 /// The crash-loop latch (`boot_attempts`), owned by root so the user session cannot clear it.
 fn boot_attempt(event: &str) -> Result<Json, PErr> {
     use crate::bare::takeover;
@@ -517,7 +527,8 @@ fn network_dns_set(p: &Json) -> Result<Json, PErr> {
     } else {
         let dir = Path::new(DNS_PREFS_FILE).parent().unwrap_or(Path::new("/etc/systemd/resolved.conf.d"));
         std::fs::create_dir_all(dir).map_err(|e| PErr::internal(e.to_string()))?;
-        write_nofollow(DNS_PREFS_FILE, &dns_text(&servers)).map_err(|e| PErr::internal(e.to_string()))?;
+        // systemd-resolved runs as its own user, not root: a drop-in only root can read is never applied
+        write_nofollow_mode(DNS_PREFS_FILE, &dns_text(&servers), 0o644).map_err(|e| PErr::internal(e.to_string()))?;
     }
     run("systemctl", &["try-reload-or-restart", "systemd-resolved"])?;
     Ok(obj(vec![("servers", Json::Arr(servers.into_iter().map(s).collect()))]))
@@ -526,6 +537,27 @@ fn network_dns_set(p: &Json) -> Result<Json, PErr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_file_for_an_unprivileged_service_is_world_readable_even_over_an_older_private_copy() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("privd-mode-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("10-dns.conf");
+        let name = file.to_str().unwrap();
+        // an older copy written root-only keeps its mode through a truncating open
+        write_nofollow(name, "old").unwrap();
+        assert_eq!(std::fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o600);
+        write_nofollow_mode(name, "[Resolve]\n", 0o644).unwrap();
+        assert_eq!(std::fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o644);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "[Resolve]\n");
+        // a planted link is still refused
+        let link = dir.join("link.conf");
+        std::os::unix::fs::symlink(&file, &link).unwrap();
+        assert!(write_nofollow_mode(link.to_str().unwrap(), "x", 0o644).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn package_installs_refuse_bad_paths_and_names_before_anything_runs() {

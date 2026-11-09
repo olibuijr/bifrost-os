@@ -98,7 +98,7 @@ impl Gate for AuthGate {
         let at = now();
         let (plan, verifier) = {
             let mut a = self.lock_auth();
-            (a.plan_set_password(token, peer.console_shell && !peer.root_socket, new, at).map_err(perr)?, a.verifier())
+            (a.plan_set_password(token, peer.console_shell && !peer.root_socket, peer.root_socket, new, at).map_err(perr)?, a.verifier())
         };
         let user = match plan {
             PwPlan::First(u) | PwPlan::Skip(u) => u,
