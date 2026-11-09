@@ -1852,13 +1852,13 @@
    "doc": "",
    "bifrost": "packaging/arch/pam-bifrost-login",
    "status": "parity",
-   "note": "Local password checks at login use pam_unix with a faillock lockout after 5 failures for 300 seconds. Not covered: a directory password server, password policy for accounts managed elsewhere, and password reset flows. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
+   "note": "Local password checks at login use pam_unix; the privileged daemon locks the login after 5 failures (60 seconds, growing with each further failure). Not covered: a directory password server, password policy for accounts managed elsewhere, and password reset flows. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
    "rea": [],
    "method": "assessed",
    "checks": [
     {
      "kind": "cmd",
-     "run": "grep -q pam_faillock.so /etc/pam.d/bifrost-login",
+     "run": "grep -q pam_unix.so /etc/pam.d/bifrost-login",
      "expect_exit": 0
     },
     {
@@ -1866,7 +1866,7 @@
      "path": "/etc/pam.d/bifrost-login"
     }
    ],
-   "ready_note": "Local password checks use pam_unix with pam_faillock (deny 5, 300 s) in /etc/pam.d/bifrost-login. Directory servers and reset flows are not covered."
+   "ready_note": "Local password checks use pam_unix in /etc/pam.d/bifrost-login; the privileged daemon keeps the lockout (5 failures, 60 s and growing). Directory servers and reset flows are not covered."
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PaymentUI.framework",
