@@ -151,6 +151,11 @@ impl AlsaDriver {
                 let probe = |dir| Pcm::open(card, device, dir).and_then(|p| p.caps()).ok();
                 let play = pcm.playback.then(|| probe(Direction::Playback)).flatten();
                 let cap = pcm.capture.then(|| probe(Direction::Capture)).flatten();
+                if play.is_none() && cap.is_none() {
+                    // Busy, or the node of a card that was just plugged in is not there yet: a device with no
+                    // channels and no buffer range is of no use. It is not recorded, so the next scan probes it again.
+                    continue;
+                }
                 let (inch, outch, rates, buf) = merge_caps(play.as_ref(), cap.as_ref());
                 let transport = transport_of(&info.driver, &pcm.name);
                 let name = if transport == "hdmi" { ctl.monitor_name(device).unwrap_or_else(|| pcm.name.clone()) } else { pcm.name.clone() };
