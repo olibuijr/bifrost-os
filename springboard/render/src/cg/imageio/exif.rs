@@ -227,7 +227,10 @@ impl<'a> Block<'a> {
             let tag = self.u16(e)?;
             let typ = self.u16(e + 2)?;
             let count = self.u32(e + 4)? as usize;
-            let size = TYPE_SIZE.get(typ as usize).copied().unwrap_or(0).checked_mul(count)?;
+            // An entry of an unknown type has no value to read; keeping it would keep a count that nothing bounds,
+            // and every reader of the entry loops over that count.
+            let Some(unit) = TYPE_SIZE.get(typ as usize).copied().filter(|&s| s > 0) else { continue };
+            let size = unit.checked_mul(count)?;
             let at = if size <= 4 { e + 8 } else { self.u32(e + 8)? as usize };
             if size > 0 && at.checked_add(size)? > self.d.len() {
                 continue;
@@ -531,6 +534,27 @@ pub fn thumbnail_of_block(d: &[u8]) -> Option<&[u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn entries_of_an_unknown_type_are_dropped() {
+        // One directory: ImageWidth as a SHORT, then two entries of types 0 and 13 that each claim 2^32 - 1 values.
+        let mut d = vec![b'I', b'I', 42, 0, 8, 0, 0, 0, 3, 0];
+        for (tag, typ, count, value) in [(256u16, 3u16, 1u32, 7u32), (258, 0, u32::MAX, 0), (277, 13, u32::MAX, 0)] {
+            d.extend(tag.to_le_bytes());
+            d.extend(typ.to_le_bytes());
+            d.extend(count.to_le_bytes());
+            d.extend(value.to_le_bytes());
+        }
+        d.extend(0u32.to_le_bytes());
+        let b = Block::new(&d).unwrap();
+        let (entries, next) = b.ifd(8).unwrap();
+        assert_eq!(next, 0);
+        assert_eq!(entries.len(), 1);
+        assert_eq!((entries[0].tag, entries[0].count), (256, 1));
+        assert_eq!(b.uints(&entries[0]), vec![7]);
+        // every entry that is kept lies inside the block, so its count is bounded by the block's length
+        assert!(entries.iter().all(|e| e.count <= d.len()));
+    }
 
     #[test]
     fn block_round_trips() {

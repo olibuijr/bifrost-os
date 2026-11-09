@@ -60,9 +60,15 @@ fn latin1(b: &[u8]) -> String {
     b.iter().map(|&c| c as char).collect()
 }
 
-fn inflate(b: &[u8]) -> Option<Vec<u8>> {
-    miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(b, 64 << 20).ok()
+fn inflate(b: &[u8], limit: usize) -> Option<Vec<u8>> {
+    miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(b, limit).ok()
 }
+
+/// The most inflated text (`zTXt` and compressed `iTXt`) one file's properties keep, over all its chunks.
+const MAX_INFLATED_TEXT: usize = 8 << 20;
+
+/// The largest inflated colour profile that is kept.
+const MAX_INFLATED_PROFILE: usize = 16 << 20;
 
 /// Reads the header and metadata of the first image. `None` when it is not a PNG with a valid IHDR.
 pub fn probe(data: &[u8]) -> Option<Properties> {
@@ -91,6 +97,18 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
     p.has_alpha = matches!(ctype, 4 | 6);
     let mut png = Dict::new();
     png.insert("InterlaceType".into(), PropValue::Int(interlace as i64));
+    // Compressed text shares one budget: a file may hold any number of text chunks and each inflates about a
+    // thousandfold. A chunk that does not fit what is left (or does not inflate) ends the budget, so the chunks
+    // after it cost nothing.
+    let mut text_left = MAX_INFLATED_TEXT;
+    let mut inflate_text = |b: &[u8]| -> Option<Vec<u8>> {
+        if text_left == 0 {
+            return None;
+        }
+        let t = inflate(b, text_left);
+        text_left = t.as_ref().map_or(0, |t| text_left.saturating_sub(t.len()));
+        t
+    };
     for (ty, d) in &cs[1..] {
         match ty {
             b"tRNS" => p.has_alpha = true,
@@ -115,7 +133,7 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
                 if let Some(z) = d.iter().position(|&c| c == 0) {
                     p.profile_name = Some(latin1(&d[..z]));
                     if d.len() > z + 2 {
-                        p.icc_profile = inflate(&d[z + 2..]);
+                        p.icc_profile = inflate(&d[z + 2..], MAX_INFLATED_PROFILE);
                     }
                 }
             }
@@ -130,7 +148,7 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
             }
             b"zTXt" => {
                 if let Some(z) = d.iter().position(|&c| c == 0) {
-                    if let Some(t) = d.get(z + 2..).and_then(inflate) {
+                    if let Some(t) = d.get(z + 2..).and_then(|t| inflate_text(t)) {
                         png.insert(latin1(&d[..z]), PropValue::Text(String::from_utf8_lossy(&t).into_owned()));
                     }
                 }
@@ -144,7 +162,7 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
                         // language tag and translated keyword, each NUL-terminated
                         let mut parts = rest.splitn(3, |&c| c == 0);
                         let (_, _, text) = (parts.next(), parts.next(), parts.next().unwrap_or(&[]));
-                        let text = if flag == 1 { inflate(text).unwrap_or_default() } else { text.to_vec() };
+                        let text = if flag == 1 { inflate_text(text).unwrap_or_default() } else { text.to_vec() };
                         if key == "XML:com.adobe.xmp" {
                             p.xmp = Some(text.clone());
                         }
@@ -207,6 +225,13 @@ pub fn decode_region(data: &[u8], x: usize, y: usize, w: usize, h: usize) -> Opt
 /// An animated PNG is decoded only when its composited frames hold at most this many pixels in all; a larger one
 /// shows its first image.
 pub const MAX_ANIMATION_PIXELS: usize = 96 << 20;
+
+/// Whether a picture of `next` pixels may join frames that already hold `held` pixels: the first one always may,
+/// later ones only while the total stays within [`MAX_ANIMATION_PIXELS`]. The readers that keep every frame or page
+/// of a file use it, so a small file that declares many large pictures cannot exhaust memory.
+pub(super) fn within_frame_budget(held: usize, next: usize) -> bool {
+    held == 0 || held.saturating_add(next) <= MAX_ANIMATION_PIXELS
+}
 
 /// What happens to a frame's rectangle after it was shown (APNG `dispose_op`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -472,6 +497,39 @@ mod tests {
 
     fn sub(x: usize, y: usize, w: usize, h: usize, dispose: Dispose, blend: Blend, c: [u8; 4]) -> SubFrame {
         SubFrame { x, y, w, h, delay_ms: 10, dispose, blend, rgba8: solid(w, h, c) }
+    }
+
+    #[test]
+    fn probe_keeps_a_bounded_amount_of_inflated_text() {
+        // IHDR, then four zTXt chunks of 3 MiB of text each under distinct keywords (chunk CRCs are not checked).
+        let mut f = SIGNATURE.to_vec();
+        let mut chunk = |ty: &[u8; 4], body: &[u8]| {
+            f.extend((body.len() as u32).to_be_bytes());
+            f.extend_from_slice(ty);
+            f.extend_from_slice(body);
+            f.extend([0u8; 4]);
+        };
+        chunk(b"IHDR", &[0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0]);
+        let packed = miniz_oxide::deflate::compress_to_vec_zlib(&vec![b'a'; 3 << 20], 6);
+        for k in 0..4 {
+            let mut body = format!("k{k}\0\0").into_bytes();
+            body.extend_from_slice(&packed);
+            chunk(b"zTXt", &body);
+        }
+        chunk(b"IEND", &[]);
+        let p = probe(&f).unwrap();
+        let kept: usize = (0..4).filter_map(|k| p.png.get(&format!("k{k}"))).filter_map(|v| v.as_str()).map(str::len).sum();
+        assert_eq!(p.png["k0"].as_str().map(str::len), Some(3 << 20));
+        assert!(kept <= MAX_INFLATED_TEXT, "kept {kept} bytes");
+        assert!(!p.png.contains_key("k2") && !p.png.contains_key("k3"));
+    }
+
+    #[test]
+    fn frame_budget_keeps_the_first_picture_and_caps_the_total() {
+        assert!(within_frame_budget(0, usize::MAX), "the first picture is always kept");
+        assert!(within_frame_budget(MAX_ANIMATION_PIXELS - 16, 16));
+        assert!(!within_frame_budget(MAX_ANIMATION_PIXELS - 16, 17));
+        assert!(!within_frame_budget(1, usize::MAX), "the sum saturates instead of wrapping");
     }
 
     #[test]

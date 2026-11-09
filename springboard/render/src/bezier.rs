@@ -190,16 +190,30 @@ impl BezierPath {
     /// Hard-edged mask of a `w` by `h` box: 255 where the pixel centre is
     /// inside the path, 0 elsewhere, row-major.
     pub fn fill_mask(&self, w: usize, h: usize, rule: WindingRule) -> Vec<u8> {
-        let polys = self.flatten(0.25);
+        let (x0, y0, mw, mh, part) = self.fill_mask_in_bounds(w, h, rule);
         let mut mask = vec![0u8; w * h];
-        for y in 0..h {
-            for x in 0..w {
-                if inside(&polys, x as f32 + 0.5, y as f32 + 0.5, rule) {
-                    mask[y * w + x] = 255;
+        for r in 0..mh {
+            mask[(y0 + r) * w + x0..][..mw].copy_from_slice(&part[r * mw..][..mw]);
+        }
+        mask
+    }
+
+    /// The coverage of [`fill_mask`](Self::fill_mask) cut down to the part of the `w` by `h` box the path can touch:
+    /// `(x0, y0, mw, mh, mask)`, where `mask` is the `mw` by `mh` rectangle at `(x0, y0)`, row-major, and every
+    /// pixel outside it is 0. Only that rectangle is tested, so the cost follows the size of the path, not of the box.
+    pub fn fill_mask_in_bounds(&self, w: usize, h: usize, rule: WindingRule) -> (usize, usize, usize, usize, Vec<u8>) {
+        let polys = self.flatten(0.25);
+        let (x0, y0, x1, y1) = pixel_span(&polys, w, h);
+        let (mw, mh) = (x1.saturating_sub(x0), y1.saturating_sub(y0));
+        let mut mask = vec![0u8; mw * mh];
+        for y in 0..mh {
+            for x in 0..mw {
+                if inside(&polys, (x0 + x) as f32 + 0.5, (y0 + y) as f32 + 0.5, rule) {
+                    mask[y * mw + x] = 255;
                 }
             }
         }
-        mask
+        (x0, y0, mw, mh, mask)
     }
 
     /// Starts a new subpath at the last subpath start when a segment follows a close or no move.
@@ -229,6 +243,27 @@ fn cubic_at(p0: Point, p1: Point, p2: Point, p3: Point, t: f32) -> Point {
         a * p0.0 + b * p1.0 + c * p2.0 + d * p3.0,
         a * p0.1 + b * p1.1 + c * p2.1 + d * p3.1,
     )
+}
+
+/// The pixels `x0..x1`, `y0..y1` of a `w` by `h` box whose centres can lie inside `polys`: the bounding box of the
+/// points, one pixel wider on each side, clipped to the box. A centre outside it has no edge beside it, or only the
+/// edges of closed subpaths all on one side, so [`inside`] is false there under either rule. Points that are not
+/// finite give the whole box.
+fn pixel_span(polys: &[Vec<Point>], w: usize, h: usize) -> (usize, usize, usize, usize) {
+    let mut lo = (f32::INFINITY, f32::INFINITY);
+    let mut hi = (f32::NEG_INFINITY, f32::NEG_INFINITY);
+    for &(x, y) in polys.iter().flatten() {
+        if !x.is_finite() || !y.is_finite() {
+            return (0, 0, w, h);
+        }
+        lo = (lo.0.min(x), lo.1.min(y));
+        hi = (hi.0.max(x), hi.1.max(y));
+    }
+    if lo.0 > hi.0 {
+        return (0, 0, 0, 0);
+    }
+    let cut = |v: f32, max: usize| (v.clamp(0.0, max as f32) as usize).min(max);
+    (cut(lo.0.floor() - 1.0, w), cut(lo.1.floor() - 1.0, h), cut(hi.0.ceil() + 1.0, w), cut(hi.1.ceil() + 1.0, h))
 }
 
 /// Crossing test along a ray to the right of `(x, y)`. Subpaths close implicitly.
@@ -284,6 +319,42 @@ mod tests {
         assert_eq!(count(&mask), 20);
         assert_eq!(mask[3 * 10 + 2], 255);
         assert_eq!(mask[2 * 10 + 2], 0);
+    }
+
+    /// The mask [`BezierPath::fill_mask`] gave before it was limited to the path's bounds: every pixel tested.
+    fn every_pixel(p: &BezierPath, w: usize, h: usize, rule: WindingRule) -> Vec<u8> {
+        let polys = p.flatten(0.25);
+        (0..w * h).map(|i| if inside(&polys, (i % w) as f32 + 0.5, (i / w) as f32 + 0.5, rule) { 255 } else { 0 }).collect()
+    }
+
+    #[test]
+    fn fill_tests_only_the_pixels_the_path_can_touch() {
+        // A small rectangle in a large box: the mask covers its neighbourhood, not the 16 million pixel box.
+        let (x0, y0, mw, mh, mask) = BezierPath::rect(2000.0, 3000.0, 4.0, 5.0).fill_mask_in_bounds(4000, 4000, WindingRule::NonZero);
+        assert!(mw <= 6 && mh <= 7, "{mw} x {mh}");
+        assert!(x0 <= 2000 && y0 <= 3000);
+        assert_eq!(mask.len(), mw * mh);
+        assert_eq!(count(&mask), 20);
+        assert_eq!(mask[(3000 - y0) * mw + (2000 - x0)], 255);
+        // A path wholly outside the box gives an empty mask.
+        let (_, _, mw, mh, mask) = BezierPath::rect(-50.0, -50.0, 10.0, 10.0).fill_mask_in_bounds(20, 20, WindingRule::NonZero);
+        assert_eq!((mw * mh, mask.len()), (0, 0));
+    }
+
+    #[test]
+    fn bounded_fill_matches_testing_every_pixel() {
+        let mut holed = BezierPath::rect(3.0, 2.0, 10.0, 10.0);
+        holed.append(&BezierPath::rect(6.0, 5.0, 4.0, 4.0));
+        let mut open = BezierPath::new();
+        open.move_to((1.5, 1.5));
+        open.line_to((17.2, 4.0));
+        open.line_to((6.0, 18.7));
+        let paths = [holed, open, BezierPath::oval(-6.0, 4.5, 20.0, 11.0), BezierPath::oval(9.0, 12.0, 30.0, 30.0), BezierPath::rect(0.0, 0.0, 20.0, 20.0)];
+        for (i, p) in paths.iter().enumerate() {
+            for rule in [WindingRule::NonZero, WindingRule::EvenOdd] {
+                assert_eq!(p.fill_mask(20, 20, rule), every_pixel(p, 20, 20, rule), "path {i}");
+            }
+        }
     }
 
     #[test]
