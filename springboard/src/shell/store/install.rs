@@ -96,6 +96,12 @@ pub fn parse_semver(v: &str) -> Option<(u64, u64, u64)> {
     it.next().is_none().then_some(r)
 }
 
+/// Whether `v` can name a version directory: a semver whose whole text, suffix included, is `[0-9A-Za-z.+-]`.
+/// `parse_semver` ignores what follows the first `-` or `+`, so on its own it lets a path separator through.
+pub fn safe_version(v: &str) -> bool {
+    parse_semver(v).is_some() && v.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'+' | b'-'))
+}
+
 // ---- manifest ----
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -244,7 +250,8 @@ pub fn validate(m: &Manifest, files: &[TarEntry], shell: &str) -> Result<(), Str
     if m.name.trim().is_empty() {
         return Err("manifest has no name".into());
     }
-    if parse_semver(&m.version).is_none() {
+    // the version names a directory under the app's folder, so it must be one safe path component
+    if !safe_version(&m.version) {
         return Err(format!("invalid version {:?}", m.version));
     }
     let need = if m.min_shell.is_empty() { (0, 0, 0) } else { parse_semver(&m.min_shell).ok_or_else(|| format!("invalid min_shell {:?}", m.min_shell))? };
@@ -437,7 +444,7 @@ fn read_registry(root: &Path) -> Vec<Entry> {
         .and_then(Json::as_array)
         .unwrap_or_default()
         .iter()
-        .filter_map(|a| Some(Entry { id: a.str_field("id").filter(|i| valid_id(i))?, name: a.str_field("name")?, version: a.str_field("version")?, previous: a.str_field("previous"), purchased: a.get("purchased").and_then(Json::as_u64).unwrap_or(0) as i64, exec: a.str_field("exec").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), icon: a.str_field("icon").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), kind: a.str_field("kind").unwrap_or_default(), provides: a.get("provides").and_then(Json::as_array).unwrap_or_default().iter().filter_map(|p| p.as_str().map(str::to_string)).collect() }))
+        .filter_map(|a| Some(Entry { id: a.str_field("id").filter(|i| valid_id(i))?, name: a.str_field("name")?, version: a.str_field("version").filter(|v| safe_version(v))?, previous: a.str_field("previous").filter(|v| safe_version(v)), purchased: a.get("purchased").and_then(Json::as_u64).unwrap_or(0) as i64, exec: a.str_field("exec").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), icon: a.str_field("icon").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), kind: a.str_field("kind").unwrap_or_default(), provides: a.get("provides").and_then(Json::as_array).unwrap_or_default().iter().filter_map(|p| p.as_str().map(str::to_string)).collect() }))
         .filter(|e| !e.exec.is_empty() || e.kind == KIND_SYSTEM || e.kind == KIND_SERVICE)
         .collect()
 }
@@ -1150,6 +1157,43 @@ pub mod tests {
         assert_eq!(std::fs::read_link(dir.join("current")).unwrap(), Path::new("1.1.0"));
         uninstall(&root, "is.olibuijr.calc").unwrap();
         assert!(installed_in(&root).is_empty() && !dir.exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_version_with_a_path_separator_is_refused_before_anything_is_unpacked() {
+        assert!(safe_version("1.0.0") && safe_version("1.2.3-rc.1+build5"));
+        for bad in ["1.0.0-a/../../../victim", "1.0.0+a/b", "1.0.0-a\\b", "1.0.0-a b", "1.0", ""] {
+            assert!(!safe_version(bad), "{bad:?}");
+        }
+        let root = scratch("version-path");
+        std::fs::create_dir_all(root.join("victim")).unwrap();
+        std::fs::write(root.join("victim/keep"), b"x").unwrap();
+        // the first package makes `apps/<id>/1.0.0-a` exist, so the `..` of the second one would resolve
+        let first = pkg(&MANIFEST.replace("1.0.0", "1.0.0-a"));
+        install_package(&root, &first, &sum(&first), "0.1.0").unwrap();
+        let bytes = pkg(&MANIFEST.replace("1.0.0", "1.0.0-a/../../../victim"));
+        let err = install_package(&root, &bytes, &sum(&bytes), "0.1.0").unwrap_err();
+        assert!(err.contains("invalid version"), "{err}");
+        assert_eq!(std::fs::read(root.join("victim/keep")).unwrap(), b"x", "the folder outside the app is untouched");
+        assert!(!root.join("victim.part").exists(), "nothing was staged outside the app folder");
+        assert_eq!(installed_in(&root)[0].version, "1.0.0-a");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_registry_version_that_is_not_one_path_component_is_not_trusted() {
+        let root = scratch("registry-version");
+        std::fs::create_dir_all(apps_dir(&root)).unwrap();
+        std::fs::write(registry_path(&root), concat!(
+            "{\"apps\":[",
+            "{\"id\":\"is.olibuijr.calc\",\"name\":\"Calc\",\"version\":\"1.1.0\",\"previous\":\"1.0.0-a/../../../victim\",\"exec\":\"bin/calc\",\"icon\":\"\",\"kind\":\"\",\"provides\":[]},",
+            "{\"id\":\"is.olibuijr.other\",\"name\":\"Other\",\"version\":\"1.0.0-a/../../../victim\",\"exec\":\"bin/other\",\"icon\":\"\",\"kind\":\"\",\"provides\":[]}",
+            "]}\n")).unwrap();
+        let apps = installed_in(&root);
+        assert_eq!(apps.len(), 1, "an entry whose version would leave its folder is dropped");
+        assert_eq!((apps[0].id.as_str(), apps[0].version.as_str(), apps[0].previous.as_deref()), ("is.olibuijr.calc", "1.1.0", None));
+        assert_eq!(rollback(&root, "is.olibuijr.calc").unwrap_err(), "no previous version");
         let _ = std::fs::remove_dir_all(root);
     }
 
