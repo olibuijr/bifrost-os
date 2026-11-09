@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.7
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
 ## 1.14.6
 
 - No longer wakes every millisecond while the audio service is connected.

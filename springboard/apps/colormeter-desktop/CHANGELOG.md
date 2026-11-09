@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.13
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
 ## 0.5.12
 
 - Near 0% CPU: draws only when the pointer or the pixels change, and waits 5 s before asking again after screen capture is refused.

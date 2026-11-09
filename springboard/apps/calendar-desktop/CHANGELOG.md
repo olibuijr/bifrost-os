@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.12
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
 ## 1.19.11
 
 - Cmd+A selects the event title; a clicked event shows its selection and a right click offers Open and Delete Event; the Day and Week grid opens with the 8 AM label clear of the all-day band.

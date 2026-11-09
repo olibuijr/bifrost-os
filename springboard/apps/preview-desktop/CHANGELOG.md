@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.20
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
 ## 0.11.19
 
 - Export As asks where to save; sidebar thumbnails turn with their page; one Print and one Edit menu.

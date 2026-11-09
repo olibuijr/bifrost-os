@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.10.46 — 2026-11-09
+
+Fixes from a code review of the whole system: 66 defects found by reading, each one checked a second time, then fixed.
+
+- Lock screen: a notification that wakes the display always lands on the lock screen, and time the machine spent asleep counts toward the Require Password delay.
+- Files: Replace on paste or move keeps the old item until the new one is whole, and puts it back when the copy fails or is cancelled. A selection in search results follows its item when more results arrive. Put Back can be tried again after it fails.
+- Login: a correct password is accepted as soon as the wait the login window shows is over. Changing your own password in Users & Groups works.
+- Updates: a rebuilt boot image no longer replaces the rollback image, machines on other kernel packages can update, and an update whose boot image could not be built is not staged. The installer never formats a partition it did not create.
+- Keychain: the system’s own keys are out of reach of apps, an app cannot claim a system keychain group, and a saved network login goes only to the app it was given to.
+- App Store: a package version cannot name a folder outside the app, and a package that declares another app’s id is refused before it is unpacked.
+- Network: saved Wi-Fi passwords are readable by the owner only, a passphrase with a quote mark works, an https request never reuses a plain connection, and credentials are not sent on to another site after a redirect.
+- Pictures, fonts and archives: damaged or hostile TIFF, GIF, PNG, icon, SVG, font, property list, archive and WebM files are refused without a crash or runaway memory use.
+- Window server: a pointer lock ends when its app loses the keyboard or the session locks, and an app’s layer surface cannot turn off click-to-focus.
+- Audio: the server no longer stops on a device it cannot probe, the PulseAudio bridge lists devices, a re-plugged sound card is found again, and one bad sample no longer silences a device.
+- Apps: a document saved on quit reaches the disk, Notes keeps edits from two windows, monthly reminders return to the 31st after a short month, and Grapher makes one equation from each pasted line.
+- Smaller fixes: Game Mode priority reaches the game, old swap files are removed at start, the computer name may start with a hyphen, and custom DNS servers take effect.
+
 ## 0.10.45 — 2026-10-29
 
 - Require signed system updates after importing the repository key, and sign published packages and repository metadata.

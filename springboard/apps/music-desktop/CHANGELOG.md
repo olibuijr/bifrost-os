@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.8
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
 ## 1.14.7
 
 - Cmd+A selects a playlist name being renamed; a search with no match reads No Results; Rating and Add to Playlist are greyed without a song.

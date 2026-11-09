@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.10
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
 ## 0.8.9
 
 - Idle at 0% CPU: the volume list refreshes every 2 s and usage every 10 s, not every few milliseconds.

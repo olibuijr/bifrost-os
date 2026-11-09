@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.11
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
 ## 0.17.10
 
 - Text links follow the selected accent.

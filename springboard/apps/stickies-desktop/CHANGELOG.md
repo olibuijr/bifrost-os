@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.9
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
 ## 0.10.8
 
 - A double click on a note works (it needed two clicks within 0.4 ms).

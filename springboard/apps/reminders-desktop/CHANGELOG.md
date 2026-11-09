@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.14
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
 ## 1.20.13
 
 - Escape closes the details popover and keeps its edits; the Recently Deleted toolbar menu is named for what it does.
