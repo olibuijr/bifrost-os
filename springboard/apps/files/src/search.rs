@@ -373,8 +373,11 @@ impl Files {
             hits.retain(|h| date.matches(h.mtime, now));
         }
         self.order(&mut hits);
+        // each batch moves the rows: the selection follows its items, not their old places
+        let keep = self.selected_paths();
         self.hits = Some(hits);
         self.refresh_rows();
+        self.reselect(&keep);
         if done {
             self.search = None;
         }
@@ -463,6 +466,23 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         }
         panic!("the search did not finish");
+    }
+
+    #[test]
+    fn a_selection_follows_its_hit_when_a_later_batch_moves_the_rows() {
+        let mut files = crate::tests::fixture(vec![]);
+        files.query.push_str("n");
+        let (tx, rx) = std::sync::mpsc::channel();
+        files.search = Some(Search { rx, cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)), query: "n".into(), tag: None, date: None });
+        tx.send((vec![crate::tests::folder("n2")], false)).unwrap();
+        assert!(files.poll_search());
+        files.selection = vec![0];
+        assert_eq!(files.selected_paths(), vec![PathBuf::from("/fixture/n2")]);
+        // the next cumulative batch sorts a hit in front of the selected one
+        tx.send((vec![crate::tests::folder("n2"), crate::tests::folder("n1")], true)).unwrap();
+        assert!(files.poll_search());
+        assert_eq!(files.rows[0].name, "n1");
+        assert_eq!(files.selected_paths(), vec![PathBuf::from("/fixture/n2")], "the selected hit, not the row that took its place");
     }
 
     #[test]
