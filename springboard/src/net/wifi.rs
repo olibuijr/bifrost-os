@@ -474,9 +474,7 @@ impl Manager {
 
     /// Writes the saved networks to springboard.conf (replacing it in one step).
     fn persist(&self) -> std::io::Result<()> {
-        let tmp = format!("{}.tmp", self.conf_path());
-        std::fs::write(&tmp, wifi_config::conf(&self.ctrl_dir(), &self.nets))?;
-        std::fs::rename(tmp, self.conf_path())
+        write_private(&self.conf_path(), &wifi_config::conf(&self.ctrl_dir(), &self.nets))
     }
 
     /// The supplicant's ids of the networks named `ssid`.
@@ -599,6 +597,8 @@ impl Manager {
     /// Desktop start: load the mirrored saved networks and look for the adapter.
     fn bring_up_desktop(&mut self) -> std::io::Result<()> {
         std::fs::create_dir_all(self.local_dir())?;
+        // a file saved before the mode was set is readable by every account: close it
+        let _ = make_private(&self.conf_path());
         self.nets = wifi_config::parse_conf(&std::fs::read_to_string(self.conf_path()).unwrap_or_default());
         self.desktop_attach();
         Ok(())
@@ -731,6 +731,25 @@ fn tick_interval(state: State, transient: bool, has_ctrl: bool) -> Duration {
         (true, false, false) => PROBE_EVERY,
         (false, _, _) => PROBE_EVERY,
     }
+}
+
+/// Restricts `path` to its owner (it holds the saved networks' passwords).
+fn make_private(path: &str) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+}
+
+/// Replaces `path` with `text` in one step, readable and writable by the owner only.
+fn write_private(path: &str, text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let tmp = format!("{path}.tmp");
+    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
+    // the mode above only applies to a new file; one left by an earlier run keeps its own
+    make_private(&tmp)?;
+    f.write_all(text.as_bytes())?;
+    drop(f);
+    std::fs::rename(tmp, path)
 }
 
 /// Preserve the inode: native init bind-mounts this RAM file over /etc/resolv.conf.
@@ -911,6 +930,31 @@ mod tests {
             eth0\t0001A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\n";
         assert_eq!(default_gateway(t), Some(("eth0".into(), Ipv4Addr::new(192, 168, 1, 1))));
         assert_eq!(default_gateway("Iface\tDestination\tGateway\tFlags\n"), None);
+    }
+
+    #[test]
+    fn the_saved_networks_file_is_readable_by_the_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("sb-wifi-conf-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("springboard.conf");
+        let (path, tmp) = (path.to_str().unwrap().to_string(), format!("{}.tmp", path.to_str().unwrap()));
+        let mode = |p: &str| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        // a config and a leftover temp file from before the mode was set
+        for p in [&path, &tmp] {
+            std::fs::write(p, "old").unwrap();
+            std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o644)).unwrap();
+        }
+        make_private(&path).unwrap();
+        assert_eq!(mode(&path), 0o600, "an existing file is closed at start");
+        write_private(&path, "network={\n\tpsk=\"secret12\"\n}\n").unwrap();
+        assert_eq!(mode(&path), 0o600);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "network={\n\tpsk=\"secret12\"\n}\n");
+        assert!(!std::path::Path::new(&tmp).exists(), "the temp file was renamed into place");
+        std::fs::remove_file(&path).unwrap();
+        write_private(&path, "fresh").unwrap();
+        assert_eq!(mode(&path), 0o600, "a new file is created closed");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
