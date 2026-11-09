@@ -16,6 +16,10 @@ const PACMAN_LOG: &str = "/var/log/pacman.log";
 const PACMAN_CACHE: &str = "/var/cache/pacman/pkg";
 /// A prepared update that has not reached its pacman transaction (or finished it) after this long is abandoned.
 const PREPARED_TIMEOUT: Duration = Duration::from_secs(900);
+/// In the store: the `pacman -Q` listing `install` took just before a system update's transaction.
+const TRANSACTION_PACKAGES: &str = "transaction-packages";
+/// How long `install` waits for the new shell to build its first-frame caches (best effort).
+const FIRST_FRAME_CACHE_TIMEOUT: Duration = Duration::from_secs(120);
 const FILES: &[&str] = &[
     "usr/bin/bifrost-open-url",
     "usr/share/applications/bifrost-browser.desktop",
@@ -93,8 +97,13 @@ fn prepared_abandoned(age: Duration, pacman_busy: bool, completed: bool) -> bool
 /// Whether the `prepared` or `system-prepared` state in `store` is abandoned (see `prepared_abandoned`). `root` is the
 /// tree whose shell binary a shell-only update replaces.
 fn abandoned_now(root: &Path, store: &Path, pacman_busy: bool) -> bool {
+    let age = state_age(store);
     let completed = match state(store).trim() {
-        "system-prepared" => system::pending_cleared(),
+        // staged, or the transaction ran and only the staging is missing (`install` died or hung after pacman): the
+        // packages are asked only once the update is old and idle
+        "system-prepared" => {
+            system::pending_cleared() || (prepared_abandoned(age, pacman_busy, false) && transaction_applied(store))
+        }
         "prepared" => {
             let old = fs::read_to_string(store.join("previous-inode")).unwrap_or_default();
             fs::metadata(root.join("usr/bin/springboard"))
@@ -102,12 +111,47 @@ fn abandoned_now(root: &Path, store: &Path, pacman_busy: bool) -> bool {
         }
         _ => return false,
     };
-    let age = fs::metadata(store.join("state"))
+    prepared_abandoned(age, pacman_busy, completed)
+}
+/// How long the update has been in its current phase.
+fn state_age(store: &Path) -> Duration {
+    fs::metadata(store.join("state"))
         .and_then(|m| m.modified())
         .ok()
         .and_then(|t| t.elapsed().ok())
-        .unwrap_or_default();
-    prepared_abandoned(age, pacman_busy, completed)
+        .unwrap_or_default()
+}
+/// Whether a system update's transaction changed the installed packages. `saved` is the listing `install` stored
+/// just before pacman ran (`None`: it never got that far), `now` the current one (`None` when it cannot be read,
+/// which counts as changed).
+fn transaction_ran(saved: Option<&str>, now: Option<&str>) -> bool {
+    match (saved, now) {
+        (None, _) => false,
+        (Some(s), Some(n)) => s != n,
+        (Some(_), None) => true,
+    }
+}
+fn transaction_applied(store: &Path) -> bool {
+    transaction_ran(
+        fs::read_to_string(store.join(TRANSACTION_PACKAGES)).ok().as_deref(),
+        output(&["-Q"]).ok().as_deref(),
+    )
+}
+/// Builds the new shell's first-frame caches, for at most `FIRST_FRAME_CACHE_TIMEOUT`: the new shell is unproven,
+/// and a hang here must not keep `install` from staging the update.
+fn first_frame_cache() {
+    let Ok(mut child) = Command::new("/usr/bin/springboard").arg("--first-frame-cache").spawn() else {
+        return;
+    };
+    let deadline = Instant::now() + FIRST_FRAME_CACHE_TIMEOUT;
+    while let Ok(None) = child.try_wait() {
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
 }
 /// Gives up a prepared update that never changed the system: the boot marker goes, the phase returns to idle.
 fn abandon(store: &Path) -> io::Result<()> {
@@ -390,12 +434,18 @@ fn watch() -> io::Result<()> {
     loop {
         match state(store).trim() {
             "system-prepared" => {
+                let busy = pacman_active();
                 if system::new_boot() {
                     phase(store, "system-probation")?;
                     start = Some(Instant::now());
-                } else if abandoned_now(Path::new("/"), store, pacman_active()) {
+                } else if abandoned_now(Path::new("/"), store, busy) {
                     abandon(store)?;
                     println!("BifrOSt update abandoned: it never reached its pacman transaction");
+                    return Ok(());
+                } else if !busy && !system::pending_cleared() && state_age(store) >= PREPARED_TIMEOUT {
+                    // old and idle but not abandoned: the transaction ran and was never staged. The boot marker
+                    // stays, so the next boot is the previous system (or probation, if install() still stages it).
+                    println!("BifrOSt update was installed but not staged; the boot marker keeps the previous system for the next start");
                     return Ok(());
                 }
             }
@@ -515,6 +565,14 @@ fn install() -> io::Result<()> {
         return Err(e);
     }
     let before = output(&["-Q"]).ok();
+    if full {
+        // what the transaction starts from: once the installed packages differ, the update is never abandoned as
+        // "never reached pacman" (an unreadable listing is stored empty, which differs from any later one)
+        if let Err(e) = save(&store.join(TRANSACTION_PACKAGES), before.as_deref().unwrap_or_default().as_bytes()) {
+            give_up(store);
+            return Err(e);
+        }
+    }
     let log_from = log_len();
     if let Err(e) = run("pacman", &["-Su", "--noconfirm", "--overwrite", "/usr/bin/springboard,/usr/lib/systemd/system/springboard.service,/usr/lib/springboard/seed-data,/usr/bin/bifrost-update-guard,/usr/lib/systemd/system/bifrost-update-guard.service,/usr/share/springboard/system-assets/*", "springboard-shell"]) {
         let after = output(&["-Q"]).ok();
@@ -535,7 +593,7 @@ fn install() -> io::Result<()> {
         return Err(err(&format!("The update failed before any package changed; the running system is untouched ({e})")));
     }
     // the first frame's caches for the new shell, before the reboot (boot-08); best effort, the shell rebuilds on a miss
-    let _ = Command::new("/usr/bin/springboard").arg("--first-frame-cache").status();
+    first_frame_cache();
     if full {
         system::ready()?;
         println!("System update staged; reboot required for kernel/root probation");
@@ -710,6 +768,14 @@ mod tests {
         assert!(!prepared_abandoned(Duration::from_secs(5), false, false));
         assert!(!prepared_abandoned(long * 4, true, false));
         assert!(!prepared_abandoned(long * 4, false, true));
+        // a system update whose packages changed ran its transaction: it is complete for this purpose, never idle
+        let q = "linux-rt 7.2.9-1\nspringboard-shell 1.0-1\n";
+        assert!(!transaction_ran(None, Some(q)), "install never reached pacman");
+        assert!(!transaction_ran(Some(q), Some(q)), "pacman changed nothing");
+        assert!(transaction_ran(Some(q), Some("linux-rt 7.2.10-1\nspringboard-shell 1.0-1\n")));
+        assert!(transaction_ran(Some(q), None), "an unreadable listing counts as changed");
+        assert!(transaction_ran(Some(""), Some(q)), "the listing before could not be read");
+        assert!(!prepared_abandoned(long * 4, false, transaction_ran(Some(q), None)));
 
         let base = temp_base("stale-prepared");
         let root = shell_root(&base, "1.0-1", None);

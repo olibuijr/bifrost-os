@@ -145,7 +145,7 @@ pub fn prepare() -> io::Result<()> {
     fs::create_dir_all(store)?;
     // a new rollback generation: forget the last one's restore bookkeeping and its kernel files (a different kernel
     // package would otherwise leave stale names behind)
-    for marker in [RESTORE_SWAPPED, RESTORE_ATTEMPTS] {
+    for marker in [RESTORE_SWAPPED, RESTORE_ATTEMPTS, super::TRANSACTION_PACKAGES] {
         let _ = fs::remove_file(store.join(marker));
     }
     let _ = fs::remove_dir_all(format!("{ESP}/previous"));
