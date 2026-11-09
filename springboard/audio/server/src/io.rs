@@ -589,7 +589,10 @@ impl DeviceRunner {
 
     /// Runs one cycle at host time `now_ns`. See the module comment for the steps.
     pub fn cycle(&mut self, now_ns: u64) -> CycleReport {
-        let want = self.shared.quantum.load(Ordering::Acquire).clamp(MIN_QUANTUM, MAX_QUANTUM);
+        // The quantum the control thread (or the fallback) asks for, bounded by what the open device takes in one
+        // cycle: a hardware ring sized for the quantum at open overflows on a larger one, every cycle. A larger
+        // quantum then waits for the next open; clients with bigger buffers are triggered every n cycles meanwhile.
+        let want = self.shared.quantum.load(Ordering::Acquire).clamp(MIN_QUANTUM, MAX_QUANTUM).min(self.io.max_quantum().max(MIN_QUANTUM));
         let quantum_changed = want != self.quantum;
         self.quantum = want;
         let q = want as usize;
@@ -946,7 +949,7 @@ pub fn spawn_io_thread_tuned(
             // One late client is that client's trouble (and its own late counter); only a cycle where every running
             // client was late looks like an overloaded machine.
             let overloaded = rep.device_xrun || (rep.late > 0 && rep.late as usize >= runner.running_clients());
-            let raised = policy.record(overloaded, rep.frames, rt::window_cycles(rep.frames, rate)).map(|q| fallback_quantum(q, runner.min_client_buffer()));
+            let raised = policy.record(overloaded, rep.frames, rt::window_cycles(rep.frames, rate)).map(|q| fallback_quantum(q, runner.min_client_buffer()).min(runner.io.max_quantum()));
             if let Some(q) = raised.filter(|q| *q > rep.frames) {
                 runner.shared.fallback_floor.store(q, Ordering::Release);
                 runner.shared.quantum.store(q, Ordering::Release);
@@ -1217,6 +1220,69 @@ mod tests {
         assert_eq!(w[0][256..], vec![0.25; 64][..]);
         // next_ns advances by 64 frames = 1.333 ms from the 320 frames played: 320 * 1e9 / 48000.
         assert_eq!(rep.next_ns, 6_666_666);
+    }
+
+    /// A device whose ring takes at most `max` frames a cycle, as a hardware ring configured at open does.
+    struct Capped {
+        io: Box<dyn DeviceIo>,
+        max: u32,
+    }
+
+    impl DeviceIo for Capped {
+        fn start(&mut self) -> Result<ZeroTimeStamp, DriverError> {
+            self.io.start()
+        }
+        fn position(&mut self) -> HwPosition {
+            self.io.position()
+        }
+        fn read_input(&mut self, frames: u32, dst: &mut BufferList) -> Result<(), bifrost_audio_driver::Xrun> {
+            assert!(frames <= self.max, "{frames} frames into a ring that takes {}", self.max);
+            self.io.read_input(frames, dst)
+        }
+        fn write_mix(&mut self, frames: u32, src: &BufferList) -> Result<(), bifrost_audio_driver::Xrun> {
+            assert!(frames <= self.max, "{frames} frames into a ring that takes {}", self.max);
+            self.io.write_mix(frames, src)
+        }
+        fn stop(&mut self) {
+            self.io.stop()
+        }
+        fn latency(&self) -> bifrost_audio_driver::Latency {
+            self.io.latency()
+        }
+        fn physical_formats(&self) -> (Option<bifrost_audio_types::StreamFormat>, Option<bifrost_audio_types::StreamFormat>) {
+            self.io.physical_formats()
+        }
+        fn max_quantum(&self) -> u32 {
+            self.max
+        }
+    }
+
+    #[test]
+    fn a_quantum_larger_than_the_open_device_takes_is_not_applied() {
+        // opened at 64 frames by a client that has since stopped; a 256-frame client keeps the device running
+        let mut d = NullDriver::new(vec![NullDriver::stereo(UID, 48_000.0)]);
+        let h = d.handle();
+        let io = d.open(UID, &IoConfig { rate: 48_000.0, quantum: 64, input: true, output: true }).unwrap();
+        let shared = Shared::new(64);
+        let cfg = RunnerConfig { rate: 48_000, in_channels: 2, out_channels: 2, wait: WaitPolicy::None };
+        let mut runner = DeviceRunner::new(Box::new(Capped { io, max: 64 }), shared.clone(), cfg);
+        runner.start().unwrap();
+        let mut r = Rig { h, shared, runner, slots: Vec::new() };
+        let a = r.add(1, 0, 2, 256);
+        r.shared.quantum.store(256, Ordering::Release);
+        for cycle in 0..8 {
+            let rep = r.step_q(64);
+            assert_eq!((rep.frames, rep.quantum_changed, rep.late), (64, false, 0), "cycle {cycle}");
+            assert_eq!(rep.triggered, u32::from(cycle % 4 == 0), "cycle {cycle}");
+            if rep.triggered == 1 {
+                Rig::play(&a, 256, &[0.5, 0.5]);
+            }
+        }
+        assert_eq!(r.runner.quantum(), 64);
+        assert_eq!(r.h.written(UID)[0].len(), 8 * 64);
+        // a smaller quantum is taken as before
+        r.shared.quantum.store(32, Ordering::Release);
+        assert_eq!(r.step_q(32).frames, 32);
     }
 
     #[test]

@@ -358,6 +358,15 @@ fn sane_stamp(ts: u64, now: u64) -> u64 {
     if ts.abs_diff(now) <= 1_000_000_000 { ts } else { 0 }
 }
 
+/// The most frames a cycle can carry on rings configured at open: a playback ring holds the lead (`prefill`) plus the
+/// cycle's frames, and a capture ring is read one cycle behind and must not fill before the read. Never below the
+/// quantum the device was opened for. `None`: that direction is not open.
+pub fn max_cycle_frames(out_buffer: Option<u32>, in_buffer: Option<u32>, prefill: u32, quantum: u32) -> u32 {
+    let out = out_buffer.map_or(u32::MAX, |b| b.saturating_sub(prefill));
+    let inp = in_buffer.map_or(u32::MAX, |b| b / 2);
+    out.min(inp).max(quantum)
+}
+
 /// An open device: the IO thread's handle.
 pub struct AlsaIo {
     out: Option<Pcm>,
@@ -623,6 +632,10 @@ impl DeviceIo for AlsaIo {
         }
     }
 
+    fn max_quantum(&self) -> u32 {
+        max_cycle_frames(self.out.as_ref().map(|p| p.buffer_frames), self.inp.as_ref().map(|p| p.buffer_frames), self.prefill, self.quantum)
+    }
+
     fn physical_formats(&self) -> (Option<StreamFormat>, Option<StreamFormat>) {
         let f = |p: &Pcm| physical_format(p.rate, p.channels, p.layout.format, p.layout.interleaved);
         (self.inp.as_ref().map(f), self.out.as_ref().map(f))
@@ -667,6 +680,20 @@ mod tests {
         assert_eq!(quantum_range((64, 2048), true), (32, 2048));
         assert_eq!(quantum_range((64, 2048), false), (64, 2048));
         assert_eq!(quantum_range((1, 8), true), (1, 8));
+    }
+
+    #[test]
+    fn a_cycle_never_carries_more_than_the_open_ring_takes() {
+        // low latency, two periods of 64: lead 64, so a cycle of 64 fills the ring and 256 would overflow it
+        assert_eq!(max_cycle_frames(Some(128), Some(128), 64, 64), 64);
+        // three periods: lead 96
+        assert_eq!(max_cycle_frames(Some(192), None, 96, 64), 96);
+        // the largest buffer (not low latency): room for any quantum the server uses
+        assert_eq!(max_cycle_frames(Some(16_384), Some(16_384), 512, 256), 8192);
+        // capture only
+        assert_eq!(max_cycle_frames(None, Some(512), 0, 256), 256);
+        // never below the quantum the device was opened for
+        assert_eq!(max_cycle_frames(Some(64), None, 64, 64), 64);
     }
 
     #[test]
