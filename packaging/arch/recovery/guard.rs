@@ -397,6 +397,12 @@ fn running(inode: &str) -> bool {
                 .is_ok_and(|m| format!("{}:{}", m.dev(), m.ino()) == inode)
     })
 }
+/// Whether the kernel `release` (`uname -r`) has its modules under `root`. A boot image left over from the previous
+/// kernel starts on the updated root without them: the session may come up, but no driver can load any more.
+fn kernel_modules_present(root: &Path, release: &str) -> bool {
+    let release = release.trim();
+    !release.is_empty() && !release.contains('/') && root.join("usr/lib/modules").join(release).is_dir()
+}
 fn state_is_complete(text: &str) -> bool {
     text.contains("screen=") && text.contains("screen_on=")
 }
@@ -489,7 +495,13 @@ fn watch() -> io::Result<()> {
                     beat = next;
                     advanced = Instant::now();
                 }
-                if running(&new) && probe() && advanced.elapsed() < Duration::from_secs(15) {
+                // a system update must also have booted a kernel whose modules the new root holds
+                let kernel_ok = state(store).trim() != "system-probation"
+                    || kernel_modules_present(
+                        Path::new("/"),
+                        &fs::read_to_string("/proc/sys/kernel/osrelease").unwrap_or_default(),
+                    );
+                if kernel_ok && running(&new) && probe() && advanced.elapsed() < Duration::from_secs(15) {
                     let since = healthy.get_or_insert_with(Instant::now);
                     if since.elapsed() >= Duration::from_secs(30) {
                         if state(store).trim() == "system-probation" {
@@ -595,6 +607,18 @@ fn install() -> io::Result<()> {
     // the first frame's caches for the new shell, before the reboot (boot-08); best effort, the shell rebuilds on a miss
     first_frame_cache();
     if full {
+        // pacman reports success even when its post-transaction hooks failed, so the image the next boot starts may
+        // still hold the old kernel. Build it here (a no-op after a good hook) and never stage a stale one.
+        if system::boot_image_in_use() {
+            if let Err(e) = system::build_boot_image() {
+                if system::boot_image_stale() {
+                    eprintln!("BifrOSt recovery: the boot image could not be built for the new kernel: {e}");
+                    system::fallback_reset()?;
+                    return Err(e);
+                }
+                eprintln!("BifrOSt recovery: the boot image was not rebuilt, the current one still matches the kernel: {e}");
+            }
+        }
         system::ready()?;
         println!("System update staged; reboot required for kernel/root probation");
     }
@@ -680,6 +704,18 @@ mod tests {
         fs::write(&marker, b"").unwrap();
         assert!(awaiting_display(&marker), "the window server waits: probation holds");
         let _ = fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn probation_needs_the_running_kernels_modules_on_the_new_root() {
+        let base = std::env::temp_dir().join(format!("guard-kernel-modules-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(base.join("usr/lib/modules/7.2.10-rt4-1-rt")).unwrap();
+        assert!(kernel_modules_present(&base, "7.2.10-rt4-1-rt\n"));
+        // the old kernel's image booted on the updated root: its modules are gone
+        assert!(!kernel_modules_present(&base, "7.2.9-rt3-1-rt\n"));
+        assert!(!kernel_modules_present(&base, ""));
+        assert!(!kernel_modules_present(&base, "../modules/7.2.10-rt4-1-rt"));
+        let _ = fs::remove_dir_all(&base);
     }
     #[test]
     fn the_probe_asks_the_shell_over_its_unix_socket() {

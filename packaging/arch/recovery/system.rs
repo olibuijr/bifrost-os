@@ -663,6 +663,28 @@ pub fn build_boot_image() -> io::Result<()> {
     build_uki().map(|_| ())
 }
 
+/// Whether this install boots the unified image (an older install still on kernel plus initramfs has none).
+pub fn boot_image_in_use() -> bool {
+    Path::new(ESP).join(REBUILD_WRITES[0]).exists()
+}
+
+/// Whether an image written at `image` is older than one of its build inputs (the kernel, the initramfs). A time
+/// that cannot be read counts as stale.
+pub fn image_stale(image: Option<std::time::SystemTime>, inputs: &[Option<std::time::SystemTime>]) -> bool {
+    match image {
+        Some(built) => inputs.iter().any(|t| t.map_or(true, |t| t > built)),
+        None => true,
+    }
+}
+
+/// Whether the unified image predates the installed kernel or its initramfs (see `image_stale`).
+pub fn boot_image_stale() -> bool {
+    let modified = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).ok();
+    let inputs: Vec<Option<std::time::SystemTime>> =
+        kernel_files().iter().map(|f| modified(&Path::new("/boot").join(f))).collect();
+    image_stale(modified(&Path::new(ESP).join(REBUILD_WRITES[0])), &inputs)
+}
+
 fn ucode_images() -> io::Result<Vec<String>> {
     let mut v: Vec<String> = fs::read_dir("/boot")?
         .flatten()
@@ -882,6 +904,20 @@ mod update_tests {
         // `prepare` saved with @rollback, so the rebuild writes the current image and the boot line only
         assert_eq!(REBUILD_WRITES, &["bifrost.efi", "boot.cfg"]);
         assert!(!REBUILD_WRITES.iter().any(|f| UKI_PREVIOUS.ends_with(f) || *f == "rollback.txt"));
+    }
+
+    #[test]
+    fn an_image_older_than_the_kernel_or_the_initramfs_is_stale() {
+        let at = |s: u64| Some(std::time::UNIX_EPOCH + Duration::from_secs(s));
+        // the hook built the image after the kernel and the initramfs: good
+        assert!(!image_stale(at(120), &[at(100), at(110)]));
+        assert!(!image_stale(at(110), &[at(100), at(110)]), "the same instant is not older");
+        // a failed hook left the image of the previous kernel behind
+        assert!(image_stale(at(50), &[at(100), at(110)]));
+        assert!(image_stale(at(105), &[at(100), at(110)]));
+        // nothing to compare with: do not trust it
+        assert!(image_stale(None, &[at(100)]));
+        assert!(image_stale(at(120), &[at(100), None]));
     }
 
     #[test]
