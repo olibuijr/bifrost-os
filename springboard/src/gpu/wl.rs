@@ -458,7 +458,16 @@ impl Presenter {
             infos.push(BufferInfo { fd: bo.fd, stride: bo.stride, offset: bo.offset, modifier: bo.modifier, fourcc, w, h });
             ring.push(Drawable { _bo: bo, image, tex, fbo });
         }
-        let content = self.texture(cw, ch, GL_NEAREST, None)?;
+        let content = match self.texture(cw, ch, GL_NEAREST, None) {
+            Ok(t) => t,
+            Err(e) => {
+                // the ring is not in `surfaces` yet, so nothing else would release it
+                for d in ring.drain(..) {
+                    self.release(d);
+                }
+                return Err(e);
+            }
+        };
         let mut all = Damage::new(w, h);
         all.all();
         self.surfaces.insert(id, Surf { w, h, cx, cy, cw, ch, shadow: None, fx: bifrost_render::glass::Fx::IDENTITY, opaque, owed: vec![all; n], ring, content, fresh: true, pending: Damage::new(cw, ch) });
