@@ -1,26 +1,34 @@
 //! The `network_auth` service: the network-authentication agent an app asks when an SMB share or an 802.1X Wi-Fi network
-//! needs a login (`NetAuth`). A saved login is handed back at once; otherwise the shell asks the person on a sheet
-//! (`shell/network_auth_sheet.rs`: user name, password, and whether to remember them) and the answer goes back to the app.
+//! needs a login (`NetAuth`). A saved login is handed back at once to an app the person gave it to; otherwise the shell
+//! asks the person on a sheet (`shell/network_auth_sheet.rs`: user name, password, and whether to remember them) and the
+//! answer goes back to the app.
+//!
+//! A saved login belongs to the apps whose sheet the person answered with "remember": the item carries a binding that
+//! lists them (`keychain::Store::grant`). Another app with the `network` permission gets a sheet of its own, never the
+//! stored login or its user name, and cannot make the agent forget the login.
 //!
 //! An app may ask only when its manifest lists the `network` permission. Without it the answer is `permission_denied`
 //! and no sheet is shown.
 //!
 //! Methods (params are a JSON object):
 //! - `request_login {kind: "share", host, share}` or `{kind: "wifi", ssid}`, optionally `refused: true` (the server or
-//!   network rejected the login it was given: the saved login is forgotten and the sheet says it was not accepted) and
-//!   `user` (the name that was rejected, for the sheet to start from). Answers `{ok: true, user, password, saved: true}`
-//!   when a login is stored, `{ok: false, error: "pending", pending: true}` while the sheet is up (the app calls again),
+//!   network rejected the login it was given: the saved login is forgotten when this app was given it, and the sheet
+//!   says it was not accepted) and `user` (the name that was rejected, for the sheet to start from). Answers
+//!   `{ok: true, user, password, saved: true}` when a login is stored and this app was given it,
+//!   `{ok: false, error: "pending", pending: true}` while the sheet is up (the app calls again),
 //!   then once `{ok: true, user, password, saved: false}` with what the person typed, or `{ok: false, error:
 //!   "cancelled"}`.
 //! - `answer {app, key, cancel}` or `{app, key, user, password, remember}` is the shell's own call, made by the sheet.
 //!   An app's id is never empty, so an app cannot make it. The login is saved in the keychain group
-//!   `net_auth::GROUP` only when `remember` is set.
+//!   `net_auth::GROUP` only when `remember` is set, and the app that asked is then listed on it. A login that differs
+//!   from the stored one replaces it and drops the apps that were given the old one.
 //!
 //! The queue and the answers live on the shell thread (one thread-local copy), like the accounts service.
 use super::{Shell, SystemService};
 use crate::keychain::{self, ShareAccess, Store};
 use crate::net_auth::{self, Answer, Prompt, Target};
 use bifrost_core::json::Json;
+use bifrost_ui::credential_acl::Binding;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
 
@@ -162,7 +170,39 @@ fn open_store(shell: &Shell) -> Result<Store, String> {
     Store::open_group(&shell.data_dir, net_auth::GROUP).map_err(|e| format!("network_auth: the keychain could not be opened: {e}"))
 }
 
-/// A request from an app: the stored login, the outcome of an earlier sheet, or a new sheet.
+/// The name the agent's items are bound under. It has no dot, so it is never an app id.
+const AGENT: &str = "network_auth";
+
+/// The keychain item that holds the login of `target`.
+fn item_of(target: &Target) -> (&'static str, String) {
+    match target {
+        Target::Share { host, share } => (keychain::SHARE_LOGIN_SERVICE, keychain::share_login_account(host, share)),
+        Target::Wifi { ssid } => (net_auth::WIFI_LOGIN_SERVICE, ssid.clone()),
+    }
+}
+
+/// Whether the person gave `app` the stored login of `target`: the item's binding lists the app. A login with no
+/// binding (or one that cannot be read) was given to no app.
+fn handed_to(store: &Store, target: &Target, app: &str) -> bool {
+    let (service, account) = item_of(target);
+    matches!(store.binding(service, &account), Ok(Some(b)) if b.allowed().iter().any(|a| a == app))
+}
+
+/// Lists `app` on the stored login of `target`, after the person answered its sheet with "remember". With `replaced`
+/// (the login is not the one that was stored before) the apps listed until now are dropped first: they were given
+/// the old login, not this one. A failure lists nobody, so the app is asked again next time.
+fn hand_to(store: &Store, target: &Target, app: &str, replaced: bool) {
+    let (service, account) = item_of(target);
+    if replaced {
+        if let Ok(fresh) = Binding::new(AGENT, service, &account, None) {
+            let _ = store.bind(service, &account, &fresh);
+        }
+    }
+    let _ = store.grant(AGENT, service, &account, app);
+}
+
+/// A request from an app: the stored login when the person gave it to this app, the outcome of an earlier sheet, or a
+/// new sheet.
 pub fn request_login(shell: &Shell, app_id: &str, params: &Json) -> Result<Json, String> {
     let target = target_from(params)?;
     let key = target.key();
@@ -174,13 +214,17 @@ pub fn request_login(shell: &Shell, app_id: &str, params: &Json) -> Result<Json,
     }
     let refused = matches!(params.get("refused"), Some(Json::Bool(true)));
     let store = open_store(shell)?;
-    let saved = match net_auth::access(&store, &target).map_err(|e| format!("network_auth: the saved login could not be read: {e}"))? {
-        ShareAccess::Saved { user, password } if !refused => return Ok(ok_login(&user, &password, true)),
-        ShareAccess::Saved { user, .. } => Some(user),
-        ShareAccess::Prompt => None,
+    let access = net_auth::access(&store, &target).map_err(|e| format!("network_auth: the saved login could not be read: {e}"))?;
+    // a stored login is this app's to use, or to report as refused, only when the person gave it to this app
+    let handed = matches!(access, ShareAccess::Saved { .. }) && handed_to(&store, &target, app_id);
+    let saved = match access {
+        ShareAccess::Saved { user, password } if handed && !refused => return Ok(ok_login(&user, &password, true)),
+        ShareAccess::Saved { user, .. } if handed => Some(user),
+        // no login, or one this app was never given: not even its user name leaves the store
+        _ => None,
     };
     let previous = refused.then(|| saved.or_else(|| params.get("user").and_then(Json::as_str).map(str::to_string)).unwrap_or_default());
-    if refused {
+    if refused && handed {
         // the login that was just refused must not come back from the store
         let _ = net_auth::forget(&store, &target);
     }
@@ -201,7 +245,14 @@ fn answer(shell: &Shell, params: &Json) -> Result<Json, String> {
     } else {
         let field = |name: &str| params.get(name).and_then(Json::as_str).unwrap_or_default().to_string();
         let typed = Answer { user: field("user"), password: field("password"), remember: matches!(params.get("remember"), Some(Json::Bool(true))) };
-        match open_store(shell).map(|store| net_auth::complete(&store, &request.prompt, &typed)) {
+        let store = open_store(shell);
+        let before = store.as_ref().ok().and_then(|s| net_auth::access(s, &request.prompt.target).ok());
+        let done = store.as_ref().map(|s| net_auth::complete(s, &request.prompt, &typed));
+        if let (true, Ok(s), Ok(Ok(now))) = (typed.remember, &store, &done) {
+            // the login was saved for this app: later requests from it are answered without a sheet
+            hand_to(s, &request.prompt.target, app, before.as_ref() != Some(now));
+        }
+        match done {
             Ok(Ok(ShareAccess::Saved { user, password })) => Outcome::Login { user, password },
             Ok(Err(keychain::Error::Param)) | Ok(Ok(ShareAccess::Prompt)) => Outcome::Cancelled,
             // the login could not be saved, but the person typed it: use it this once
@@ -338,6 +389,87 @@ mod tests {
         assert_eq!(net_auth::access(&store, &again.prompt.target), Ok(ShareAccess::Prompt));
         finish("app.files", &key, Outcome::Cancelled);
         take_answer("app.files", &key);
+    }
+
+    fn typed(app: &str, key: &str, user: &str, password: &str) -> Json {
+        Json::Obj(vec![
+            ("app".into(), Json::Str(app.into())),
+            ("key".into(), Json::Str(key.into())),
+            ("user".into(), Json::Str(user.into())),
+            ("password".into(), Json::Str(password.into())),
+            ("remember".into(), Json::Bool(true)),
+        ])
+    }
+
+    fn refusing(params: &Json) -> Json {
+        let mut p = params.clone();
+        if let Json::Obj(f) = &mut p {
+            f.push(("refused".into(), Json::Bool(true)));
+        }
+        p
+    }
+
+    #[test]
+    fn a_saved_login_goes_only_to_the_app_the_person_gave_it_to() {
+        let mut shell = sh("scoped");
+        let params = share("nas.scoped.test", "Docs");
+        let target = target_from(&params).unwrap();
+        let key = target.key();
+        request_login(&shell, "app.files", &params).unwrap();
+        take_request().unwrap();
+        NetworkAuth.call(&mut shell, "", "answer", &typed("app.files", &key, "ola", "pw"), 0.0).unwrap();
+        take_answer("app.files", &key).unwrap();
+        // another app asks for the same share: a sheet of its own, and nothing from the store
+        let other = request_login(&shell, "app.other", &params).unwrap();
+        assert_eq!(other.get("pending"), Some(&Json::Bool(true)));
+        assert!(other.get("password").is_none() && other.get("user").is_none());
+        let asked = take_request().expect("the other app is asked");
+        assert_eq!(asked.app, "app.other");
+        assert!(!asked.prompt.retry && asked.prompt.user_hint.is_none());
+        finish("app.other", &key, Outcome::Cancelled);
+        take_answer("app.other", &key);
+        // it cannot make the agent forget the login either, nor learn the saved user name from the retry sheet
+        let reply = request_login(&shell, "app.other", &refusing(&params)).unwrap();
+        assert_eq!(reply.get("pending"), Some(&Json::Bool(true)));
+        let retry = take_request().unwrap();
+        assert_eq!(retry.prompt.user_hint.as_deref(), Some(""), "the saved name is not shown to an app that never had it");
+        finish("app.other", &key, Outcome::Cancelled);
+        take_answer("app.other", &key);
+        let store = Store::open_group(&shell.data_dir, net_auth::GROUP).unwrap();
+        assert_eq!(net_auth::access(&store, &target), Ok(ShareAccess::Saved { user: "ola".into(), password: "pw".into() }));
+        // the app that was given the login still gets it with no sheet
+        let again = request_login(&shell, "app.files", &params).unwrap();
+        assert_eq!(again.get("saved"), Some(&Json::Bool(true)));
+        assert_eq!(again.get("password").and_then(Json::as_str), Some("pw"));
+        assert!(take_request().is_none());
+    }
+
+    #[test]
+    fn answering_another_apps_sheet_shares_the_same_login_and_a_new_login_drops_the_old_apps() {
+        let mut shell = sh("shared");
+        let params = share("nas.shared.test", "Docs");
+        let key = target_from(&params).unwrap().key();
+        let ask = |shell: &mut Shell, app: &str, password: &str| {
+            request_login(shell, app, &params).unwrap();
+            take_request().unwrap();
+            NetworkAuth.call(shell, "", "answer", &typed(app, &key, "ola", password), 0.0).unwrap();
+            take_answer(app, &key).unwrap();
+        };
+        let saved = |shell: &Shell, app: &str| request_login(shell, app, &params).unwrap().get("saved") == Some(&Json::Bool(true));
+        ask(&mut shell, "app.files", "pw");
+        // the person types the same login for a second app: both are answered from the store
+        ask(&mut shell, "app.other", "pw");
+        assert!(saved(&shell, "app.files") && saved(&shell, "app.other"));
+        // a different login typed for a third app is that app's alone
+        ask(&mut shell, "app.third", "changed");
+        assert!(saved(&shell, "app.third"));
+        for app in ["app.files", "app.other"] {
+            let reply = request_login(&shell, app, &params).unwrap();
+            assert_eq!(reply.get("pending"), Some(&Json::Bool(true)), "{app} was given the old login only");
+            take_request().unwrap();
+            finish(app, &key, Outcome::Cancelled);
+            take_answer(app, &key);
+        }
     }
 
     #[test]

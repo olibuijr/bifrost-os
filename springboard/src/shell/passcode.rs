@@ -80,7 +80,7 @@ pub enum Verdict {
     Locked(u64),
 }
 
-/// The keychain item that holds a keychain-backed store (the Screen Time passcode).
+/// The shell keychain store and item that hold a keychain-backed store (the Screen Time passcode).
 const KEYCHAIN_APP: &str = "bifrost.screentime";
 const KEYCHAIN_SERVICE: &str = "passcode";
 const KEYCHAIN_ACCOUNT: &str = "screentime";
@@ -255,7 +255,7 @@ impl Store {
 
 /// The keychain item of the store under `root` (see `Store::load_keychain`).
 fn keychain_item(root: &Path) -> Result<crate::keychain::Store, io::Error> {
-    crate::keychain::Store::open(root, KEYCHAIN_APP).map_err(|e| io::Error::other(e.to_string()))
+    crate::keychain::Store::open_system(root, KEYCHAIN_APP).map_err(|e| io::Error::other(e.to_string()))
 }
 
 fn read_keychain(root: &Path) -> Option<String> {

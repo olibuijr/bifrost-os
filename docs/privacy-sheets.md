@@ -63,10 +63,14 @@ All sheets default to refusal: an unanswered question never grants.
 
 - An app with the `network` permission calls the `network_auth` service's `request_login` for an SMB share
   (`kind: "share", host, share`) or an 802.1X network (`kind: "wifi", ssid`). A saved login in the keychain group
-  `is.bifrost.network-auth` is returned at once; otherwise the reply is `pending` and the shell asks: user name (starting
-  from a refused name), password in a secure field, then whether to remember the login. Cancel or Escape ends it.
-- `refused: true` forgets the saved login and makes the sheet say it was not accepted. The typed login goes back to the
-  app once; it is saved only when the person chose Remember.
+  `is.bifrost.network-auth` is returned at once to an app the person gave it to; otherwise the reply is `pending` and the
+  shell asks: user name (starting from a refused name), password in a secure field, then whether to remember the login.
+  Cancel or Escape ends it.
+- A saved login is given to the app whose sheet the person answered with Remember, and the item lists that app. Another
+  app gets its own sheet and never the stored login or its user name. Typing the same login for it adds it to the
+  list; typing a different one replaces the login and drops the apps that had the old one.
+- `refused: true` makes the sheet say the login was not accepted, and forgets the saved login only when the calling app
+  was given it. The typed login goes back to the app once; it is saved only when the person chose Remember.
 
 ## Package install (`package_install_sheet.rs`, `pacman_update::Source`)
 

@@ -30,7 +30,7 @@ const MAGIC: &[u8] = b"SBBK1\n";
 const MAGIC_V2: &[u8] = b"SBBK2\n";
 const NONCE_LEN: usize = 24;
 const TAG_LEN: usize = 16;
-/// The keychain app id (`<data dir>/keychain/bifrost.backup.kc`) and item that hold the archive key.
+/// The shell keychain store (`<data dir>/keychain/system/bifrost.backup.kc`) and item that hold the archive key.
 pub const KEY_APP: &str = "bifrost.backup";
 const KEY_ACCOUNT: &str = "archive-key";
 /// Directories and files (relative to the data directory) a backup holds.
@@ -187,7 +187,7 @@ pub fn collect(dir: &Path) -> Vec<String> {
 
 /// The archive key: read from the keychain, or created on first use from `/dev/urandom`.
 pub fn backup_key(dir: &Path) -> io::Result<[u8; 32]> {
-    let store = Store::open(dir, KEY_APP).map_err(|e| io::Error::other(e.to_string()))?;
+    let store = Store::open_system(dir, KEY_APP).map_err(|e| io::Error::other(e.to_string()))?;
     match store.get(KEY_APP, KEY_ACCOUNT) {
         Ok(bytes) => bytes.as_slice().try_into().map_err(|_| bad("the backup key in the keychain has the wrong length")),
         Err(crate::keychain::Error::ItemNotFound) => {
