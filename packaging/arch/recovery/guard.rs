@@ -523,6 +523,9 @@ fn install() -> io::Result<()> {
             if full {
                 system::fallback_reset()?;
             } else {
+                // One owner for the restore: the watcher started above polls the phase and would run its own
+                // restore on the same files and package database as soon as this one writes `restoring`.
+                let _ = run("systemctl", &["stop", "bifrost-update-guard.service"]);
                 restore(Path::new("/"), store)?;
             }
             return Err(e);
