@@ -1,13 +1,14 @@
 //! Blocking client for `bifrost-privd` (see `privd`). The user session talks to the daemon over its socket;
 //! a process that is itself root (host tests, the installer, `bifrost pc smoke`, a lab root shell) uses
-//! `Local`, which runs the same methods in-process, so nothing there changes.
+//! `Local`, which runs the same methods in-process, so nothing there changes. The methods only the daemon's login
+//! service answers (`gate_only`) go to its root socket from there.
 //!
 //! `connect()` picks the socket from `SPRINGBOARD_PRIVD` (the session script sets it). The session token from
 //! `login.authenticate` is kept in memory with `set_token` and added to every authenticated call.
 
 use crate::privd::{self, methods, PErr};
 use bifrost_core::json::Json;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -76,6 +77,21 @@ pub fn connect() -> Client {
     }
 }
 
+/// Methods that only the daemon's login service answers: it holds the lockout state and checks the old password, and
+/// the in-process method table has no entry for them.
+fn gate_only(method: &str) -> bool {
+    method == privd::proto::M_ACCOUNT_SET_PASSWORD
+}
+
+/// One call of the in-process client. A `gate_only` method goes to the daemon at `root_sock` (its peers are root and
+/// need no token); every other method runs in this process.
+fn local_call(root_sock: &Path, method: &str, fields: Vec<(String, Json)>, timeout: Duration) -> Result<Json, ClientError> {
+    if gate_only(method) {
+        return bifrost_core::privd_wire::call(root_sock, None, method, fields, timeout).map_err(|e| ClientError { code: e.code, message: e.message });
+    }
+    methods::call(method, &Json::Obj(fields)).map_err(Into::into)
+}
+
 /// The user's own data directory (`SPRINGBOARD_DATA`, else `~/.local/share/springboard`).
 pub fn user_data_dir() -> PathBuf {
     match std::env::var("SPRINGBOARD_DATA") {
@@ -107,7 +123,7 @@ impl Client {
     pub fn call_timeout(&self, method: &str, params: Vec<(&str, Json)>, timeout: Duration) -> Result<Json, ClientError> {
         let fields: Vec<(String, Json)> = params.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
         let Some(sock) = &self.sock else {
-            return methods::call(method, &Json::Obj(fields)).map_err(Into::into);
+            return local_call(Path::new(privd::ROOT_SOCK), method, fields, timeout);
         };
         let token = TOKEN.lock().ok().and_then(|g| g.clone());
         bifrost_core::privd_wire::call(sock, token.as_deref(), method, fields, timeout).map_err(|e| ClientError { code: e.code, message: e.message })
@@ -153,11 +169,6 @@ impl Client {
 
     pub fn set_timezone(&self, name: &str) -> Result<(), ClientError> {
         self.call("time.set_timezone", vec![("name", privd::s(name))]).map(|_| ())
-    }
-
-    /// Changes the account password (`account.set_password`); `old` is empty for a first password.
-    pub fn set_password(&self, old: &str, new: &str) -> Result<(), ClientError> {
-        self.call("account.set_password", vec![("old", privd::s(old)), ("new", privd::s(new))]).map(|_| ())
     }
 
     pub fn set_ntp(&self, on: bool) -> Result<(), ClientError> {
@@ -242,9 +253,9 @@ impl Client {
         self.call("user.set_password", vec![("name", privd::s(name)), ("new", privd::s(new))]).map(|_| ())
     }
 
-    /// The installed account's own password; the login service checks `old`.
+    /// The installed account's own password; the login service checks `old` (empty for a first password).
     pub fn account_set_password(&self, old: &str, new: &str) -> Result<(), ClientError> {
-        self.call("account.set_password", vec![("old", privd::s(old)), ("new", privd::s(new))]).map(|_| ())
+        self.call(privd::proto::M_ACCOUNT_SET_PASSWORD, vec![("old", privd::s(old)), ("new", privd::s(new))]).map(|_| ())
     }
 
     pub fn group_add(&self, name: &str) -> Result<(), ClientError> {
@@ -430,8 +441,8 @@ mod tests {
             if t == "t0" { Ok(()) } else { Err(PErr::new("locked", "locked")) }
         }
         fn lock(&self) {}
-        fn set_password(&self, _: Option<&str>, _: privd::Peer, _: &str, _: &str) -> Result<(), PErr> {
-            Ok(())
+        fn set_password(&self, _: Option<&str>, _: privd::Peer, old: &str, _: &str) -> Result<(), PErr> {
+            if old == "old-pass" { Ok(()) } else { Err(PErr::new("wrong_password", "wrong")) }
         }
         fn elevate(&self, t: &str, _: &str, _: &str) -> Result<String, PErr> {
             self.require_unlocked(t)?;
@@ -461,6 +472,27 @@ mod tests {
         assert_eq!(c.package_remove("base").unwrap_err().code, "bad_params");
         set_token(None);
         assert_eq!(Client::remote(dir.join("missing.sock")).ping().unwrap_err().code, "unavailable");
+    }
+
+    #[test]
+    fn the_in_process_client_sends_the_own_password_change_to_the_login_service() {
+        // the method table of this process cannot change the installed account's password
+        let fields = || vec![("old".to_string(), privd::s("old-pass")), ("new".to_string(), privd::s("longenough"))];
+        assert_eq!(methods::call(privd::proto::M_ACCOUNT_SET_PASSWORD, &Json::Obj(fields())).unwrap_err().code, "bad_params");
+        let dir = std::env::temp_dir().join(format!("privd-client-gate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("root.sock");
+        let cfg = Config { sock: sock.clone(), root_sock: None, group_gid: None, allowed_uid: Some(server::euid()), check_exe: false, exes: vec![] };
+        server::serve(cfg, Arc::new(Open), Arc::new(Echo)).unwrap();
+        let t = Duration::from_secs(5);
+        assert!(local_call(&sock, privd::proto::M_ACCOUNT_SET_PASSWORD, fields(), t).is_ok());
+        let wrong = vec![("old".to_string(), privd::s("nope")), ("new".to_string(), privd::s("longenough"))];
+        assert_eq!(local_call(&sock, privd::proto::M_ACCOUNT_SET_PASSWORD, wrong, t).unwrap_err().code, "wrong_password");
+        // every other method still runs in this process and never reaches the socket
+        assert_eq!(local_call(&dir.join("missing.sock"), "nope", vec![], t).unwrap_err().code, "bad_params");
+        // without the daemon the change fails as unavailable, not as an unknown method
+        assert_eq!(local_call(&dir.join("missing.sock"), privd::proto::M_ACCOUNT_SET_PASSWORD, fields(), t).unwrap_err().code, "unavailable");
     }
 
     #[test]

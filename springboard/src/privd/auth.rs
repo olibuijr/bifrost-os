@@ -431,7 +431,7 @@ impl Auth {
     /// `account.set_password` in one call (tests); see [`Auth::plan_set_password`] for the rules.
     pub fn set_password(&mut self, token: Option<&str>, console_shell: bool, old: &str, new: &str) -> Result<(), AuthError> {
         let at = now();
-        match self.plan_set_password(token, console_shell, new, at)? {
+        match self.plan_set_password(token, console_shell, false, new, at)? {
             PwPlan::Verify(user) => {
                 let r = self.backend.clone().verify(&user, old);
                 self.finish_verify_old(r, at)?;
@@ -442,18 +442,19 @@ impl Auth {
     }
 
     /// The rules, under the lock:
-    /// - an empty hash may get its first password without a token, but only from the console shell;
-    /// - a usable hash needs the session token and the old password;
+    /// - an empty hash may get its first password without a token, but only from the console shell or a root peer;
+    /// - a usable hash needs the session token and the old password; a peer on the root socket (`root`, the shell
+    ///   while it runs as root) has no token to give and is asked for the old password only;
     /// - a locked hash (`passwd -l`, `!`, `*`) is an administrator's decision and is never changed here;
     /// - the new password is at least [`MIN_PASSWORD`] bytes and has no newline, colon or NUL.
-    pub fn plan_set_password(&mut self, token: Option<&str>, console_shell: bool, new: &str, at: i64) -> Result<PwPlan, AuthError> {
+    pub fn plan_set_password(&mut self, token: Option<&str>, console_shell: bool, root: bool, new: &str, at: i64) -> Result<PwPlan, AuthError> {
         let a = self.account()?;
         if new.len() < MIN_PASSWORD || new.contains(['\n', ':', '\0']) {
             return Err(AuthError::BadParams(format!("the new password needs at least {MIN_PASSWORD} characters and no colon or line break")));
         }
         match self.hash_class(&a.name) {
             Hash::Empty => {
-                if !console_shell {
+                if !console_shell && !root {
                     return Err(AuthError::Unauthorized);
                 }
                 Ok(PwPlan::First(a.name))
@@ -461,7 +462,9 @@ impl Auth {
             Hash::Locked => Err(AuthError::NoPassword),
             Hash::Missing => Err(AuthError::Internal("no shadow entry".into())),
             Hash::Set => {
-                self.require_unlocked(token)?;
+                if !root {
+                    self.require_unlocked(token)?;
+                }
                 if self.bypass_active() {
                     return Ok(PwPlan::Skip(a.name));
                 }

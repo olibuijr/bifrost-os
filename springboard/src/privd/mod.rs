@@ -81,8 +81,8 @@ pub trait Gate: Send + Sync {
     /// `session.lock` / `session.logout`.
     fn lock(&self);
     /// `account.set_password`. `token` is the request's `t`, if any. A first password (empty hash) needs no
-    /// token but only from the console shell; a set password needs the token and the old password; a locked
-    /// hash is never changed from here.
+    /// token but only from the console shell or the root socket; a set password needs the old password and,
+    /// except on the root socket, the token; a locked hash is never changed from here.
     fn set_password(&self, token: Option<&str>, peer: Peer, old: &str, new: &str) -> Result<(), PErr>;
     /// `auth.elevate`: re-checks the administrator's password for a session that is already Unlocked (`token`) and
     /// returns a single-use grant for `scope`. The session token does not change.
