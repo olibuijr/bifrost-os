@@ -345,6 +345,9 @@ pub fn parse_block(p: &[u8], simple: bool) -> R<Block> {
                             break;
                         }
                     }
+                    if s > total - off {
+                        return Err(DemuxError::Invalid("lace sizes exceed block"));
+                    }
                     sizes.push(s);
                 }
             }
@@ -352,14 +355,22 @@ pub fn parse_block(p: &[u8], simple: bool) -> R<Block> {
                 if n > 1 {
                     let (first, l) = read_vint(&p[off..])?;
                     off += l;
+                    // every size is bounded by what is left of the block as soon as it is
+                    // known, so the sizes cannot add up past the address space
+                    if first > (total - off) as u64 {
+                        return Err(DemuxError::Invalid("lace sizes exceed block"));
+                    }
                     sizes.push(first as usize);
                     let mut prev = first as i64;
                     for _ in 0..n - 2 {
                         let (raw, l) = read_vint(&p[off..])?;
                         off += l;
-                        prev += raw as i64 - ((1i64 << (7 * l - 1)) - 1);
+                        prev = prev.checked_add(raw as i64 - ((1i64 << (7 * l - 1)) - 1)).ok_or(DemuxError::Invalid("lace sizes exceed block"))?;
                         if prev < 0 {
                             return Err(DemuxError::Invalid("negative lace size"));
+                        }
+                        if prev as u64 > (total - off) as u64 {
+                            return Err(DemuxError::Invalid("lace sizes exceed block"));
                         }
                         sizes.push(prev as usize);
                     }
@@ -373,8 +384,8 @@ pub fn parse_block(p: &[u8], simple: bool) -> R<Block> {
                 sizes.resize(n - 1, rest / n);
             }
         }
-        let used: usize = sizes.iter().sum();
-        if off + used > total {
+        let used = sizes.iter().try_fold(0usize, |a, &s| a.checked_add(s)).ok_or(DemuxError::Invalid("lace sizes exceed block"))?;
+        if used > total - off {
             return Err(DemuxError::Invalid("lace sizes exceed block"));
         }
         sizes.push(total - off - used);
@@ -628,6 +639,34 @@ mod tests {
         let f = frames_of(&laced(0x06, &body));
         assert_eq!(f.iter().map(|x| x.len()).collect::<Vec<_>>(), vec![3, 5, 4, 2]);
         assert_eq!(f[3], vec![4, 4]);
+    }
+
+    #[test]
+    fn ebml_lace_sizes_that_wrap_the_sum_are_refused() {
+        // 256 frames: the 255 sizes read from the block start at `first` and each grows by
+        // `delta`; they add up to 2^64 + 254, which fits the 300 bytes left when the sum wraps
+        let (first, delta) = (0x0003_0101_0101_0102u64, 1u64 << 49);
+        let wrapped = (0..255u64).fold(0u64, |a, i| a.wrapping_add(first + i * delta));
+        assert_eq!(wrapped, 254);
+        let vint8 = |v: u64| {
+            let mut b = v.to_be_bytes();
+            b[0] = 0x01;
+            b
+        };
+        let mut body = vec![255];
+        body.extend(vint8(first));
+        for _ in 0..254 {
+            body.extend(vint8(delta + (1 << 55) - 1));
+        }
+        body.extend([9u8; 300]);
+        assert!(parse_block(&laced(0x06, &body), true).is_err());
+        // a first size past the end of the block is refused on its own
+        assert!(parse_block(&laced(0x06, &[2, 0x90, 0x80 | 63, 1, 2, 3]), true).is_err());
+        // every frame a parsed block does return lies inside it
+        let ok = laced(0x06, &[1, 0x82, 5, 5, 6]);
+        let blk = parse_block(&ok, true).unwrap();
+        assert!(blk.frames.iter().all(|&(o, l)| o + l <= ok.len()));
+        assert_eq!(blk.frames.iter().map(|f| f.1).collect::<Vec<_>>(), vec![2, 1]);
     }
 
     #[test]
