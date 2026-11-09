@@ -135,12 +135,21 @@ impl AlsaDriver {
     fn rescan(&mut self) -> (Vec<DeviceDesc>, Vec<String>) {
         let mut found: Vec<Entry> = Vec::new();
         let mut added = Vec::new();
-        for card in list_cards() {
+        let cards = list_cards();
+        // A card that went away leaves a disconnected control handle behind: drop it, or the card that takes its
+        // number later is asked through the dead handle for good.
+        self.ctls.retain(|card, _| cards.contains(card));
+        for card in cards {
             if !self.ensure_ctl(card) {
                 continue;
             }
             let ctl = &self.ctls[&card];
-            let (Ok(info), Ok(devs)) = (ctl.card_info(), ctl.pcm_devices()) else { continue };
+            let (Ok(info), Ok(devs)) = (ctl.card_info(), ctl.pcm_devices()) else {
+                // Unplugged and plugged in again between two scans: the handle is the old card's. Its devices read
+                // as removed in this scan, and the next one opens the new card.
+                self.ctls.remove(&card);
+                continue;
+            };
             for device in devs {
                 let uid = uid_of(&info.id, device);
                 if let Some(known) = self.entries.iter().find(|e| e.desc.uid == uid) {
