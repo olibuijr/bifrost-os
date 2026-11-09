@@ -4,7 +4,8 @@
 //! The shell owns the store and speaks for the app (`ToShell::Keychain`, docs/bifrost-ui.md "Keychain"). One file
 //! per app id under `<root>/keychain/`, mode 0600 in a 0700 directory owned by the shell (root), so the app's own
 //! user cannot read or replace it. The app id is the one the shell launched, never one the app sends, so an app
-//! reaches only its own items. Items are keyed by `(service, account)`.
+//! reaches only its own items. Items are keyed by `(service, account)`. The shell's own secrets are not app stores:
+//! they live in `<root>/keychain/system/` under their own key label (`Store::open_system`).
 //!
 //! At rest the file is `BKC1 | nonce(12) | ChaCha20(items) | HMAC-SHA256`, with per-app subkeys derived from a
 //! random master key in `<root>/keychain/.master` (0600). Limitation, stated plainly: the master key lives on the same
@@ -27,6 +28,15 @@ const MAGIC_PLAIN: &[u8; 4] = b"BKP0";
 /// Reserved start of the service name under which an item's credential binding is kept next to it. Apps cannot add,
 /// read or delete a name with this start, and listings leave those entries out.
 const ACL_PREFIX: &str = "\u{1}acl\u{1}";
+/// The stores the shell keeps for itself ([`Store::open_system`]): the Screen Time passcode, the backup archive key
+/// and the search index key. They used to be app stores under these names, so the names stay closed as app ids: an
+/// app that carries one cannot open a store at all, and a file found under one is moved into the system directory.
+const SYSTEM_STORES: [&str; 3] = ["bifrost.backup", "bifrost.quicksearch", "bifrost.screentime"];
+
+/// True for an app id the keychain keeps for the shell's own stores. No app store opens under such an id.
+pub fn reserved_id(app_id: &str) -> bool {
+    SYSTEM_STORES.contains(&app_id)
+}
 
 /// What a keychain call returns on failure; `status()` is the wire form, `code()` the `OSStatus`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -139,9 +149,13 @@ struct Keys {
 
 impl Store {
     /// The store of `app_id` under the shell data dir `root`: `<root>/keychain/<app_id>.kc`, with the master key
-    /// created on first use. Refuses ids that are not a plain file name.
+    /// created on first use. Refuses ids that are not a plain file name, and with `NotPermitted` the ids of the
+    /// shell's own stores ([`reserved_id`]), so an app that carries such an id never reaches the shell's items.
     pub fn open(root: &Path, app_id: &str) -> Result<Store, Error> {
         let path = file_for(root, app_id)?;
+        if reserved_id(app_id) {
+            return Err(Error::NotPermitted);
+        }
         let dir = path.parent().unwrap();
         make_private_dir(dir)?;
         let master = master_key(&dir.join(".master"))?;
@@ -161,6 +175,31 @@ impl Store {
         let master = master_key(&dir.join(".master"))?;
         let path = groups.join(format!("{group}.kc"));
         Ok(Store { path, keys: Some(derive(&master, &format!("group:{group}"))), owner: None })
+    }
+
+    /// A store the shell keeps for itself under the shell data dir `root`: `<root>/keychain/system/<name>.kc`, keyed
+    /// by `system:<name>`. No app id maps into this directory or onto this key, whatever the app is called, so only
+    /// shell code that calls this reaches the items. A store an older shell kept as the app store of the same name
+    /// is moved here on first open.
+    pub fn open_system(root: &Path, name: &str) -> Result<Store, Error> {
+        if !group_ok(name) {
+            return Err(Error::Param);
+        }
+        let dir = root.join("keychain");
+        let system = dir.join("system");
+        make_private_dir(&system)?;
+        let master = master_key(&dir.join(".master"))?;
+        let store = Store { path: system.join(format!("{name}.kc")), keys: Some(derive(&master, &format!("system:{name}"))), owner: None };
+        let legacy = dir.join(format!("{name}.kc"));
+        if reserved_id(name) && legacy.exists() {
+            // the old file is removed only after the new one is in place, so a failure here loses nothing
+            if !store.path.exists() {
+                let old = Store { path: legacy.clone(), keys: Some(derive(&master, name)), owner: None };
+                store.save(&old.load()?)?;
+            }
+            let _ = std::fs::remove_file(&legacy);
+        }
+        Ok(store)
     }
 
     /// An encrypted store with a caller-supplied master key (tests, and a future key source such as a TPM).
@@ -957,6 +996,53 @@ mod tests {
         // another group is another file: no item leaks between groups
         let other = Store::open_group(&d, "is.olibuijr.other").unwrap();
         assert_eq!(other.get("svc", "me"), Err(Error::ItemNotFound));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_system_store_is_out_of_reach_of_an_app_with_the_same_id() {
+        let d = dir("system");
+        let shell = Store::open_system(&d, "bifrost.screentime").unwrap();
+        shell.add("passcode", "screentime", b"salt=..").unwrap();
+        assert!(d.join("keychain/system/bifrost.screentime.kc").exists());
+        assert!(!d.join("keychain/bifrost.screentime.kc").exists());
+        // the app path opens by app id: the shell's names are refused there
+        for id in SYSTEM_STORES {
+            assert!(reserved_id(id));
+            assert!(matches!(Store::open(&d, id), Err(Error::NotPermitted)), "{id}");
+        }
+        assert!(!reserved_id("is.example.app"));
+        // an unreserved name in the system directory has its own file and key, apart from the app of that name
+        let sys = Store::open_system(&d, "is.example.app").unwrap();
+        sys.add("svc", "me", b"shell").unwrap();
+        let app = Store::open(&d, "is.example.app").unwrap();
+        assert_eq!(app.get("svc", "me"), Err(Error::ItemNotFound));
+        assert_eq!(Store::open_system(&d, "bifrost.screentime").unwrap().get("passcode", "screentime"), Ok(b"salt=..".to_vec()));
+        for bad in ["", ".hidden", "../escape", "a/b"] {
+            assert!(matches!(Store::open_system(&d, bad), Err(Error::Param)), "{bad:?}");
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_store_an_older_shell_kept_under_an_app_id_moves_to_the_system_directory() {
+        let d = dir("system-move");
+        // what the older shell wrote: the app store file of the name, under the app key
+        let kc = d.join("keychain");
+        make_private_dir(&kc).unwrap();
+        let master = master_key(&kc.join(".master")).unwrap();
+        let legacy = kc.join("bifrost.backup.kc");
+        let old = Store { path: legacy.clone(), keys: Some(derive(&master, "bifrost.backup")), owner: None };
+        old.add("bifrost.backup", "archive-key", &[7u8; 32]).unwrap();
+        let moved = Store::open_system(&d, "bifrost.backup").unwrap();
+        assert_eq!(moved.get("bifrost.backup", "archive-key"), Ok(vec![7u8; 32]), "the key survives the move");
+        assert!(!legacy.exists(), "nothing is left under the app id");
+        assert!(kc.join("system/bifrost.backup.kc").exists());
+        // a file that turns up under the old name later never replaces what the system store holds
+        old.add("bifrost.backup", "archive-key", &[9u8; 32]).unwrap();
+        let again = Store::open_system(&d, "bifrost.backup").unwrap();
+        assert_eq!(again.get("bifrost.backup", "archive-key"), Ok(vec![7u8; 32]));
+        assert!(!legacy.exists());
         let _ = std::fs::remove_dir_all(&d);
     }
 

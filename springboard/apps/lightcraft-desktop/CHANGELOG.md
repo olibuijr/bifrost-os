@@ -4,6 +4,20 @@
 
 # Changelog
 
+## 0.19.0
+
+- Upstream lightcraft v0.19.0.
+  ## What's Changed
+  * Use crw craftlib by @rwoldberg in https://github.com/storytold/lightcraft/pull/3503
+  * security(web): ?bench runs on demo photos in an unsaved library, never the stored one by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/3646
+  * #3601: the Square Grid's badge band sits on the photo itself by @rahul05ranjan in https://github.com/storytold/lightcraft/pull/3604
+  * lightcraft-cli: calibrate walks folders with the engine's bounded walk by @dylanmtaylor in https://github.com/storytold/lightcraft/pull/3643
+
+## 0.18.1
+
+- Upstream lightcraft v0.18.1.
+  **Full Changelog**: https://github.com/storytold/lightcraft/compare/v0.18.0...v0.18.1
+
 ## 0.18.0
 
 - Upstream lightcraft v0.18.0.

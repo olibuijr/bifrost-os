@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.14
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
+## 0.5.13
+
+- Standard toolbar in every view; New Song is a proper button and nothing is clipped at the window edge (default window 960x600).
+
 ## 0.5.12
 
 - Text links follow the selected accent.

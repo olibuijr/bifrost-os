@@ -306,7 +306,8 @@ impl Files {
             ext,
         };
         // a folder given on the command line opens there (Show in Files)
-        let start = std::env::args().nth(1).map(PathBuf::from).filter(|p| p.is_dir()).unwrap_or_else(|| f.home.clone());
+        // (a folder that is gone opens the nearest one above it, in `navigate`)
+        let start = std::env::args().nth(1).map(PathBuf::from).unwrap_or_else(|| f.home.clone());
         f.navigate(start, true);
         f
     }
@@ -532,6 +533,7 @@ impl App for Files {
                 changed = true;
                 continue;
             }
+            let mut vanished = None;
             if done.path == self.path {
                 self.loading = false;
                 self.ancestors = done.ancestors;
@@ -547,6 +549,8 @@ impl App for Files {
                         // a renamed item stays selected, and a new folder opens its name for editing
                         self.apply_pending();
                     }
+                    // the folder was removed while it was listed: it opens the nearest folder that is still there
+                    Err(_) if !self.is_virtual_folder(&done.path) && !done.path.is_dir() => vanished = Some(done.path.clone()),
                     Err(e) => {
                         self.listing.clear();
                         self.refresh_rows();
@@ -557,6 +561,9 @@ impl App for Files {
             }
             self.revision += 1;
             self.job = None;
+            if let Some(gone) = vanished {
+                self.navigate(gone, false);
+            }
             self.update_controls();
             self.catch_up();
             changed = true;
@@ -1009,6 +1016,53 @@ mod tests {
         files.append_batch(vec![folder("d")]);
         assert_eq!(files.rows.len(), 4);
         assert_eq!(files.listing.len(), 4);
+    }
+
+    #[test]
+    fn a_missing_folder_at_launch_opens_the_nearest_folder_that_is_there() {
+        // the launch navigates to the folder it was given (or Home); a folder that is gone opens its parent and says so
+        let home = temp("gone-launch");
+        std::fs::create_dir_all(home.join("Projects")).unwrap();
+        let mut files = fixture(vec![]);
+        files.home = home.clone();
+        files.navigate(home.join("Projects/drag-check"), true);
+        assert_eq!(files.path, home.join("Projects"));
+        assert_eq!(files.history, vec![home.join("Projects")], "the history names the folder that is shown");
+        assert!(files.error.is_none(), "no OS error is shown");
+        assert_eq!(files.notice.as_deref(), Some("The folder \u{201C}drag-check\u{201D} can\u{2019}t be found."));
+        // a folder gone from the top of Home opens Home itself
+        files.navigate(home.join("gone/deeper"), true);
+        assert_eq!(files.path, home);
+        assert_eq!(existing_folder(&home.join("gone/deeper"), &home), home);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_folder_removed_while_it_is_shown_opens_the_folder_above_it() {
+        let ctx = test_ctx();
+        let home = temp("gone-shown");
+        let child = home.join("drag-check");
+        std::fs::create_dir_all(&child).unwrap();
+        let mut files = fixture(vec![]);
+        files.home = home.clone();
+        files.navigate(child.clone(), true);
+        // the folder goes away while its listing is still in flight, so that listing fails
+        std::fs::remove_dir_all(&child).unwrap();
+        let (tx, rx) = feed();
+        tx.send(Listing { path: child.clone(), result: Err("No such file or directory (os error 2)".into()), ancestors: vec![], partial: false }).unwrap();
+        files.job = Some(rx);
+        files.loading = true;
+        files.tick(&ctx, 0.);
+        assert_eq!(files.path, home, "the window shows the folder above the one that went away");
+        assert!(files.error.is_none(), "the raw OS error is never shown");
+        assert_eq!(files.notice.as_deref(), Some("The folder \u{201C}drag-check\u{201D} can\u{2019}t be found."));
+        assert_eq!(files.history.last(), Some(&home), "the history no longer names the removed folder");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_folder_that_cannot_be_listed_says_so_in_a_sentence() {
+        assert_eq!(cant_open_message(Path::new("/x/drag-check")), "The folder \u{201C}drag-check\u{201D} can\u{2019}t be opened.");
     }
 
     #[test]

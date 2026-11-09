@@ -232,6 +232,11 @@ impl<'a> Font<'a> {
         let os2_field = |off: usize| os2.and_then(|o| i16_at(data, o + off)).unwrap_or(0) as f32;
         let post = find(b"post");
         let post_field = |off: usize| post.and_then(|o| i16_at(data, o + off)).unwrap_or(0) as f32;
+        // every scale is `px / upem`: a zero em would make them all infinite
+        let upem = u16_at(data, head + 18)?;
+        if upem == 0 {
+            return None;
+        }
         Some(Font {
             line_gap: i16_at(data, hhea + 8).unwrap_or(0) as f32,
             x_height: os2_field(86),
@@ -252,7 +257,7 @@ impl<'a> Font<'a> {
             num_glyphs: u16_at(data, maxp + 4)?,
             cmap,
             cmap_format,
-            upem: u16_at(data, head + 18)? as f32,
+            upem: upem as f32,
             ascent: i16_at(data, hhea + 4)? as f32,
             descent: i16_at(data, hhea + 6)? as f32,
             cache: GlyphCache::new(0, CACHE_BYTES),
@@ -468,6 +473,13 @@ impl<'a> Font<'a> {
     /// Appends the glyph's outline as line segments (after `m`), at the
     /// normalised variation coordinates `norm` (empty = default instance).
     fn outline(&self, gid: u16, m: Affine, lines: &mut Vec<(Pt, Pt)>, depth: u32, norm: &[f32]) -> Option<()> {
+        let mut budget = OUTLINE_BUDGET;
+        self.outline_in(gid, m, lines, depth, norm, &mut budget)
+    }
+
+    /// `outline` with the work left for this top-level glyph: every component and every point of a simple glyph
+    /// takes one from `budget`, so nested composites cannot multiply the work past it.
+    fn outline_in(&self, gid: u16, m: Affine, lines: &mut Vec<(Pt, Pt)>, depth: u32, norm: &[f32], budget: &mut u32) -> Option<()> {
         if let Some(cff) = &self.cff {
             let mut sink = Flatten { m, lines, cur: Pt { x: 0.0, y: 0.0 }, start: Pt { x: 0.0, y: 0.0 } };
             return cff.outline(gid, &mut sink).map(|_| ());
@@ -476,11 +488,16 @@ impl<'a> Font<'a> {
         let d = self.data;
         let contours = i16_at(d, start)?;
         if contours < 0 {
-            return if depth < 8 { self.composite(gid, start + 10, m, lines, depth, norm) } else { None };
+            return if depth < 8 { self.composite(gid, start + 10, m, lines, depth, norm, budget) } else { None };
         }
         let n = contours as usize;
         let ends: Vec<usize> = (0..n).map(|i| u16_at(d, start + 10 + 2 * i).map(|e| e as usize)).collect::<Option<_>>()?;
+        // the point arrays are sized from the last end, so an end below its predecessor would index past them
+        if ends.windows(2).any(|w| w[1] < w[0]) {
+            return None;
+        }
         let points = ends.last().map_or(0, |e| e + 1);
+        *budget = budget.checked_sub(points as u32)?;
         let ins = u16_at(d, start + 10 + 2 * n)? as usize;
         let mut p = start + 12 + 2 * n + ins;
         let mut flags = Vec::with_capacity(points);
@@ -529,7 +546,7 @@ impl<'a> Font<'a> {
         Some(())
     }
 
-    fn composite(&self, parent: u16, mut p: usize, m: Affine, lines: &mut Vec<(Pt, Pt)>, depth: u32, norm: &[f32]) -> Option<()> {
+    fn composite(&self, parent: u16, mut p: usize, m: Affine, lines: &mut Vec<(Pt, Pt)>, depth: u32, norm: &[f32], budget: &mut u32) -> Option<()> {
         let d = self.data;
         // component offsets are the composite's variable "points"
         let mut offsets = (Vec::new(), Vec::new());
@@ -540,6 +557,7 @@ impl<'a> Font<'a> {
         }
         let mut index = 0;
         loop {
+            *budget = budget.checked_sub(1)?;
             let flags = u16_at(d, p)?;
             let gid = u16_at(d, p + 2)?;
             p += 4;
@@ -572,7 +590,7 @@ impl<'a> Font<'a> {
                 p += 8;
             }
             let local = Affine([a, b, c, e, dx, dy]);
-            self.outline(gid, local.then(&m), lines, depth + 1, norm);
+            self.outline_in(gid, local.then(&m), lines, depth + 1, norm, budget);
             if flags & 0x20 == 0 {
                 return Some(());
             }
@@ -755,6 +773,13 @@ impl Raster {
 }
 
 const SUBPIXEL: f32 = 16.0;
+/// Components plus outline points one top-level glyph may expand to (a simple glyph holds at most 65536 points).
+const OUTLINE_BUDGET: u32 = 1 << 18;
+/// How far from its origin a glyph may reach and still get a mask, in ems (plus 64 px for small sizes). The widest
+/// real glyphs (long ligatures) stay well inside; a font cannot size the mask past this with its coordinates.
+const MASK_REACH_EM: f32 = 16.0;
+/// Largest glyph mask in pixels (the raster holds one f32 per pixel while it draws).
+const MASK_MAX_PIXELS: usize = 1 << 24;
 const CACHE_BYTES: usize = 4 << 20;
 
 struct Mask {
@@ -1150,9 +1175,18 @@ impl Font<'_> {
                 y1 = y1.max(p.y);
             }
         }
+        // the box comes from the font's own coordinates: check it as floats before any integer maths or allocation
+        // (an infinite or NaN bound fails the comparison too)
+        let reach = MASK_REACH_EM * k * self.upem + 64.0;
+        if ![x0, y0, x1, y1].iter().all(|v| v.abs() <= reach) {
+            return Mask { ox: 0, oy: 0, w: 0, h: 0, a: Vec::new() };
+        }
         let (ox, oy) = (x0.floor() as i32, y0.floor() as i32);
         let w = (x1.ceil() as i32 - ox + 1).max(1) as usize;
         let h = (y1.ceil() as i32 - oy + 1).max(1) as usize;
+        if w.saturating_mul(h) > MASK_MAX_PIXELS {
+            return Mask { ox: 0, oy: 0, w: 0, h: 0, a: Vec::new() };
+        }
         let mut r = Raster::new(w, h);
         for (a, b) in lines {
             r.line(Pt { x: a.x - ox as f32, y: a.y - oy as f32 }, Pt { x: b.x - ox as f32, y: b.y - oy as f32 });
@@ -1426,6 +1460,124 @@ mod tests {
         assert!((double.ascent - 2.0 * m.ascent).abs() < 1e-3, "linear in size");
         assert!((double.underline_position - 2.0 * m.underline_position).abs() < 1e-3);
         assert!((m.ascent - f.ascent * 20.0 / f.upem).abs() < 1e-3);
+    }
+
+    /// A minimal TrueType font (long loca, no cmap) whose glyphs are the given raw `glyf` entries.
+    fn tiny_ttf(upem: u16, glyphs: &[Vec<u8>]) -> Vec<u8> {
+        let mut head = vec![0u8; 54];
+        head[18..20].copy_from_slice(&upem.to_be_bytes());
+        head[51] = 1;
+        let mut hhea = vec![0u8; 36];
+        hhea[4..6].copy_from_slice(&800i16.to_be_bytes());
+        hhea[6..8].copy_from_slice(&(-200i16).to_be_bytes());
+        hhea[35] = 1;
+        let mut maxp = vec![0u8; 6];
+        maxp[4..6].copy_from_slice(&(glyphs.len() as u16).to_be_bytes());
+        let hmtx = vec![0u8; 4 + 2 * glyphs.len()];
+        let (mut glyf, mut loca): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
+        for g in glyphs {
+            loca.extend_from_slice(&(glyf.len() as u32).to_be_bytes());
+            glyf.extend_from_slice(g);
+        }
+        loca.extend_from_slice(&(glyf.len() as u32).to_be_bytes());
+        let tables: [(&[u8; 4], Vec<u8>); 6] = [(b"glyf", glyf), (b"head", head), (b"hhea", hhea), (b"hmtx", hmtx), (b"loca", loca), (b"maxp", maxp)];
+        let mut out = vec![0u8, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0];
+        let mut body: Vec<u8> = Vec::new();
+        let mut off = 12 + 16 * tables.len();
+        for (tag, t) in &tables {
+            out.extend_from_slice(&tag[..]);
+            out.extend_from_slice(&[0; 4]);
+            out.extend_from_slice(&(off as u32).to_be_bytes());
+            out.extend_from_slice(&(t.len() as u32).to_be_bytes());
+            off += t.len();
+            body.extend_from_slice(t);
+        }
+        out.extend_from_slice(&body);
+        out
+    }
+
+    /// A simple glyph: the contour end points as given, every point on the curve.
+    fn simple_glyph(ends: &[u16], pts: &[(i16, i16)]) -> Vec<u8> {
+        let mut g = (ends.len() as i16).to_be_bytes().to_vec();
+        g.extend_from_slice(&[0; 8]);
+        for e in ends {
+            g.extend_from_slice(&e.to_be_bytes());
+        }
+        g.extend_from_slice(&[0, 0]);
+        g.extend(std::iter::repeat_n(1u8, pts.len()));
+        let mut prev = 0i16;
+        for &(x, _) in pts {
+            g.extend_from_slice(&(x - prev).to_be_bytes());
+            prev = x;
+        }
+        prev = 0;
+        for &(_, y) in pts {
+            g.extend_from_slice(&(y - prev).to_be_bytes());
+            prev = y;
+        }
+        g
+    }
+
+    /// A composite glyph of `n` unscaled, unmoved copies of glyph `gid`.
+    fn composite_glyph(gid: u16, n: usize) -> Vec<u8> {
+        let mut g = (-1i16).to_be_bytes().to_vec();
+        g.extend_from_slice(&[0; 8]);
+        for i in 0..n {
+            let more: u16 = if i + 1 < n { 0x20 } else { 0 };
+            g.extend_from_slice(&more.to_be_bytes());
+            g.extend_from_slice(&gid.to_be_bytes());
+            g.extend_from_slice(&[0, 0]);
+        }
+        g
+    }
+
+    const TRIANGLE: [(i16, i16); 3] = [(0, 0), (500, 0), (500, 500)];
+
+    #[test]
+    fn a_synthetic_triangle_has_an_outline_and_a_mask() {
+        let data = tiny_ttf(1000, &[Vec::new(), simple_glyph(&[2], &TRIANGLE)]);
+        let f = Font::parse(&data).unwrap();
+        assert_eq!(f.outline_lines(1).len(), 3);
+        let m = f.glyph_mask(1, 20.0 / 1000.0, 0.0, 0.0, &[]);
+        assert!(m.w >= 10 && m.h >= 10, "a 0.5 em triangle at 20 px: {} x {}", m.w, m.h);
+        assert!(m.a.iter().any(|&c| c >= 250), "the inside is covered");
+    }
+
+    #[test]
+    fn contour_ends_that_go_backwards_give_no_outline() {
+        // ends [5, 2]: three points are stored, the first contour claims six
+        let data = tiny_ttf(1000, &[Vec::new(), simple_glyph(&[5, 2], &TRIANGLE)]);
+        let f = Font::parse(&data).unwrap();
+        assert!(f.outline_lines(1).is_empty());
+        let img = f.render_glyph(1, &Style { px: 20.0, embolden: 0.0, color: pack(255, 255, 255, 255), shadow: false });
+        assert_eq!(ink(&img), 0);
+    }
+
+    #[test]
+    fn a_glyph_far_larger_than_its_em_gets_an_empty_mask() {
+        // 16 units per em and a 32767 unit glyph: about 26,600 px a side at 13 px
+        let data = tiny_ttf(16, &[Vec::new(), simple_glyph(&[2], &[(0, 0), (32767, 0), (32767, 32767)])]);
+        let f = Font::parse(&data).unwrap();
+        let m = f.glyph_mask(1, 13.0 / 16.0, 0.0, 0.0, &[]);
+        assert_eq!((m.w, m.h, m.a.len()), (0, 0, 0));
+    }
+
+    #[test]
+    fn a_font_with_a_zero_em_does_not_parse() {
+        let data = tiny_ttf(0, &[Vec::new(), simple_glyph(&[2], &TRIANGLE)]);
+        assert!(Font::parse(&data).is_none());
+    }
+
+    #[test]
+    fn nested_composites_stop_at_the_outline_budget() {
+        // 600 copies of a glyph that is itself 600 triangles: 360,000 components and over a million points
+        let data = tiny_ttf(1000, &[Vec::new(), composite_glyph(2, 600), composite_glyph(3, 600), simple_glyph(&[2], &TRIANGLE)]);
+        let f = Font::parse(&data).unwrap();
+        let lines = f.outline_lines(1).len();
+        assert!(lines >= 3, "the first components are still drawn");
+        assert!(lines <= OUTLINE_BUDGET as usize, "{lines} segments");
+        // an ordinary composite is untouched
+        assert_eq!(f.outline_lines(2).len(), 3 * 600);
     }
 }
 

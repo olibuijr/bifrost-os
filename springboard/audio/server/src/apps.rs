@@ -74,9 +74,22 @@ pub fn device_rate(desc: &DeviceDesc) -> f64 {
     }
 }
 
+/// A device's buffer range within `MIN_QUANTUM..=cap`. A range the driver could not probe (`(0, 0)`) or one that lies
+/// wholly outside the bounds would come out inverted, and `u32::clamp` panics on an inverted range: such a device gets
+/// the whole span, and opening it decides whether it can run.
+pub fn frames_bounds(range: (u32, u32), cap: u32) -> (u32, u32) {
+    let (lo, hi) = (range.0.max(MIN_QUANTUM), range.1.min(cap));
+    if lo > hi {
+        (MIN_QUANTUM, cap)
+    } else {
+        (lo, hi)
+    }
+}
+
 /// The quantum a device starts with (before any client asked for another): the default, within the device's range.
 pub fn initial_quantum(desc: &DeviceDesc) -> u32 {
-    DEFAULT_QUANTUM.clamp(desc.buffer_frames_range.0.max(MIN_QUANTUM), desc.buffer_frames_range.1.min(MAX_QUANTUM))
+    let (lo, hi) = frames_bounds(desc.buffer_frames_range, MAX_QUANTUM);
+    DEFAULT_QUANTUM.clamp(lo, hi)
 }
 
 /// The default-device selectors, in the order of `AppState::pinned`.
@@ -258,7 +271,8 @@ impl AppState {
         let _ = t.define(id, g(props::NOMINAL_RATE), PropertyValue::F64(device_rate(desc)));
         let _ = t.define(id, g(props::AVAILABLE_RATES), PropertyValue::Rates(desc.rates.clone()));
         let _ = t.define(id, g(props::BUFFER_FRAMES), PropertyValue::U32(initial_quantum(desc)));
-        let _ = t.define(id, g(props::BUFFER_FRAMES_RANGE), PropertyValue::RangeU32(desc.buffer_frames_range.0.max(MIN_QUANTUM), desc.buffer_frames_range.1.min(MAX_QUANTUM * 2)));
+        let (lo, hi) = frames_bounds(desc.buffer_frames_range, MAX_QUANTUM * 2);
+        let _ = t.define(id, g(props::BUFFER_FRAMES_RANGE), PropertyValue::RangeU32(lo, hi));
         let _ = t.define(id, g(props::CLOCK_DOMAIN), PropertyValue::U32(desc.clock_domain));
         for (scope, channels) in [(Scope::Output, desc.output_channels), (Scope::Input, desc.input_channels)] {
             if channels == 0 {
@@ -895,6 +909,25 @@ mod tests {
         assert_eq!(device_rate(&d), 48_000.0);
         d.buffer_frames_range = (512, 1024);
         assert_eq!(initial_quantum(&d), 512);
+    }
+
+    #[test]
+    fn a_device_with_an_unprobed_or_out_of_bounds_buffer_range_is_published_without_a_panic() {
+        // (0, 0): neither direction could be probed; (1, 0): the same through the two-period halving;
+        // (10_000, 20_000): the smallest buffer is above the largest quantum
+        for range in [(0, 0), (1, 0), (10_000, 20_000)] {
+            let mut d = dev("alsa:USB:0", "usb", 2, 0);
+            d.buffer_frames_range = range;
+            assert_eq!(frames_bounds(range, MAX_QUANTUM), (MIN_QUANTUM, MAX_QUANTUM), "{range:?}");
+            assert_eq!(initial_quantum(&d), DEFAULT_QUANTUM, "{range:?}");
+            let mut a = AppState::new();
+            a.add_device(ObjectId(1000), &d);
+            assert_eq!(a.get(ObjectId(1000), g(props::BUFFER_FRAMES)), Ok(PropertyValue::U32(DEFAULT_QUANTUM)));
+            assert_eq!(a.get(ObjectId(1000), g(props::BUFFER_FRAMES_RANGE)), Ok(PropertyValue::RangeU32(MIN_QUANTUM, MAX_QUANTUM * 2)));
+        }
+        // an ordinary range is only bounded
+        assert_eq!(frames_bounds((32, 16_384), MAX_QUANTUM), (32, MAX_QUANTUM));
+        assert_eq!(frames_bounds((4, 1024), MAX_QUANTUM * 2), (MIN_QUANTUM, 1024));
     }
 
     #[test]

@@ -868,6 +868,16 @@
         assert_eq!(sh.desktop_menu,Some(Menu::Arrange));
     }
 
+    /// A pointer left resting in a hot corner sends no more motion: the shell asks to be woken when the dwell is over.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_rest_in_a_hot_corner_wakes_the_shell_when_the_dwell_is_over() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;sh.screen_on=true;
+        sh.hot_corner_pointer(0.,0.,1000.);
+        assert_eq!(sh.hot_corners.resting_corner(),Some(0));
+        assert!(sh.next_wake(1000.).is_some_and(|w|w<=1000.+hot_corners::DWELL_MS),"the shell wakes for it");
+    }
+
     /// A press on the green button while its menu is open is still the button's own click, so full screen keeps
     /// working for anyone who rests on the button before clicking.
     #[cfg(feature="desktop-wayland")]
@@ -970,6 +980,31 @@
         let mut px=vec![0u32;w*h];
         sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut px,y0:0},0.);
         assert!(sh.desk.as_ref().unwrap().unmapped.contains(&ghost),"drawing keeps the list");
+    }
+
+    /// Suspend Background Apps: an app whose only shown window is an extra window (its main window is closed or
+    /// minimized) is on screen, and its own windows do not count as covering it.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn an_app_showing_only_an_extra_window_counts_as_on_screen_for_background_suspension() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,_theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let m=sh.desk_metrics();
+        sh.desk.as_mut().unwrap().wins.clear();
+        sh.desk.as_mut().unwrap().open(&m,AppId::ExternalWindow(0,3),(600,400));
+        assert_eq!(sh.background_facts(),vec![(0,background::Facts{focused:false,on_screen:true,covered:false})]);
+        // the main window stacked over the extra one is the same app: it does not cover it
+        sh.desk.as_mut().unwrap().open(&m,AppId::External(0),(2000,2000));
+        let d=sh.desk.as_mut().unwrap();
+        let r=d.wins[d.index_of(AppId::ExternalWindow(0,3)).unwrap()].r;
+        let i=d.index_of(AppId::External(0)).unwrap();
+        d.wins[i].r=r;
+        assert!(!sh.app_covered(AppId::External(0)),"an app's own windows do not cover it");
+        // with every window minimized nothing of the app is shown
+        for w in sh.desk.as_mut().unwrap().wins.iter_mut() {w.minimized=true;}
+        assert!(!sh.background_facts()[0].1.on_screen);
     }
 
     /// A fixture host standing for a running external app in slot 0.
@@ -3923,6 +3958,22 @@
         let n=100;let start=std::time::Instant::now();
         for k in 0..n {let t=1000.+k as f64*16.;let app=if k%2==0 {AppId::Settings} else {AppId::Files};sh.desk_open(app,t);sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut img.px,y0:0},t+8.);}
         eprintln!("focus switch: {:.2} ms a frame at {w}x{h}",start.elapsed().as_secs_f64()*1000./n as f64);
+    }
+
+    /// Require Password after a minute: a wake inside the minute returns the session, but time the machine spent
+    /// suspended counts although the shell clock stood still for it.
+    #[test]
+    fn time_asleep_counts_toward_the_password_grace() {
+        let mut sh = shell();
+        sh.prefs.set("lock_grace_seconds", "60").unwrap();
+        unlock(&mut sh);
+        sh.event(Event::Power, 2000.0);
+        assert_eq!(sh.event(Event::Wake, 5000.0), vec![Effect::ScreenOn]);
+        assert!(!sh.is_locked(), "three seconds are inside the grace");
+        sh.event(Event::Power, 6000.0);
+        sh.system_slept(3_600_000.0);
+        assert_eq!(sh.event(Event::Wake, 9000.0), vec![Effect::ScreenOn]);
+        assert!(sh.is_locked(), "an hour asleep is past the grace");
     }
 
 #[cfg(test)]

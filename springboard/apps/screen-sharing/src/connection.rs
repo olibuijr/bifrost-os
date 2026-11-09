@@ -127,6 +127,7 @@ fn run(
     let mut stream = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)?;
     stream.set_nodelay(true)?;
     let init = handshake::connect_with(&mut stream, password)?;
+    let frame = Framebuffer::checked(init.width as usize, init.height as usize)?;
     *lock(socket) = Some(stream.try_clone()?);
     {
         // The window may have hung up while the handshake ran; a close already recorded is kept.
@@ -134,7 +135,7 @@ fn run(
         if matches!(*st, Status::Closed(_)) {
             return Ok(());
         }
-        *lock(&shared.frame) = Framebuffer::new(init.width as usize, init.height as usize);
+        *lock(&shared.frame) = frame;
         *st = Status::Connected { name: init.name.clone() };
     }
     DispatchQueue::main().async_(|| {});

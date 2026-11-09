@@ -12,7 +12,7 @@ mod window;
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, Ctx, Input, KeyInput, TouchKind};
-use window::{AudioSetup, Target, REFRESH_S};
+use window::{AudioSetup, Target, REFRESH_MS};
 
 /// The window size in points, from the configured size in pixels and the display scale.
 fn size_pt(w_px: u32, h_px: u32, scale: f32) -> (f32, f32) {
@@ -77,10 +77,10 @@ impl App for AudioSetup {
         draw::controls(self, &ctx.ui)
     }
 
-    /// Reads the device list every `REFRESH_S` seconds, so hot-plugged devices and new aggregates show up.
+    /// Reads the device list every `REFRESH_MS` milliseconds, so hot-plugged devices and new aggregates show up.
     fn tick(&mut self, _ctx: &Ctx, t: f64) -> bool {
         self.now = t;
-        if t - self.last_refresh >= REFRESH_S {
+        if t - self.last_refresh >= REFRESH_MS {
             self.refresh(t)
         } else {
             false
@@ -89,7 +89,7 @@ impl App for AudioSetup {
 
     fn next_wake(&self, _t: f64) -> Option<f64> {
         if self.last_refresh.is_finite() {
-            Some(self.last_refresh + REFRESH_S)
+            Some(self.last_refresh + REFRESH_MS)
         } else {
             None
         }
@@ -137,4 +137,29 @@ impl AudioSetup {
 
 fn main() {
     bifrost_app::run(AudioSetup::new());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_app::kit::{Font, Ui};
+    use bifrost_app::proto::Configure;
+
+    fn test_ctx() -> Ctx {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    #[test]
+    fn the_device_list_is_re_read_two_seconds_on_the_millisecond_clock() {
+        let ctx = test_ctx();
+        let mut app = AudioSetup::new();
+        app.last_refresh = 1000.0;
+        assert_eq!(app.next_wake(1000.0), Some(3000.0), "2 s on a millisecond clock is 2000 ms away");
+        // two ticks a few milliseconds apart do not read the list again
+        app.tick(&ctx, 1005.0);
+        app.tick(&ctx, 1010.0);
+        assert_eq!(app.last_refresh, 1000.0, "no refresh before the interval has passed");
+    }
 }

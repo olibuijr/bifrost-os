@@ -174,10 +174,30 @@ fn set_password_without_token_only_for_an_empty_hash_from_the_shell() {
     assert_eq!(a.set_password(None, false, "", "longenough"), Err(AuthError::Unauthorized));
     // from the shell the plan is allowed, but a short password is still refused
     assert!(matches!(a.set_password(None, true, "", "short"), Err(AuthError::BadParams(_))));
-    assert_eq!(a.plan_set_password(None, true, "longenough", 1), Ok(PwPlan::First("olafur".into())));
+    assert_eq!(a.plan_set_password(None, true, false, "longenough", 1), Ok(PwPlan::First("olafur".into())));
     // a missing entry fails closed
     std::fs::write(d.join("shadow"), "other:$6$x:1::::::\n").unwrap();
     assert!(matches!(a.set_password(None, true, "", "longenough"), Err(AuthError::Internal(_))));
+}
+
+#[test]
+fn a_root_peer_changes_the_password_without_a_token_but_not_without_the_old_one() {
+    let (mut a, _, d) = setup("setpw-root");
+    // the session is locked and no token is given: any other peer is refused before the old password is looked at
+    assert_eq!(a.plan_set_password(None, false, false, "longenough", 1), Err(AuthError::Locked));
+    // the root socket's peer is asked for the old password, and a wrong one counts toward the lockout
+    assert_eq!(a.plan_set_password(None, false, true, "longenough", 1), Ok(PwPlan::Verify("olafur".into())));
+    assert!(matches!(a.finish_verify_old(Verify::Wrong, 1), Err(AuthError::WrongPassword { .. })));
+    assert_eq!(a.fails, 1);
+    assert_eq!(a.plan_set_password(None, false, true, "longenough", 1), Ok(PwPlan::Verify("olafur".into())));
+    assert_eq!(a.finish_verify_old(Verify::Ok, 1), Ok(()));
+    // the other rules hold for root too: the new password is checked and a locked hash is never changed
+    assert!(matches!(a.plan_set_password(None, false, true, "short", 1), Err(AuthError::BadParams(_))));
+    std::fs::write(d.join("shadow"), "olafur:!$6$x:1::::::\n").unwrap();
+    assert_eq!(a.plan_set_password(None, false, true, "longenough", 1), Err(AuthError::NoPassword));
+    // a first password may come from root as it may from the console shell
+    std::fs::write(d.join("shadow"), "olafur::1::::::\n").unwrap();
+    assert_eq!(a.plan_set_password(None, false, true, "longenough", 1), Ok(PwPlan::First("olafur".into())));
 }
 
 #[test]

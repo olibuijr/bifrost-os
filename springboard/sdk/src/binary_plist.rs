@@ -10,14 +10,22 @@
 //! dictionary comes out byte for byte as the reference writer lays it out.
 //!
 //! The reader checks every offset and length against the file, refuses nesting deeper than `MAX_DEPTH` (which also
-//! stops reference cycles) and never allocates from an unchecked count.
+//! stops reference cycles), builds no more objects than a budget set from the file size (which stops shared references
+//! that multiply at every level) and never allocates from an unchecked count.
 
 use crate::coding::Value;
+use std::cell::Cell;
 
 const MAGIC: &[u8] = b"bplist00";
 const TRAILER: usize = 32;
 /// Deepest nesting the reader follows (a cycle recurses this deep before it is refused, which must fit a 2 MiB thread stack in a debug build).
 pub const MAX_DEPTH: usize = 128;
+/// How many objects the reader builds for each byte of the file, and the fewest it allows for a small file. Every
+/// reference is at least one byte, so a file that shares only leaves needs fewer objects than it has bytes; the factor
+/// leaves room for shared containers. Without the budget a few arrays that each name the next one many times expand to
+/// a value tree that grows by that factor per level, which the depth limit does not stop.
+const OBJECTS_PER_BYTE: usize = 8;
+const MIN_OBJECT_BUDGET: usize = 65_536;
 /// Seconds from the Unix epoch to 2001-01-01T00:00:00Z, the date origin of the format.
 pub const REFERENCE_DATE_OFFSET: f64 = 978_307_200.0;
 
@@ -243,7 +251,8 @@ pub fn read(bytes: &[u8]) -> Result<BValue, BplistError> {
     if count == 0 || top >= count || table < MAGIC.len() as u64 || table_end.map_or(true, |e| e > limit as u64) {
         return bad("the offset table is out of range");
     }
-    let reader = Reader { b: &bytes[..limit], table: table as usize, offset_size, ref_size, count: count as usize };
+    let budget = Cell::new(bytes.len().saturating_mul(OBJECTS_PER_BYTE).max(MIN_OBJECT_BUDGET));
+    let reader = Reader { b: &bytes[..limit], table: table as usize, offset_size, ref_size, count: count as usize, budget };
     reader.object(top as usize, 0)
 }
 
@@ -257,6 +266,8 @@ struct Reader<'a> {
     offset_size: usize,
     ref_size: usize,
     count: usize,
+    /// Objects the reader may still build.
+    budget: Cell<usize>,
 }
 
 impl Reader<'_> {
@@ -304,6 +315,10 @@ impl Reader<'_> {
     fn object(&self, idx: usize, depth: usize) -> Result<BValue, BplistError> {
         if depth > MAX_DEPTH {
             return bad("nested too deeply");
+        }
+        match self.budget.get().checked_sub(1) {
+            Some(left) => self.budget.set(left),
+            None => return bad("too many object references"),
         }
         let entry = self.table + idx * self.offset_size;
         let off = be(self.slice(entry, self.offset_size)?) as usize;
@@ -420,4 +435,52 @@ pub fn to_value(v: &BValue) -> Result<Value, BplistError> {
         BValue::Data(d) => Value::Data(d.clone()),
         BValue::Uid(_) => return bad("uid values have no Codable form"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `levels` arrays of `width` references each, every reference of one array naming the next array, and the last
+    /// array naming one short string: a small file whose value tree has `width` to the power `levels` leaves.
+    fn fan_out(levels: usize, width: u8) -> Vec<u8> {
+        let mut b = MAGIC.to_vec();
+        let mut offsets = Vec::new();
+        for i in 0..levels {
+            offsets.push(b.len() as u16);
+            b.extend([0xAF, 0x10, width]); // an array whose length follows as a one-byte integer
+            b.extend(std::iter::repeat(i as u8 + 1).take(width as usize));
+        }
+        offsets.push(b.len() as u16);
+        b.extend([0x51, b'x']);
+        let table = b.len() as u64;
+        for o in offsets {
+            b.extend(o.to_be_bytes());
+        }
+        b.extend([0, 0, 0, 0, 0, 0, 2, 1]); // unused, sort version, offset size, reference size
+        b.extend((levels as u64 + 1).to_be_bytes());
+        b.extend(0u64.to_be_bytes());
+        b.extend(table.to_be_bytes());
+        b
+    }
+
+    #[test]
+    fn shared_references_that_multiply_per_level_are_refused_not_expanded() {
+        // ten levels of 255 references is 255^10 values from under 3 KB; thirty levels of two is 2^30 from under 1 KB
+        let wide = fan_out(10, 255);
+        assert!(wide.len() < 3072);
+        assert!(read(&wide).is_err());
+        assert!(read(&fan_out(30, 2)).is_err());
+    }
+
+    #[test]
+    fn ordinary_shared_references_still_read() {
+        let shared = read(&fan_out(1, 255)).unwrap();
+        assert_eq!(shared, BValue::Array(vec![BValue::Str("x".into()); 255]));
+        let BValue::Array(rows) = read(&fan_out(2, 100)).unwrap() else {
+            panic!("not an array");
+        };
+        assert_eq!(rows.len(), 100);
+        assert_eq!(rows[99], BValue::Array(vec![BValue::Str("x".into()); 100]));
+    }
 }

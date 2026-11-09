@@ -4,6 +4,20 @@
 
 # Changelog
 
+## 0.16.0
+
+- Upstream deckcraft v0.16.0.
+  ## What's Changed
+  * Animations: index morph matching and timeline lookups by shape by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1700
+  * Fonts: shape long items in bounded pieces by @dylanmtaylor in https://github.com/storytold/deckcraft/pull/1702
+  * ui: label animation effect options by @Harrison-Booth in https://github.com/storytold/deckcraft/pull/1579
+  * Preserve bullet sizes authored in points by @Harrison-Booth in https://github.com/storytold/deckcraft/pull/1588
+
+## 0.15.1
+
+- Upstream deckcraft v0.15.1.
+  **Full Changelog**: https://github.com/storytold/deckcraft/compare/v0.15.0...v0.15.1
+
 ## 0.15.0
 
 - Upstream deckcraft v0.15.0.

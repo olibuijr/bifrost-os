@@ -2,7 +2,9 @@
 //! and transport through the shell's audio service.
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::{ui, Damage, Surface, Ui, Weight};
-use bifrost_app::layout::traffic_lights_trailing;
+use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarKind, ToolbarLayout};
+use bifrost_app::layout::UNIFIED_BAR_PT;
+use bifrost_app::widgets;
 use bifrost_app::controls::media_trim::{TrimResult, TrimSession};
 use bifrost_app::controls::plugin_host::PresetStore;
 use bifrost_app::now_playing::Command;
@@ -87,8 +89,8 @@ struct Daw {
     picker: Option<usize>,
     /// instruments the desktop engine can build: (type, name, description), sorted by name
     instruments: Vec<(String, String, String)>,
-    /// x of the header controls in px: right of the traffic lights in the full-size window band
-    lead: f32,
+    /// the toolbar items of the current view in px (id, x, y, w, h), laid out by `refresh_bar` before every touch
+    bar_hits: Vec<(u32, (f32, f32, f32, f32))>,
     /// the shell services the app uses: output route, Now Playing session, Low Power Mode (system.rs)
     system: system::System,
     /// playback was paused from the Now Playing tile (the service keeps the position)
@@ -163,7 +165,7 @@ impl Daw {
         let root = PathBuf::from(std::env::var("BIFROST_SERVICE_ROOT").unwrap_or_else(|_| "/var/lib/springboard".into()));
         let instruments = load_instruments(&plugins);
         let player = std::env::var("BIFROST_SOCK").ok().map(|_| Player::new(&root, store_dir.join("render-cache"), plugins));
-        Daw { store_dir, songs, view: View::Songs, project: None, selected_clip: None, status: String::new(), player, playing: false, now: 0.0, auto_mode: false, param: None, rack_track: 0, picker: None, instruments, lead: 0.0, system: Default::default(), paused: false, trim: None, pending_import: false, rack_presets: None }
+        Daw { store_dir, songs, view: View::Songs, project: None, selected_clip: None, status: String::new(), player, playing: false, now: 0.0, auto_mode: false, param: None, rack_track: 0, picker: None, instruments, bar_hits: Vec::new(), system: Default::default(), paused: false, trim: None, pending_import: false, rack_presets: None }
     }
 
     /// Writes the project to `<store>/projects/<id>.json`.
@@ -266,14 +268,11 @@ impl Daw {
     }
 
     fn hit(&self, w: f32, h: f32, x: f32, y: f32) -> Hit {
+        if let Some(hit) = self.bar_hit(x, y) {
+            return hit;
+        }
         match self.view {
             View::Songs => {
-                if rect_contains((w - 150.0, 26.0, 130.0, 40.0), x, y) {
-                    return Hit::NewSong;
-                }
-                if rect_contains((self.lead, 0.0, 120.0, HEADER), x, y) {
-                    return Hit::Nothing;
-                }
                 if y < HEADER {
                     return Hit::Nothing;
                 }
@@ -285,12 +284,6 @@ impl Daw {
                 }
             }
             View::Arrangement => {
-                if rect_contains((self.lead, 8.0, 80.0, 40.0), x, y) {
-                    return Hit::Back;
-                }
-                if rect_contains((w - 220.0, 16.0, 100.0, 32.0), x, y) {
-                    return Hit::Play;
-                }
                 let Some(p) = &self.project else { return Hit::Nothing };
                 let top = HEADER + 16.0;
                 if y < top {
@@ -319,15 +312,6 @@ impl Daw {
                 Hit::Nothing
             }
             View::Rack => {
-                if rect_contains((self.lead, 8.0, 80.0, 40.0), x, y) {
-                    return Hit::Back;
-                }
-                if rect_contains((w - 220.0, 16.0, 100.0, 32.0), x, y) {
-                    return Hit::RackTrack(-1);
-                }
-                if rect_contains((w - 110.0, 16.0, 100.0, 32.0), x, y) {
-                    return Hit::RackTrack(1);
-                }
                 let Some(p) = &self.project else { return Hit::Nothing };
                 let (px, pw) = rack_panel(w);
                 if rect_contains((px, RACK_TOP, pw, 32.0), x, y) {
@@ -360,41 +344,6 @@ impl Daw {
                     if let Some(hit) = self.picker_hit(w, h, x, y) {
                         return hit;
                     }
-                }
-                if rect_contains((w - 220.0, 16.0, 100.0, 32.0), x, y) {
-                    return Hit::Play;
-                }
-                if rect_contains((w - 330.0, 16.0, 100.0, 32.0), x, y) {
-                    return Hit::Arrange;
-                }
-                if rect_contains((w - 440.0, 16.0, 100.0, 32.0), x, y) {
-                    return Hit::Rack;
-                }
-                if rect_contains((w - 550.0, 16.0, 100.0, 32.0), x, y) {
-                    return Hit::Auto;
-                }
-                if rect_contains((w - 110.0, 16.0, 100.0, 32.0), x, y) {
-                    return Hit::Stop;
-                }
-                if rect_contains((w - 660.0, 16.0, 100.0, 32.0), x, y) {
-                    return Hit::Trim;
-                }
-                if rect_contains((w - 770.0, 16.0, 100.0, 32.0), x, y) {
-                    return Hit::Export;
-                }
-                if self.trim.is_none() && rect_contains((w - 880.0, 16.0, 100.0, 32.0), x, y) {
-                    return Hit::ExportCd;
-                }
-                if self.trim.is_some() {
-                    if rect_contains((w - 880.0, 16.0, 100.0, 32.0), x, y) {
-                        return Hit::TrimStart;
-                    }
-                    if rect_contains((w - 990.0, 16.0, 100.0, 32.0), x, y) {
-                        return Hit::TrimEnd;
-                    }
-                }
-                if rect_contains((self.lead, 8.0, 80.0, 40.0), x, y) {
-                    return Hit::Back;
                 }
                 let Some(p) = &self.project else { return Hit::Nothing };
                 let (gx, gy, _gw, _gh) = self.layout_session(w, h);
@@ -890,10 +839,6 @@ impl Daw {
     }
 
     fn draw_songs(&self, s: &mut Surface, ui: &Ui) {
-        Self::draw_text(s, ui, "DAW", ui.pt(26.0), Weight::Bold, ui::LABEL.now(), self.lead, 22.0);
-        let w = s.w as f32;
-        s.fill_rect((w - 150.0) as usize, 26, 130, 40, ui::accent_now());
-        Self::draw_text(s, ui, "New Song", ui.pt(15.0), Weight::Semibold, ui::WHITE, w - 136.0, 35.0);
         if self.songs.is_empty() {
             Self::draw_text(s, ui, "No songs yet. Create one with New Song.", ui.pt(15.0), Weight::Regular, ui::LABEL_2.now(), MARGIN, HEADER + 4.0);
         }
@@ -909,33 +854,6 @@ impl Daw {
     fn draw_session(&self, s: &mut Surface, ui: &Ui) {
         let (w, h) = (s.w as f32, s.h as f32);
         let Some(p) = &self.project else { return };
-        // header
-        s.fill_rect(self.lead as usize, 8, 80, 40, ui::FIELD_BG.now());
-        Self::draw_text(s, ui, "< Songs", ui.pt(15.0), Weight::Semibold, link_color(), self.lead + 12.0, 18.0);
-        Self::draw_text(s, ui, &p.name, ui.pt(ui::MAC_TITLE1_PT), Weight::Bold, ui::LABEL.now(), self.lead + 110.0, 16.0);
-        let play_col = if self.playing { ui::LABEL_2.now() } else { ui::accent_now() };
-        s.fill_rect((w - 220.0) as usize, 16, 100, 32, play_col);
-        Self::draw_text(s, ui, "Play", ui.pt(15.0), Weight::Semibold, ui::WHITE, w - 190.0, 22.0);
-        s.fill_rect((w - 110.0) as usize, 16, 100, 32, ui::FIELD_BG.now());
-        Self::draw_text(s, ui, "Stop", ui.pt(15.0), Weight::Semibold, ui::LABEL.now(), w - 80.0, 22.0);
-        for (x, label, on) in [(w - 330.0, "Arrange", false), (w - 440.0, "Rack", false), (w - 550.0, "Auto", self.auto_mode)] {
-            s.fill_rect(x as usize, 16, 100, 32, toggle_fill(on));
-            Self::draw_text(s, ui, label, ui.pt(14.0), Weight::Semibold, if on { ui::WHITE } else { ui::LABEL.now() }, x + 12.0, 22.0);
-        }
-        // Trim and Export; the in and out buttons only while trimming
-        let trimming = self.trim.is_some();
-        let trim_label = if trimming { "Cancel Trim" } else { "Trim" };
-        let mut trim_buttons = vec![(w - 660.0, trim_label, trimming), (w - 770.0, "Export", false)];
-        if trimming {
-            trim_buttons.push((w - 880.0, "Start +1 Bar", false));
-            trim_buttons.push((w - 990.0, "End -1 Bar", false));
-        } else {
-            trim_buttons.push((w - 880.0, "Export CD", false));
-        }
-        for (x, label, on) in trim_buttons {
-            s.fill_rect(x as usize, 16, 100, 32, toggle_fill(on));
-            Self::draw_text(s, ui, label, ui.pt(14.0), Weight::Semibold, if on { ui::WHITE } else { ui::LABEL.now() }, x + 10.0, 22.0);
-        }
         let (gx, gy, _gw, _gh) = self.layout_session(s.w as f32, s.h as f32);
         // the scene row: Stop in the head column
         s.fill_rect(gx as usize, (gy + 4.0) as usize, (TRACK_W - 8.0) as usize, 24, ui::FIELD_BG.now());
@@ -1091,9 +1009,6 @@ impl Daw {
     fn draw_arrangement(&self, s: &mut Surface, ui: &Ui) {
         let w = s.w as f32;
         let Some(p) = &self.project else { return };
-        s.fill_rect(self.lead as usize, 8, 80, 40, ui::FIELD_BG.now());
-        Self::draw_text(s, ui, "< Session", ui.pt(15.0), Weight::Semibold, link_color(), self.lead + 8.0, 18.0);
-        Self::draw_text(s, ui, "Arrangement", ui.pt(ui::MAC_TITLE1_PT), Weight::Bold, ui::LABEL.now(), self.lead + 110.0, 16.0);
         for (i, a) in p.arrangement.iter().enumerate() {
             let y = HEADER + 16.0 + i as f32 * ROW_H;
             s.fill_rect(MARGIN as usize, (y + 4.0) as usize, (w - 2.0 * MARGIN) as usize, (ROW_H - 8.0) as usize, ui::FIELD_BG.now());
@@ -1119,16 +1034,8 @@ impl Daw {
     fn draw_rack(&self, s: &mut Surface, ui: &Ui) {
         let Some(p) = &self.project else { return };
         let w = s.w as f32;
-        s.fill_rect(self.lead as usize, 8, 80, 40, ui::FIELD_BG.now());
-        Self::draw_text(s, ui, "< Session", ui.pt(15.0), Weight::Semibold, link_color(), self.lead + 8.0, 18.0);
-        let title = p.tracks.get(self.rack_track).map(|t| t.name.clone()).unwrap_or_default();
-        Self::draw_text(s, ui, &format!("Rack · {title}"), ui.pt(ui::MAC_TITLE1_PT), Weight::Bold, ui::LABEL.now(), self.lead + 110.0, 16.0);
         let format = format!("Stream: {}", rack::describe(daw::render::DEFAULT_SR, 2));
-        Self::draw_text(s, ui, &format, ui.pt(ui::MAC_CALLOUT_PT), Weight::Regular, ui::LABEL_2.now(), self.lead + 110.0, 58.0);
-        for (label, x) in [("< Track", w - 220.0), ("Track >", w - 110.0)] {
-            s.fill_rect(x as usize, 16, 100, 32, ui::FIELD_BG.now());
-            Self::draw_text(s, ui, label, ui.pt(15.0), Weight::Semibold, link_color(), x + 22.0, 22.0);
-        }
+        Self::draw_text(s, ui, &format, ui.pt(ui::MAC_CALLOUT_PT), Weight::Regular, ui::LABEL_2.now(), MARGIN, ui.pt(Self::bar_h(ui)) + 6.0);
 
         let Some(track) = p.tracks.get(self.rack_track) else { return };
         let (sx, sw) = rack_slider(w);
@@ -1172,44 +1079,135 @@ impl Daw {
     }
 }
 
+/// Toolbar item ids (also the control ids published in `App::controls`).
+const B_BACK: u32 = 1;
+const B_NEW: u32 = 2;
+const B_PLAY: u32 = 3;
+const B_STOP: u32 = 4;
+const B_ARRANGE: u32 = 5;
+const B_RACK: u32 = 6;
+const B_AUTO: u32 = 7;
+const B_TRIM: u32 = 8;
+const B_EXPORT: u32 = 9;
+const B_EXPORT_CD: u32 = 10;
+const B_START: u32 = 11;
+const B_END: u32 = 12;
+const B_PREV: u32 = 13;
+const B_NEXT: u32 = 14;
+/// The title slot: drawn by the app, not a button.
+const B_TITLE: u32 = 20;
+/// The widest the title slot gets, in points.
+const TITLE_MAX_PT: f32 = 240.0;
+
 impl Daw {
-    /// Sets the header x: right of the traffic lights in the full-size window band (points to px).
-    fn set_lead(&mut self, ui: &Ui) {
-        self.lead = ui.pt(traffic_lights_trailing() + ui::SPACE_S);
+    /// Height of the toolbar band in points: the standard unified bar, kept inside the `HEADER` rows at large scales.
+    fn bar_h(ui: &Ui) -> f32 {
+        UNIFIED_BAR_PT.min(HEADER / ui.pt(1.0))
     }
 
-    /// Header buttons of the current view: (control id, accessible label, px rect). Published as controls so the
-    /// top band does not drag the window under them; `hit` uses the same rectangles.
-    fn header_buttons(&self, w: f32) -> Vec<(u64, &'static str, (f32, f32, f32, f32))> {
-        let back = (self.lead, 8.0, 80.0, 40.0);
+    /// The toolbar's rectangle in points: the window's top band, with the right edge inset like the other kit apps.
+    fn bar_bounds(ui: &Ui, w_px: f32) -> Rect {
+        Rect { x: 0.0, y: 0.0, w: (w_px / ui.pt(1.0) - ui::SPACE_M).max(0.0), h: Self::bar_h(ui) }
+    }
+
+    /// The text in the title slot: the song, or the name of the view.
+    fn title(&self) -> String {
+        match (self.view, &self.project) {
+            (View::Songs, _) | (_, None) => "DAW".into(),
+            (View::Session, Some(p)) => p.name.clone(),
+            (View::Arrangement, Some(_)) => "Arrangement".into(),
+            (View::Rack, Some(p)) => format!("Rack · {}", p.tracks.get(self.rack_track).map(|t| t.name.as_str()).unwrap_or_default()),
+        }
+    }
+
+    /// The buttons of the current view as (leading items, trailing items); the title slot sits between them.
+    fn bar_items(&self) -> (Vec<ToolbarItem>, Vec<ToolbarItem>) {
+        let back = vec![ToolbarItem::icon(B_BACK, "Back", "chevron.left")];
         match self.view {
-            View::Songs => vec![(1, "New Song", (w - 150.0, 26.0, 130.0, 40.0))],
+            View::Songs => (vec![], vec![ToolbarItem::button(B_NEW, "New Song")]),
             View::Session => {
-                let mut buttons = vec![
-                    (1, "Back", back),
-                    (2, "Play", (w - 220.0, 16.0, 100.0, 32.0)),
-                    (3, "Arrange", (w - 330.0, 16.0, 100.0, 32.0)),
-                    (4, "Rack", (w - 440.0, 16.0, 100.0, 32.0)),
-                    (5, "Auto", (w - 550.0, 16.0, 100.0, 32.0)),
-                    (6, "Stop", (w - 110.0, 16.0, 100.0, 32.0)),
-                    (7, if self.trim.is_some() { "Cancel Trim" } else { "Trim" }, (w - 660.0, 16.0, 100.0, 32.0)),
-                    (8, "Export", (w - 770.0, 16.0, 100.0, 32.0)),
+                let trimming = self.trim.is_some();
+                let mut tools = vec![ToolbarItem::button(B_TRIM, if trimming { "Cancel Trim" } else { "Trim" }).selected(trimming).in_group(2)];
+                tools.push(ToolbarItem::button(B_EXPORT, "Export").in_group(2));
+                if trimming {
+                    tools.push(ToolbarItem::button(B_START, "Start +1 Bar").in_group(2));
+                    tools.push(ToolbarItem::button(B_END, "End -1 Bar").in_group(2));
+                } else {
+                    tools.push(ToolbarItem::button(B_EXPORT_CD, "Export CD").in_group(2));
+                }
+                let mut trail = vec![
+                    ToolbarItem::button(B_ARRANGE, "Arrange").in_group(1),
+                    ToolbarItem::button(B_RACK, "Rack").in_group(1),
+                    ToolbarItem::button(B_AUTO, "Auto").selected(self.auto_mode).in_group(1),
                 ];
-                if self.trim.is_none() {
-                    buttons.push((11, "Export CD", (w - 880.0, 16.0, 100.0, 32.0)));
-                }
-                if self.trim.is_some() {
-                    buttons.push((9, "Start +1 Bar", (w - 880.0, 16.0, 100.0, 32.0)));
-                    buttons.push((10, "End -1 Bar", (w - 990.0, 16.0, 100.0, 32.0)));
-                }
-                buttons
+                trail.extend(tools);
+                trail.push(ToolbarItem::button(B_PLAY, "Play").selected(self.playing).in_group(3));
+                trail.push(ToolbarItem::button(B_STOP, "Stop").in_group(3));
+                (back, trail)
             }
-            View::Arrangement => vec![(1, "Back", back), (2, "Play", (w - 220.0, 16.0, 100.0, 32.0))],
-            View::Rack => vec![
-                (1, "Back", back),
-                (2, "Previous Track", (w - 220.0, 16.0, 100.0, 32.0)),
-                (3, "Next Track", (w - 110.0, 16.0, 100.0, 32.0)),
-            ],
+            View::Arrangement => (back, vec![ToolbarItem::button(B_PLAY, "Play").selected(self.playing)]),
+            View::Rack => (back, vec![ToolbarItem::icon(B_PREV, "Previous Track", "chevron.left").in_group(1), ToolbarItem::icon(B_NEXT, "Next Track", "chevron.right").in_group(1)]),
+        }
+    }
+
+    /// The view's toolbar and where it puts every item. The title slot takes the width the buttons leave, up to
+    /// `TITLE_MAX_PT` and what the text needs, so the buttons are never pushed off the bar.
+    fn bar_layout(&self, ui: &Ui, w_px: f32) -> (Toolbar, ToolbarLayout) {
+        let bounds = Self::bar_bounds(ui, w_px);
+        let (lead, trail) = self.bar_items();
+        let probe = Toolbar { items: lead.iter().chain(&trail).cloned().collect() };
+        let used = widgets::toolbar_layout(ui, Rect { w: 1.0e4, ..bounds }, &probe).visible.iter().map(|(_, r)| r.right()).fold(0.0, f32::max);
+        let want = (ui.measure(&self.title(), ui::MAC_HEADLINE_PT, Weight::Semibold) / ui.pt(1.0)).ceil().min(TITLE_MAX_PT);
+        let room = bounds.right() - used - widgets::TOOLBAR_GAP_PT;
+        let mut items = lead;
+        if room >= 24.0 {
+            items.push(ToolbarItem::custom(B_TITLE, "Title", want.min(room)));
+        }
+        items.push(ToolbarItem::flexible_space());
+        items.extend(trail);
+        let bar = Toolbar { items };
+        let layout = widgets::toolbar_layout(ui, bounds, &bar);
+        (bar, layout)
+    }
+
+    /// Remembers the toolbar's item rectangles in px for the next touch (`hit` has no `Ui`).
+    fn refresh_bar(&mut self, ui: &Ui, w_px: f32) {
+        let k = ui.pt(1.0);
+        self.bar_hits = self.bar_layout(ui, w_px).1.visible.iter().map(|(id, r)| (*id, (r.x * k, r.y * k, r.w * k, r.h * k))).collect();
+    }
+
+    /// The toolbar button under a px point, as the action it stands for.
+    fn bar_hit(&self, x: f32, y: f32) -> Option<Hit> {
+        let id = self.bar_hits.iter().find(|(_, r)| rect_contains(*r, x, y))?.0;
+        Some(match id {
+            B_BACK => Hit::Back,
+            B_NEW => Hit::NewSong,
+            B_PLAY => Hit::Play,
+            B_STOP => Hit::Stop,
+            B_ARRANGE => Hit::Arrange,
+            B_RACK => Hit::Rack,
+            B_AUTO => Hit::Auto,
+            B_TRIM => Hit::Trim,
+            B_EXPORT => Hit::Export,
+            B_EXPORT_CD => Hit::ExportCd,
+            B_START => Hit::TrimStart,
+            B_END => Hit::TrimEnd,
+            B_PREV => Hit::RackTrack(-1),
+            B_NEXT => Hit::RackTrack(1),
+            _ => Hit::Nothing,
+        })
+    }
+
+    /// Draws the toolbar band, the buttons and the title over the view.
+    fn draw_bar(&self, s: &mut Surface, ui: &Ui) {
+        let (bar, layout) = self.bar_layout(ui, s.w as f32);
+        let k = ui.pt(1.0);
+        let w = s.w as f32;
+        widgets::toolbar_band(s, ui, Rect { x: 0.0, y: 0.0, w: w / k, h: Self::bar_h(ui) });
+        widgets::toolbar(s, ui, Self::bar_bounds(ui, w), &bar, None);
+        if let Some(r) = layout.rect_of(B_TITLE) {
+            let img = ui.text(&ui.fit(&self.title(), ui::MAC_HEADLINE_PT, ui.pt(r.w)), ui::MAC_HEADLINE_PT, Weight::Semibold, ui::LABEL.now());
+            s.blit(&img, ui.pt(r.x) as i32, (ui.pt(r.y + r.h / 2.0) as i32) - img.h as i32 / 2, 255, 255);
         }
     }
 }
@@ -1221,30 +1219,26 @@ impl App for Daw {
 
     fn configure(&mut self, ctx: &Ctx) {
         self.songs = store::list(&self.store_dir);
-        self.set_lead(&ctx.ui);
         self.system.start(ctx);
         // every edit is written at once and atomically, so nothing is left unsaved when the shell kills the app
         ctx.enable_sudden_termination();
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
-        let k = ctx.ui.pt(1.0);
-        self.header_buttons(ctx.cfg.w as f32)
-            .into_iter()
-            .map(|(id, label, (x, y, w, h))| Node {
-                id,
-                role: Role::Button,
-                label: label.to_string(),
-                value: String::new(),
-                bounds: Rect { x: x / k, y: y / k, w: w / k, h: h / k },
-                enabled: true,
+        let (bar, layout) = self.bar_layout(&ctx.ui, ctx.cfg.w as f32);
+        layout
+            .visible
+            .iter()
+            .filter_map(|(id, bounds)| {
+                let item = bar.items.iter().find(|i| i.id == *id && i.kind == ToolbarKind::Button)?;
+                Some(Node { id: u64::from(*id), role: Role::Button, label: item.label.clone(), value: String::new(), bounds: *bounds, enabled: item.enabled })
             })
             .collect()
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
-        self.set_lead(&ctx.ui);
         let (w, h) = (ctx.cfg.w as f32, ctx.cfg.h as f32);
+        self.refresh_bar(&ctx.ui, w);
         match ev {
             Input::Touch { kind: TouchKind::Down, x, y, .. } => {
                 let handled = self.touch(w, h, x, y);
@@ -1300,7 +1294,6 @@ impl App for Daw {
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
         self.now = t;
-        self.set_lead(&ctx.ui);
         if let Some(player) = self.player.as_mut() {
             player.tick(t);
             self.playing = player.playing();
@@ -1319,6 +1312,7 @@ impl App for Daw {
             View::Arrangement => self.draw_arrangement(s, ui),
             View::Rack => self.draw_rack(s, ui),
         }
+        self.draw_bar(s, ui);
         if !self.status.is_empty() {
             Self::draw_text(s, ui, &self.status, ui.pt(ui::MAC_CALLOUT_PT), Weight::Regular, ui::LABEL_2.now(), MARGIN, s.h as f32 - 16.0);
         }
@@ -1366,5 +1360,91 @@ mod accent_tests {
         set_accent(keep);
         assert_eq!(link, green);
         assert_ne!(link, ui::TINT);
+    }
+}
+
+#[cfg(test)]
+mod toolbar_tests {
+    use super::*;
+    use bifrost_app::kit::Font;
+    use bifrost_app::proto::Configure;
+
+    const DEFAULT_PT: (f32, f32) = (960.0, 600.0);
+    const MIN_PT: (f32, f32) = (900.0, 520.0);
+
+    fn ctx(w_pt: f32, h_pt: f32, scale: f32) -> Ctx {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = Configure { w: (w_pt * scale).round() as u32, h: (h_pt * scale).round() as u32, scale, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(bifrost_app::Ui::new(Font::parse(data).unwrap(), scale), cfg)
+    }
+
+    fn daw(tag: &str) -> Daw {
+        let dir = std::env::temp_dir().join(format!("daw-toolbar-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        Daw::new(dir)
+    }
+
+    fn labels(d: &Daw, c: &Ctx) -> Vec<String> {
+        d.controls(c).into_iter().map(|n| n.label).collect()
+    }
+
+    /// Every view at the default and the minimum window size, at two scales: each toolbar item sits inside the window,
+    /// nothing overflowed behind the `»` button, and the buttons are published as controls.
+    #[test]
+    fn toolbar_buttons_fit_inside_the_window_in_every_view() {
+        for scale in [1.0, 1.5625] {
+            for (w_pt, h_pt) in [DEFAULT_PT, MIN_PT] {
+                let c = ctx(w_pt, h_pt, scale);
+                let mut d = daw(&format!("fit{scale}-{w_pt}"));
+                for view in [View::Songs, View::Session, View::Arrangement, View::Rack] {
+                    if view != View::Songs && d.project.is_none() {
+                        d.new_song();
+                    }
+                    for trimming in [false, true] {
+                        d.view = view;
+                        d.trim = (trimming && view == View::Session).then(|| TrimSession::new(8.0, 1.0));
+                        let (bar, layout) = d.bar_layout(&c.ui, c.cfg.w as f32);
+                        let what = format!("{:?} at {w_pt}x{h_pt} pt, scale {scale}, trim {trimming}", d.title());
+                        assert!(layout.overflow.is_empty() && layout.overflow_button.is_none(), "toolbar overflows: {what}");
+                        for (id, r) in &layout.visible {
+                            assert!(r.x >= 0.0 && r.y >= 0.0 && r.right() <= w_pt && r.bottom() <= Daw::bar_h(&c.ui), "item {id} outside the window: {what}: {r:?}");
+                        }
+                        let buttons = bar.items.iter().filter(|i| i.kind == ToolbarKind::Button).count();
+                        assert_eq!(d.controls(&c).len(), buttons, "every button is a control: {what}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn songs_toolbar_has_the_new_song_button_clear_of_the_traffic_lights() {
+        let c = ctx(DEFAULT_PT.0, DEFAULT_PT.1, 1.0);
+        let d = daw("songs");
+        assert_eq!(labels(&d, &c), vec!["New Song".to_string()]);
+        let node = &d.controls(&c)[0];
+        assert!(node.bounds.x >= bifrost_app::widgets::toolbar_lead_pt(), "left of the traffic lights' trailing edge: {:?}", node.bounds);
+        assert!(node.bounds.right() <= DEFAULT_PT.0, "clipped at the right edge: {:?}", node.bounds);
+    }
+
+    #[test]
+    fn session_toolbar_publishes_the_transport_and_edit_buttons() {
+        let c = ctx(DEFAULT_PT.0, DEFAULT_PT.1, 1.0);
+        let mut d = daw("session");
+        d.new_song();
+        let got = labels(&d, &c);
+        for want in ["Back", "Play", "Stop", "Arrange", "Rack", "Auto", "Trim", "Export", "Export CD"] {
+            assert!(got.iter().any(|l| l == want), "{want} missing in {got:?}");
+        }
+    }
+
+    #[test]
+    fn a_tap_on_the_toolbar_button_starts_a_song() {
+        let c = ctx(DEFAULT_PT.0, DEFAULT_PT.1, 1.0);
+        let mut d = daw("tap");
+        d.refresh_bar(&c.ui, c.cfg.w as f32);
+        let r = d.bar_hits.iter().find(|(id, _)| *id == B_NEW).expect("New Song laid out").1;
+        d.touch(c.cfg.w as f32, c.cfg.h as f32, r.0 + r.2 / 2.0, r.1 + r.3 / 2.0);
+        assert!(d.view == View::Session && d.project.is_some());
     }
 }

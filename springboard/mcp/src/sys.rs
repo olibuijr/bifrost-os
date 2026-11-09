@@ -189,17 +189,7 @@ pub fn exec(command: &str, as_user: bool, cwd: Option<&str>, timeout: Duration, 
             let _ = pipe.write_all(text.as_bytes());
         });
     }
-    let (mut o, mut e) = (child.stdout.take().unwrap(), child.stderr.take().unwrap());
-    let ot = std::thread::spawn(move || {
-        let mut b = Vec::new();
-        let _ = o.read_to_end(&mut b);
-        b
-    });
-    let et = std::thread::spawn(move || {
-        let mut b = Vec::new();
-        let _ = e.read_to_end(&mut b);
-        b
-    });
+    let (ot, et) = (collect(child.stdout.take().unwrap()), collect(child.stderr.take().unwrap()));
     let pid = child.id() as i32;
     let mut timed_out = false;
     let status = loop {
@@ -213,13 +203,59 @@ pub fn exec(command: &str, as_user: bool, cwd: Option<&str>, timeout: Duration, 
         }
         std::thread::sleep(Duration::from_millis(2));
     };
+    // The pipes reach end of file only when every process that inherited them has exited. A background process the
+    // command left behind (or one that left the process group before the kill) must not hold the caller: both readers
+    // share one short grace period after the command itself is gone, then what was read is returned.
+    let grace_end = Instant::now() + PIPE_GRACE;
+    let (out, err) = (ot.take(grace_end), et.take(grace_end));
     Ok(Ran {
         code: status.and_then(|s| s.code()),
-        out: String::from_utf8_lossy(&ot.join().unwrap_or_default()).into_owned(),
-        err: String::from_utf8_lossy(&et.join().unwrap_or_default()).into_owned(),
+        out: String::from_utf8_lossy(&out).into_owned(),
+        err: String::from_utf8_lossy(&err).into_owned(),
         timed_out,
         ms: t.elapsed().as_millis(),
     })
+}
+
+/// How long `exec` waits for the output pipes to close once the command has exited or been killed.
+const PIPE_GRACE: Duration = Duration::from_millis(300);
+
+/// The output of one pipe, read by a detached thread.
+struct Collected {
+    bytes: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+    done: std::sync::mpsc::Receiver<()>,
+}
+
+impl Collected {
+    /// Everything read so far, after waiting until `until` at most for the end of the pipe.
+    fn take(&self, until: Instant) -> Vec<u8> {
+        // Ok never arrives: the reader only drops its sender at end of file, which ends the wait early.
+        let _ = self.done.recv_timeout(until.saturating_duration_since(Instant::now()));
+        self.bytes.lock().map(|mut b| std::mem::take(&mut *b)).unwrap_or_default()
+    }
+}
+
+/// Reads `pipe` to its end on a detached thread, so the caller can stop waiting while a process still holds it open.
+fn collect(mut pipe: impl Read + Send + 'static) -> Collected {
+    let bytes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let (tx, done) = std::sync::mpsc::channel::<()>();
+    let sink = bytes.clone();
+    std::thread::spawn(move || {
+        let _tx = tx;
+        let mut chunk = [0u8; 8192];
+        loop {
+            match pipe.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(n) => match sink.lock() {
+                    Ok(mut b) => b.extend_from_slice(&chunk[..n]),
+                    Err(_) => break,
+                },
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+        }
+    });
+    Collected { bytes, done }
 }
 
 /// Running processes from /proc: (pid, rss KiB, cpu ticks, command line).
@@ -277,6 +313,26 @@ mod tests {
         assert_eq!(out, b"version=9.9.9\n");
         assert_eq!(server.join().unwrap(), "version\n");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn exec_returns_when_a_background_process_keeps_the_output_pipes_open() {
+        let t = Instant::now();
+        let ran = exec("sleep 5 & echo started; echo oops >&2", false, None, Duration::from_secs(20), None).unwrap();
+        assert!(t.elapsed() < Duration::from_secs(3), "exec waited for the background process: {:?}", t.elapsed());
+        assert_eq!(ran.code, Some(0));
+        assert!(!ran.timed_out);
+        assert_eq!(ran.out, "started\n");
+        assert_eq!(ran.err, "oops\n");
+    }
+
+    #[test]
+    fn exec_keeps_the_whole_output_of_a_command_that_ends_normally() {
+        let ran = exec("head -c 300000 /dev/zero | tr '\\0' x; exit 3", false, None, Duration::from_secs(20), None).unwrap();
+        assert_eq!(ran.code, Some(3));
+        assert_eq!(ran.out.len(), 300000);
+        assert!(ran.out.bytes().all(|b| b == b'x'));
+        assert_eq!(ran.err, "");
     }
 
     #[test]

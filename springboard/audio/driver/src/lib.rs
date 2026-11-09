@@ -144,6 +144,13 @@ pub trait DeviceIo: Send {
     fn take_restart(&mut self) -> Option<ZeroTimeStamp> {
         None
     }
+    /// The most frames one cycle (`read_input`, `write_mix`) can carry while the device stays open. A driver that
+    /// sizes its hardware ring for the quantum it was opened with returns what that ring takes; the server then keeps
+    /// the running quantum at or below it, and a larger one takes effect the next time the device is opened. The
+    /// default: no limit.
+    fn max_quantum(&self) -> u32 {
+        u32::MAX
+    }
     /// A closure that stops the hardware stream from another thread (a PCM `DROP` on a duplicate descriptor), so
     /// the control thread can end a stop the IO thread has not finished. `None`: nothing to abort.
     fn abort_hook(&self) -> Option<Box<dyn Fn() + Send + Sync>> {

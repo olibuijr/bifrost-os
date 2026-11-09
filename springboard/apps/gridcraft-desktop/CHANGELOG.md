@@ -4,6 +4,20 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream gridcraft v0.17.0.
+  ## What's Changed
+  * Ribbon: Font Size value is centered in its box (fixes #3155) by @kenkanuma in https://github.com/storytold/gridcraft/pull/3161
+  * Data validation and conditional formats: anchor relative formulas on the top-left cell of all areas (#3152) by @ljkx in https://github.com/storytold/gridcraft/pull/3173
+  * Ribbon test: pin macOS for the AutoSum tooltip, so it passes on a Mac by @Aimarmndz in https://github.com/storytold/gridcraft/pull/3179
+  * Charts: decimate area top and baseline at paired horizontal indices by @neilcawse in https://github.com/storytold/gridcraft/pull/3132
+
+## 0.16.1
+
+- Upstream gridcraft v0.16.1.
+  **Full Changelog**: https://github.com/storytold/gridcraft/compare/v0.16.0...v0.16.1
+
 ## 0.16.0
 
 - Upstream gridcraft v0.16.0.

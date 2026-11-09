@@ -2439,6 +2439,10 @@ impl Shell {
         if self.desktop_menu == Some(desktop_bar::Menu::Stack) && self.stack_thumbs_pending() { due.add(Some(t + 50.0)); }
         // a rest on a green button opens its menu when the dwell is over
         if self.desktop_menu.is_none() { if let Some((_,since))=self.desk.as_ref().and_then(|d|d.arrange_at) { if since.is_finite() { due.add(Some(since+desk::ARRANGE_DWELL_MS)); } } }
+        // a rest in a hot corner runs its action when the dwell is over; no pointer motion arrives to wake the loop for it
+        if self.screen_on && !self.is_locked() { due.add(self.hot_corners.next_wake()); }
+        // the screen saver starts when its idle time is up, and a running one advances frame by frame
+        due.add(self.saver.next_wake(t, self.screen_on));
         if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
         if self.live.look() != live_wallpaper::Look::Still && self.desk_active() && self.screen_on { due.add(live_wallpaper::next_due(self.live.look(), t, self.live_still_only())); }
         if self.metrics_active() {
@@ -3473,6 +3477,14 @@ impl Shell {
         self.screen = if options::grace_lapsed(off, t, grace_s) { Screen::Lock } else { before };
     }
 
+    /// The machine was suspended for `slept_ms`. The shell clock stood still for that time, so the moment the display
+    /// went off moves back by it and the Require Password grace counts the time asleep. Call it before the wake.
+    pub fn system_slept(&mut self, slept_ms: f64) {
+        if let Some((off, _)) = self.grace_from.as_mut() {
+            *off -= slept_ms.max(0.0);
+        }
+    }
+
     /// Puts both pagers back on their first page and resets the Today View.
     fn leave_today(&mut self) {
         self.today.reset();
@@ -4322,33 +4334,41 @@ impl Shell {
             self.send_app_signals(&signals);
             return;
         }
-        let facts: Vec<(u8, background::Facts)> = self
-            .ext
-            .iter()
-            .enumerate()
-            .filter_map(|(n, host)| {
-                if !host.as_ref()?.running() {
-                    return None;
-                }
-                let app = AppId::External(n as u8);
-                let focused = matches!(self.screen, Screen::App(a) if a == app);
-                let on_screen = focused || self.desk.as_ref().is_some_and(|d| d.wins.iter().any(|w| w.app == app && !w.minimized));
-                let covered = self.app_covered(app);
-                Some((n as u8, background::Facts { focused, on_screen, covered }))
-            })
-            .collect();
-        let signals = self.suspender.update(&facts, (t.max(0.0) * 1000.0) as u64);
+        let facts = self.background_facts();
+        // the shell clock is already milliseconds
+        let signals = self.suspender.update(&facts, t.max(0.0) as u64);
         self.send_app_signals(&signals);
     }
 
-    /// Whether every shown window of `app` is covered by windows of other apps stacked over it. The desktop lists its
-    /// windows back to front, so the windows over window `i` are `wins[i + 1..]`. Minimized windows show nothing and
-    /// cover nothing.
+    /// What `background_tick` knows about each running external app whose windows the shell draws. An app's windows are
+    /// its main window and its extra windows (`AppId::parent`). An app on the direct route is left out, so it is never
+    /// stopped (`background::shell_sees_windows`).
+    fn background_facts(&self) -> Vec<(u8, background::Facts)> {
+        self.ext
+            .iter()
+            .enumerate()
+            .filter_map(|(n, host)| {
+                let host = host.as_ref()?;
+                if !host.running() || !background::shell_sees_windows(host.route()) {
+                    return None;
+                }
+                let app = AppId::External(n as u8);
+                let focused = matches!(self.screen, Screen::App(a) if a.parent() == app);
+                let on_screen = focused || self.desk.as_ref().is_some_and(|d| d.wins.iter().any(|w| w.app.parent() == app && !w.minimized));
+                let covered = self.app_covered(app);
+                Some((n as u8, background::Facts { focused, on_screen, covered }))
+            })
+            .collect()
+    }
+
+    /// Whether every shown window of `app` (its extra windows included) is covered by windows of other apps stacked
+    /// over it. The desktop lists its windows back to front, so the windows over window `i` are `wins[i + 1..]`.
+    /// Minimized windows show nothing and cover nothing.
     fn app_covered(&self, app: AppId) -> bool {
         let Some(desk) = self.desk.as_ref() else { return false };
         let rect = |w: &desk::Win| [w.r.x as i64, w.r.y as i64, w.r.w as i64, w.r.h as i64];
-        desk.wins.iter().enumerate().filter(|(_, w)| w.app == app && !w.minimized).all(|(i, w)| {
-            let above: Vec<[i64; 4]> = desk.wins[i + 1..].iter().filter(|o| o.app != app && !o.minimized).map(rect).collect();
+        desk.wins.iter().enumerate().filter(|(_, w)| w.app.parent() == app && !w.minimized).all(|(i, w)| {
+            let above: Vec<[i64; 4]> = desk.wins[i + 1..].iter().filter(|o| o.app.parent() != app && !o.minimized).map(rect).collect();
             bifrost_core::occlusion::is_covered(rect(w), &above)
         })
     }

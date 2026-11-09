@@ -186,7 +186,7 @@ const CTL_SIDEBAR: u64 = 16;
 /// Frame poll period while recording or playing (ms).
 const POLL_MS: f64 = 100.0;
 /// How often a Record press waiting for the microphone answer asks the privacy service again (ms).
-const MIC_POLL_S: f64 = 500.0;
+const MIC_POLL_MS: f64 = 500.0;
 /// how long a started recording or playback may take to show up in the service state
 const START_TIMEOUT_MS: f64 = 4_000.0;
 
@@ -768,7 +768,7 @@ impl VoiceMemos {
             Gate::Ask => {
                 // nothing is captured before consent: the shell asks the person, and the take starts once they allow it
                 self.wants.push(Want::MicRequest);
-                self.mic_wait = Some(MicWait { replace, poll_at: self.now + MIC_POLL_S });
+                self.mic_wait = Some(MicWait { replace, poll_at: self.now + MIC_POLL_MS });
                 self.dirty = true;
                 return;
             }
@@ -2181,7 +2181,7 @@ impl VoiceMemos {
         self.sync_audio(t);
         if let Some(wait) = &mut self.mic_wait {
             if t >= wait.poll_at {
-                wait.poll_at = t + MIC_POLL_S;
+                wait.poll_at = t + MIC_POLL_MS;
                 self.wants.push(Want::MicStatus);
             }
         }

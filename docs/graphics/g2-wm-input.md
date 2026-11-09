@@ -62,6 +62,11 @@ change. `delegate_pointer_gestures!` serves the global, created by `register_pro
   leave (`update_constraint_focus`). A new constraint on the focused surface activates at once. While a locked
   constraint is active the absolute pointer does not move (`motion_locked`). A `cursor_position_hint` from a
   locked client moves the pointer to the hint.
+- Only the client that has the keyboard may hold a constraint, and none while the session is locked
+  (`constraint_permitted`). The constraint ends when the keyboard focus moves to another client (`WmState::focus`),
+  when the session locks (the pointer also leaves its surface, so no press reaches an app behind the lock screen), and
+  on the next motion otherwise. A persistent constraint is activated again by the first motion over its surface once
+  its client has the keyboard back; a oneshot one is gone.
 
 ### Touchscreen (`touch.rs`)
 

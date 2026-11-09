@@ -514,6 +514,8 @@ impl WmState {
         if let Some(keyboard) = self.seat.get_keyboard() {
             keyboard.set_focus(self, surface, serial);
         }
+        // a client that lost the keyboard here no longer holds the pointer (input.rs, `constraint_permitted`)
+        self.release_stale_pointer_constraint();
         self.sync_toplevels();
     }
 

@@ -842,8 +842,9 @@ pub fn toggle_complete(items: &mut [Reminder], id: u64, today: i64) -> Option<Co
         return Some(Completion::Undone);
     }
     if let (Some(rule), Some(due)) = (r.repeat, r.due) {
-        let next = next_occurrence(due, rule, today);
+        let (next, rule) = next_occurrence(due, rule, today);
         r.due = Some(next);
+        r.repeat = Some(rule);
         return Some(Completion::Advanced(next));
     }
     r.completed = true;

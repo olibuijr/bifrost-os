@@ -1,7 +1,9 @@
 //! The `keychain-groups` service: keychain items shared between the apps that list the same group in
 //! `keychain_groups = [...]` in their manifests (`kSecAttrAccessGroup`). The shell speaks for the calling app: its id
 //! comes from the connection, and its groups come from its installed manifest. They count only when the app also has
-//! the `keychain` permission, so a group never grants an app that could not use the keychain at all.
+//! the `keychain` permission, so a group never grants an app that could not use the keychain at all. Groups in the
+//! `is.bifrost.` namespace belong to the system: only the system's own apps may use them, and the
+//! network-authentication agent's group is open to no app (`groups_of`).
 //!
 //! Methods, all with JSON parameters and the secret as hex:
 //! - `groups` lists the caller's groups.
@@ -20,6 +22,7 @@
 use super::{Event, Shell, SystemService};
 use crate::cloud_session;
 use crate::keychain::{hex, unhex, Error, Store};
+use crate::net_auth;
 use crate::shell::apphost::{self, Manifest};
 use crate::shell::kinds;
 use bifrost_core::json::Json;
@@ -66,18 +69,42 @@ impl SystemService for KeychainGroups {
     }
 }
 
-/// The groups an app may use: its `keychain_groups`, but only with the `keychain` permission. The BifrOSt Account
-/// session group ([`cloud_session::GROUP`]) is further limited to first-party apps ([`first_party`]).
+/// The start of the group names the system keeps for itself. Listing one in a manifest is not enough to join it.
+const SYSTEM_GROUP_PREFIX: &str = "is.bifrost.";
+/// The start of the app ids of the system's own apps.
+const SYSTEM_APP_ID_PREFIX: &str = "is.olibuijr.";
+
+/// The groups an app may use: its `keychain_groups`, but only with the `keychain` permission. A group in the system's
+/// own namespace (`is.bifrost.`) is further limited by [`may_join`], so a manifest cannot claim its way into one.
 pub fn groups_of(m: &Manifest) -> Vec<String> {
     if !m.permissions.iter().any(|p| p == "keychain") {
         return Vec::new();
     }
-    m.keychain_groups.iter().filter(|g| g.as_str() != cloud_session::GROUP || first_party(m)).cloned().collect()
+    m.keychain_groups.iter().filter(|g| may_join(m, g)).cloned().collect()
+}
+
+/// Whether the app of manifest `m` may use `group` when its manifest lists it:
+/// - the network-authentication agent's group ([`net_auth::GROUP`]) goes to no app: its logins are reached only
+///   through the `network_auth` service;
+/// - the BifrOSt Account session group ([`cloud_session::GROUP`]) goes to first-party system apps ([`first_party`]);
+/// - any other group in the `is.bifrost.` namespace (the saved passwords among them) goes to apps whose id is in the
+///   `is.olibuijr.` namespace;
+/// - every other group is the app's to name.
+fn may_join(m: &Manifest, group: &str) -> bool {
+    if group == net_auth::GROUP {
+        false
+    } else if group == cloud_session::GROUP {
+        first_party(m)
+    } else if group.starts_with(SYSTEM_GROUP_PREFIX) {
+        m.id.starts_with(SYSTEM_APP_ID_PREFIX)
+    } else {
+        true
+    }
 }
 
 /// First-party: a system app whose id is in the `is.olibuijr.` namespace (the rule the log-store entitlement uses).
 pub fn first_party(m: &Manifest) -> bool {
-    m.id.starts_with("is.olibuijr.") && m.kind == kinds::SYSTEM_APP
+    m.id.starts_with(SYSTEM_APP_ID_PREFIX) && m.kind == kinds::SYSTEM_APP
 }
 
 /// What one call answered: the reply body, and the `(group, account)` a successful mutation changed.
@@ -295,6 +322,26 @@ mod tests {
         let plain_app = manifest("is.olibuijr.notes.desktop", "app");
         assert_eq!(groups_of(&plain_app), vec![example.clone()], "a first-party app that is not a system app does not get it");
         assert!(first_party(&locate) && !first_party(&third_party) && !first_party(&plain_app));
+    }
+
+    #[test]
+    fn a_manifest_cannot_claim_a_system_group() {
+        let manifest = |id: &str, kind: &str| {
+            let text = format!("id = \"{id}\"\nname = \"A\"\nexec = \"a\"\nkind = \"{kind}\"\npermissions = [\"keychain\"]\nkeychain_groups = [\"is.bifrost.network-auth\", \"is.bifrost.passwords\", \"is.bifrost.other\", \"is.example.g\"]\n");
+            apphost::Manifest::parse(&text).unwrap()
+        };
+        let passwords = crate::credentials::GROUP.to_string();
+        let other = "is.bifrost.other".to_string();
+        let example = "is.example.g".to_string();
+        // a third-party app keeps only the group outside the system namespace
+        assert_eq!(groups_of(&manifest("com.other.app", "app")), vec![example.clone()]);
+        assert_eq!(groups_of(&manifest("com.other.app", "system-app")), vec![example.clone()]);
+        // the system's own apps reach the saved passwords whatever their kind, and never the agent's logins
+        for kind in ["app", "system-app"] {
+            let own = groups_of(&manifest("is.olibuijr.browser.desktop", kind));
+            assert_eq!(own, vec![passwords.clone(), other.clone(), example.clone()], "{kind}");
+            assert!(!own.iter().any(|g| g == net_auth::GROUP));
+        }
     }
 
     #[test]

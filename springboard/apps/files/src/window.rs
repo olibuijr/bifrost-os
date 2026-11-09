@@ -7,8 +7,44 @@ pub(crate) const HEADER_H: f32 = 60.;
 /// How far a press must move before it becomes a drag.
 pub(crate) const DRAG_SLOP: f32 = 12.;
 
+/// The nearest folder above `path` that is still there, or Home when none is.
+pub(crate) fn existing_folder(path: &Path, home: &Path) -> PathBuf {
+    path.ancestors().skip(1).find(|p| p.is_dir()).map_or_else(|| home.to_path_buf(), Path::to_path_buf)
+}
+
+fn name_of(path: &Path) -> String {
+    path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
+}
+
+/// The notice for a folder that is gone (the sentence style the other notices use, never an OS error).
+pub(crate) fn not_found_message(path: &Path) -> String {
+    format!("The folder \u{201C}{}\u{201D} can\u{2019}t be found.", name_of(path))
+}
+
+/// The error for a folder that is there but cannot be listed.
+pub(crate) fn cant_open_message(path: &Path) -> String {
+    format!("The folder \u{201C}{}\u{201D} can\u{2019}t be opened.", name_of(path))
+}
+
 impl Files {
+    /// Whether `path` is a listing with no folder on disk behind it (Recents, tags, smart folders, the Trash, providers,
+    /// the Applications place).
+    pub(crate) fn is_virtual_folder(&self, path: &Path) -> bool {
+        path == Path::new(fs::RECENTS)
+            || path.starts_with(TAGGED)
+            || smart::folder_index(path).is_some()
+            || path == self.bin()
+            || provider::is_path(path)
+            || applications::is_store_dir(path)
+    }
     pub(crate) fn navigate(&mut self, path: PathBuf, remember: bool) {
+        // a folder that is gone (a restored or launch path, or one removed while it was shown) opens the nearest folder
+        // above it that is still there, and says so
+        let gone = (!self.is_virtual_folder(&path) && !path.is_dir()).then(|| path.clone());
+        let path = match &gone {
+            Some(missing) => existing_folder(missing, &self.home),
+            None => path,
+        };
         if remember {
             self.history.truncate(if self.history.is_empty() {
                 0
@@ -17,6 +53,13 @@ impl Files {
             });
             self.history.push(path.clone());
             self.at = self.history.len() - 1;
+        } else if let Some(missing) = &gone {
+            // the history entry that named the missing folder now names the folder that replaces it
+            if let Some(entry) = self.history.get_mut(self.at) {
+                if entry == missing {
+                    *entry = path.clone();
+                }
+            }
         }
         self.revision += 1;
         self.path = path.clone();
@@ -24,7 +67,7 @@ impl Files {
         self.ext.borrow_mut().show(&path);
         self.loading = true;
         self.error = None;
-        self.notice = None;
+        self.notice = gone.as_deref().map(not_found_message);
         self.selection.clear();
         self.scroll = 0.;
         self.query.clear();
@@ -44,7 +87,7 @@ impl Files {
         let in_provider = provider::is_path(&path);
         // the store apps folder is listed as the installed apps by name (Applications), with no folders above it
         let store_apps = applications::is_store_dir(&path);
-        let virtual_folder = path == Path::new(fs::RECENTS) || path.starts_with(TAGGED) || smart::folder_index(&path).is_some() || path == self.bin() || in_provider || store_apps;
+        let virtual_folder = self.is_virtual_folder(&path);
         // a provider folder is listed by its extension, which the host starts if it is not running
         let providers = in_provider.then(provider::shared);
         let (sort, bin) = (self.sort, self.bin());
@@ -66,7 +109,7 @@ impl Files {
                 fs::list_batched(&path, |batch| {
                     let _ = tx.send(Listing { path: batch_path.clone(), result: Ok(batch.to_vec()), ancestors: vec![], partial: true });
                 })
-                .map_err(|e| e.to_string())
+                .map_err(|_| cant_open_message(&path))
             };
             let (in_bin, keep_order) = (path == bin, path == Path::new(fs::RECENTS) || path.starts_with(TAGGED));
             let result = result.map(|mut rows| {

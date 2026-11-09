@@ -86,7 +86,7 @@ the method runs):
 - any install call, right or wrong or without a grant, empties the slot, so a grant is good for exactly one call and a
   guess burns it. A call that fails validation after the grant check still spends it, so the shell re-authenticates;
 - `session.lock` / `session.logout` and a new login drop it;
-- a wrong password counts toward the same persistent lockout as a wrong login (`faillock` plus the in-daemon curve);
+- a wrong password counts toward the same persistent lockout as a wrong login (the in-daemon curve);
 - peers on the root socket are root and need no grant. The in-process client (a root shell with no daemon: the installer,
   host tests) never goes through the dispatch, so it neither needs nor can obtain one.
 
@@ -96,10 +96,10 @@ Escape, or three wrong passwords end the sheet with no install request sent.
 
 ## Authentication (inside privd)
 
-- PAM service `/etc/pam.d/bifrost-login`: `auth required pam_faillock.so preauth`;
-  `auth [success=1 default=bad] pam_unix.so`; `auth [default=die] pam_faillock.so authfail`;
-  `auth sufficient pam_faillock.so authsucc`; `account required pam_unix.so`. faillock deny=5 unlock_time=300, plus an
-  in-daemon exponential delay (old lockout_secs curve: 5 fails gives 60 s).
+- PAM service `/etc/pam.d/bifrost-login`: `auth required pam_unix.so`; `account required pam_unix.so`. The lockout has
+  one owner, the in-daemon curve (`auth::lockout_secs`: 5 fails gives 60 s, then 300 s, 900 s and 3600 s). The stack has
+  no `pam_faillock`: its own counter and times disagreed with the wait privd reports, so the correct password was
+  refused after the wait the login window showed.
 - libpam FFI (`#[link(name="pam")]`, conversation callback copies then zeroes the password). Fallback if libpam is
   missing at build time: shadow + libcrypt `crypt_r`, constant-time compare. Hash `!`/`*`/empty = no login, recovery path.
 - The account is always the installed username from `/var/lib/springboard/account`; the client never names a user.
@@ -129,10 +129,10 @@ requires the password; apps keep running. Logout/restart/shutdown go through pri
   accepts an empty password. `tools/midget.py recovery` prints whether it exists; `midget.py login-bypass on|off`.
 - There is no automatic bypass (security review 2026-10-11): a failed PAM start at privd boot only logs loudly and the
   login window stays locked; root recovers over ssh with `login-bypass on`. PAM errors at run time (resource exhaustion,
-  `AUTHINFO_UNAVAIL`, faillock trouble) only fail that attempt and never open the lock.
+  `AUTHINFO_UNAVAIL`) only fail that attempt and never open the lock.
 - Stage 1 (0.5.30): privd admits root only (the shell is root); the account is not in `bifrost-session`. The lockout
-  counters are persistent (`/var/lib/springboard/privd-fails`, faillock `dir=/var/lib/faillock`), so a reboot from the
-  login window does not reset them. With a login backend every unlock route (Return, the swipe, a notification tap)
+  counter is persistent (`/var/lib/springboard/privd-fails`), so a reboot from the
+  login window does not reset it. With a login backend every unlock route (Return, the swipe, a notification tap)
   only brings the login window up; privd's token is the only unlock.
 - Fail closed: without the user-data marker the shell starts on a fresh `~/.local/share/springboard`; root never
   chgrp/chmods or creates directories inside paths the user can write (they are made as the user via `setpriv`).

@@ -56,8 +56,7 @@ fn run() -> std::io::Result<()> {
         let app=catalogue.iter().find(|a|a.id==*id&&springboard::shell::kinds::Kind::parse(&a.kind).is_some_and(|k|k.on_home_grid())).ok_or_else(||std::io::Error::other("App not found in PC App Store"))?;
         let root=std::path::PathBuf::from(std::env::var("SPRINGBOARD_DATA").unwrap_or_else(|_|"/var/lib/springboard".into()));
         let done=std::sync::atomic::AtomicU64::new(0);
-        let installed=install::install_download_local(&root,&net::absolute(&app.package),app.size,&app.sha256,install::shell_version(),&done,&std::sync::atomic::AtomicBool::new(false)).map_err(std::io::Error::other)?;
-        if installed.id!=*id {return Err(std::io::Error::other("Package identity mismatch"));}
+        let installed=install::install_download_local(&root,id,&net::absolute(&app.package),app.size,&app.sha256,install::shell_version(),&done,&std::sync::atomic::AtomicBool::new(false)).map_err(std::io::Error::other)?;
         println!("Installed {} {} through App Store",installed.id,installed.version);return Ok(());
     }
     if args.get(1).map(String::as_str)==Some("--install-package") {
@@ -559,6 +558,8 @@ fn run() -> std::io::Result<()> {
     let mut idle_stats = springboard::bare::heartbeat::IdleStats::default();
     // what drawing and copying a frame costs, to start it as late as the vblank allows
     let mut frame_cost = kms::FrameCost::new(period);
+    // total time suspended so far (the shell clock stands still while asleep), to tell the shell about each sleep
+    let mut asleep_total = sys::boottime_ms() - sys::now_ms();
     loop {
         // the wallpaper catalogue from its worker, once it is ready (see the spawn above)
         if let Ok(list) = wallpapers_rx.try_recv() {
@@ -659,6 +660,14 @@ fn run() -> std::io::Result<()> {
         kms::wait_precise(&fds, wait_ms, &mut ready);
         let ready = &ready;
         let t = sys::now_ms();
+        // a suspend ended during the wait (the shell's own or one started elsewhere): the Require Password grace counts
+        // that time, and hears of it before the input that wakes the display is handled below
+        let asleep_now = sys::boottime_ms() - t;
+        let slept = springboard::bare::heartbeat::slept_between(asleep_total, asleep_now);
+        asleep_total = asleep_now;
+        if springboard::bare::heartbeat::resumed(slept) {
+            shell.system_slept(slept);
+        }
         // notifications posted while the sockets are served below start their banner now, not at the last tick (W5-4)
         shell.notify_note_time(t);
         // the chrome clients: their menu items run on the shell, and the menu bar follows the shell's menus

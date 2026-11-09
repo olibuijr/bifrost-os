@@ -4,6 +4,20 @@
 
 # Changelog
 
+## 0.18.0
+
+- Upstream filmcraft v0.18.0.
+  ## What's Changed
+  * web: check MP4 sample extent before allocating its buffer by @dylanmtaylor in https://github.com/storytold/filmcraft/pull/4102
+  * avi: hold child chunks to their container so lists cannot overlap by @dylanmtaylor in https://github.com/storytold/filmcraft/pull/4106
+  * security(dnx): cap decoded frame memory and reject repeated scan line indices by @dylanmtaylor in https://github.com/storytold/filmcraft/pull/4101
+  * security(apv): size the auxiliary alpha frame only after its tiles decode by @dylanmtaylor in https://github.com/storytold/filmcraft/pull/4109
+
+## 0.17.1
+
+- Upstream filmcraft v0.17.1.
+  **Full Changelog**: https://github.com/storytold/filmcraft/compare/v0.17.0...v0.17.1
+
 ## 0.17.0
 
 - Upstream filmcraft v0.17.0.

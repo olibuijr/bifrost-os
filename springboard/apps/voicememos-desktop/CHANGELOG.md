@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.11.9
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
+## 1.11.8
+
+- Internal: the microphone poll interval is named in milliseconds.
+
 ## 1.11.7
 
 - Rebuilt for 0.10.44: every touch says whether a mouse or a finger made it, so a mouse drag no longer scrolls lists on the desktop (the wheel, trackpad and scroll bar still do).

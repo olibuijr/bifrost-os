@@ -23,8 +23,8 @@ use std::collections::{BTreeMap, VecDeque};
 
 /// Failures in a row after which an app is locked out.
 pub const MAX_FAILURES: u32 = 5;
-/// Lockout when the backend gives no retry time.
-pub const DEFAULT_LOCKOUT_SECS: f64 = 30.0;
+/// Lockout when the backend gives no retry time, in milliseconds of shell time.
+pub const DEFAULT_LOCKOUT_MS: f64 = 30_000.0;
 
 /// The policies an app may ask for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -246,7 +246,7 @@ impl LocalAuth {
         }
     }
 
-    /// Verifies one password for `app` at time `t` with `check`, counting failures and locking out after
+    /// Verifies one password for `app` at shell time `t` (milliseconds) with `check`, counting failures and locking out after
     /// [`MAX_FAILURES`]. The backend is not asked while the app is locked out.
     pub fn verify(&mut self, app: &str, t: f64, check: impl FnOnce() -> Check) -> Result<(), Failure> {
         let entry = self.fails.entry(app.to_string()).or_insert((0, 0.0));
@@ -264,7 +264,7 @@ impl LocalAuth {
             Check::Wrong { retry_secs } => {
                 entry.0 += 1;
                 if entry.0 >= MAX_FAILURES {
-                    entry.1 = t + if retry_secs > 0 { retry_secs as f64 } else { DEFAULT_LOCKOUT_SECS };
+                    entry.1 = t + if retry_secs > 0 { retry_secs as f64 * 1_000.0 } else { DEFAULT_LOCKOUT_MS };
                 }
                 Err(Failure::AuthenticationFailed)
             }
@@ -441,9 +441,21 @@ mod tests {
         for _ in 0..MAX_FAILURES {
             let _ = s.verify("a", 0.0, wrong);
         }
-        assert_eq!(s.verify("a", 1.0, || panic!("asked while locked")), Err(Failure::AuthenticationFailed));
-        assert_eq!(s.verify("b", 1.0, || Check::Right), Ok(()), "other apps are not locked");
-        assert_eq!(s.verify("a", DEFAULT_LOCKOUT_SECS + 1.0, || Check::Right), Ok(()));
+        assert_eq!(s.verify("a", 1_000.0, || panic!("asked while locked")), Err(Failure::AuthenticationFailed));
+        assert_eq!(s.verify("b", 1_000.0, || Check::Right), Ok(()), "other apps are not locked");
+        assert_eq!(s.verify("a", DEFAULT_LOCKOUT_MS + 1_000.0, || Check::Right), Ok(()));
+    }
+
+    #[test]
+    fn the_lockout_still_holds_29_seconds_later() {
+        let mut s = LocalAuth::default();
+        let t = 50_000.0;
+        for _ in 0..MAX_FAILURES {
+            let _ = s.verify("a", t, wrong);
+        }
+        // the clock is milliseconds: 29 s is 29 000 ms, inside the 30 s lockout
+        assert_eq!(s.verify("a", t + 29_000.0, || panic!("asked while locked")), Err(Failure::AuthenticationFailed));
+        assert_eq!(s.verify("a", t + 30_000.0, || Check::Right), Ok(()));
     }
 
     #[test]
@@ -463,8 +475,8 @@ mod tests {
         for _ in 0..MAX_FAILURES {
             let _ = s.verify("a", 0.0, || Check::Wrong { retry_secs: 120 });
         }
-        assert_eq!(s.verify("a", 100.0, || panic!("locked")), Err(Failure::AuthenticationFailed));
-        assert_eq!(s.verify("a", 121.0, || Check::Right), Ok(()));
+        assert_eq!(s.verify("a", 100_000.0, || panic!("locked")), Err(Failure::AuthenticationFailed));
+        assert_eq!(s.verify("a", 121_000.0, || Check::Right), Ok(()));
     }
 
     #[test]

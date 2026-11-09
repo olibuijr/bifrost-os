@@ -4,6 +4,20 @@
 
 # Changelog
 
+## 0.19.0
+
+- Upstream pdfcraft v0.19.0.
+  ## What's Changed
+  * fix(ui): size the whole-page raster allowance to the pages on screen by @dotCooCoo in https://github.com/storytold/pdfcraft/pull/6065
+  * fix(ui): continuous view renders the pages ahead of the scroll by @dotCooCoo in https://github.com/storytold/pdfcraft/pull/6063
+  * Scroll: smooth wheel bursts and preserve precise movement by @dotCooCoo in https://github.com/storytold/pdfcraft/pull/6031
+  * refactor(ui): tell page modules whether a press is theirs (router PR 4a) by @alehel in https://github.com/storytold/pdfcraft/pull/5803
+
+## 0.18.2
+
+- Upstream pdfcraft v0.18.2.
+  **Full Changelog**: https://github.com/storytold/pdfcraft/compare/v0.18.1...v0.18.2
+
 ## 0.18.1
 
 - Upstream pdfcraft v0.18.1.

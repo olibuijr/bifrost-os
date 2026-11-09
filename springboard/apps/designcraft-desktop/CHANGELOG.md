@@ -4,6 +4,20 @@
 
 # Changelog
 
+## 0.18.0
+
+- Upstream designcraft v0.18.0.
+  ## What's Changed
+  * M5: keep out-and-back cubic segments in striped strokes by @MMexicann in https://github.com/storytold/designcraft/pull/2323
+  * Pass the Linux signing key to the release workflow by @dylanmtaylor in https://github.com/storytold/designcraft/pull/2328
+  * About: credits tables fit without side-scrolling and their columns resize by @FredApps in https://github.com/storytold/designcraft/pull/2264
+  * Pages: parents and alternate layouts; export and print layouts and versions by @Gamedirection in https://github.com/storytold/designcraft/pull/1342
+
+## 0.17.2
+
+- Upstream designcraft v0.17.2.
+  **Full Changelog**: https://github.com/storytold/designcraft/compare/v0.17.1...v0.17.2
+
 ## 0.17.1
 
 - Upstream designcraft v0.17.1.

@@ -301,17 +301,31 @@ pub fn ico_decode(data: &[u8]) -> Option<Decoded> {
     let n = ico_count(data)?;
     let mut frames = Vec::new();
     let mut props = Vec::new();
+    let mut held = 0usize;
     for i in 0..n {
         let Some(img) = ico_entry(data, i) else { continue };
-        if img.starts_with(&super::png::SIGNATURE) {
-            if let Some(mut d) = super::png::decode(img) {
-                frames.push(d.frames.remove(0));
-                props.push(d.props.remove(0));
-            }
-        } else if let Some((f, p)) = decode_dib(img, None, true) {
-            frames.push(f);
-            props.push(p);
+        let is_png = img.starts_with(&super::png::SIGNATURE);
+        // Every image is kept decoded and the entries may all point at the same bytes, so an image that would take
+        // the total past the shared pixel budget is skipped. Its size is read from the header, before it is decoded.
+        let size = if is_png {
+            img.get(16..24).map(|d| (u32::from_be_bytes([d[0], d[1], d[2], d[3]]) as usize, u32::from_be_bytes([d[4], d[5], d[6], d[7]]) as usize))
+        } else {
+            probe_dib(img, true).map(|p| (p.pixel_width, p.pixel_height))
+        };
+        let Some((iw, ih)) = size else { continue };
+        if !super::png::within_frame_budget(held, iw.saturating_mul(ih)) {
+            continue;
         }
+        let (f, p) = if is_png {
+            let Some(mut d) = super::png::decode(img) else { continue };
+            (d.frames.remove(0), d.props.remove(0))
+        } else {
+            let Some(v) = decode_dib(img, None, true) else { continue };
+            v
+        };
+        held += f.w * f.h;
+        frames.push(f);
+        props.push(p);
     }
     (!frames.is_empty()).then_some(Decoded { frames, props, loop_count: None })
 }

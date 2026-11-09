@@ -135,12 +135,21 @@ impl AlsaDriver {
     fn rescan(&mut self) -> (Vec<DeviceDesc>, Vec<String>) {
         let mut found: Vec<Entry> = Vec::new();
         let mut added = Vec::new();
-        for card in list_cards() {
+        let cards = list_cards();
+        // A card that went away leaves a disconnected control handle behind: drop it, or the card that takes its
+        // number later is asked through the dead handle for good.
+        self.ctls.retain(|card, _| cards.contains(card));
+        for card in cards {
             if !self.ensure_ctl(card) {
                 continue;
             }
             let ctl = &self.ctls[&card];
-            let (Ok(info), Ok(devs)) = (ctl.card_info(), ctl.pcm_devices()) else { continue };
+            let (Ok(info), Ok(devs)) = (ctl.card_info(), ctl.pcm_devices()) else {
+                // Unplugged and plugged in again between two scans: the handle is the old card's. Its devices read
+                // as removed in this scan, and the next one opens the new card.
+                self.ctls.remove(&card);
+                continue;
+            };
             for device in devs {
                 let uid = uid_of(&info.id, device);
                 if let Some(known) = self.entries.iter().find(|e| e.desc.uid == uid) {
@@ -151,6 +160,11 @@ impl AlsaDriver {
                 let probe = |dir| Pcm::open(card, device, dir).and_then(|p| p.caps()).ok();
                 let play = pcm.playback.then(|| probe(Direction::Playback)).flatten();
                 let cap = pcm.capture.then(|| probe(Direction::Capture)).flatten();
+                if play.is_none() && cap.is_none() {
+                    // Busy, or the node of a card that was just plugged in is not there yet: a device with no
+                    // channels and no buffer range is of no use. It is not recorded, so the next scan probes it again.
+                    continue;
+                }
                 let (inch, outch, rates, buf) = merge_caps(play.as_ref(), cap.as_ref());
                 let transport = transport_of(&info.driver, &pcm.name);
                 let name = if transport == "hdmi" { ctl.monitor_name(device).unwrap_or_else(|| pcm.name.clone()) } else { pcm.name.clone() };
@@ -342,6 +356,15 @@ pub fn physical_format(rate: u32, channels: u32, fmt: SampleFormat, interleaved:
 /// The device stamp when it is within 1 s of `now` (same clock), else 0 (a realtime or bogus stamp).
 fn sane_stamp(ts: u64, now: u64) -> u64 {
     if ts.abs_diff(now) <= 1_000_000_000 { ts } else { 0 }
+}
+
+/// The most frames a cycle can carry on rings configured at open: a playback ring holds the lead (`prefill`) plus the
+/// cycle's frames, and a capture ring is read one cycle behind and must not fill before the read. Never below the
+/// quantum the device was opened for. `None`: that direction is not open.
+pub fn max_cycle_frames(out_buffer: Option<u32>, in_buffer: Option<u32>, prefill: u32, quantum: u32) -> u32 {
+    let out = out_buffer.map_or(u32::MAX, |b| b.saturating_sub(prefill));
+    let inp = in_buffer.map_or(u32::MAX, |b| b / 2);
+    out.min(inp).max(quantum)
 }
 
 /// An open device: the IO thread's handle.
@@ -609,6 +632,10 @@ impl DeviceIo for AlsaIo {
         }
     }
 
+    fn max_quantum(&self) -> u32 {
+        max_cycle_frames(self.out.as_ref().map(|p| p.buffer_frames), self.inp.as_ref().map(|p| p.buffer_frames), self.prefill, self.quantum)
+    }
+
     fn physical_formats(&self) -> (Option<StreamFormat>, Option<StreamFormat>) {
         let f = |p: &Pcm| physical_format(p.rate, p.channels, p.layout.format, p.layout.interleaved);
         (self.inp.as_ref().map(f), self.out.as_ref().map(f))
@@ -653,6 +680,20 @@ mod tests {
         assert_eq!(quantum_range((64, 2048), true), (32, 2048));
         assert_eq!(quantum_range((64, 2048), false), (64, 2048));
         assert_eq!(quantum_range((1, 8), true), (1, 8));
+    }
+
+    #[test]
+    fn a_cycle_never_carries_more_than_the_open_ring_takes() {
+        // low latency, two periods of 64: lead 64, so a cycle of 64 fills the ring and 256 would overflow it
+        assert_eq!(max_cycle_frames(Some(128), Some(128), 64, 64), 64);
+        // three periods: lead 96
+        assert_eq!(max_cycle_frames(Some(192), None, 96, 64), 96);
+        // the largest buffer (not low latency): room for any quantum the server uses
+        assert_eq!(max_cycle_frames(Some(16_384), Some(16_384), 512, 256), 8192);
+        // capture only
+        assert_eq!(max_cycle_frames(None, Some(512), 0, 256), 256);
+        // never below the quantum the device was opened for
+        assert_eq!(max_cycle_frames(Some(64), None, 64, 64), 64);
     }
 
     #[test]

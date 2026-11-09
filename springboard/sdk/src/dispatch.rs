@@ -8,9 +8,12 @@
 //!
 //! Width cap: the pool runs at most `available_parallelism` jobs at once across all lanes. Higher QoS is served
 //! first; a lane borrows width the higher lanes leave idle, and Background always gets one slot when it has work.
+//! A job that blocks in one of this module's waits (`sync`, `async_and_wait`, a group, work item or semaphore wait)
+//! does not count while it waits, so the work it waits for can always get a slot.
 //!
 //! Closures are `FnOnce() + Send + 'static`. A panicking closure is caught and logged; the worker survives.
 
+use std::cell::Cell;
 use std::cmp::Ordering as Ord_;
 use std::collections::{BinaryHeap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -55,6 +58,8 @@ impl Qos {
 }
 
 const LANES: usize = 4;
+/// The QoS of each lane, indexed by `Qos::lane`.
+const LANE_QOS: [Qos; LANES] = [Qos::UserInteractive, Qos::UserInitiated, Qos::Utility, Qos::Background];
 const IDLE_EXIT: Duration = Duration::from_secs(30);
 
 #[derive(Default)]
@@ -95,7 +100,8 @@ struct State {
     lanes: [Lane; LANES],
     timers: BinaryHeap<Timer>,
     timer_thread: bool,
-    /// jobs running now, all lanes: never above `Pool::cap`
+    /// jobs running now and not blocked in a queue wait, all lanes. A job starts only while this is below `Pool::cap`;
+    /// a job that comes back from a wait resumes at once, so the number can be above the cap for a moment
     active: usize,
     running: [usize; LANES],
 }
@@ -124,17 +130,45 @@ impl Pool {
         let l = qos.lane();
         let mut st = lock(&self.state);
         st.lanes[l].jobs.push_back(job);
-        let lane = &mut st.lanes[l];
-        if lane.idle > 0 {
+        if st.lanes[l].idle > 0 {
             self.cv[l].notify_one();
         }
+        self.grow(&mut st, l);
+    }
+
+    /// Starts one more worker for lane `l` when it has more jobs than idle workers and is below its thread limit.
+    fn grow(&'static self, st: &mut State, l: usize) {
+        let lane = &mut st.lanes[l];
         if lane.jobs.len() > lane.idle && lane.threads < self.cap {
             lane.threads += 1;
+            let qos = LANE_QOS[l];
             let ok = thread::Builder::new().name(format!("dispatch-{}", qos.name())).spawn(move || self.worker(qos)).is_ok();
             if !ok {
-                st.lanes[l].threads -= 1;
+                lane.threads -= 1;
             }
         }
+    }
+
+    /// A job on a lane-`l` worker is about to block in a queue wait: it gives up its slot and its place in the lane's
+    /// thread count, so the work it waits for (which may be queued on this same pool) can start.
+    fn block_begin(&'static self, l: usize) {
+        let mut st = lock(&self.state);
+        st.active -= 1;
+        st.running[l] -= 1;
+        st.lanes[l].threads -= 1;
+        // the job it waits for may have been submitted while every thread of its lane was busy
+        for k in 0..LANES {
+            self.grow(&mut st, k);
+        }
+        self.wake_waiting(&st);
+    }
+
+    /// The wait is over: the job counts again. It does not wait for a free slot (see `State::active`).
+    fn block_end(&self, l: usize) {
+        let mut st = lock(&self.state);
+        st.active += 1;
+        st.running[l] += 1;
+        st.lanes[l].threads += 1;
     }
 
     fn worker(&'static self, qos: Qos) {
@@ -142,23 +176,22 @@ impl Pool {
             springboard::gfx::affinity::background_thread();
         }
         let l = qos.lane();
+        WORKER_LANE.with(|w| w.set(Some(l)));
         let mut st = lock(&self.state);
         loop {
             if self.may_run(&st, l) {
                 let job = st.lanes[l].jobs.pop_front().unwrap();
                 st.active += 1;
                 st.running[l] += 1;
+                // this lane's queue may be empty now: a lower lane that was held back by it can borrow the width
+                self.wake_waiting(&st);
                 drop(st);
                 run(job);
                 st = lock(&self.state);
                 st.active -= 1;
                 st.running[l] -= 1;
                 // a slot opened: wake the best waiting lane first
-                for k in 0..LANES {
-                    if st.lanes[k].idle > 0 && !st.lanes[k].jobs.is_empty() {
-                        self.cv[k].notify_one();
-                    }
-                }
+                self.wake_waiting(&st);
                 continue;
             }
             st.lanes[l].idle += 1;
@@ -168,6 +201,16 @@ impl Pool {
             if to.timed_out() && st.lanes[l].jobs.is_empty() {
                 st.lanes[l].threads -= 1;
                 return;
+            }
+        }
+    }
+
+    /// Wakes one idle worker in every lane that has a job waiting, best lane first. Each woken worker checks `may_run`
+    /// again, so waking a lane that still may not run costs one wake-up and nothing else.
+    fn wake_waiting(&self, st: &State) {
+        for k in 0..LANES {
+            if st.lanes[k].idle > 0 && !st.lanes[k].jobs.is_empty() {
+                self.cv[k].notify_one();
             }
         }
     }
@@ -231,6 +274,32 @@ impl Pool {
                     st = lock(&self.state);
                 }
             }
+        }
+    }
+}
+
+thread_local! {
+    /// The lane of the pool worker this thread is; `None` on every other thread.
+    static WORKER_LANE: Cell<Option<usize>> = const { Cell::new(None) };
+}
+
+/// Held by a pool job while it blocks in a queue wait; see `Pool::block_begin`. Does nothing on other threads.
+struct SlotYield(Option<usize>);
+
+/// Call just before blocking on other dispatch work, and keep the result until the wait is over. No closure may run
+/// on this thread while it is held.
+fn yield_slot() -> SlotYield {
+    let lane = WORKER_LANE.with(|w| w.get());
+    if let Some(l) = lane {
+        pool().block_begin(l);
+    }
+    SlotYield(lane)
+}
+
+impl Drop for SlotYield {
+    fn drop(&mut self) {
+        if let Some(l) = self.0 {
+            pool().block_end(l);
         }
     }
 }
@@ -501,7 +570,11 @@ impl DispatchQueue {
                 self.async_(move || {
                     let _ = tx.send(std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)));
                 });
-                match rx.recv() {
+                let got = {
+                    let _slot = yield_slot();
+                    rx.recv()
+                };
+                match got {
                     Ok(Ok(v)) => v,
                     Ok(Err(p)) => std::panic::resume_unwind(p),
                     Err(_) => panic!("dispatch: queue dropped the sync closure"),
@@ -608,6 +681,10 @@ impl DispatchGroup {
     pub fn wait(&self, timeout: Option<Duration>) -> bool {
         let deadline = timeout.map(|t| Instant::now() + t);
         let mut st = lock(&self.0 .0);
+        if st.count == 0 {
+            return true;
+        }
+        let _slot = yield_slot();
         while st.count > 0 {
             match deadline {
                 None => st = self.0 .1.wait(st).unwrap_or_else(|e| e.into_inner()),
@@ -633,36 +710,50 @@ pub enum DispatchTimeoutResult {
     TimedOut,
 }
 
+#[derive(Default)]
+struct SemaphoreState {
+    /// the count; below zero it is minus the number of waiters that no signal has released yet
+    count: isize,
+    /// wake-ups handed out by `signal` that no waiter has taken yet: each one releases exactly one waiter
+    wakeups: usize,
+}
+
 /// `DispatchSemaphore`: a counting semaphore. The count may go negative while waiters are queued: each one owes the
 /// count it is waiting for. Clones share the same semaphore.
 #[derive(Clone)]
-pub struct DispatchSemaphore(Arc<(Mutex<isize>, Condvar)>);
+pub struct DispatchSemaphore(Arc<(Mutex<SemaphoreState>, Condvar)>);
 
 impl DispatchSemaphore {
     /// `init(value:)`.
     pub fn new(value: isize) -> Self {
-        DispatchSemaphore(Arc::new((Mutex::new(value), Condvar::new())))
+        DispatchSemaphore(Arc::new((Mutex::new(SemaphoreState { count: value, wakeups: 0 }), Condvar::new())))
     }
 
     /// `signal()`: increments the count. Returns true when a waiter was woken (the count did not stay positive).
+    /// Each such signal releases exactly one waiter.
     pub fn signal(&self) -> bool {
         let (m, cv) = &*self.0;
-        let mut v = lock(m);
-        *v += 1;
-        let woke = *v <= 0;
+        let mut st = lock(m);
+        st.count += 1;
+        let woke = st.count <= 0;
         if woke {
-            cv.notify_all();
+            st.wakeups += 1;
+            cv.notify_one();
         }
         woke
     }
 
-    /// `wait()`: decrements the count and blocks while it is negative.
+    /// `wait()`: decrements the count and, when it went negative, blocks until a signal releases this waiter.
     pub fn wait(&self) {
         let (m, cv) = &*self.0;
-        let mut v = lock(m);
-        *v -= 1;
-        while *v < 0 {
-            v = cv.wait(v).unwrap_or_else(|e| e.into_inner());
+        let mut st = lock(m);
+        st.count -= 1;
+        if st.count < 0 {
+            let _slot = yield_slot();
+            while st.wakeups == 0 {
+                st = cv.wait(st).unwrap_or_else(|e| e.into_inner());
+            }
+            st.wakeups -= 1;
         }
     }
 
@@ -671,21 +762,28 @@ impl DispatchSemaphore {
     pub fn wait_timeout(&self, timeout: Duration) -> DispatchTimeoutResult {
         let deadline = Instant::now().checked_add(timeout);
         let (m, cv) = &*self.0;
-        let mut v = lock(m);
-        *v -= 1;
-        while *v < 0 {
+        let mut st = lock(m);
+        st.count -= 1;
+        if st.count >= 0 {
+            return DispatchTimeoutResult::Success;
+        }
+        let _slot = yield_slot();
+        loop {
+            // checked before the deadline, so a wake-up that arrived in time is never left behind
+            if st.wakeups > 0 {
+                st.wakeups -= 1;
+                return DispatchTimeoutResult::Success;
+            }
             let left = match deadline {
                 Some(d) if d > Instant::now() => d - Instant::now(),
                 _ => {
-                    *v += 1;
-                    // the count is back: other waiters may now be owed a wake-up
-                    cv.notify_all();
+                    // no wake-up is pending, so this waiter is still owed in the count: take it back
+                    st.count += 1;
                     return DispatchTimeoutResult::TimedOut;
                 }
             };
-            v = cv.wait_timeout(v, left).unwrap_or_else(|e| e.into_inner()).0;
+            st = cv.wait_timeout(st, left).unwrap_or_else(|e| e.into_inner()).0;
         }
-        DispatchTimeoutResult::Success
     }
 }
 
@@ -732,6 +830,10 @@ impl DispatchWorkItem {
     pub fn wait(&self, timeout: Option<Duration>) -> bool {
         let deadline = timeout.map(|t| Instant::now() + t);
         let mut done = lock(&self.0.done.0);
+        if *done {
+            return true;
+        }
+        let _slot = yield_slot();
         while !*done {
             match deadline {
                 None => done = self.0.done.1.wait(done).unwrap_or_else(|e| e.into_inner()),
@@ -953,6 +1055,40 @@ mod tests {
         }
         assert!(g.wait(T));
         assert!(peak.load(Ordering::SeqCst) <= cap, "peak {} > cap {}", peak.load(Ordering::SeqCst), cap);
+    }
+
+    #[test]
+    fn pool_jobs_blocked_in_queue_waits_do_not_hold_the_width() {
+        // As many pool jobs as the pool is wide all wait on a group that only another pool job can open, then each
+        // waits on a serial queue that needs a pool slot of its own to drain.
+        let cap = pool().cap;
+        let gate = DispatchGroup::new();
+        gate.enter();
+        let q = DispatchQueue::serial("t.wait-from-pool");
+        let arrived = Arc::new(AtomicUsize::new(0));
+        let ran = Arc::new(AtomicUsize::new(0));
+        let g = DispatchGroup::new();
+        for _ in 0..cap {
+            let (gate, q, arrived, ran) = (gate.clone(), q.clone(), arrived.clone(), ran.clone());
+            DispatchQueue::global(Qos::UserInitiated).async_group(&g, move || {
+                arrived.fetch_add(1, Ordering::SeqCst);
+                gate.wait(None);
+                q.sync(move || {
+                    ran.fetch_add(1, Ordering::SeqCst);
+                });
+            });
+        }
+        let end = Instant::now() + Duration::from_secs(5);
+        while arrived.load(Ordering::SeqCst) < cap {
+            assert!(Instant::now() < end, "the jobs never started");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        // let the last one reach its wait, so every job is blocked before the opener is submitted
+        std::thread::sleep(Duration::from_millis(20));
+        let opener = gate.clone();
+        DispatchQueue::global(Qos::Utility).async_(move || opener.leave());
+        assert!(g.wait(T), "the pool stopped: every slot was held by a job waiting on queue work");
+        assert_eq!(ran.load(Ordering::SeqCst), cap);
     }
 
     #[test]
@@ -1183,6 +1319,78 @@ mod tests {
         assert!(!sem.signal());
         sem.wait();
         sem.wait();
+    }
+
+    /// Blocks until `n` threads are queued on the semaphore (its count is `-n`).
+    fn until_waiters(sem: &DispatchSemaphore, n: isize) {
+        let end = Instant::now() + Duration::from_secs(5);
+        while lock(&sem.0 .0).count != -n {
+            assert!(Instant::now() < end, "the waiters never queued");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    #[test]
+    fn semaphore_signal_releases_exactly_one_of_two_waiters() {
+        let sem = DispatchSemaphore::new(0);
+        let (tx, rx) = mpsc::channel();
+        let waiters: Vec<_> = (0..2)
+            .map(|_| {
+                let (s, tx) = (sem.clone(), tx.clone());
+                std::thread::spawn(move || {
+                    s.wait();
+                    let _ = tx.send(());
+                })
+            })
+            .collect();
+        until_waiters(&sem, 2);
+        assert!(sem.signal(), "two waiters were queued, so the signal should wake one");
+        assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok(), "one signal released no waiter");
+        assert!(rx.recv_timeout(Duration::from_millis(50)).is_err(), "one signal released both waiters");
+        assert!(sem.signal());
+        assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok(), "the second signal released no waiter");
+        for w in waiters {
+            w.join().unwrap();
+        }
+        // both waits were paid for: the count is back at zero
+        assert_eq!(sem.wait_timeout(Duration::ZERO), DispatchTimeoutResult::TimedOut);
+    }
+
+    #[test]
+    fn semaphore_of_one_works_as_a_lock_for_three_threads() {
+        let sem = DispatchSemaphore::new(1);
+        let inside = Arc::new(AtomicUsize::new(0));
+        let threads: Vec<_> = (0..3)
+            .map(|_| {
+                let (s, inside) = (sem.clone(), inside.clone());
+                std::thread::spawn(move || {
+                    for _ in 0..50 {
+                        assert_eq!(s.wait_timeout(Duration::from_secs(5)), DispatchTimeoutResult::Success, "a waiter was never released");
+                        assert_eq!(inside.fetch_add(1, Ordering::SeqCst), 0, "two threads held the semaphore");
+                        std::thread::yield_now();
+                        inside.fetch_sub(1, Ordering::SeqCst);
+                        s.signal();
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+        assert_eq!(sem.wait_timeout(Duration::ZERO), DispatchTimeoutResult::Success);
+    }
+
+    #[test]
+    fn semaphore_timed_out_waiter_does_not_take_a_later_signal() {
+        let sem = DispatchSemaphore::new(0);
+        let s2 = sem.clone();
+        let waiter = std::thread::spawn(move || s2.wait());
+        until_waiters(&sem, 1);
+        // a second waiter gives up: the first one is still the only one owed a signal
+        assert_eq!(sem.wait_timeout(Duration::from_millis(10)), DispatchTimeoutResult::TimedOut);
+        assert!(sem.signal());
+        waiter.join().unwrap();
+        assert!(!sem.signal(), "nobody is waiting any more");
     }
 }
 

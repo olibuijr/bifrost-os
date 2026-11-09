@@ -14,8 +14,6 @@ fn main() -> std::process::ExitCode {
         println!("bifrost-privd {}", env!("CARGO_PKG_VERSION"));
         return std::process::ExitCode::SUCCESS;
     }
-    // faillock's tally outlives a reboot (pam-bifrost-login dir=); the default /run/faillock is tmpfs
-    let _ = std::fs::create_dir_all("/var/lib/faillock");
     // the accessory approval policy outlives a reboot: the kernel default is a runtime parameter
     if let Some(p) = privd::methods::apply_saved_usb_policy() {
         eprintln!("bifrost-privd: usb policy {}", p.name());

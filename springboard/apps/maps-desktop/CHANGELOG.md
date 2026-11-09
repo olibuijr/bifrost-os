@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.9
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
 ## 0.7.8
 
 - The scroll wheel zooms the map about the pointer; File lists Print once; New Collection has its own button.

@@ -391,6 +391,13 @@ fn existing_files() -> Vec<String> {
     out
 }
 
+/// Splits the swap files found on disk into those `swaps` lists as active and the stale rest. After a reboot nothing
+/// has enabled the files of the previous boot, so they are dead space: [`decide`] only removes a file that is active
+/// and empty, and a stale one would still count against [`MAX_SWAP_FILES`] and keep its name taken.
+pub fn split_stale(existing: Vec<String>, swaps: &[SwapDev]) -> (Vec<String>, Vec<String>) {
+    existing.into_iter().partition(|f| swaps.iter().any(|s| s.path == *f))
+}
+
 /// The running pager: one [`tick`](Pager::tick) per supervisor loop turn.
 pub struct Pager {
     pub state: State,
@@ -399,7 +406,19 @@ pub struct Pager {
 
 impl Pager {
     pub fn new() -> Pager {
-        Pager { state: State { files: existing_files(), ..State::default() }, level_path: PathBuf::from(LEVEL_PATH) }
+        let mut files = existing_files();
+        // without the list of active swap nothing is known to be stale, so every file is kept
+        if let Ok(text) = fs::read_to_string("/proc/swaps") {
+            let (active, stale) = split_stale(files, &parse_swaps(&text));
+            for path in &stale {
+                match fs::remove_file(path) {
+                    Ok(()) => eprintln!("bifrostd: removed the stale swap file {path}"),
+                    Err(e) => eprintln!("bifrostd: stale swap file {path}: {e}"),
+                }
+            }
+            files = active;
+        }
+        Pager { state: State { files, ..State::default() }, level_path: PathBuf::from(LEVEL_PATH) }
     }
 
     /// Samples the system, decides and carries out the actions. A failed creation is forgotten (the file is removed)
@@ -623,6 +642,23 @@ mod tests {
         // pressure returns: the calm clock resets
         let (_, s3) = decide(&mem, psi(12.0, 0.0), &swaps, &s2, 2000);
         assert_eq!(s3.calm_since, None);
+    }
+
+    #[test]
+    fn files_left_by_an_earlier_boot_are_stale_and_only_active_ones_are_kept() {
+        let path1 = format!("{SWAP_DIR}/swap1");
+        let path2 = format!("{SWAP_DIR}/swap2");
+        // after a reboot: both files are on disk, only zram swaps
+        let (active, stale) = split_stale(vec![path1.clone(), path2.clone()], &[swap(ZRAM_DEV, 4096)]);
+        assert!(active.is_empty());
+        assert_eq!(stale, vec![path1.clone(), path2.clone()]);
+        // so the pager starts with no file held and the first name is free again
+        assert_eq!(next_path(&active), path1);
+
+        // after a restart of bifrostd alone the active file is kept, whether or not it holds pages
+        let (active, stale) = split_stale(vec![path1.clone(), path2.clone()], &[swap(ZRAM_DEV, 0), swap(&path2, 4096)]);
+        assert_eq!(active, vec![path2.clone()]);
+        assert_eq!(stale, vec![path1]);
     }
 
     #[test]

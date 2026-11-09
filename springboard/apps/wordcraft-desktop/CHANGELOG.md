@@ -4,6 +4,20 @@
 
 # Changelog
 
+## 0.16.0
+
+- Upstream wordcraft v0.16.0.
+  ## What's Changed
+  * Text boxes: a press inside one goes to its text, not to a picture under it by @arcanii in https://github.com/storytold/wordcraft/pull/4240
+  * Flag document fonts that aren't installed by @alehel in https://github.com/storytold/wordcraft/pull/4770
+  * DOCX: nil shading paints no fill, border theme colours win (part of #1991) by @VoiceLessQ in https://github.com/storytold/wordcraft/pull/4705
+  * Format readers: one border-type table for .doc, one HYPERLINK parser for DOCX, RTF and .doc by @VoiceLessQ in https://github.com/storytold/wordcraft/pull/4222
+
+## 0.15.2
+
+- Upstream wordcraft v0.15.2.
+  **Full Changelog**: https://github.com/storytold/wordcraft/compare/v0.15.1...v0.15.2
+
 ## 0.15.1
 
 - Upstream wordcraft v0.15.1.

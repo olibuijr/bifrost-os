@@ -96,6 +96,12 @@ pub fn parse_semver(v: &str) -> Option<(u64, u64, u64)> {
     it.next().is_none().then_some(r)
 }
 
+/// Whether `v` can name a version directory: a semver whose whole text, suffix included, is `[0-9A-Za-z.+-]`.
+/// `parse_semver` ignores what follows the first `-` or `+`, so on its own it lets a path separator through.
+pub fn safe_version(v: &str) -> bool {
+    parse_semver(v).is_some() && v.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'+' | b'-'))
+}
+
 // ---- manifest ----
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -241,10 +247,15 @@ pub fn validate(m: &Manifest, files: &[TarEntry], shell: &str) -> Result<(), Str
     if !valid_id(&m.id) {
         return Err(format!("invalid app id {:?}", m.id));
     }
+    // the shell's own keychain stores used to be app stores under these ids: no package may carry one
+    if crate::keychain::reserved_id(&m.id) {
+        return Err(format!("app id {:?} is reserved for the shell", m.id));
+    }
     if m.name.trim().is_empty() {
         return Err("manifest has no name".into());
     }
-    if parse_semver(&m.version).is_none() {
+    // the version names a directory under the app's folder, so it must be one safe path component
+    if !safe_version(&m.version) {
         return Err(format!("invalid version {:?}", m.version));
     }
     let need = if m.min_shell.is_empty() { (0, 0, 0) } else { parse_semver(&m.min_shell).ok_or_else(|| format!("invalid min_shell {:?}", m.min_shell))? };
@@ -437,7 +448,7 @@ fn read_registry(root: &Path) -> Vec<Entry> {
         .and_then(Json::as_array)
         .unwrap_or_default()
         .iter()
-        .filter_map(|a| Some(Entry { id: a.str_field("id").filter(|i| valid_id(i))?, name: a.str_field("name")?, version: a.str_field("version")?, previous: a.str_field("previous"), purchased: a.get("purchased").and_then(Json::as_u64).unwrap_or(0) as i64, exec: a.str_field("exec").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), icon: a.str_field("icon").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), kind: a.str_field("kind").unwrap_or_default(), provides: a.get("provides").and_then(Json::as_array).unwrap_or_default().iter().filter_map(|p| p.as_str().map(str::to_string)).collect() }))
+        .filter_map(|a| Some(Entry { id: a.str_field("id").filter(|i| valid_id(i))?, name: a.str_field("name")?, version: a.str_field("version").filter(|v| safe_version(v))?, previous: a.str_field("previous").filter(|v| safe_version(v)), purchased: a.get("purchased").and_then(Json::as_u64).unwrap_or(0) as i64, exec: a.str_field("exec").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), icon: a.str_field("icon").filter(|e| e.is_empty() || safe_path(e).is_ok()).unwrap_or_default(), kind: a.str_field("kind").unwrap_or_default(), provides: a.get("provides").and_then(Json::as_array).unwrap_or_default().iter().filter_map(|p| p.as_str().map(str::to_string)).collect() }))
         .filter(|e| !e.exec.is_empty() || e.kind == KIND_SYSTEM || e.kind == KIND_SERVICE)
         .collect()
 }
@@ -482,7 +493,7 @@ pub fn install_package(root: &Path, bytes: &[u8], sha256: &str, shell: &str) -> 
     if hex(&h.finish()) != sha256.to_ascii_lowercase() {
         return Err("checksum mismatch; package discarded".into());
     }
-    install_archive(root, &mut std::io::Cursor::new(bytes), shell)
+    install_archive(root, &mut std::io::Cursor::new(bytes), shell, None)
 }
 
 /// The ML-DSA context string that separates package signatures from other uses of a publisher key.
@@ -622,8 +633,9 @@ pub fn runs_here(path: &Path) -> bool {
 }
 
 /// Installs the (already verified) package `r` holds: the archive is indexed and
-/// unpacked straight from where it is, never loaded whole.
-fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str) -> Result<InstalledApp, String> {
+/// unpacked straight from where it is, never loaded whole. With `expected_id` (a store install: the id of the
+/// catalogue entry) a package that declares another id is refused before anything is unpacked.
+fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str, expected_id: Option<&str>) -> Result<InstalledApp, String> {
     let files = index_tar(r)?;
     let mf = files.iter().find(|f| !f.is_dir && f.path == Path::new("manifest.toml")).ok_or("package has no manifest.toml")?;
     if mf.size > MAX_MANIFEST {
@@ -633,6 +645,9 @@ fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str) -> Resul
     r.seek(SeekFrom::Start(mf.offset)).and_then(|_| r.read_exact(&mut text)).map_err(|e| e.to_string())?;
     let m = parse_manifest(&String::from_utf8_lossy(&text))?;
     validate(&m, &files, shell)?;
+    if expected_id.is_some_and(|id| id != m.id) {
+        return Err(IDENTITY_MISMATCH.into());
+    }
     // refused before anything is unpacked, so no version directory is left behind
     if let Some(host) = host_elf_machine() {
         for f in files.iter().filter(|f| !f.is_dir && f.size >= 20) {
@@ -691,24 +706,27 @@ fn install_archive<R: Read + Seek>(root: &Path, r: &mut R, shell: &str) -> Resul
 /// the SHA-256 and installs it from there: the package is never held in memory.
 /// Error returned when a download is stopped by its cancel flag; the `.part` file is kept.
 pub const CANCELLED: &str = "download cancelled";
+/// Error returned when a package declares another id than the store entry it was downloaded for.
+pub const IDENTITY_MISMATCH: &str = "Package identity mismatch";
 
 pub fn install_download(root: &Path, id: &str, url: &str, size: u64, sha256: &str, shell: &str, progress: &std::sync::atomic::AtomicU64, cancel: &std::sync::atomic::AtomicBool) -> Result<InstalledApp, String> {
     let client = crate::privd_client::connect();
     if client.is_local() {
-        return install_download_local(root, url, size, sha256, shell, progress, cancel);
+        return install_download_local(root, id, url, size, sha256, shell, progress, cancel);
     }
     // user session: privd fetches the catalogue and the package itself and checks the catalogue hash; the
     // session passes only the app id, so there is no user-staged file for root to open
     let got = client.store_install(id).map_err(|e| e.to_string())?;
     if got != id {
-        return Err("Package identity mismatch".into());
+        return Err(IDENTITY_MISMATCH.into());
     }
     let _ = (url, size, sha256, progress, cancel);
     installed_in(root).into_iter().find(|a| a.id == id).ok_or_else(|| "installed app not found in the registry".to_string())
 }
 
-/// The root-side install: downloads under `root` and installs from there.
-pub fn install_download_local(root: &Path, url: &str, size: u64, sha256: &str, shell: &str, progress: &std::sync::atomic::AtomicU64, cancel: &std::sync::atomic::AtomicBool) -> Result<InstalledApp, String> {
+/// The root-side install: downloads under `root` and installs from there. `id` is the store entry's app id; a
+/// package whose manifest declares another id is discarded before it is unpacked.
+pub fn install_download_local(root: &Path, id: &str, url: &str, size: u64, sha256: &str, shell: &str, progress: &std::sync::atomic::AtomicU64, cancel: &std::sync::atomic::AtomicBool) -> Result<InstalledApp, String> {
     let part = apps_dir(root).join(format!(".download-{}.part", sha256.to_ascii_lowercase().chars().filter(char::is_ascii_alphanumeric).take(16).collect::<String>()));
     let result = download_to(url, size, &part, progress, cancel).and_then(|got| {
         if got != sha256.to_ascii_lowercase() {
@@ -716,12 +734,12 @@ pub fn install_download_local(root: &Path, url: &str, size: u64, sha256: &str, s
         }
         enforce_signature_policy(&[Path::new(PACKAGED_PUBLISHER_KEYS), Path::new(PINNED_PUBLISHER_KEYS)], &part, url)?;
         let mut file = std::fs::File::open(&part).map_err(|e| e.to_string())?;
-        install_archive(root, &mut file, shell)
+        install_archive(root, &mut file, shell, Some(id))
     });
     if result.as_ref().is_err_and(|e| e.contains("built for another CPU")) {
         note_refused(root, sha256);
     }
-    if result.is_ok() || result.as_ref().is_err_and(|e| e.contains("checksum mismatch") || e.contains("signature check failed") || e.contains("built for another CPU")) {let _ = std::fs::remove_file(&part);}
+    if result.is_ok() || result.as_ref().is_err_and(|e| e.contains("checksum mismatch") || e.contains("signature check failed") || e.contains("built for another CPU") || e == IDENTITY_MISMATCH) {let _ = std::fs::remove_file(&part);}
     result
 }
 
@@ -749,11 +767,7 @@ pub fn install_store_app(root: &Path, id: &str) -> Result<InstalledApp, String> 
     let catalogue = api::parse_catalog(std::str::from_utf8(&bytes).map_err(|e| e.to_string())?)?;
     let app = catalogue.iter().find(|a| a.id == id && Kind::parse(&a.kind).is_some()).ok_or("App not found in PC App Store")?;
     let done = std::sync::atomic::AtomicU64::new(0);
-    let installed = install_download_local(root, &net::absolute(&app.package), app.size, &app.sha256, shell_version(), &done, &std::sync::atomic::AtomicBool::new(false))?;
-    if installed.id != id {
-        return Err("Package identity mismatch".into());
-    }
-    Ok(installed)
+    install_download_local(root, id, &net::absolute(&app.package), app.size, &app.sha256, shell_version(), &done, &std::sync::atomic::AtomicBool::new(false))
 }
 
 /// Roll back to the previous version, when one is kept.
@@ -959,6 +973,16 @@ pub mod tests {
     }
 
     #[test]
+    fn a_package_cannot_carry_the_id_of_a_shell_keychain_store() {
+        let files = read_tar(&pkg(MANIFEST)).unwrap();
+        let mut m = parse_manifest(MANIFEST).unwrap();
+        for id in ["bifrost.screentime", "bifrost.backup", "bifrost.quicksearch"] {
+            m.id = id.into();
+            assert!(validate(&m, &files, "0.1.0").unwrap_err().contains("reserved"), "{id}");
+        }
+    }
+
+    #[test]
     fn an_app_provides_its_wallpapers_through_the_manifest() {
         let text = format!("{MANIFEST}wallpaper_kind = \"day\"\nwallpapers = [\"wallpapers/a.png\", \"wallpapers/b.png\"]\n");
         let m = parse_manifest(&text).unwrap();
@@ -1150,6 +1174,63 @@ pub mod tests {
         assert_eq!(std::fs::read_link(dir.join("current")).unwrap(), Path::new("1.1.0"));
         uninstall(&root, "is.olibuijr.calc").unwrap();
         assert!(installed_in(&root).is_empty() && !dir.exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_version_with_a_path_separator_is_refused_before_anything_is_unpacked() {
+        assert!(safe_version("1.0.0") && safe_version("1.2.3-rc.1+build5"));
+        for bad in ["1.0.0-a/../../../victim", "1.0.0+a/b", "1.0.0-a\\b", "1.0.0-a b", "1.0", ""] {
+            assert!(!safe_version(bad), "{bad:?}");
+        }
+        let root = scratch("version-path");
+        std::fs::create_dir_all(root.join("victim")).unwrap();
+        std::fs::write(root.join("victim/keep"), b"x").unwrap();
+        // the first package makes `apps/<id>/1.0.0-a` exist, so the `..` of the second one would resolve
+        let first = pkg(&MANIFEST.replace("1.0.0", "1.0.0-a"));
+        install_package(&root, &first, &sum(&first), "0.1.0").unwrap();
+        let bytes = pkg(&MANIFEST.replace("1.0.0", "1.0.0-a/../../../victim"));
+        let err = install_package(&root, &bytes, &sum(&bytes), "0.1.0").unwrap_err();
+        assert!(err.contains("invalid version"), "{err}");
+        assert_eq!(std::fs::read(root.join("victim/keep")).unwrap(), b"x", "the folder outside the app is untouched");
+        assert!(!root.join("victim.part").exists(), "nothing was staged outside the app folder");
+        assert_eq!(installed_in(&root)[0].version, "1.0.0-a");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_registry_version_that_is_not_one_path_component_is_not_trusted() {
+        let root = scratch("registry-version");
+        std::fs::create_dir_all(apps_dir(&root)).unwrap();
+        std::fs::write(registry_path(&root), concat!(
+            "{\"apps\":[",
+            "{\"id\":\"is.olibuijr.calc\",\"name\":\"Calc\",\"version\":\"1.1.0\",\"previous\":\"1.0.0-a/../../../victim\",\"exec\":\"bin/calc\",\"icon\":\"\",\"kind\":\"\",\"provides\":[]},",
+            "{\"id\":\"is.olibuijr.other\",\"name\":\"Other\",\"version\":\"1.0.0-a/../../../victim\",\"exec\":\"bin/other\",\"icon\":\"\",\"kind\":\"\",\"provides\":[]}",
+            "]}\n")).unwrap();
+        let apps = installed_in(&root);
+        assert_eq!(apps.len(), 1, "an entry whose version would leave its folder is dropped");
+        assert_eq!((apps[0].id.as_str(), apps[0].version.as_str(), apps[0].previous.as_deref()), ("is.olibuijr.calc", "1.1.0", None));
+        assert_eq!(rollback(&root, "is.olibuijr.calc").unwrap_err(), "no previous version");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_package_that_declares_another_id_than_the_store_entry_is_refused_before_it_is_unpacked() {
+        let root = scratch("identity");
+        // the app the foreign package names is installed; it must stay as it is
+        let files = pkg(MANIFEST);
+        let before = install_package(&root, &files, &sum(&files), "0.1.0").unwrap();
+        let foreign = pkg(&MANIFEST.replace("1.0.0", "2.0.0"));
+        let err = install_archive(&root, &mut std::io::Cursor::new(&foreign), "0.1.0", Some("is.olibuijr.notes")).unwrap_err();
+        assert_eq!(err, IDENTITY_MISMATCH);
+        let dir = apps_dir(&root).join("is.olibuijr.calc");
+        assert!(!dir.join("2.0.0").exists() && !dir.join(".2.0.0.part").exists(), "nothing unpacked");
+        assert_eq!(std::fs::read_link(dir.join("current")).unwrap(), Path::new("1.0.0"));
+        assert_eq!(installed_in(&root), vec![before]);
+        assert!(!apps_dir(&root).join("is.olibuijr.notes").exists());
+        // the matching id installs
+        let app = install_archive(&root, &mut std::io::Cursor::new(&foreign), "0.1.0", Some("is.olibuijr.calc")).unwrap();
+        assert_eq!(app.version, "2.0.0");
         let _ = std::fs::remove_dir_all(root);
     }
 

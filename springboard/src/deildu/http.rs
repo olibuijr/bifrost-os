@@ -488,7 +488,9 @@ fn read_response(s: &mut dyn Stream, limit: usize, head_only: bool) -> io::Resul
     Ok(((status, headers, body), !close && framing != Framing::Close))
 }
 
-type Idle = HashMap<(String, u16), Vec<Box<dyn Stream>>>;
+/// Idle connections by (TLS, host, port): a stream is only reused for the transport it was opened with.
+type IdleKey = (bool, String, u16);
+type Idle = HashMap<IdleKey, Vec<Box<dyn Stream>>>;
 
 /// An HTTP session: connection reuse, redirects and, only when asked for (`with_cookies`), a cookie jar.
 ///
@@ -622,7 +624,7 @@ impl Client {
         self.send(method, url, extra, body.map(<[u8]>::to_vec), limit)
     }
 
-    fn send(&self, method: &str, url: &str, extra: Vec<(String, String)>, body: Option<Vec<u8>>, limit: usize) -> io::Result<Response> {
+    fn send(&self, method: &str, url: &str, mut extra: Vec<(String, String)>, body: Option<Vec<u8>>, limit: usize) -> io::Result<Response> {
         let (mut method, mut url, mut body) = (method.to_string(), url.to_string(), body);
         for _ in 0..=MAX_REDIRECTS {
             let u = Url::parse(&url).map_err(|_| io::Error::other("bad url"))?;
@@ -630,7 +632,12 @@ impl Client {
             let location = headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Location")).map(|(_, v)| v.clone());
             match (status, location) {
                 (301 | 302 | 303 | 307 | 308, Some(loc)) => {
-                    url = u.join(&loc).map_err(|_| io::Error::other("bad redirect"))?.to_string();
+                    let next = u.join(&loc).map_err(|_| io::Error::other("bad redirect"))?;
+                    // the caller's headers were meant for the origin it named: a redirect elsewhere gets none of its credentials
+                    if !same_origin(&u, &next) {
+                        extra.retain(|(k, _)| REDIRECT_SAFE_HEADERS.iter().any(|safe| k.eq_ignore_ascii_case(safe)));
+                    }
+                    url = next.to_string();
                     if status == 303 || (status != 307 && status != 308 && method == "POST") {
                         method = "GET".into();
                         body = None;
@@ -642,11 +649,11 @@ impl Client {
         Err(io::Error::other("too many redirects"))
     }
 
-    fn take_idle(&self, key: &(String, u16)) -> Option<Box<dyn Stream>> {
+    fn take_idle(&self, key: &IdleKey) -> Option<Box<dyn Stream>> {
         self.idle.lock().unwrap().get_mut(key).and_then(Vec::pop)
     }
 
-    fn park(&self, key: (String, u16), s: Box<dyn Stream>) {
+    fn park(&self, key: IdleKey, s: Box<dyn Stream>) {
         let mut idle = self.idle.lock().unwrap();
         let v = idle.entry(key).or_default();
         if v.len() < IDLE_PER_HOST {
@@ -663,7 +670,7 @@ impl Client {
         if !tls && u.scheme() != "http" {
             return Err(io::Error::other("unsupported scheme"));
         }
-        let key = (host.clone(), port);
+        let key = (tls, host.clone(), port);
         let cookie = if self.cookies { self.jar.lock().unwrap().header(&host, tls) } else { None };
         let req = request_bytes(method, u, &host, extra, &self.agent, cookie.as_deref(), body);
         let mut reused = true;
@@ -699,6 +706,14 @@ impl Client {
             }
         }
     }
+}
+
+/// The caller-supplied headers that still go out after a redirect to another origin; everything else (a bearer
+/// token, an API key) stays with the origin the caller named.
+const REDIRECT_SAFE_HEADERS: [&str; 5] = ["User-Agent", "Accept", "Accept-Language", "Range", "Content-Type"];
+
+fn same_origin(a: &Url, b: &Url) -> bool {
+    a.scheme() == b.scheme() && a.host_str() == b.host_str() && a.port_or_known_default() == b.port_or_known_default()
 }
 
 fn request_bytes(method: &str, u: &Url, host: &str, extra: &[(String, String)], default_agent: &str, cookie: Option<&str>, body: Option<&[u8]>) -> Vec<u8> {
@@ -979,6 +994,40 @@ pub(crate) mod tests {
         let r = c.get("https://h.net/again", None, 1024).unwrap();
         assert_eq!(r.body, b"again");
         assert_eq!(*fake.connects.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn an_idle_plain_connection_is_not_reused_for_https_on_the_same_port() {
+        let fake = Fake::new(vec![]);
+        fake.route("GET /", &ok("x"));
+        let c = Client::new(fake.clone(), Jar::default());
+        c.get("http://h/a", None, 100).unwrap();
+        assert_eq!(*fake.connects.lock().unwrap(), 1);
+        c.get("https://h:80/b", None, 100).unwrap();
+        assert_eq!(*fake.connects.lock().unwrap(), 2, "the https request opened its own connection");
+        c.get("http://h/c", None, 100).unwrap();
+        c.get("https://h:80/d", None, 100).unwrap();
+        assert_eq!(*fake.connects.lock().unwrap(), 2, "each scheme reuses its own idle connection");
+    }
+
+    #[test]
+    fn caller_credentials_are_not_sent_to_another_origin_after_a_redirect() {
+        let fake = Fake::new(vec![]);
+        fake.route("GET /media", "HTTP/1.1 307 Temporary Redirect\r\nLocation: https://cdn.example/file\r\nContent-Length: 0\r\n\r\n");
+        fake.route("GET /file", &ok("data"));
+        fake.route("GET /local", "HTTP/1.1 302 Found\r\nLocation: /here\r\nContent-Length: 0\r\n\r\n");
+        fake.route("GET /here", &ok("data"));
+        let c = Client::new(fake.clone(), Jar::default());
+        let headers = [("Authorization", "Bearer secret"), ("X-Api-Key", "secret"), ("User-Agent", "Own/1")];
+        assert_eq!(c.get_with_headers("https://home.example/media", &headers, 1024).unwrap().body, b"data");
+        assert_eq!(c.get_with_headers("https://home.example/local", &headers, 1024).unwrap().body, b"data");
+        let reqs = fake.requests.lock().unwrap().clone();
+        assert!(reqs[0].contains("Authorization: Bearer secret\r\n"), "{}", reqs[0]);
+        assert!(reqs[1].starts_with("GET /file HTTP/1.1\r\nHost: cdn.example\r\n"), "{}", reqs[1]);
+        assert!(!reqs[1].contains("secret"), "{}", reqs[1]);
+        assert!(reqs[1].contains("User-Agent: Own/1\r\n"), "the named agent survives: {}", reqs[1]);
+        assert!(reqs[3].starts_with("GET /here "), "{}", reqs[3]);
+        assert!(reqs[3].contains("Authorization: Bearer secret\r\n") && reqs[3].contains("X-Api-Key: secret\r\n"), "same origin keeps them: {}", reqs[3]);
     }
 
     #[test]

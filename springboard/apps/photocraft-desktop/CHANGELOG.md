@@ -4,6 +4,20 @@
 
 # Changelog
 
+## 0.21.0
+
+- Upstream photocraft v0.21.0.
+  ## What's Changed
+  * Save the flattened document at full size into .pcraft files as an option by @dotCooCoo in https://github.com/storytold/photocraft/pull/9913
+  * Add guarded scratch storage and owned memory supervision by @vistaero in https://github.com/storytold/photocraft/pull/5330
+  * Save: stop doubling the encoded file in memory (#6607) by @VishnuByrraju in https://github.com/storytold/photocraft/pull/8115
+  * Stream native PSD/PSB and EXR imports through bounded bands by @vistaero in https://github.com/storytold/photocraft/pull/5331
+
+## 0.20.2
+
+- Upstream photocraft v0.20.2.
+  **Full Changelog**: https://github.com/storytold/photocraft/compare/v0.20.1...v0.20.2
+
 ## 0.20.1
 
 - Upstream photocraft v0.20.1.

@@ -10,7 +10,7 @@ use bifrost_audio_driver::loopback::LoopbackDriver;
 use bifrost_audio_driver::transport::CompositeDriver;
 use bifrost_audio_driver::Driver;
 use bifrost_audio_hal::{IoProcConfig, Role, System};
-use bifrost_audio_types::{props, AudioError, ObjectId, PropertyAddress, PropertyValue, SYSTEM_OBJECT};
+use bifrost_audio_types::{props, AudioError, ObjectId, PropertyAddress, PropertyValue, Scope, SYSTEM_OBJECT};
 use bifrost_audiod::control::{listen, serve, CoreConfig, NoObjects, ServerCore};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -131,6 +131,34 @@ fn a_client_plays_on_the_default_output_the_server_chose() {
 
     let (cycles, ok) = run_output(&device);
     assert!(ok, "the IO procedure got {cycles} cycles in 5 s");
+}
+
+/// The compatibility daemons list a device as a sink or a source by the scoped `LEVEL` it publishes: the server
+/// defines it for exactly the directions the device has channels in.
+#[test]
+fn a_device_publishes_its_level_only_for_the_directions_it_has() {
+    let server = Server::start("directions", || {
+        let mut playback = NullDriver::stereo("alsa:PCH:0", 48_000.0);
+        playback.transport = "pci".into();
+        playback.input_channels = 0;
+        let mut capture = NullDriver::stereo("alsa:USB:0", 48_000.0);
+        capture.transport = "usb".into();
+        capture.output_channels = 0;
+        vec![Box::new(NullDriver::new(vec![playback, capture])) as Box<dyn Driver>]
+    });
+    let sys = server.connect("test.directions");
+    let devices = sys.devices().unwrap();
+    let by_uid = |uid: &str| {
+        devices
+            .iter()
+            .find(|d| d.get(PropertyAddress::global(props::DEVICE_UID)) == Ok(PropertyValue::String(uid.into())))
+            .unwrap_or_else(|| panic!("{uid} is listed"))
+    };
+    let level = |uid: &str, scope| by_uid(uid).get(PropertyAddress::scoped(props::LEVEL, scope));
+    assert!(level("alsa:PCH:0", Scope::Output).is_ok());
+    assert_eq!(level("alsa:PCH:0", Scope::Input), Err(AudioError::UnknownProperty));
+    assert!(level("alsa:USB:0", Scope::Input).is_ok());
+    assert_eq!(level("alsa:USB:0", Scope::Output), Err(AudioError::UnknownProperty));
 }
 
 #[test]

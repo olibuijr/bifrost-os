@@ -128,7 +128,11 @@ impl NetworkConfig {
         if self.ssid.is_empty() || self.ssid.len() > 32 {
             return Some("Enter the network name");
         }
-        let n = self.password.chars().count();
+        // a WPA passphrase is limited in bytes, not characters
+        let n = match self.security {
+            Security::Wpa | Security::Wpa2 | Security::Wpa2Wpa3 => self.password.len(),
+            _ => self.password.chars().count(),
+        };
         let (min, max) = self.security.password_len();
         let key_ok = match self.security {
             Security::Wep => wep_key_ok(&self.password),
@@ -211,10 +215,16 @@ impl NetworkConfig {
 }
 
 /// A 64-digit hex key is a raw PSK and is written unquoted, as wpa_supplicant
-/// itself saves it.
+/// itself saves it. Any other value is a passphrase and is always quoted:
+/// for `psk` the supplicant takes an unquoted value only as a 64-digit raw
+/// key, and it looks for the closing quote from the end, so quotes and
+/// non-ASCII bytes inside are fine. Only a control character (which would
+/// break the line) still falls back to hex, which the supplicant refuses.
 fn psk_value(p: &str) -> String {
     if p.len() == 64 && p.bytes().all(|b| b.is_ascii_hexdigit()) {
         p.to_string()
+    } else if p.bytes().all(|b| b >= 0x20 && b != 0x7f) {
+        format!("\"{p}\"")
     } else {
         wpa::quoted(p)
     }
@@ -367,6 +377,33 @@ mod tests {
         assert!(wpa3.contains("key_mgmt=SAE\n\tsae_password=\"secret12\"\n\tieee80211w=2\n"));
         let mixed = NetworkConfig::personal("Home", Some("secret12")).block(1);
         assert!(mixed.contains("key_mgmt=WPA-PSK SAE\n\tpsk=\"secret12\"\n\tieee80211w=1\n"));
+    }
+
+    #[test]
+    fn a_passphrase_with_a_quote_or_non_ascii_letters_stays_quoted() {
+        for pass in ["my\"pass123", "\"quoted\"", "lykilorð-þæö", "a\"#b c d e"] {
+            let n = NetworkConfig::personal("Home", Some(pass));
+            assert_eq!(n.problem(), None, "{pass}");
+            let psk = n.fields(1).into_iter().find(|(k, _)| *k == "psk").unwrap().1;
+            assert_eq!(psk, format!("\"{pass}\""), "hex of any other length is not a valid psk");
+            for security in [Security::Wpa, Security::Wpa2, Security::Wpa2Wpa3] {
+                let nets = vec![NetworkConfig { security, ..n.clone() }];
+                assert_eq!(parse_conf(&conf("/d", &nets)), nets, "{pass}");
+            }
+        }
+        // 32 characters with a quote must not become 64 hex digits (a raw key)
+        let long = format!("{}\"", "a".repeat(31));
+        assert_eq!(psk_value(&long), format!("\"{long}\""));
+        assert_eq!(psk_value("line\nbreak"), "6c696e650a627265616b", "a control character never reaches the file as text");
+    }
+
+    #[test]
+    fn a_passphrase_is_limited_to_63_bytes() {
+        let wide = "þ".repeat(32);
+        assert_eq!((wide.chars().count(), wide.len()), (32, 64));
+        assert!(NetworkConfig::personal("Home", Some(&wide)).problem().is_some());
+        assert_eq!(NetworkConfig::personal("Home", Some(&"þ".repeat(31))).problem(), None);
+        assert_eq!(NetworkConfig { password: wide, ..NetworkConfig::new("Home", Security::Wpa3) }.problem(), None);
     }
 
     #[test]

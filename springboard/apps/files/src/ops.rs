@@ -110,6 +110,17 @@ pub(crate) fn take_origin(bin: &Path, stored: &str) -> Option<PathBuf> {
     Some(PathBuf::from(origin))
 }
 
+/// Puts the trashed item `path` back into the folder it came from (`home` when that folder is gone). The recorded
+/// origin is dropped only once the item is back, so a Put Back that failed can be tried again.
+pub(crate) fn restore_to_origin(bin: &Path, home: &Path, path: &Path) -> std::io::Result<PathBuf> {
+    let stored = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let origin = read_origins(bin).into_iter().find(|(name, _)| *name == stored).map(|(_, origin)| PathBuf::from(origin));
+    let target = origin.filter(|o| o.is_dir()).unwrap_or_else(|| home.to_path_buf());
+    let put = trash::restore(path, &target)?;
+    let _ = take_origin(bin, &stored);
+    Ok(put)
+}
+
 /// Drops origins for items that are no longer in `bin` (purged or restored by hand).
 pub(crate) fn prune_origins(bin: &Path) {
     let lines: Vec<_> = read_origins(bin).into_iter().filter(|(name, _)| bin.join(name).symlink_metadata().is_ok()).collect();
@@ -528,9 +539,7 @@ impl Files {
         let home = self.home.clone();
         let mut failed = None;
         for path in self.selected_paths() {
-            let stored = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-            let target = take_origin(&bin, &stored).filter(|o| o.is_dir()).unwrap_or_else(|| home.clone());
-            if let Err(e) = trash::restore(&path, &target) {
+            if let Err(e) = restore_to_origin(&bin, &home, &path) {
                 failed = Some(e.to_string());
             }
         }
@@ -741,6 +750,25 @@ mod receive_tests {
     }
 
     #[test]
+    fn a_put_back_that_fails_keeps_the_origin_for_the_next_try() {
+        let d = dir("origin");
+        let (bin, home, from) = (d.join("bin"), d.join("home"), d.join("from"));
+        for p in [&bin, &home, &from] {
+            std::fs::create_dir_all(p).unwrap();
+        }
+        record_origin(&bin, "note.txt", &from);
+        // the item cannot be moved (it is not there): the restore fails and the origin stays on record
+        assert!(restore_to_origin(&bin, &home, &bin.join("note.txt")).is_err());
+        assert_eq!(read_origins(&bin).len(), 1);
+        // the next try goes to the folder it came from, not to Home, and only then is the record dropped
+        std::fs::write(bin.join("note.txt"), b"n").unwrap();
+        assert_eq!(restore_to_origin(&bin, &home, &bin.join("note.txt")).unwrap(), from.join("note.txt"));
+        assert!(read_origins(&bin).is_empty());
+        assert_eq!(std::fs::read_dir(&home).unwrap().count(), 0);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
     fn a_copy_takes_a_free_name_and_leaves_nothing_on_failure() {
         let d = dir("name");
         std::fs::write(d.join("a.txt"), b"old").unwrap();
@@ -908,33 +936,51 @@ mod rename_tests {
         assert!(files.naming.is_none(), "Return in the editor commits it");
     }
 
+    /// A window on a real folder that holds the folders Alpha and Beta. A folder that is not on disk opens the nearest
+    /// one above it, so the tests that open a folder need real ones.
+    fn real_folders(name: &str) -> (PathBuf, Files) {
+        let root = std::env::temp_dir().join(format!("files-ops-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let entry = |n: &str| {
+            std::fs::create_dir_all(root.join(n)).unwrap();
+            Entry { path: root.join(n), ..crate::tests::folder(n) }
+        };
+        let mut files = crate::tests::fixture(vec![entry("Alpha"), entry("Beta")]);
+        files.home = root.clone();
+        files.path = root.clone();
+        (root, files)
+    }
+
     #[test]
     fn return_in_the_search_field_still_opens_the_hit() {
         let ctx = test_ctx();
-        let mut files = crate::tests::fixture(vec![crate::tests::folder("Alpha"), crate::tests::folder("Beta")]);
+        let (root, mut files) = real_folders("search-open");
         files.select_only(1);
         files.searching = true;
         assert!(files.event(&ctx, Input::Key(KeyInput::Code(13))));
         assert!(files.naming.is_none(), "no rename from the search field");
-        assert_eq!(files.path, PathBuf::from("/fixture/Beta"), "the selected hit opens");
+        assert_eq!(files.path, root.join("Beta"), "the selected hit opens");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
     fn cmd_o_and_cmd_down_open_and_cmd_up_goes_to_the_enclosing_folder() {
-        let mut files = crate::tests::fixture(vec![crate::tests::folder("Alpha"), crate::tests::folder("Beta")]);
+        let (root, mut files) = real_folders("open-keys");
+        let beta = files.rows[1].clone();
         files.select_only(0);
         assert!(files.chord(24, CHORD_META), "Cmd+O");
-        assert_eq!(files.path, PathBuf::from("/fixture/Alpha"));
+        assert_eq!(files.path, root.join("Alpha"));
         assert!(files.chord(103, CHORD_META), "Cmd+Up");
-        assert_eq!(files.path, PathBuf::from("/fixture"));
-        files.rows = vec![crate::tests::folder("Beta")];
+        assert_eq!(files.path, root);
+        files.rows = vec![beta];
         files.select_only(0);
         assert!(files.chord(108, CHORD_META), "Cmd+Down");
-        assert_eq!(files.path, PathBuf::from("/fixture/Beta"));
+        assert_eq!(files.path, root.join("Beta"));
         // nothing selected: nothing to open
         files.selection.clear();
         assert!(files.chord(24, CHORD_META));
-        assert_eq!(files.path, PathBuf::from("/fixture/Beta"));
+        assert_eq!(files.path, root.join("Beta"));
+        let _ = std::fs::remove_dir_all(&root);
         // the editor owns the keys while it is open
         files.rows = vec![file("c.txt")];
         files.select_only(0);

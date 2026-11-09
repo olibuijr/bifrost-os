@@ -5,9 +5,12 @@
 //! `ok` or `err <reason>`. `nice` must be between -5 and 0 and `util_min` between 0 and 1024 (0 clears the hint, and 0
 //! puts nice back to 0 when the game leaves the front).
 //!
-//! Who may ask: the peer of the socket (`SO_PEERCRED`) may only name its own child, owned by the same user, whose
-//! executable lives under `<root>/apps/` (an installed app). Every thread of that process gets the setting, because
-//! nice and uclamp are per thread on Linux. Nothing else is accepted, so the request cannot reach other processes.
+//! Who may ask: the peer of the socket (`SO_PEERCRED`) may only name its own child, owned by the same user, or by any
+//! user when the peer is root (the shell runs as root and starts apps as the installed account). The child is usually
+//! the sandbox launcher, not the app, so the setting goes to the processes below it (and the child itself) that belong
+//! to the child's user and whose executable lives under `<root>/apps/` (an installed app). Every thread of those
+//! processes gets the setting, because nice and uclamp are per thread on Linux. Nothing else is accepted, so the
+//! request cannot reach other processes.
 
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -54,19 +57,40 @@ pub fn stat_ppid(stat: &str) -> Option<u32> {
     rest.split_whitespace().nth(1)?.parse().ok()
 }
 
-/// The check that decides whether `peer` may change `target`: a child of the peer, of the same user, running an app
-/// installed under `apps`. Returns the reason it is refused.
-pub fn allowed(target_ppid: u32, target_uid: u32, target_exe: &Path, peer_pid: u32, peer_uid: u32, apps: &Path) -> Result<(), &'static str> {
+/// The check that decides whether `peer` may name `target`: a child of the peer, of the same user. A root peer may
+/// name a child of any user: the shell runs as root and starts each app as the installed account. Returns the reason it
+/// is refused.
+pub fn allowed(target_ppid: u32, target_uid: u32, peer_pid: u32, peer_uid: u32) -> Result<(), &'static str> {
     if target_ppid != peer_pid {
         return Err("not a child of the caller");
     }
-    if target_uid != peer_uid {
+    if peer_uid != 0 && target_uid != peer_uid {
         return Err("another user's process");
     }
-    if !target_exe.starts_with(apps) {
-        return Err("not an installed app");
-    }
     Ok(())
+}
+
+/// `pid` and every process below it in `parents` (pairs of pid and parent pid), nearest first. The named child of the
+/// shell is the sandbox launcher; the app runs one or two levels below it.
+pub fn descendants(pid: u32, parents: &[(u32, u32)]) -> Vec<u32> {
+    let mut out = vec![pid];
+    let mut i = 0;
+    while i < out.len() {
+        let parent = out[i];
+        for &(child, ppid) in parents {
+            if ppid == parent && !out.contains(&child) {
+                out.push(child);
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Whether a process may get the setting: it runs as the user of the named child and its executable is installed under
+/// `apps`. This leaves out the sandbox launcher and anything it started that is not part of the app.
+pub fn is_app(uid: u32, exe: &Path, named_uid: u32, apps: &Path) -> bool {
+    uid == named_uid && exe.starts_with(apps)
 }
 
 /// `struct sched_attr` (linux/sched/types.h), SCHED_ATTR_SIZE_VER1.
@@ -154,6 +178,18 @@ fn proc_owner(pid: u32) -> Option<(u32, u32)> {
     Some((ppid, uid))
 }
 
+/// Every process in `/proc` with its parent pid.
+fn proc_parents() -> Vec<(u32, u32)> {
+    let Ok(rd) = std::fs::read_dir("/proc") else { return Vec::new() };
+    rd.flatten()
+        .filter_map(|e| {
+            let pid: u32 = e.file_name().to_str()?.parse().ok()?;
+            let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+            Some((pid, stat_ppid(&stat)?))
+        })
+        .collect()
+}
+
 /// The pid and uid of the process on the other end of `stream`.
 fn peer(stream: &UnixStream) -> Option<(u32, u32)> {
     let mut cred = Ucred::default();
@@ -178,13 +214,32 @@ fn handle(stream: &mut UnixStream, apps: &Path) -> String {
         Err(e) => return format!("err {e}"),
     };
     let Some((ppid, uid)) = proc_owner(req.pid) else { return "err no such process".into() };
-    let exe = std::fs::read_link(format!("/proc/{}/exe", req.pid)).unwrap_or_default();
-    if let Err(e) = allowed(ppid, uid, &exe, peer_pid, peer_uid, apps) {
+    if let Err(e) = allowed(ppid, uid, peer_pid, peer_uid) {
         return format!("err {e}");
     }
-    match apply(&req) {
-        Ok(_) => "ok".into(),
-        Err(e) => format!("err {e}"),
+    // the app's package folder is mounted at the same path inside the sandbox, so its executable reads as under `apps`
+    let targets: Vec<u32> = descendants(req.pid, &proc_parents())
+        .into_iter()
+        .filter(|&pid| {
+            let exe = std::fs::read_link(format!("/proc/{pid}/exe")).unwrap_or_default();
+            proc_owner(pid).is_some_and(|(_, owner)| is_app(owner, &exe, uid, apps))
+        })
+        .collect();
+    if targets.is_empty() {
+        return "err not an installed app".into();
+    }
+    // a helper process of the app may end between the listing and the call: one process set is enough for `ok`
+    let (mut done, mut failed) = (0, String::new());
+    for pid in targets {
+        match apply(&Request { pid, ..req }) {
+            Ok(_) => done += 1,
+            Err(e) => failed = e,
+        }
+    }
+    if done > 0 {
+        "ok".into()
+    } else {
+        format!("err {failed}")
     }
 }
 
@@ -224,13 +279,32 @@ mod tests {
     }
 
     #[test]
-    fn only_an_installed_child_of_the_same_user_may_be_changed() {
+    fn only_a_child_of_the_caller_may_be_named() {
+        assert_eq!(allowed(100, 1000, 100, 1000), Ok(()));
+        assert_eq!(allowed(101, 1000, 100, 1000), Err("not a child of the caller"));
+        assert_eq!(allowed(100, 0, 100, 1000), Err("another user's process"));
+        assert_eq!(allowed(100, 1001, 100, 1000), Err("another user's process"));
+        // the shell is root and starts the app as the installed account
+        assert_eq!(allowed(100, 1000, 100, 0), Ok(()));
+        assert_eq!(allowed(101, 1000, 100, 0), Err("not a child of the caller"), "root is held to its own children too");
+    }
+
+    #[test]
+    fn the_app_below_the_sandbox_launcher_is_the_one_changed() {
         let apps = Path::new("/var/lib/springboard/apps");
-        let exe = Path::new("/var/lib/springboard/apps/is.example.game/current/bin/game");
-        assert_eq!(allowed(100, 1000, exe, 100, 1000, apps), Ok(()));
-        assert_eq!(allowed(101, 1000, exe, 100, 1000, apps), Err("not a child of the caller"));
-        assert_eq!(allowed(100, 0, exe, 100, 1000, apps), Err("another user's process"));
-        let stray = Path::new("/usr/bin/sleep");
-        assert_eq!(allowed(100, 1000, stray, 100, 1000, apps), Err("not an installed app"));
+        let launcher = Path::new("/usr/bin/bwrap");
+        let game = Path::new("/var/lib/springboard/apps/is.example.game/1.0.0/game");
+        // shell 100 -> launcher 200 -> launcher 201 (init of the sandbox) -> game 202 -> helper 203; 300 is another app
+        let parents = [(1, 0), (100, 1), (300, 100), (203, 202), (202, 201), (201, 200), (200, 100), (301, 300)];
+        assert_eq!(descendants(200, &parents), vec![200, 201, 202, 203]);
+        assert_eq!(descendants(999, &parents), vec![999], "a process with nothing below it");
+        let exe = |pid: u32| if pid >= 202 { game } else { launcher };
+        let targets: Vec<u32> = descendants(200, &parents).into_iter().filter(|&p| is_app(1000, exe(p), 1000, apps)).collect();
+        assert_eq!(targets, vec![202, 203], "the launcher's own processes are left alone");
+
+        // a directly started app (no sandbox) is its own target
+        assert!(is_app(1000, game, 1000, apps));
+        assert!(!is_app(1000, Path::new("/usr/bin/sleep"), 1000, apps), "not an installed app");
+        assert!(!is_app(0, game, 1000, apps), "a process of another user below the child");
     }
 }

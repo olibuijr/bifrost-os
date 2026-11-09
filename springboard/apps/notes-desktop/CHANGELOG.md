@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.14
+
+- Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
+
 ## 1.24.13
 
 - Creating a folder closes a note that is not in it; the folder name field no longer covers the list; Escape clears the search first.

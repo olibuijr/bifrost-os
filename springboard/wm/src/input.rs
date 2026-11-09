@@ -22,7 +22,7 @@ use smithay::{
         },
         Seat,
     },
-    reexports::wayland_server::{protocol::wl_surface::WlSurface, DisplayHandle},
+    reexports::wayland_server::{protocol::wl_surface::WlSurface, DisplayHandle, Resource},
     utils::{Logical, Point, Serial, SERIAL_COUNTER},
     wayland::{
         pointer_constraints::{
@@ -330,6 +330,28 @@ pub fn motion_locked(state: Option<(bool, bool)>) -> bool {
     matches!(state, Some((true, true)))
 }
 
+/// Whether a client may hold a pointer constraint: never while the session is locked, and only the client that has the
+/// keyboard. A client that loses the keyboard (another window is focused, its window is minimized, the lock screen
+/// comes up) loses the pointer with it, so a lock cannot keep the pointer from the rest of the desktop.
+pub fn constraint_permitted(session_locked: bool, client_has_keyboard: bool) -> bool {
+    !session_locked && client_has_keyboard
+}
+
+/// Activates or deactivates the constraint the pointer has on `surface`, if it has one and its state differs.
+fn set_constraint_active(surface: &WlSurface, pointer: &PointerHandle<WmState>, active: bool) {
+    with_pointer_constraint(surface, pointer, |c| {
+        if let Some(c) = c {
+            if c.is_active() != active {
+                if active {
+                    c.activate();
+                } else {
+                    c.deactivate();
+                }
+            }
+        }
+    });
+}
+
 /// `(active, locked)` of the constraint the pointer has on `surface`, if any.
 fn constraint_state(surface: &WlSurface, pointer: &PointerHandle<WmState>) -> Option<(bool, bool)> {
     with_pointer_constraint(surface, pointer, |c| c.map(|c| (c.is_active(), matches!(*c, PointerConstraint::Locked(_)))))
@@ -419,7 +441,6 @@ impl WmState {
         pointer.frame(self);
     }
 
-    /// Moves the pointer to `pos`, kept on the output. A pointer locked by the focused surface does not move.
     /// An absolute pointer (a tablet, VNC, an absolute uinput device) at `norm`, 0..1 of the device's range: the device
     /// range goes through the output transform, as a touch does (`touch_position`), and the move is the same
     /// `pointer_motion` a relative move makes, so a move inside a surface reaches it as `wl_pointer.motion` and a move
@@ -432,10 +453,34 @@ impl WmState {
         }
     }
 
+    /// Whether the client of `surface` may hold a pointer constraint now (`constraint_permitted`).
+    fn constraint_allowed(&self, surface: &WlSurface) -> bool {
+        let has_keyboard =
+            self.seat.get_keyboard().and_then(|k| k.current_focus()).is_some_and(|f| f.id().same_client_as(&surface.id()));
+        constraint_permitted(self.locked, has_keyboard)
+    }
+
+    /// Ends the constraint of the pointer's surface when its client may no longer hold one. Called when the keyboard
+    /// focus moves; a motion checks the same, so a path that moves the keyboard without calling this is still caught.
+    pub(crate) fn release_stale_pointer_constraint(&mut self) {
+        let Some(pointer) = self.seat.get_pointer() else { return };
+        if let Some(surface) = pointer.current_focus() {
+            if !self.constraint_allowed(&surface) {
+                set_constraint_active(&surface, &pointer, false);
+            }
+        }
+    }
+
+    /// Moves the pointer to `pos`, kept on the output. A pointer locked by the focused surface does not move, as long as
+    /// that surface's client may hold the lock (`constraint_permitted`).
     pub fn pointer_motion(&mut self, pos: Point<f64, Logical>, time: u32) {
         let pointer = self.seat.get_pointer().expect("pointer");
-        if pointer.current_focus().is_some_and(|s| motion_locked(constraint_state(&s, &pointer))) {
-            return;
+        if let Some(surface) = pointer.current_focus() {
+            if !self.constraint_allowed(&surface) {
+                set_constraint_active(&surface, &pointer, false);
+            } else if motion_locked(constraint_state(&surface, &pointer)) {
+                return;
+            }
         }
         let pos = match self.output().and_then(|o| self.space.output_geometry(&o)) {
             Some(g) => (
@@ -446,7 +491,8 @@ impl WmState {
             None => pos,
         };
         let under = self.surface_under(pos);
-        update_constraint_focus(&pointer, under.as_ref().map(|u| &u.0));
+        let allowed = under.as_ref().is_some_and(|u| self.constraint_allowed(&u.0));
+        update_constraint_focus(&pointer, under.as_ref().map(|u| &u.0), allowed);
         pointer.motion(self, under, &MotionEvent { location: pos, serial: SERIAL_COUNTER.next_serial(), time });
         pointer.frame(self);
     }
@@ -469,10 +515,15 @@ impl WmState {
     pub fn focus_at(&mut self, pos: Point<f64, Logical>, serial: Serial) {
         if let Some(output) = self.output() {
             let map = smithay::desktop::layer_map_for_output(&output);
+            // only a surface that was given the exclusive keyboard counts (`layer_commit` grants it with the same rule):
+            // an app's layer surface that merely asks for it must not turn off click-to-focus for the desktop
+            let locked = self.locked;
             let has_exclusive = map.layers().any(|l| {
-                smithay::wayland::compositor::with_states(l.wl_surface(), |states| {
+                let asks = smithay::wayland::compositor::with_states(l.wl_surface(), |states| {
                     states.cached_state.get::<smithay::wayland::shell::wlr_layer::LayerSurfaceCachedState>().current().keyboard_interactivity == smithay::wayland::shell::wlr_layer::KeyboardInteractivity::Exclusive
-                })
+                });
+                let privileged = l.wl_surface().client().is_some_and(|client| crate::privileged::is_privileged(&client));
+                crate::handlers::holds_exclusive_keyboard(asks, locked, privileged)
             });
             if has_exclusive {
                 return;
@@ -492,7 +543,7 @@ impl WmState {
     /// The pointer leaves its surface at `pos` (the end of an emulated touch pointer).
     pub fn pointer_leave(&mut self, pos: Point<f64, Logical>, time: u32) {
         let pointer = self.seat.get_pointer().expect("pointer");
-        update_constraint_focus(&pointer, None);
+        update_constraint_focus(&pointer, None, false);
         pointer.motion(self, None, &MotionEvent { location: pos, serial: SERIAL_COUNTER.next_serial(), time });
         pointer.frame(self);
     }
@@ -586,29 +637,16 @@ impl WmState {
     }
 }
 
-/// Activates the pointer constraints of the surface that gets focus and deactivates those of the one that loses it.
-fn update_constraint_focus(pointer: &PointerHandle<WmState>, new: Option<&WlSurface>) {
-    let old = pointer.current_focus();
-    if old.as_ref() == new {
-        return;
-    }
-    if let Some(old) = old {
-        with_pointer_constraint(&old, pointer, |c| {
-            if let Some(c) = c {
-                if c.is_active() {
-                    c.deactivate();
-                }
-            }
-        });
+/// Deactivates the pointer constraint of the surface that loses the pointer and sets that of the surface that has it
+/// now: active when its client may hold one (`allowed`, from `WmState::constraint_allowed`), inactive otherwise. The
+/// surface that keeps the pointer is set too, so a persistent constraint comes back when its client has the keyboard
+/// again.
+fn update_constraint_focus(pointer: &PointerHandle<WmState>, new: Option<&WlSurface>, allowed: bool) {
+    if let Some(old) = pointer.current_focus().filter(|old| Some(old) != new) {
+        set_constraint_active(&old, pointer, false);
     }
     if let Some(new) = new {
-        with_pointer_constraint(new, pointer, |c| {
-            if let Some(c) = c {
-                if !c.is_active() {
-                    c.activate();
-                }
-            }
-        });
+        set_constraint_active(new, pointer, allowed);
     }
 }
 
@@ -622,15 +660,10 @@ pub fn register_protocols(dh: &DisplayHandle) {
 
 impl PointerConstraintsHandler for WmState {
     fn new_constraint(&mut self, surface: &WlSurface, pointer: &PointerHandle<Self>) {
-        // a constraint created while the pointer is already on its surface starts active
-        if pointer.current_focus().as_ref() == Some(surface) {
-            with_pointer_constraint(surface, pointer, |c| {
-                if let Some(c) = c {
-                    if !c.is_active() {
-                        c.activate();
-                    }
-                }
-            });
+        // a constraint created while the pointer is already on its surface starts active, when its client has the
+        // keyboard and the session is not locked; otherwise the next motion over it decides
+        if pointer.current_focus().as_ref() == Some(surface) && self.constraint_allowed(surface) {
+            set_constraint_active(surface, pointer, true);
         }
     }
 
@@ -660,6 +693,15 @@ mod tests {
 
     fn lookup<'a>(pairs: &'a [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<&'static str> + 'a {
         move |key| pairs.iter().find(|(k, _)| *k == key).map(|(_, v)| *v)
+    }
+
+    #[test]
+    fn a_pointer_constraint_is_held_only_by_the_keyboard_client_and_never_under_a_lock() {
+        assert!(constraint_permitted(false, true), "the focused client keeps its lock");
+        assert!(!constraint_permitted(false, false), "another window took the keyboard: the pointer is free again");
+        assert!(!constraint_permitted(true, true), "the lock screen takes the pointer");
+        assert!(!constraint_permitted(true, false));
+        assert!(motion_locked(Some((true, true))) && !motion_locked(Some((false, true))), "a released lock lets the pointer move");
     }
 
     #[test]

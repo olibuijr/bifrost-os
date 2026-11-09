@@ -146,6 +146,8 @@ pub fn read_server_init<S: Read>(s: &mut S) -> Result<ServerInit, Error> {
     s.read_exact(&mut head)?;
     let width = u16::from_be_bytes([head[0], head[1]]);
     let height = u16::from_be_bytes([head[2], head[3]]);
+    // the viewer allocates a framebuffer of this size: a desktop larger than it accepts ends the handshake
+    crate::framebuffer::check_size(width as usize, height as usize)?;
     let format = PixelFormat::parse(&head[4..20])?;
     let len = u32::from_be_bytes([head[20], head[21], head[22], head[23]]) as usize;
     if len > 4096 {
@@ -269,6 +271,14 @@ mod tests {
         assert_eq!((init.width, init.height), (100, 50));
         assert_eq!(&s.out[..12], b"RFB 003.003\n");
         assert_eq!(s.out.len(), 12 + 1, "version then ClientInit only");
+    }
+
+    #[test]
+    fn a_server_init_with_a_desktop_too_large_to_allocate_is_refused() {
+        let mut input = b"RFB 003.003\n".to_vec();
+        input.extend_from_slice(&1u32.to_be_bytes());
+        input.extend_from_slice(&server_init(65535, 65535, "huge"));
+        assert!(matches!(connect(&mut Duplex::new(input)), Err(Error::Protocol(_))));
     }
 
     #[test]

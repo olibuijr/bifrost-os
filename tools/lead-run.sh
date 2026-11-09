@@ -24,8 +24,12 @@ disk_alert() {
 # build state and failed (2026-11-05). The lock is held until this script exits.
 lock="$here/../out/autopilot/lead-run.lock"
 mkdir -p "$(dirname "$lock")"
-exec 9>"$lock"
-flock -n 9 || { echo "lead-run: waiting for the running lead command to finish" >&2; flock 9; }
+# a lead command that itself calls lead-run.sh (midget-push-shell.sh builds through it) already holds the lock
+if [[ -z ${LEAD_RUN_HELD:-} ]]; then
+    exec 9>"$lock"
+    flock -n 9 || { echo "lead-run: waiting for the running lead command to finish" >&2; flock 9; }
+    export LEAD_RUN_HELD=1
+fi
 disk_alert
 systemd-run --user --scope --quiet --collect --unit="lead-build-$$" \
     -p MemoryHigh="${LEAD_MEM_HIGH:-7G}" -p MemoryMax="${LEAD_MEM_MAX:-9G}" \

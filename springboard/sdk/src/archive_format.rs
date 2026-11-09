@@ -30,7 +30,8 @@
 //! A decoder refuses, before it allocates for them: a count of entries or a payload length past [`Limits`], an entry
 //! count that cannot fit in the payload, an entry or attribute that runs past the end, a path that is absolute, has
 //! `..`, `.`, an empty part, a backslash or a control character, a path that appears twice, and a link whose target
-//! is absolute or climbs out of the archive root. The decompressed size is capped at the length the header declares,
+//! is absolute or climbs out of the archive root, also when it only does so by passing through other links of the
+//! archive. The decompressed size is capped at the length the header declares,
 //! so a small input cannot expand without bound, and the SHA-256 must match. [`extract`] checks every entry before
 //! it writes any, never writes through a symbolic link (each parent folder must be a real folder), never replaces an
 //! existing file, and drops the set-user-id, set-group-id and sticky bits.
@@ -59,7 +60,7 @@ use crate::digest;
 use crate::encrypted_archive;
 use crate::file_metadata;
 use crate::signature_pq::{PrivateKey, PublicKey};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, Read, Write};
 use std::os::unix::fs::{chown, lchown, symlink, MetadataExt, OpenOptionsExt, PermissionsExt};
@@ -87,6 +88,8 @@ pub const MAX_NAME: usize = 255;
 pub const MAX_DEPTH: usize = 64;
 /// The longest attribute value in bytes.
 pub const MAX_XATTR_VALUE: usize = 64 * 1024;
+/// The most links a link target may pass through before it is refused (which also stops a loop of links).
+const MAX_LINK_HOPS: usize = 40;
 /// The fewest payload bytes one entry takes: the fixed header fields and a one-byte path.
 const MIN_ENTRY_BYTES: u64 = 1 + 2 + 1 + 4 + 4 + 4 + 8 + 4 + 8 + 2;
 
@@ -331,6 +334,86 @@ fn validate_link(path: &str, target: &str) -> Result<(), Error> {
     Ok(())
 }
 
+/// True when the target of the link at `path` leaves the archive root once the other links of the archive are followed
+/// the way the file system follows them, or passes through more than `MAX_LINK_HOPS` links. `links` maps the path of
+/// every link entry to its target.
+fn link_escapes<'a>(path: &str, target: &'a str, links: &HashMap<&'a str, &'a str>) -> bool {
+    // the folder reached so far, without a trailing slash, and its length before each of its components
+    let mut cur = String::new();
+    let mut marks: Vec<usize> = Vec::new();
+    let parent = path.rsplit_once('/').map_or("", |(p, _)| p);
+    for part in parent.split('/').filter(|p| !p.is_empty()) {
+        marks.push(cur.len());
+        if !cur.is_empty() {
+            cur.push('/');
+        }
+        cur.push_str(part);
+    }
+    // the components still to walk, the next one last
+    let mut pending: Vec<&'a str> = target.split('/').rev().collect();
+    let mut hops = 0;
+    while let Some(part) = pending.pop() {
+        match part {
+            "" | "." => {}
+            ".." => match marks.pop() {
+                Some(len) => cur.truncate(len),
+                None => return true,
+            },
+            name => {
+                marks.push(cur.len());
+                if !cur.is_empty() {
+                    cur.push('/');
+                }
+                cur.push_str(name);
+                // an entry path has at most MAX_DEPTH components, so a deeper folder cannot be a link
+                if marks.len() > MAX_DEPTH {
+                    continue;
+                }
+                if let Some(&next) = links.get(cur.as_str()) {
+                    hops += 1;
+                    if hops > MAX_LINK_HOPS {
+                        return true;
+                    }
+                    // the link stands for its own target, read from the folder that holds it
+                    if let Some(len) = marks.pop() {
+                        cur.truncate(len);
+                    }
+                    pending.extend(next.split('/').rev());
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Checks the links against each other: [`validate_link`] reads one target as plain text, so a target that passes
+/// through another link (`a/l1 -> ..` and `a/b/l2 -> ../l1/..`) looks safe to it and still ends above the root. The
+/// entries have passed [`validate_entry`]. An archive with one link or none has nothing to check.
+fn validate_link_chains(entries: &[Entry]) -> Result<(), Error> {
+    let mut links: HashMap<&str, &str> = HashMap::new();
+    for e in entries {
+        if e.header.kind == Kind::Symlink {
+            if let Ok(target) = std::str::from_utf8(&e.data) {
+                links.insert(e.header.path.as_str(), target);
+            }
+        }
+    }
+    if links.len() < 2 {
+        return Ok(());
+    }
+    for e in entries {
+        if e.header.kind != Kind::Symlink {
+            continue;
+        }
+        if let Ok(target) = std::str::from_utf8(&e.data) {
+            if link_escapes(&e.header.path, target, &links) {
+                return Err(Error::UnsafeLink(e.header.path.clone()));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn validate_entry(e: &Entry, max_xattrs: usize) -> Result<(), Error> {
     let h = &e.header;
     validate_path(&h.path)?;
@@ -368,7 +451,7 @@ fn validate_all(entries: &[Entry], max_xattrs: usize) -> Result<(), Error> {
             return Err(Error::Duplicate(e.header.path.clone()));
         }
     }
-    Ok(())
+    validate_link_chains(entries)
 }
 
 fn put_u16(out: &mut Vec<u8>, v: u16) {
@@ -563,6 +646,7 @@ pub fn decode(data: &[u8], limits: &Limits) -> Result<Vec<Entry>, Error> {
     if r.pos != payload.len() {
         return Err(Error::Corrupt("bytes after the last entry"));
     }
+    validate_link_chains(&entries)?;
     Ok(entries)
 }
 
@@ -599,6 +683,11 @@ pub fn pack_directory(root: &Path, limits: &Limits) -> Result<Packed, Error> {
     let mut packed = Packed::default();
     let mut total = 0u64;
     walk(root, "", 0, limits, &mut total, &mut packed)?;
+    // a link that leaves the folder only through other links is left out like one that does so directly
+    while let Err(Error::UnsafeLink(path)) = validate_link_chains(&packed.entries) {
+        packed.entries.retain(|e| e.header.path != path);
+        packed.skipped.push(path);
+    }
     Ok(packed)
 }
 
@@ -1027,6 +1116,46 @@ mod tests {
         }
         // a link that stays inside the root is fine
         assert!(encode(&[Entry::symlink("a/b/l", "../../c"), Entry::symlink("m", "a/b")], Compression::None).is_ok());
+    }
+
+    #[test]
+    fn a_link_that_leaves_the_root_through_another_link_is_refused() {
+        // each target is fine read as text, but a/b/l2 goes through a/l1 (the root) and then one folder up
+        let chained = vec![Entry::symlink("a/l1", ".."), Entry::symlink("a/b/l2", "../l1/..")];
+        assert_eq!(encode(&chained, Compression::None), Err(Error::UnsafeLink("a/b/l2".to_string())));
+        let dest = tempfile::tempdir().unwrap();
+        let out = dest.path().join("out");
+        assert_eq!(extract(&chained, &out, &ExtractOptions::default()), Err(Error::UnsafeLink("a/b/l2".to_string())));
+        assert!(!out.join("a/l1").exists(), "nothing is written for a refused archive");
+        let mut raw = raw_entry(3, "a/l1", b"..");
+        raw.extend(raw_entry(3, "a/b/l2", b"../l1/.."));
+        assert_eq!(decode(&with_payload(&raw, 2), &Limits::default()), Err(Error::UnsafeLink("a/b/l2".to_string())));
+        // a loop of links never resolves, so it is refused instead of followed forever
+        let looped = vec![Entry::symlink("x", "y/z"), Entry::symlink("y", "x/z")];
+        assert!(matches!(encode(&looped, Compression::None), Err(Error::UnsafeLink(_))));
+        // links through links that stay inside the root still pack: a versioned layout and a link to a link
+        let layout = vec![
+            Entry::symlink("v/current", "1"),
+            Entry::symlink("res", "v/current/res"),
+            Entry::symlink("v/up", "current/../.."),
+            Entry::symlink("lib.so", "lib.so.1"),
+            Entry::symlink("lib.so.1", "lib.so.1.2"),
+        ];
+        assert!(encode(&layout, Compression::None).is_ok());
+    }
+
+    #[test]
+    fn packing_leaves_out_a_link_that_escapes_through_another_link() {
+        let src = tempfile::tempdir().unwrap();
+        let root = src.path().join("tree");
+        fs::create_dir_all(root.join("a/b")).unwrap();
+        symlink("..", root.join("a/l1")).unwrap();
+        symlink("../l1/..", root.join("a/b/l2")).unwrap();
+        let packed = pack_directory(&root, &Limits::default()).unwrap();
+        let paths: Vec<&str> = packed.entries.iter().map(|e| e.header.path.as_str()).collect();
+        assert_eq!(paths, ["a", "a/b", "a/l1"]);
+        assert_eq!(packed.skipped, ["a/b/l2"]);
+        assert!(encode(&packed.entries, Compression::None).is_ok());
     }
 
     #[test]

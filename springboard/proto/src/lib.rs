@@ -1631,8 +1631,18 @@ fn layout_(b: &mut Vec<u8>, types: &[(String, u32)]) {
 /// uses `PasteboardBlob` instead and never sends the cut text.
 pub const MAX_INLINE_TEXT: usize = MAX_PACKET - 64;
 
+/// The longest title of a `ToShell::Notify`, in bytes.
+pub const MAX_NOTIFY_TITLE: usize = 1024;
+/// The longest body of a `ToShell::Notify`, in bytes: with the longest title the packet still fits `MAX_PACKET`.
+pub const MAX_NOTIFY_BODY: usize = MAX_INLINE_TEXT - MAX_NOTIFY_TITLE;
+
 fn str_(b: &mut Vec<u8>, s: &str) {
-    let max = MAX_INLINE_TEXT;
+    str_max(b, s, MAX_INLINE_TEXT);
+}
+
+/// `str_` with its own limit, for a message that carries more than one long text: `s` is cut to `max` bytes on a
+/// character boundary.
+fn str_max(b: &mut Vec<u8>, s: &str, max: usize) {
     let mut n = s.len().min(max);
     while !s.is_char_boundary(n) {
         n -= 1;
@@ -1855,7 +1865,15 @@ impl ToApp {
             ToApp::Context{x,y}=>{u32_(&mut b,tag::CONTEXT);f32_(&mut b,*x);f32_(&mut b,*y);},
             ToApp::ContextAction(id)=>{u32_(&mut b,tag::CONTEXT_ACTION);u32_(&mut b,*id);},
             ToApp::MenuAction(id)=>{u32_(&mut b,tag::MENU_ACTION);u32_(&mut b,*id);},
-            ToApp::QuickAction{kind,user_info}=>{u32_(&mut b,tag::QUICK_ACTION);str_(&mut b,kind);u32_(&mut b,user_info.len() as u32);for (k,v) in user_info {str_(&mut b,k);str_(&mut b,v);}},
+            ToApp::QuickAction{kind,user_info}=>{
+                // the decoder refuses more than `MAX_QUICK_INFO` pairs and the receiver a packet over `MAX_PACKET`:
+                // whole pairs are sent while both hold, and the count written is the number sent
+                u32_(&mut b,tag::QUICK_ACTION);str_(&mut b,kind);let at=b.len();u32_(&mut b,0);let mut count=0u32;
+                for (k,v) in user_info.iter().take(MAX_QUICK_INFO as usize) {
+                    let mut pair=Vec::new();str_(&mut pair,k);str_(&mut pair,v);
+                    if b.len()+pair.len()>MAX_PACKET {break;}b.extend_from_slice(&pair);count+=1;
+                }b[at..at+4].copy_from_slice(&count.to_le_bytes());
+            },
             ToApp::Touch { kind, id, x, y, t_ms, source, mods } => {
                 u32_(&mut b, tag::TOUCH);
                 b.push(*kind as u8);
@@ -2381,7 +2399,15 @@ impl ToShell {
                     }
                 }
             }
-            ToShell::ContextMenu{x,y,items}=>{u32_(&mut b,tag::CONTEXT_MENU);f32_(&mut b,*x);f32_(&mut b,*y);u32_(&mut b,items.len().min(32) as u32);for item in items.iter().take(32){u32_(&mut b,item.id);b.push(item.enabled as u8);let label=item.label.chars().take(128).collect::<String>();str_(&mut b,&label);}},
+            ToShell::ContextMenu{x,y,items}=>{
+                // 32 items of 128 four-byte characters pass `MAX_PACKET`: whole items are sent while they fit, and the
+                // count written is the number sent
+                u32_(&mut b,tag::CONTEXT_MENU);f32_(&mut b,*x);f32_(&mut b,*y);let at=b.len();u32_(&mut b,0);let mut count=0u32;
+                for item in items.iter().take(32){
+                    let mut one=Vec::new();u32_(&mut one,item.id);one.push(item.enabled as u8);let label=item.label.chars().take(128).collect::<String>();str_(&mut one,&label);
+                    if b.len()+one.len()>MAX_PACKET {break;}b.extend_from_slice(&one);count+=1;
+                }b[at..at+4].copy_from_slice(&count.to_le_bytes());
+            },
             // Menus that do not fit one packet are cut (whole items, then whole menus), never split; `app_menu_packets`
             // sends the rest in `AppMenusMore` packets and reports what was cut.
             ToShell::AppMenus(menus) => b = app_menus_packet(tag::APP_MENUS, &menus[..menus.len().min(MAX_APP_MENUS)]).0,
@@ -2516,9 +2542,11 @@ impl ToShell {
                 str_(&mut b, name);
             }
             ToShell::Notify { title, body } => {
+                // two texts in one packet: each has its own share, so the pair never passes `MAX_PACKET` (a packet
+                // over it arrives truncated and the shell takes the app for dead)
                 u32_(&mut b, tag::NOTIFY);
-                str_(&mut b, title);
-                str_(&mut b, body);
+                str_max(&mut b, title, MAX_NOTIFY_TITLE);
+                str_max(&mut b, body, MAX_NOTIFY_BODY);
             }
             ToShell::Log { text } => {
                 u32_(&mut b, tag::LOG);

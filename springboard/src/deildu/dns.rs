@@ -3,6 +3,7 @@
 //! gateway (the DHCP router forwards DNS) first, then public resolvers.
 
 use std::collections::HashMap;
+use std::io::Read;
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -10,6 +11,8 @@ use std::time::{Duration, Instant};
 const FALLBACK: [Ipv4Addr; 2] = [Ipv4Addr::new(1, 1, 1, 1), Ipv4Addr::new(8, 8, 8, 8)];
 const TIMEOUT: Duration = Duration::from_secs(3);
 const MIN_TTL: Duration = Duration::from_secs(60);
+/// The longest an answer is kept, whatever TTL the reply claims.
+const MAX_TTL: Duration = Duration::from_secs(3600);
 
 /// Encodes a standard recursive A query with transaction id `id`.
 pub fn query(id: u16, name: &str) -> Vec<u8> {
@@ -38,16 +41,26 @@ fn skip_name(msg: &[u8], mut pos: usize) -> Option<usize> {
     }
 }
 
-/// Addresses and the smallest TTL from a reply to transaction `id`.
-pub fn answers(msg: &[u8], id: u16) -> Option<(Vec<Ipv4Addr>, Duration)> {
-    if msg.len() < 12 || msg[..2] != id.to_be_bytes() || msg[2] & 0x80 == 0 || msg[3] & 0x0F != 0 {
+/// Whether `msg` is a reply to the query `query(id, name)`: the same id, the response bit, and exactly the one
+/// question that was asked (the name compared without case). Returns the offset after the question.
+fn reply_to(msg: &[u8], id: u16, name: &str) -> Option<usize> {
+    if msg.len() < 12 || msg[..2] != id.to_be_bytes() || msg[2] & 0x80 == 0 || u16::from_be_bytes([msg[4], msg[5]]) != 1 {
         return None;
     }
-    let (questions, count) = (u16::from_be_bytes([msg[4], msg[5]]), u16::from_be_bytes([msg[6], msg[7]]));
-    let mut pos = 12;
-    for _ in 0..questions {
-        pos = skip_name(msg, pos)? + 4;
+    let asked = query(id, name);
+    let question = &asked[12..];
+    let end = 12 + question.len();
+    // label lengths are at most 63, below the letters, so ignoring case only ever affects the name's letters
+    msg.get(12..end)?.eq_ignore_ascii_case(question).then_some(end)
+}
+
+/// Addresses and the smallest TTL from a reply to transaction `id` that asked for `name`.
+pub fn answers(msg: &[u8], id: u16, name: &str) -> Option<(Vec<Ipv4Addr>, Duration)> {
+    let mut pos = reply_to(msg, id, name)?;
+    if msg[3] & 0x0F != 0 {
+        return None;
     }
+    let count = u16::from_be_bytes([msg[6], msg[7]]);
     let mut out = vec![];
     let mut ttl = u32::MAX;
     for _ in 0..count {
@@ -62,7 +75,7 @@ pub fn answers(msg: &[u8], id: u16) -> Option<(Vec<Ipv4Addr>, Duration)> {
         }
         pos += 10 + len;
     }
-    (!out.is_empty()).then(|| (out, Duration::from_secs(ttl as u64).max(MIN_TTL)))
+    (!out.is_empty()).then(|| (out, Duration::from_secs(ttl as u64).clamp(MIN_TTL, MAX_TTL)))
 }
 
 /// The default route's gateway from /proc/net/route (little-endian hex).
@@ -82,16 +95,33 @@ pub fn servers() -> Vec<Ipv4Addr> {
     gw.into_iter().chain(FALLBACK).collect()
 }
 
-/// Asks one server; `Err` on timeout or a malformed reply.
+/// An unpredictable transaction id, so a reply cannot be forged by guessing it.
+fn fresh_id() -> std::io::Result<u16> {
+    let mut b = [0u8; 2];
+    std::fs::File::open("/dev/urandom")?.read_exact(&mut b)?;
+    Ok(u16::from_be_bytes(b))
+}
+
+/// Asks one server; `Err` on timeout or a malformed reply. Datagrams that do not answer this query (another id or
+/// another question) are ignored until the timeout, so a stray or forged packet cannot fail the lookup.
 pub fn ask(server: SocketAddr, name: &str) -> std::io::Result<(Vec<Ipv4Addr>, Duration)> {
     let sock = UdpSocket::bind("0.0.0.0:0")?;
-    sock.set_read_timeout(Some(TIMEOUT))?;
     sock.connect(server)?;
-    let id = (Instant::now().elapsed().subsec_nanos() ^ std::process::id()) as u16 ^ 0x5a17;
+    let id = fresh_id()?;
     sock.send(&query(id, name))?;
+    let deadline = Instant::now() + TIMEOUT;
     let mut buf = [0u8; 2048];
-    let n = sock.recv(&mut buf)?;
-    answers(&buf[..n], id).ok_or_else(|| std::io::Error::other("no A record"))
+    loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "no reply from the resolver"));
+        }
+        sock.set_read_timeout(Some(left))?;
+        let n = sock.recv(&mut buf)?;
+        if reply_to(&buf[..n], id, name).is_some() {
+            return answers(&buf[..n], id, name).ok_or_else(|| std::io::Error::other("no A record"));
+        }
+    }
 }
 
 /// Most names kept at once; a long session cannot grow the cache without bound.
@@ -220,14 +250,58 @@ mod tests {
     #[test]
     fn parses_compressed_answers_and_min_ttl() {
         let r = reply(9, "a.b", &[[10, 0, 0, 1], [10, 0, 0, 2]], 30);
-        let (ips, ttl) = answers(&r, 9).unwrap();
+        let (ips, ttl) = answers(&r, 9, "a.b").unwrap();
         assert_eq!(ips, vec![Ipv4Addr::new(10, 0, 0, 1), Ipv4Addr::new(10, 0, 0, 2)]);
         assert_eq!(ttl, MIN_TTL, "short TTLs are stretched");
-        assert!(answers(&r, 8).is_none(), "wrong id");
+        assert!(answers(&r, 8, "a.b").is_none(), "wrong id");
         let mut nx = r.clone();
         nx[3] = 0x83;
-        assert!(answers(&nx, 9).is_none(), "NXDOMAIN");
-        assert!(answers(&r[..20], 9).is_none(), "truncated");
+        assert!(answers(&nx, 9, "a.b").is_none(), "NXDOMAIN");
+        assert!(answers(&r[..20], 9, "a.b").is_none(), "truncated");
+    }
+
+    #[test]
+    fn a_reply_must_answer_the_question_that_was_asked() {
+        let r = reply(9, "bank.test", &[[10, 0, 0, 1]], 300);
+        assert!(answers(&r, 9, "bank.test").is_some());
+        assert!(answers(&reply(9, "BANK.Test", &[[10, 0, 0, 1]], 300), 9, "bank.test").is_some(), "names compare without case");
+        assert!(answers(&r, 9, "other.test").is_none(), "a reply about another name");
+        assert!(answers(&r, 9, "bank.tes").is_none(), "a shorter name");
+        let mut none = r.clone();
+        none[5] = 0;
+        assert!(answers(&none, 9, "bank.test").is_none(), "no question section");
+        let mut aaaa = r.clone();
+        aaaa[12 + 11 + 1] = 28;
+        assert!(answers(&aaaa, 9, "bank.test").is_none(), "another record type was asked");
+    }
+
+    #[test]
+    fn a_long_ttl_is_capped() {
+        let (_, ttl) = answers(&reply(9, "a.b", &[[10, 0, 0, 1]], u32::MAX), 9, "a.b").unwrap();
+        assert_eq!(ttl, MAX_TTL);
+    }
+
+    #[test]
+    fn transaction_ids_are_not_constant() {
+        let ids: Vec<u16> = (0..8).map(|_| fresh_id().unwrap()).collect();
+        assert!(ids.iter().any(|i| *i != ids[0]), "{ids:?}");
+    }
+
+    #[test]
+    fn datagrams_that_do_not_answer_the_query_are_ignored() {
+        let server = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let addr = server.local_addr().unwrap();
+        let t = std::thread::spawn(move || {
+            let mut buf = [0u8; 512];
+            let (_, from) = server.recv_from(&mut buf).unwrap();
+            let id = u16::from_be_bytes([buf[0], buf[1]]);
+            server.send_to(&reply(id.wrapping_add(1), "host.test", &[[6, 6, 6, 6]], 3600), from).unwrap();
+            server.send_to(&reply(id, "evil.test", &[[6, 6, 6, 6]], 3600), from).unwrap();
+            server.send_to(&reply(id, "host.test", &[[1, 2, 3, 4]], 3600), from).unwrap();
+        });
+        let (ips, _) = ask(addr, "host.test").unwrap();
+        assert_eq!(ips, vec![Ipv4Addr::new(1, 2, 3, 4)]);
+        t.join().unwrap();
     }
 
     #[test]

@@ -30,6 +30,9 @@ pub const MAX_CH: usize = bifrost_audio_types::control::MAX_CLIENT_CHANNELS;
 pub const MIN_QUANTUM: u32 = 16;
 pub const MAX_QUANTUM: u32 = 4096;
 pub const DEFAULT_QUANTUM: u32 = 256;
+/// The largest magnitude a client sample is mixed with (+36 dB over full scale). With `MAX_CLIENTS` streams the sum
+/// stays far inside what an f32 holds, so the device stages never see an infinity.
+pub const MAX_CLIENT_SAMPLE: f32 = 64.0;
 /// SCHED_FIFO priority of the device IO threads (Decisions, 2).
 pub const IO_PRIORITY: u32 = 88;
 /// SCHED_FIFO priority granted to client IO threads.
@@ -328,6 +331,17 @@ impl Shared {
 // ---------------------------------------------------------------------------------------------------------------
 // The device runner
 
+/// Makes what a client wrote safe to mix: its ring is memory the client fills, and one NaN or infinity in the mix
+/// would stay in the state of the device's filters and silence the device for every application. A non-finite sample
+/// becomes silence, anything else is bounded to `MAX_CLIENT_SAMPLE`. No allocation (IO thread).
+fn tame_client_samples(planes: &mut [&mut [f32]]) {
+    for plane in planes.iter_mut() {
+        for x in plane.iter_mut() {
+            *x = if x.is_finite() { x.clamp(-MAX_CLIENT_SAMPLE, MAX_CLIENT_SAMPLE) } else { 0.0 };
+        }
+    }
+}
+
 /// How step 4 waits for clients.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WaitPolicy {
@@ -357,6 +371,18 @@ struct SlotState {
     start_cycle: u64,
     every: u64,
     trigger: bool,
+    /// The cycle of the latest trigger (clients whose buffer is not a whole number of quanta).
+    last_trigger: u64,
+}
+
+/// Whether a client whose buffer is not a whole number of quanta is triggered this cycle. Such a client writes (and
+/// reads) one buffer per trigger while the device moves one quantum per cycle, so a trigger every `every` cycles
+/// would leave it short by `every * q - buffer` frames each time; it is triggered by what its rings hold instead.
+/// `due`: its output ring holds less than `every` quanta (or, for a capture-only client, its input ring holds a whole
+/// buffer). It is not triggered again while it still works on the last trigger, unless that was `every` cycles ago
+/// (a client that never reports back keeps the old schedule).
+fn uneven_trigger(due: bool, finished: bool, since: u64, every: u64) -> bool {
+    due && (finished || since >= every)
 }
 
 /// What one cycle did.
@@ -527,6 +553,7 @@ impl DeviceRunner {
                 start_cycle: 0,
                 every: 1,
                 trigger: false,
+                last_trigger: 0,
             });
             self.spare.push(st);
         }
@@ -575,7 +602,10 @@ impl DeviceRunner {
 
     /// Runs one cycle at host time `now_ns`. See the module comment for the steps.
     pub fn cycle(&mut self, now_ns: u64) -> CycleReport {
-        let want = self.shared.quantum.load(Ordering::Acquire).clamp(MIN_QUANTUM, MAX_QUANTUM);
+        // The quantum the control thread (or the fallback) asks for, bounded by what the open device takes in one
+        // cycle: a hardware ring sized for the quantum at open overflows on a larger one, every cycle. A larger
+        // quantum then waits for the next open; clients with bigger buffers are triggered every n cycles meanwhile.
+        let want = self.shared.quantum.load(Ordering::Acquire).clamp(MIN_QUANTUM, MAX_QUANTUM).min(self.io.max_quantum().max(MIN_QUANTUM));
         let quantum_changed = want != self.quantum;
         self.quantum = want;
         let q = want as usize;
@@ -627,6 +657,7 @@ impl DeviceRunner {
             if !st.active {
                 st.active = true;
                 st.start_cycle = cycle;
+                st.last_trigger = cycle;
                 if every > 1 {
                     if let Some(ring) = s.output_ring() {
                         // Pre-roll so the first cycles of a large-buffer client find data.
@@ -641,8 +672,19 @@ impl DeviceRunner {
                 }
             }
             st.every = every;
-            st.trigger = (cycle - st.start_cycle) % every == 0;
+            st.trigger = if every == 1 || s.buffer_frames as usize % q == 0 {
+                (cycle - st.start_cycle) % every == 0
+            } else {
+                let due = match (s.output_ring(), s.input_ring()) {
+                    (Some(out), _) => (out.readable() as usize) < every as usize * q,
+                    (None, Some(inp)) => inp.readable() as usize >= s.buffer_frames as usize,
+                    (None, None) => true,
+                };
+                let finished = s.done().pending.load(Ordering::Acquire) == 0;
+                uneven_trigger(due, finished, cycle - st.last_trigger, every)
+            };
             if st.trigger {
+                st.last_trigger = cycle;
                 shm::reset(s.activation(), want, rate);
                 shm::reset(s.done(), want, rate);
                 shm::finish(&self.drv, &[s.activation()], now_ns);
@@ -707,6 +749,7 @@ impl DeviceRunner {
             let mut it = self.scratch.iter_mut();
             let mut d: [&mut [f32]; MAX_CH] = std::array::from_fn(|_| &mut it.next().unwrap()[..q]);
             ring.read(&mut d[..ch], want);
+            tame_client_samples(&mut d[..ch]);
             let target = if s.muted.load(Ordering::Relaxed) { 0.0 } else { s.volume() * s.session_gain() };
             if st.ramp.target() != target {
                 st.ramp.set_target(target, RAMP_FRAMES);
@@ -931,7 +974,7 @@ pub fn spawn_io_thread_tuned(
             // One late client is that client's trouble (and its own late counter); only a cycle where every running
             // client was late looks like an overloaded machine.
             let overloaded = rep.device_xrun || (rep.late > 0 && rep.late as usize >= runner.running_clients());
-            let raised = policy.record(overloaded, rep.frames, rt::window_cycles(rep.frames, rate)).map(|q| fallback_quantum(q, runner.min_client_buffer()));
+            let raised = policy.record(overloaded, rep.frames, rt::window_cycles(rep.frames, rate)).map(|q| fallback_quantum(q, runner.min_client_buffer()).min(runner.io.max_quantum()));
             if let Some(q) = raised.filter(|q| *q > rep.frames) {
                 runner.shared.fallback_floor.store(q, Ordering::Release);
                 runner.shared.quantum.store(q, Ordering::Release);
@@ -1136,6 +1179,26 @@ mod tests {
     }
 
     #[test]
+    fn non_finite_and_absurd_client_samples_never_reach_the_mix() {
+        let mut r = rig(256);
+        let a = r.add(1, 0, 2, 256);
+        let b = r.add(2, 0, 2, 256);
+        Rig::play(&a, 256, &[f32::NAN, f32::NEG_INFINITY]);
+        Rig::play(&b, 256, &[0.25, 0.5]);
+        r.step();
+        Rig::play(&a, 256, &[f32::MAX, -1.0e30]);
+        Rig::play(&b, 256, &[0.25, 0.5]);
+        r.step();
+        let w = r.h.written(UID);
+        // the bad samples are silence and the other client is untouched
+        assert_eq!(w[0][..256], vec![0.25; 256][..]);
+        assert_eq!(w[1][..256], vec![0.5; 256][..]);
+        // a huge finite sample is bounded, so no sum of clients overflows to an infinity
+        assert_eq!(w[0][256..], vec![MAX_CLIENT_SAMPLE + 0.25; 256][..]);
+        assert_eq!(w[1][256..], vec![0.5 - MAX_CLIENT_SAMPLE; 256][..]);
+    }
+
+    #[test]
     fn a_late_client_is_skipped_counted_and_the_device_keeps_its_cycle() {
         let mut r = rig(256);
         let a = r.add(1, 0, 2, 256);
@@ -1184,6 +1247,69 @@ mod tests {
         assert_eq!(rep.next_ns, 6_666_666);
     }
 
+    /// A device whose ring takes at most `max` frames a cycle, as a hardware ring configured at open does.
+    struct Capped {
+        io: Box<dyn DeviceIo>,
+        max: u32,
+    }
+
+    impl DeviceIo for Capped {
+        fn start(&mut self) -> Result<ZeroTimeStamp, DriverError> {
+            self.io.start()
+        }
+        fn position(&mut self) -> HwPosition {
+            self.io.position()
+        }
+        fn read_input(&mut self, frames: u32, dst: &mut BufferList) -> Result<(), bifrost_audio_driver::Xrun> {
+            assert!(frames <= self.max, "{frames} frames into a ring that takes {}", self.max);
+            self.io.read_input(frames, dst)
+        }
+        fn write_mix(&mut self, frames: u32, src: &BufferList) -> Result<(), bifrost_audio_driver::Xrun> {
+            assert!(frames <= self.max, "{frames} frames into a ring that takes {}", self.max);
+            self.io.write_mix(frames, src)
+        }
+        fn stop(&mut self) {
+            self.io.stop()
+        }
+        fn latency(&self) -> bifrost_audio_driver::Latency {
+            self.io.latency()
+        }
+        fn physical_formats(&self) -> (Option<bifrost_audio_types::StreamFormat>, Option<bifrost_audio_types::StreamFormat>) {
+            self.io.physical_formats()
+        }
+        fn max_quantum(&self) -> u32 {
+            self.max
+        }
+    }
+
+    #[test]
+    fn a_quantum_larger_than_the_open_device_takes_is_not_applied() {
+        // opened at 64 frames by a client that has since stopped; a 256-frame client keeps the device running
+        let mut d = NullDriver::new(vec![NullDriver::stereo(UID, 48_000.0)]);
+        let h = d.handle();
+        let io = d.open(UID, &IoConfig { rate: 48_000.0, quantum: 64, input: true, output: true }).unwrap();
+        let shared = Shared::new(64);
+        let cfg = RunnerConfig { rate: 48_000, in_channels: 2, out_channels: 2, wait: WaitPolicy::None };
+        let mut runner = DeviceRunner::new(Box::new(Capped { io, max: 64 }), shared.clone(), cfg);
+        runner.start().unwrap();
+        let mut r = Rig { h, shared, runner, slots: Vec::new() };
+        let a = r.add(1, 0, 2, 256);
+        r.shared.quantum.store(256, Ordering::Release);
+        for cycle in 0..8 {
+            let rep = r.step_q(64);
+            assert_eq!((rep.frames, rep.quantum_changed, rep.late), (64, false, 0), "cycle {cycle}");
+            assert_eq!(rep.triggered, u32::from(cycle % 4 == 0), "cycle {cycle}");
+            if rep.triggered == 1 {
+                Rig::play(&a, 256, &[0.5, 0.5]);
+            }
+        }
+        assert_eq!(r.runner.quantum(), 64);
+        assert_eq!(r.h.written(UID)[0].len(), 8 * 64);
+        // a smaller quantum is taken as before
+        r.shared.quantum.store(32, Ordering::Release);
+        assert_eq!(r.step_q(32).frames, 32);
+    }
+
     #[test]
     fn a_large_buffer_client_is_triggered_every_n_cycles() {
         let mut r = rig(64);
@@ -1199,6 +1325,54 @@ mod tests {
         }
         assert_eq!(triggers, vec![1, 0, 0, 0, 1, 0, 0, 0]);
         assert_eq!(a.missed_total.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn a_client_whose_buffer_is_not_a_multiple_of_the_quantum_is_never_starved() {
+        assert!(uneven_trigger(true, true, 0, 2));
+        assert!(!uneven_trigger(false, true, 5, 2), "enough queued");
+        assert!(!uneven_trigger(true, false, 1, 2), "still working on the last trigger");
+        assert!(uneven_trigger(true, false, 2, 2), "a client that never reports back keeps the old schedule");
+        // 480 frames per trigger against 256 per cycle: a trigger every 2 cycles would deliver 480 of every 512
+        let mut r = rig(256);
+        let a = r.add(1, 0, 2, 480);
+        let mut triggers = 0u64;
+        for cycle in 0..400 {
+            let rep = r.step();
+            assert_eq!(rep.late, 0, "cycle {cycle}");
+            if rep.triggered == 1 {
+                triggers += 1;
+                Rig::play(&a, 480, &[0.5, 0.5]);
+                shm::finish(a.activation(), &[a.done()], 0);
+            }
+        }
+        assert_eq!(a.missed_total.load(Ordering::Relaxed), 0);
+        // one quantum of pre-roll, then the client's samples without a gap
+        let w = r.h.written(UID);
+        assert_eq!(w[0].len(), 400 * 256);
+        assert!(w[0][256..].iter().all(|v| *v == 0.5));
+        // it was asked for what the device played, to within the two quanta it keeps queued
+        assert!(triggers * 480 >= 399 * 256 && triggers * 480 <= 402 * 256 + 480, "{triggers} triggers");
+    }
+
+    #[test]
+    fn a_capture_client_whose_buffer_is_not_a_multiple_of_the_quantum_loses_no_input() {
+        let mut r = rig(256);
+        let a = r.add(1, 2, 0, 480);
+        let (mut l, mut rr) = (vec![0.0f32; 480], vec![0.0f32; 480]);
+        let mut read = 0u64;
+        for cycle in 0..400 {
+            let before = a.input_ring().unwrap().readable() as u64;
+            let rep = r.step();
+            let ring = a.input_ring().unwrap();
+            assert_eq!(ring.readable() as u64, before + 256, "cycle {cycle}: the quantum was dropped");
+            if rep.triggered == 1 {
+                assert_eq!(ring.read(&mut [&mut l[..], &mut rr[..]], 480), 480, "cycle {cycle}: a whole buffer is ready");
+                read += 480;
+                shm::finish(a.activation(), &[a.done()], 0);
+            }
+        }
+        assert_eq!(read + a.input_ring().unwrap().readable() as u64, 400 * 256);
     }
 
     impl Rig {

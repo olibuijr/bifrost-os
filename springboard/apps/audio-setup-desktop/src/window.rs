@@ -26,8 +26,8 @@ pub const MEMBER_PT: f32 = 44.0;
 pub const LINE_PT: f32 = 28.0;
 /// The label column of the detail card and of the editor's form (points).
 pub const KEY_PT: f32 = 110.0;
-/// How often the device list is read again (seconds).
-pub const REFRESH_S: f64 = 2.0;
+/// How often the device list is read again (milliseconds, the loop clock's unit).
+pub const REFRESH_MS: f64 = 2000.0;
 
 /// Toolbar item ids.
 pub const B_NEW_AGG: u32 = 1;
@@ -85,7 +85,7 @@ pub struct AudioSetup {
     pub last_refresh: f64,
     /// The target a press started on; the release activates it only when it lands on the same one.
     pub press: Target,
-    /// The clock time of the last event, frame or tick (seconds), for the actions that read the list.
+    /// The clock time of the last event, frame or tick (milliseconds), for the actions that read the list.
     pub now: f64,
 }
 

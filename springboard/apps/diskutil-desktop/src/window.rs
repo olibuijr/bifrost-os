@@ -1,7 +1,7 @@
 //! The Disk Utility window's state, geometry and hit tests: the disks and volumes (sidebar), the toolbar, the info pane
 //! of the selected row and the footer. Layout is in points and derives from the window size; the drawing code and the
 //! hit tests read the same rectangles from here, so a tap lands on what is drawn. The disks are re-read every
-//! `REFRESH_S` seconds, and usage every `USAGE_S` seconds.
+//! `REFRESH_MS` milliseconds, and usage every `USAGE_MS` milliseconds.
 
 use crate::actions::{self, Action};
 use crate::flow::{Flow, Want};
@@ -37,9 +37,9 @@ pub const HEAD_PT: f32 = 24.0;
 /// One line of the info card (points), and the width of its key column.
 pub const LINE_PT: f32 = 28.0;
 pub const KEY_PT: f32 = 130.0;
-/// How often the disks are re-read, and how often usage is measured (seconds).
-pub const REFRESH_S: f64 = 2.0;
-pub const USAGE_S: f64 = 10.0;
+/// How often the disks are re-read, and how often usage is measured (milliseconds, the loop clock's unit).
+pub const REFRESH_MS: f64 = 2000.0;
+pub const USAGE_MS: f64 = 10_000.0;
 
 pub const B_MOUNT: u32 = 1;
 pub const B_UNMOUNT: u32 = 2;
@@ -143,7 +143,7 @@ pub struct DiskUtility {
     pub last_usage: f64,
     /// The target a press started on; the release activates it only when it lands on the same one.
     pub press: Target,
-    /// The clock time of the last event, frame or tick (seconds).
+    /// The clock time of the last event, frame or tick (milliseconds).
     pub now: f64,
     /// Set by `refresh` when this sandbox has no `/sys`: the window then asks the shell's `disks` service for the
     /// volumes (`ask_shell`) and takes the answer in `on_volumes`.
@@ -233,7 +233,7 @@ impl DiskUtility {
         model::apply_mounts(&mut nodes, &model::parse_mounts(&probe::read_mounts()));
         // usage is measured on a worker; the rows keep the last measurement until the new one arrives
         model::carry_usage(&mut nodes, &self.nodes);
-        if (force_usage || t - self.last_usage >= USAGE_S) && !self.usage_pending {
+        if (force_usage || t - self.last_usage >= USAGE_MS) && !self.usage_pending {
             let points: Vec<String> = nodes.iter().filter_map(|n| n.mount_point.clone()).collect();
             self.usage_pending = true;
             self.last_usage = t;

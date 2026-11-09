@@ -17,7 +17,7 @@ class ResidualWakeDetection(unittest.TestCase):
         source = "\n".join(p.read_text() for p in (files.parent / "ops.rs", files.parent / "search.rs"))
 
         self.assertIn("next_deadline", body)
-        self.assertIn("t + 0.1", body)
+        self.assertIn("t + THUMB_POLL_MS", body)
         self.assertFalse(compliance.res02_required(body, source, []))
 
     def test_pending_receiver_poll_is_reported_despite_unrelated_wake_facilities(self):

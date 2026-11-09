@@ -7,12 +7,12 @@
 //! Device lifecycle: a device starts when its first IO procedure starts running and stops `idle_stop` (2 s) after
 //! the last one stopped. With no running device the loop blocks in `poll` with no timeout: no wakeups when idle.
 
-use crate::apps::{device_rate, initial_quantum, plan_text, AppState};
+use crate::apps::{device_rate, frames_bounds, initial_quantum, plan_text, AppState};
 use crate::client::{recv_msg, send_msg, Conn, HELLO_TIMEOUT, MAX_STALLED};
 use crate::dsp::{Plan, Stages};
 use crate::io::{
     log, set_realtime, ClientSlot, DeviceRunner, RunnerConfig, Shared, WaitPolicy, CLIENT_PRIORITY, DEFAULT_QUANTUM,
-    MAX_CH, MAX_CLIENTS, MAX_QUANTUM, MIN_QUANTUM,
+    MAX_CH, MAX_CLIENTS, MAX_QUANTUM,
 };
 use bifrost_audio_driver::{DeviceDesc, Driver, DriverEvent, IoConfig};
 use bifrost_audio_policy::dsp::DspManager;
@@ -498,12 +498,12 @@ impl ServerCore {
         if self.devices[dev].gone {
             return err(AudioError::DeviceGone);
         }
-        let range = self.devices[dev].desc.buffer_frames_range;
+        let range = frames_bounds(self.devices[dev].desc.buffer_frames_range, MAX_QUANTUM * 2);
         if r.input_channels as usize > MAX_CH
             || r.output_channels as usize > MAX_CH
             || r.input_channels + r.output_channels == 0
-            || r.buffer_frames < range.0.max(MIN_QUANTUM)
-            || r.buffer_frames > range.1.min(MAX_QUANTUM * 2)
+            || r.buffer_frames < range.0
+            || r.buffer_frames > range.1
         {
             return err(AudioError::BadValue);
         }
@@ -566,7 +566,8 @@ impl ServerCore {
             .map(|r| r.slot.buffer_frames)
             .min()
             .unwrap_or(DEFAULT_QUANTUM);
-        let q = want.clamp(d.desc.buffer_frames_range.0.max(MIN_QUANTUM), d.desc.buffer_frames_range.1.min(MAX_QUANTUM));
+        let (lo, hi) = frames_bounds(d.desc.buffer_frames_range, MAX_QUANTUM);
+        let q = want.clamp(lo, hi);
         // never below what the sustained-xrun fallback raised the device to
         // (but never above the smallest buffer a running client asked for: it writes one buffer per trigger)
         let q = q.max(d.shared.fallback_floor.load(Ordering::Acquire).min(want));
@@ -1150,6 +1151,19 @@ pub fn default_socket() -> &'static str {
 mod tests {
     use super::*;
     use bifrost_audio_driver::null::{NullDriver, NullHandle};
+
+    #[test]
+    fn a_device_whose_buffer_range_could_not_be_probed_does_not_bring_the_server_down() {
+        let mut desc = NullDriver::stereo("n0", 48_000.0);
+        desc.buffer_frames_range = (1, 0);
+        let d = NullDriver::new(vec![desc]);
+        let cfg = CoreConfig { spawn_threads: false, wait: WaitPolicy::None, idle_stop: Duration::from_secs(2) };
+        let mut c = ServerCore::new(vec![Box::new(d)], Box::new(NoObjects), cfg);
+        assert_eq!(c.device_quantum(0), DEFAULT_QUANTUM);
+        // the quantum is recomputed on every start and stop: the same range must not panic there either
+        c.recompute_quantum(0);
+        assert_eq!(c.device_quantum(0), DEFAULT_QUANTUM);
+    }
 
     fn core() -> (ServerCore, NullHandle) {
         let d = NullDriver::new(vec![NullDriver::stereo("n0", 48_000.0)]);
