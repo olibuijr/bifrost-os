@@ -47,6 +47,13 @@ use crate::{
 /// client (the shell). Everyone else keeps the ordinary on-demand focus.
 pub fn exclusive_keyboard_allowed(locked: bool, privileged: bool) -> bool { !locked && privileged }
 
+/// Whether a layer surface holds the keyboard exclusively: it asks for it (`asks`, its committed keyboard
+/// interactivity is exclusive) and may have it. A surface that asks without the right keeps on-demand focus, and
+/// presses on windows focus them as usual (`WmState::focus_at`).
+pub fn holds_exclusive_keyboard(asks: bool, locked: bool, privileged: bool) -> bool {
+    asks && exclusive_keyboard_allowed(locked, privileged)
+}
+
 /// A resize in progress: the frame `wm` asked for and the edges that move, applied when the client commits.
 #[derive(Default)]
 pub struct ResizeTarget(pub RefCell<Option<(Edges, Rect)>>);
@@ -229,7 +236,7 @@ impl WmState {
         // an exclusive grab takes the keyboard from every window and from the lock screen: only the shell may hold one,
         // and never while the session is locked (a sandboxed app must not receive the password being typed)
         let privileged = surface.client().is_some_and(|client| crate::privileged::is_privileged(&client));
-        if ki == KeyboardInteractivity::Exclusive && exclusive_keyboard_allowed(self.locked, privileged) {
+        if holds_exclusive_keyboard(ki == KeyboardInteractivity::Exclusive, self.locked, privileged) {
             let serial = smithay::utils::SERIAL_COUNTER.next_serial();
             if let Some(keyboard) = self.seat.get_keyboard() {
                 if keyboard.current_focus().as_ref() != Some(surface) {
@@ -666,6 +673,14 @@ mod tests {
         assert!(!resize_in_flight(old, &[old], (700, 500)), "an activation change repeats the size: the resize is the client's");
         assert!(!resize_in_flight(old, &[None], (700, 500)), "a configure without a size asks for none");
         assert!(resize_in_flight(old, &[old, Some((1280, 1233))], (923, 861)), "any resize in flight counts");
+    }
+
+    #[test]
+    fn a_layer_surface_that_only_asks_for_the_exclusive_keyboard_does_not_hold_it() {
+        assert!(holds_exclusive_keyboard(true, false, true), "the shell's menu or Spotlight");
+        assert!(!holds_exclusive_keyboard(true, false, false), "an app's layer surface: presses still focus windows");
+        assert!(!holds_exclusive_keyboard(true, true, true), "nothing holds it under the lock");
+        assert!(!holds_exclusive_keyboard(false, false, true), "the shell's bar does not ask");
     }
 
     #[test]

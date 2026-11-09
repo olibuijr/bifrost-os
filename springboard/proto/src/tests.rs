@@ -321,6 +321,37 @@ fn rejects_bad_input() {
 }
 
 #[test]
+fn a_notification_with_long_title_and_body_still_fits_one_packet() {
+    // each text alone is under the inline limit; together they were twice the receive buffer
+    let m = ToShell::Notify { title: "t".repeat(60), body: "é".repeat(MAX_PACKET) };
+    let b = m.encode();
+    assert!(b.len() <= MAX_PACKET, "{} bytes", b.len());
+    let Ok(ToShell::Notify { title, body }) = ToShell::decode(&b) else { panic!("the cut notification decodes") };
+    assert_eq!(title, "t".repeat(60), "a short title is kept whole");
+    assert!(body.len() <= MAX_NOTIFY_BODY && body.len() + 1 >= MAX_NOTIFY_BODY && body.chars().all(|c| c == 'é'));
+    let both = ToShell::Notify { title: "T".repeat(MAX_PACKET), body: "B".repeat(MAX_PACKET) }.encode();
+    assert!(both.len() <= MAX_PACKET, "{} bytes", both.len());
+    let Ok(ToShell::Notify { title, body }) = ToShell::decode(&both) else { panic!("the cut notification decodes") };
+    assert_eq!((title.len(), body.len()), (MAX_NOTIFY_TITLE, MAX_NOTIFY_BODY));
+}
+
+#[test]
+fn a_context_menu_of_the_longest_labels_fits_one_packet_in_whole_items() {
+    // 32 labels of 128 four-byte characters are 16 KiB of text before the item headers
+    let items: Vec<ContextItem> = (0..40).map(|id| ContextItem { id, label: "\u{1F600}".repeat(200), enabled: true }).collect();
+    let b = ToShell::ContextMenu { x: 1.0, y: 2.0, items: items.clone() }.encode();
+    assert!(b.len() <= MAX_PACKET, "{} bytes", b.len());
+    let Ok(ToShell::ContextMenu { items: got, .. }) = ToShell::decode(&b) else { panic!("the cut menu decodes") };
+    assert!(!got.is_empty() && got.len() < 32, "{} items", got.len());
+    for (g, want) in got.iter().zip(&items) {
+        assert_eq!((g.id, g.label.chars().count()), (want.id, 128), "items are cut whole, labels at 128 characters");
+    }
+    let small = ToShell::ContextMenu { x: 1.0, y: 2.0, items: (0..40).map(|id| ContextItem { id, label: "Copy".into(), enabled: id % 2 == 0 }).collect() };
+    let Ok(ToShell::ContextMenu { items: got, .. }) = ToShell::decode(&small.encode()) else { panic!("decodes") };
+    assert_eq!(got.len(), 32, "short items keep the limit of 32");
+}
+
+#[test]
 fn long_text_is_clamped_on_a_char_boundary() {
     let m = ToShell::Log { text: "é".repeat(MAX_PACKET) };
     let b = m.encode();

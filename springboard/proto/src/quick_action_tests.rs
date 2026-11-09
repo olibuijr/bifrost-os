@@ -10,9 +10,32 @@ fn a_chosen_quick_action_round_trips_with_its_user_info() {
 
 #[test]
 fn a_quick_action_with_too_much_user_info_is_refused() {
-    let many: Vec<(String, String)> = (0..=MAX_QUICK_INFO).map(|n| (format!("k{n}"), "v".into())).collect();
-    let bytes = ToApp::QuickAction { kind: "x".into(), user_info: many }.encode();
+    // the encoder never writes such a packet (next test), so the count is raised by hand
+    let mut bytes = ToApp::QuickAction { kind: "x".into(), user_info: Vec::new() }.encode();
+    let at = bytes.len() - 4;
+    bytes[at..].copy_from_slice(&(MAX_QUICK_INFO + 1).to_le_bytes());
+    for n in 0..=MAX_QUICK_INFO {
+        let pair = ToApp::QuickAction { kind: format!("k{n}"), user_info: Vec::new() }.encode();
+        // a key and a value in the wire form of a string: the kind of a bare action, without its tag and count
+        bytes.extend_from_slice(&pair[4..pair.len() - 4]);
+        bytes.extend_from_slice(&pair[4..pair.len() - 4]);
+    }
     assert_eq!(ToApp::decode(&bytes), Err(DecodeError::BadValue));
+}
+
+#[test]
+fn the_encoder_sends_only_the_user_info_the_decoder_and_one_packet_take() {
+    let many: Vec<(String, String)> = (0..=MAX_QUICK_INFO).map(|n| (format!("k{n}"), "v".into())).collect();
+    let bytes = ToApp::QuickAction { kind: "x".into(), user_info: many.clone() }.encode();
+    let Ok(ToApp::QuickAction { user_info, .. }) = ToApp::decode(&bytes) else { panic!("the capped action decodes") };
+    assert_eq!(user_info, many[..MAX_QUICK_INFO as usize], "the pairs past the limit are left out");
+    // pairs that would pass the packet size are left out whole
+    let long: Vec<(String, String)> = (0..8).map(|n| (format!("k{n}"), "v".repeat(4000))).collect();
+    let bytes = ToApp::QuickAction { kind: "x".into(), user_info: long.clone() }.encode();
+    assert!(bytes.len() <= MAX_PACKET, "{} bytes", bytes.len());
+    let Ok(ToApp::QuickAction { user_info, .. }) = ToApp::decode(&bytes) else { panic!("the cut action decodes") };
+    assert_eq!(user_info, long[..user_info.len()]);
+    assert!(!user_info.is_empty() && user_info.len() < long.len());
 }
 
 #[test]

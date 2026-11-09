@@ -30,6 +30,10 @@ impl SessionLockHandler for WmState {
         if let Some(keyboard) = self.seat.get_keyboard() {
             keyboard.set_focus(self, None, SERIAL_COUNTER.next_serial());
         }
+        // the pointer leaves the surface it was on, and a pointer lock that surface held ends: no button press reaches
+        // an app behind the lock screen. The next motion enters the lock surface (`surface_under`).
+        let time = self.start.elapsed().as_millis() as u32;
+        self.pointer_leave(self.pointer_location(), time);
         // the next frame draws nothing but the lock (black until its surface arrives)
         confirmation.lock();
     }
