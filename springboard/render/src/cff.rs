@@ -319,7 +319,7 @@ impl<'a> Cff<'a> {
     pub fn outline(&self, gid: u16, sink: &mut impl Sink) -> Option<f32> {
         let cs = self.char_strings.get(self.data, gid as usize)?;
         let fd = self.font_dict(gid as usize);
-        let mut t2 = Type2 { cff: self, fd, sink, stack: Vec::new(), x: 0.0, y: 0.0, stems: 0, width: None, open: false, trans: Vec::new() };
+        let mut t2 = Type2 { cff: self, fd, sink, stack: Vec::new(), x: 0.0, y: 0.0, stems: 0, width: None, open: false, trans: Vec::new(), ops: 0 };
         t2.run(cs, 0);
         if t2.open {
             t2.sink.close();
@@ -379,7 +379,16 @@ struct Type2<'s, 'a, S: Sink> {
     open: bool,
     /// transient array (put/get)
     trans: Vec<f32>,
+    /// operands and operators read so far, across every subroutine call
+    ops: u32,
 }
+
+/// Operands and operators one glyph may run, subroutines included: the call depth limit alone lets each level
+/// call the next any number of times.
+const OPS_LIMIT: u32 = 1 << 20;
+/// Deepest operand stack before the charstring is abandoned. Type 2 allows 48; this is the CFF2 limit, kept
+/// for fonts that run a little over.
+const STACK_LIMIT: usize = 513;
 
 impl<S: Sink> Type2<'_, '_, S> {
     /// Takes the width argument if the first stack-clearing operator has one
@@ -424,6 +433,10 @@ impl<S: Sink> Type2<'_, '_, S> {
         }
         let mut p = 0;
         while p < cs.len() {
+            self.ops += 1;
+            if self.ops > OPS_LIMIT || self.stack.len() > STACK_LIMIT {
+                return false;
+            }
             let b0 = cs[p] as usize;
             p += 1;
             match b0 {
@@ -1042,5 +1055,35 @@ mod tests {
         b.move_to(0.0, 0.0);
         b.curve_to(0.0, 100.0, 100.0, 100.0, 100.0, 0.0);
         assert!(b.max.1 > 70.0 && b.max.1 <= 75.0 + 1e-3, "{:?}", b.max);
+    }
+
+    #[test]
+    fn subroutine_fan_out_stops_at_the_operator_budget() {
+        // four local subrs that each call the next 20 times, then one that draws a line; the glyph calls the first
+        // 20 times: 3.2 million lines within the depth limit
+        let level = |next: i32| cs(&[&[num(next - 107), vec![10]].concat().repeat(20), &[11]]);
+        let (s0, s1, s2, s3) = (level(1), level(2), level(3), level(4));
+        let leaf = cs(&[&num(1), &num(1), &[5, 11]]);
+        let main = cs(&[&num(0), &num(0), &[21], &level(0)[..40], &[14]]);
+        let data = font(&[&[14], &main], &[], &[&s0, &s1, &s2, &s3, &leaf]);
+        let f = Cff::parse(&data).unwrap();
+        let mut rec = Rec::default();
+        f.outline(1, &mut rec).unwrap();
+        let lines = rec.0.iter().filter(|c| matches!(c, Cmd::L(..))).count();
+        assert!(lines > 0, "the glyph draws until the budget runs out");
+        assert!(lines < OPS_LIMIT as usize, "{lines} lines");
+        assert_eq!(rec.0.last(), Some(&Cmd::Z), "the open path is still closed");
+    }
+
+    #[test]
+    fn an_operand_stack_past_the_limit_abandons_the_charstring() {
+        // a subr that pushes 100 operands, called six times before one rlineto
+        let push = cs(&[&num(1).repeat(100), &[11]]);
+        let main = cs(&[&num(0), &num(0), &[21], &[num(-107), vec![10]].concat().repeat(6), &[5, 14]]);
+        let data = font(&[&[14], &main], &[], &[&push]);
+        let f = Cff::parse(&data).unwrap();
+        let mut rec = Rec::default();
+        f.outline(1, &mut rec).unwrap();
+        assert_eq!(rec.0, vec![Cmd::M(0.0, 0.0), Cmd::Z]);
     }
 }
