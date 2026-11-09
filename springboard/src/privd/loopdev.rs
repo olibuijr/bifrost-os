@@ -7,7 +7,9 @@
 
 use super::{account_ids, obj, s, PErr};
 use bifrost_core::json::Json;
-use std::os::unix::fs::MetadataExt;
+use std::fs::{File, OpenOptions};
+use std::os::fd::AsRawFd;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -15,6 +17,21 @@ use std::process::Command;
 const EXTENSIONS: [&str; 2] = ["iso", "img"];
 /// Where the kernel reports a loop device's backing file.
 const SYS_BLOCK: &str = "/sys/block";
+/// Where the kernel hands out free loop devices.
+const LOOP_CONTROL: &str = "/dev/loop-control";
+/// Opens a handle on the file itself and nothing more: no read, no write, no side effect on a device or a pipe.
+const O_PATH: i32 = 0o10000000;
+/// Binds the file of the descriptor given as argument to the loop device.
+const LOOP_SET_FD: std::os::raw::c_ulong = 0x4C00;
+/// Returns the number of a free loop device (on the control device).
+const LOOP_CTL_GET_FREE: std::os::raw::c_ulong = 0x4C82;
+const EBUSY: i32 = 16;
+/// How often a loop device that another process took first is given up for the next free one.
+const BIND_TRIES: usize = 8;
+
+extern "C" {
+    fn ioctl(fd: i32, request: std::os::raw::c_ulong, ...) -> i32;
+}
 
 /// A loop device name: `/dev/loop` and then digits.
 pub fn valid_device(dev: &str) -> bool {
@@ -29,28 +46,66 @@ pub fn image_name_ok(path: &str) -> bool {
     Path::new(path).extension().and_then(|e| e.to_str()).is_some_and(|e| EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
 }
 
-/// Checks the image file as root must see it: named as an image, canonical (no link anywhere on the path), a regular
-/// file, owned by `uid` and under `home`. Returns the canonical path to hand to `losetup`.
-fn check_file(path: &str, uid: u32, home: &Path) -> Result<PathBuf, PErr> {
+/// Checks the image file as root must see it: named as an image, reached with no link anywhere on the path, a regular
+/// file, owned by `uid` and under `home`. The file is opened once, without following a link, and every check reads the
+/// open descriptor, so what was checked is what gets attached whatever happens to the name afterwards. Returns that
+/// descriptor (a handle only, see [`reopen`]) and the path.
+fn check_file(path: &str, uid: u32, home: &Path) -> Result<(File, PathBuf), PErr> {
     if !image_name_ok(path) {
         return Err(PErr::bad("the path must be an absolute .iso or .img file"));
     }
     let given = Path::new(path);
-    let canon = given.canonicalize().map_err(|_| PErr::bad("no such image file"))?;
-    if canon != given {
+    let handle = OpenOptions::new().read(true).custom_flags(O_PATH | super::methods::O_NOFOLLOW).open(given).map_err(|_| PErr::bad("no such image file"))?;
+    let meta = handle.metadata().map_err(|_| PErr::bad("no such image file"))?;
+    if meta.file_type().is_symlink() {
         return Err(PErr::bad("the image path must not go through a symbolic link"));
     }
-    let meta = std::fs::symlink_metadata(&canon).map_err(|_| PErr::bad("no such image file"))?;
     if !meta.file_type().is_file() {
         return Err(PErr::bad("the image is not a regular file"));
     }
     if meta.uid() != uid {
         return Err(PErr::bad("the image is not owned by the account"));
     }
-    if !canon.starts_with(home) {
+    // where the kernel says the open file is: a link in a parent folder, or a rename since the open, shows here
+    let real = std::fs::read_link(format!("/proc/self/fd/{}", handle.as_raw_fd())).map_err(|_| PErr::bad("no such image file"))?;
+    if real != given {
+        return Err(PErr::bad("the image path must not go through a symbolic link"));
+    }
+    if !real.starts_with(home) {
         return Err(PErr::bad("the image is outside the account's home folder"));
     }
-    Ok(canon)
+    Ok((handle, real))
+}
+
+/// Opens the checked file for the loop device. It goes through the descriptor, not the name, so it is the same file
+/// even when the name now leads elsewhere.
+fn reopen(handle: &File, read_only: bool) -> std::io::Result<File> {
+    OpenOptions::new().read(true).write(!read_only).open(format!("/proc/self/fd/{}", handle.as_raw_fd()))
+}
+
+/// Binds the open `image` to a free loop device and returns the device path. The kernel makes the device read-only
+/// when the image was opened read-only. `losetup` is not used here: it takes a name and opens it again.
+fn bind_free(image: &File, read_only: bool) -> Result<String, PErr> {
+    let control = OpenOptions::new().read(true).write(true).open(LOOP_CONTROL).map_err(|e| PErr::internal(format!("{LOOP_CONTROL}: {e}")))?;
+    for _ in 0..BIND_TRIES {
+        // SAFETY: `control` is an open descriptor and this request takes no argument.
+        let n = unsafe { ioctl(control.as_raw_fd(), LOOP_CTL_GET_FREE) };
+        if n < 0 {
+            return Err(PErr::internal(format!("no free loop device: {}", std::io::Error::last_os_error())));
+        }
+        let device = format!("/dev/loop{n}");
+        let dev = OpenOptions::new().read(true).write(!read_only).open(&device).map_err(|e| PErr::internal(format!("{device}: {e}")))?;
+        // SAFETY: both descriptors are open for the length of the call; the request takes the image's descriptor.
+        if unsafe { ioctl(dev.as_raw_fd(), LOOP_SET_FD, image.as_raw_fd() as std::os::raw::c_ulong) } == 0 {
+            return Ok(device);
+        }
+        let e = std::io::Error::last_os_error();
+        // another process bound this device between the two calls: ask for the next free one
+        if e.raw_os_error() != Some(EBUSY) {
+            return Err(PErr::internal(format!("{device}: {e}")));
+        }
+    }
+    Err(PErr::internal("no free loop device"))
 }
 
 /// The last non-empty line of a command's stderr, or a fixed word when it printed nothing.
@@ -62,20 +117,11 @@ fn last_line(stderr: &[u8]) -> String {
 /// `disk.loop_attach {path, read_only}`: binds the image to a free loop device and returns `{device}`.
 pub fn attach(path: &str, read_only: bool) -> Result<Json, PErr> {
     let (uid, _gid, home) = account_ids().ok_or_else(|| PErr::internal("no installed account"))?;
-    let file = check_file(path, uid, Path::new(&home))?;
-    let mut cmd = Command::new("losetup");
-    cmd.arg("--find").arg("--show");
-    if read_only {
-        cmd.arg("--read-only");
-    }
-    cmd.arg(&file);
-    let out = cmd.output().map_err(|e| PErr::internal(format!("losetup: {e}")))?;
-    if !out.status.success() {
-        return Err(PErr::internal(last_line(&out.stderr)));
-    }
-    let device = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let (handle, _real) = check_file(path, uid, Path::new(&home))?;
+    let image = reopen(&handle, read_only).map_err(|e| PErr::internal(format!("the image cannot be opened: {e}")))?;
+    let device = bind_free(&image, read_only)?;
     if !valid_device(&device) {
-        return Err(PErr::internal("losetup gave no loop device"));
+        return Err(PErr::internal("the kernel gave no loop device"));
     }
     Ok(obj(vec![("device", s(device))]))
 }
@@ -149,7 +195,34 @@ mod tests {
         let home = base.join("home");
         let file = home.join("disk.iso");
         std::fs::write(&file, b"x").unwrap();
-        assert_eq!(check_file(file.to_str().unwrap(), uid_of(&home), &home), Ok(file.clone()));
+        assert_eq!(check_file(file.to_str().unwrap(), uid_of(&home), &home).map(|(_, real)| real), Ok(file.clone()));
+    }
+
+    #[test]
+    fn the_checked_file_is_the_one_attached_after_its_name_is_swapped_for_a_link() {
+        let base = scratch("swap");
+        let home = base.join("home");
+        let file = home.join("disk.img");
+        std::fs::write(&file, b"image").unwrap();
+        let secret = base.join("secret.img");
+        std::fs::write(&secret, b"secret").unwrap();
+        let (handle, _) = check_file(file.to_str().unwrap(), uid_of(&home), &home).unwrap();
+        // after the check, the name is made to lead to a file outside the home folder
+        std::fs::rename(&file, home.join("moved.img")).unwrap();
+        std::os::unix::fs::symlink(&secret, &file).unwrap();
+        let mut text = String::new();
+        std::io::Read::read_to_string(&mut reopen(&handle, true).unwrap(), &mut text).unwrap();
+        assert_eq!(text, "image");
+    }
+
+    #[test]
+    fn a_link_in_a_parent_folder_is_refused() {
+        let base = scratch("parent");
+        let home = base.join("home");
+        std::fs::create_dir_all(base.join("elsewhere")).unwrap();
+        std::fs::write(base.join("elsewhere").join("disk.img"), b"x").unwrap();
+        std::os::unix::fs::symlink(base.join("elsewhere"), home.join("folder")).unwrap();
+        assert!(check_file(home.join("folder").join("disk.img").to_str().unwrap(), uid_of(&home), &home).is_err());
     }
 
     #[test]
