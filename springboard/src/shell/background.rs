@@ -21,6 +21,13 @@ pub struct Facts {
     pub covered: bool,
 }
 
+/// Whether the shell knows what an app on `route` shows. The windows of an app on the shared-memory path are the
+/// shell's own desk windows. An app on the direct path draws in the window server: the shell has no window for it and
+/// cannot tell whether it is seen or covered, so it reports no facts for it and never stops it.
+pub fn shell_sees_windows(route: super::apphost::Route) -> bool {
+    route == super::apphost::Route::Shm
+}
+
 /// One signal to send: the external app slot and the signal number.
 pub type Signal = (u8, i32);
 
@@ -111,6 +118,13 @@ mod tests {
         assert_eq!(s.update(&[(2, HIDDEN)], GRACE_MS), vec![(2, SIGSTOP)]);
         assert!(s.is_suspended(2));
         assert!(s.update(&[(2, HIDDEN)], GRACE_MS + 10).is_empty(), "stopped once, not again");
+    }
+
+    #[test]
+    fn an_app_that_draws_in_the_window_server_is_left_out() {
+        use super::super::apphost::Route;
+        assert!(shell_sees_windows(Route::Shm));
+        assert!(!shell_sees_windows(Route::Direct), "the shell cannot tell whether a direct app is seen, so it never stops it");
     }
 
     #[test]

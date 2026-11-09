@@ -972,6 +972,31 @@
         assert!(sh.desk.as_ref().unwrap().unmapped.contains(&ghost),"drawing keeps the list");
     }
 
+    /// Suspend Background Apps: an app whose only shown window is an extra window (its main window is closed or
+    /// minimized) is on screen, and its own windows do not count as covering it.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn an_app_showing_only_an_extra_window_counts_as_on_screen_for_background_suspension() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;
+        let (mine,_theirs)=bifrost_proto::sys::socketpair_pair().unwrap();
+        let host=apphost::AppHost::with_channel("fixture",mine,None,bifrost_proto::Configure{w:100,h:100,scale:1.,safe_top:0.,safe_bottom:0.,dark:true,text_scale:1.,reduce_motion:false});
+        sh.ext.push(Some(host));
+        let m=sh.desk_metrics();
+        sh.desk.as_mut().unwrap().wins.clear();
+        sh.desk.as_mut().unwrap().open(&m,AppId::ExternalWindow(0,3),(600,400));
+        assert_eq!(sh.background_facts(),vec![(0,background::Facts{focused:false,on_screen:true,covered:false})]);
+        // the main window stacked over the extra one is the same app: it does not cover it
+        sh.desk.as_mut().unwrap().open(&m,AppId::External(0),(2000,2000));
+        let d=sh.desk.as_mut().unwrap();
+        let r=d.wins[d.index_of(AppId::ExternalWindow(0,3)).unwrap()].r;
+        let i=d.index_of(AppId::External(0)).unwrap();
+        d.wins[i].r=r;
+        assert!(!sh.app_covered(AppId::External(0)),"an app's own windows do not cover it");
+        // with every window minimized nothing of the app is shown
+        for w in sh.desk.as_mut().unwrap().wins.iter_mut() {w.minimized=true;}
+        assert!(!sh.background_facts()[0].1.on_screen);
+    }
+
     /// A fixture host standing for a running external app in slot 0.
     #[cfg(feature="desktop-wayland")]
     #[allow(dead_code)]

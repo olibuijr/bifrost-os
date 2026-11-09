@@ -4330,34 +4330,41 @@ impl Shell {
             self.send_app_signals(&signals);
             return;
         }
-        let facts: Vec<(u8, background::Facts)> = self
-            .ext
-            .iter()
-            .enumerate()
-            .filter_map(|(n, host)| {
-                if !host.as_ref()?.running() {
-                    return None;
-                }
-                let app = AppId::External(n as u8);
-                let focused = matches!(self.screen, Screen::App(a) if a == app);
-                let on_screen = focused || self.desk.as_ref().is_some_and(|d| d.wins.iter().any(|w| w.app == app && !w.minimized));
-                let covered = self.app_covered(app);
-                Some((n as u8, background::Facts { focused, on_screen, covered }))
-            })
-            .collect();
+        let facts = self.background_facts();
         // the shell clock is already milliseconds
         let signals = self.suspender.update(&facts, t.max(0.0) as u64);
         self.send_app_signals(&signals);
     }
 
-    /// Whether every shown window of `app` is covered by windows of other apps stacked over it. The desktop lists its
-    /// windows back to front, so the windows over window `i` are `wins[i + 1..]`. Minimized windows show nothing and
-    /// cover nothing.
+    /// What `background_tick` knows about each running external app whose windows the shell draws. An app's windows are
+    /// its main window and its extra windows (`AppId::parent`). An app on the direct route is left out, so it is never
+    /// stopped (`background::shell_sees_windows`).
+    fn background_facts(&self) -> Vec<(u8, background::Facts)> {
+        self.ext
+            .iter()
+            .enumerate()
+            .filter_map(|(n, host)| {
+                let host = host.as_ref()?;
+                if !host.running() || !background::shell_sees_windows(host.route()) {
+                    return None;
+                }
+                let app = AppId::External(n as u8);
+                let focused = matches!(self.screen, Screen::App(a) if a.parent() == app);
+                let on_screen = focused || self.desk.as_ref().is_some_and(|d| d.wins.iter().any(|w| w.app.parent() == app && !w.minimized));
+                let covered = self.app_covered(app);
+                Some((n as u8, background::Facts { focused, on_screen, covered }))
+            })
+            .collect()
+    }
+
+    /// Whether every shown window of `app` (its extra windows included) is covered by windows of other apps stacked
+    /// over it. The desktop lists its windows back to front, so the windows over window `i` are `wins[i + 1..]`.
+    /// Minimized windows show nothing and cover nothing.
     fn app_covered(&self, app: AppId) -> bool {
         let Some(desk) = self.desk.as_ref() else { return false };
         let rect = |w: &desk::Win| [w.r.x as i64, w.r.y as i64, w.r.w as i64, w.r.h as i64];
-        desk.wins.iter().enumerate().filter(|(_, w)| w.app == app && !w.minimized).all(|(i, w)| {
-            let above: Vec<[i64; 4]> = desk.wins[i + 1..].iter().filter(|o| o.app != app && !o.minimized).map(rect).collect();
+        desk.wins.iter().enumerate().filter(|(_, w)| w.app.parent() == app && !w.minimized).all(|(i, w)| {
+            let above: Vec<[i64; 4]> = desk.wins[i + 1..].iter().filter(|o| o.app.parent() != app && !o.minimized).map(rect).collect();
             bifrost_core::occlusion::is_covered(rect(w), &above)
         })
     }
