@@ -641,36 +641,49 @@ pub enum DispatchTimeoutResult {
     TimedOut,
 }
 
+#[derive(Default)]
+struct SemaphoreState {
+    /// the count; below zero it is minus the number of waiters that no signal has released yet
+    count: isize,
+    /// wake-ups handed out by `signal` that no waiter has taken yet: each one releases exactly one waiter
+    wakeups: usize,
+}
+
 /// `DispatchSemaphore`: a counting semaphore. The count may go negative while waiters are queued: each one owes the
 /// count it is waiting for. Clones share the same semaphore.
 #[derive(Clone)]
-pub struct DispatchSemaphore(Arc<(Mutex<isize>, Condvar)>);
+pub struct DispatchSemaphore(Arc<(Mutex<SemaphoreState>, Condvar)>);
 
 impl DispatchSemaphore {
     /// `init(value:)`.
     pub fn new(value: isize) -> Self {
-        DispatchSemaphore(Arc::new((Mutex::new(value), Condvar::new())))
+        DispatchSemaphore(Arc::new((Mutex::new(SemaphoreState { count: value, wakeups: 0 }), Condvar::new())))
     }
 
     /// `signal()`: increments the count. Returns true when a waiter was woken (the count did not stay positive).
+    /// Each such signal releases exactly one waiter.
     pub fn signal(&self) -> bool {
         let (m, cv) = &*self.0;
-        let mut v = lock(m);
-        *v += 1;
-        let woke = *v <= 0;
+        let mut st = lock(m);
+        st.count += 1;
+        let woke = st.count <= 0;
         if woke {
-            cv.notify_all();
+            st.wakeups += 1;
+            cv.notify_one();
         }
         woke
     }
 
-    /// `wait()`: decrements the count and blocks while it is negative.
+    /// `wait()`: decrements the count and, when it went negative, blocks until a signal releases this waiter.
     pub fn wait(&self) {
         let (m, cv) = &*self.0;
-        let mut v = lock(m);
-        *v -= 1;
-        while *v < 0 {
-            v = cv.wait(v).unwrap_or_else(|e| e.into_inner());
+        let mut st = lock(m);
+        st.count -= 1;
+        if st.count < 0 {
+            while st.wakeups == 0 {
+                st = cv.wait(st).unwrap_or_else(|e| e.into_inner());
+            }
+            st.wakeups -= 1;
         }
     }
 
@@ -679,21 +692,27 @@ impl DispatchSemaphore {
     pub fn wait_timeout(&self, timeout: Duration) -> DispatchTimeoutResult {
         let deadline = Instant::now().checked_add(timeout);
         let (m, cv) = &*self.0;
-        let mut v = lock(m);
-        *v -= 1;
-        while *v < 0 {
+        let mut st = lock(m);
+        st.count -= 1;
+        if st.count >= 0 {
+            return DispatchTimeoutResult::Success;
+        }
+        loop {
+            // checked before the deadline, so a wake-up that arrived in time is never left behind
+            if st.wakeups > 0 {
+                st.wakeups -= 1;
+                return DispatchTimeoutResult::Success;
+            }
             let left = match deadline {
                 Some(d) if d > Instant::now() => d - Instant::now(),
                 _ => {
-                    *v += 1;
-                    // the count is back: other waiters may now be owed a wake-up
-                    cv.notify_all();
+                    // no wake-up is pending, so this waiter is still owed in the count: take it back
+                    st.count += 1;
                     return DispatchTimeoutResult::TimedOut;
                 }
             };
-            v = cv.wait_timeout(v, left).unwrap_or_else(|e| e.into_inner()).0;
+            st = cv.wait_timeout(st, left).unwrap_or_else(|e| e.into_inner()).0;
         }
-        DispatchTimeoutResult::Success
     }
 }
 
@@ -1191,6 +1210,78 @@ mod tests {
         assert!(!sem.signal());
         sem.wait();
         sem.wait();
+    }
+
+    /// Blocks until `n` threads are queued on the semaphore (its count is `-n`).
+    fn until_waiters(sem: &DispatchSemaphore, n: isize) {
+        let end = Instant::now() + Duration::from_secs(5);
+        while lock(&sem.0 .0).count != -n {
+            assert!(Instant::now() < end, "the waiters never queued");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    #[test]
+    fn semaphore_signal_releases_exactly_one_of_two_waiters() {
+        let sem = DispatchSemaphore::new(0);
+        let (tx, rx) = mpsc::channel();
+        let waiters: Vec<_> = (0..2)
+            .map(|_| {
+                let (s, tx) = (sem.clone(), tx.clone());
+                std::thread::spawn(move || {
+                    s.wait();
+                    let _ = tx.send(());
+                })
+            })
+            .collect();
+        until_waiters(&sem, 2);
+        assert!(sem.signal(), "two waiters were queued, so the signal should wake one");
+        assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok(), "one signal released no waiter");
+        assert!(rx.recv_timeout(Duration::from_millis(50)).is_err(), "one signal released both waiters");
+        assert!(sem.signal());
+        assert!(rx.recv_timeout(Duration::from_secs(5)).is_ok(), "the second signal released no waiter");
+        for w in waiters {
+            w.join().unwrap();
+        }
+        // both waits were paid for: the count is back at zero
+        assert_eq!(sem.wait_timeout(Duration::ZERO), DispatchTimeoutResult::TimedOut);
+    }
+
+    #[test]
+    fn semaphore_of_one_works_as_a_lock_for_three_threads() {
+        let sem = DispatchSemaphore::new(1);
+        let inside = Arc::new(AtomicUsize::new(0));
+        let threads: Vec<_> = (0..3)
+            .map(|_| {
+                let (s, inside) = (sem.clone(), inside.clone());
+                std::thread::spawn(move || {
+                    for _ in 0..50 {
+                        assert_eq!(s.wait_timeout(Duration::from_secs(5)), DispatchTimeoutResult::Success, "a waiter was never released");
+                        assert_eq!(inside.fetch_add(1, Ordering::SeqCst), 0, "two threads held the semaphore");
+                        std::thread::yield_now();
+                        inside.fetch_sub(1, Ordering::SeqCst);
+                        s.signal();
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+        assert_eq!(sem.wait_timeout(Duration::ZERO), DispatchTimeoutResult::Success);
+    }
+
+    #[test]
+    fn semaphore_timed_out_waiter_does_not_take_a_later_signal() {
+        let sem = DispatchSemaphore::new(0);
+        let s2 = sem.clone();
+        let waiter = std::thread::spawn(move || s2.wait());
+        until_waiters(&sem, 1);
+        // a second waiter gives up: the first one is still the only one owed a signal
+        assert_eq!(sem.wait_timeout(Duration::from_millis(10)), DispatchTimeoutResult::TimedOut);
+        assert!(sem.signal());
+        waiter.join().unwrap();
+        assert!(!sem.signal(), "nobody is waiting any more");
     }
 }
 
