@@ -148,17 +148,15 @@ impl Pool {
                 let job = st.lanes[l].jobs.pop_front().unwrap();
                 st.active += 1;
                 st.running[l] += 1;
+                // this lane's queue may be empty now: a lower lane that was held back by it can borrow the width
+                self.wake_waiting(&st);
                 drop(st);
                 run(job);
                 st = lock(&self.state);
                 st.active -= 1;
                 st.running[l] -= 1;
                 // a slot opened: wake the best waiting lane first
-                for k in 0..LANES {
-                    if st.lanes[k].idle > 0 && !st.lanes[k].jobs.is_empty() {
-                        self.cv[k].notify_one();
-                    }
-                }
+                self.wake_waiting(&st);
                 continue;
             }
             st.lanes[l].idle += 1;
@@ -168,6 +166,16 @@ impl Pool {
             if to.timed_out() && st.lanes[l].jobs.is_empty() {
                 st.lanes[l].threads -= 1;
                 return;
+            }
+        }
+    }
+
+    /// Wakes one idle worker in every lane that has a job waiting, best lane first. Each woken worker checks `may_run`
+    /// again, so waking a lane that still may not run costs one wake-up and nothing else.
+    fn wake_waiting(&self, st: &State) {
+        for k in 0..LANES {
+            if st.lanes[k].idle > 0 && !st.lanes[k].jobs.is_empty() {
+                self.cv[k].notify_one();
             }
         }
     }
