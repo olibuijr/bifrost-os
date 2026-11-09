@@ -650,14 +650,14 @@ fn ucode_images() -> io::Result<Vec<String>> {
     Ok(v)
 }
 
-/// Whether a rebuilt image makes the current one the rollback generation. Not while an update is in flight.
-pub fn replaces_previous(update_in_flight: bool) -> bool {
-    !update_in_flight
-}
+/// The files in `EFI/BIFROST` a rebuilt image replaces: the image itself and the boot line. The rollback generation
+/// (`bifrost-previous.efi`, `rollback.txt`) is not among them: only `prepare` writes it, together with `@rollback`.
+pub const REBUILD_WRITES: &[&str] = &["bifrost.efi", "boot.cfg"];
 
 /// Builds `EFI/BIFROST/bifrost.efi` from the kernel, the microcode and the initramfs, with the boot line's options.
-/// The old image becomes `bifrost-previous.efi`, except while an update is in flight (`prepare` saved the rollback
-/// generation, which stays). `boot.cfg` is rewritten only after the new image exists, so a
+/// `bifrost-previous.efi` is never touched here: it is the rollback generation and changes only in `prepare`, together
+/// with `@rollback` and `rollback.txt` (a rebuild after an accepted kernel update would otherwise put the new kernel's
+/// image next to the old root). `boot.cfg` is rewritten only after the new image exists, so a
 /// failed build leaves the last good boot line in place. Returns whether the image changed.
 pub fn build_uki() -> io::Result<bool> {
     let esp = Path::new(ESP);
@@ -674,7 +674,7 @@ pub fn build_uki() -> io::Result<bool> {
     } else if !hooks_embed_microcode(&conf) {
         microcode = ucode_images()?;
     }
-    let out = esp.join("bifrost.efi");
+    let out = esp.join(REBUILD_WRITES[0]);
     let tmp = esp.join("bifrost.efi.new");
     let mut args: Vec<String> = vec!["build".into(), format!("--linux=/boot/vmlinuz-{}", kernel())];
     args.extend(microcode.iter().map(|m| format!("--initrd={m}")));
@@ -690,19 +690,13 @@ pub fn build_uki() -> io::Result<bool> {
         fs::remove_file(&tmp)?;
         return Ok(false);
     }
-    if out.exists() {
-        // While an update is in flight (prepared, on probation, restoring) bifrost-previous.efi is the rollback
-        // generation `prepare` saved: the image built here is not accepted yet and must never replace it.
-        if replaces_previous(in_flight_now()) {
-            copy(&out, &esp.join("bifrost-previous.efi"))?;
-        }
-    } else if !esp.join("rollback.txt").exists() {
+    if !out.exists() && !esp.join("rollback.txt").exists() {
         // The first image on an older install: the boot line it replaces is the rollback.
         save(&esp.join("rollback.txt"), line.as_bytes())?;
     }
     fs::File::open(&tmp)?.sync_all()?;
     fs::rename(&tmp, &out)?;
-    save(&esp.join("boot.cfg"), uki_line(&line).as_bytes())?;
+    save(&esp.join(REBUILD_WRITES[1]), uki_line(&line).as_bytes())?;
     Ok(true)
 }
 
@@ -831,12 +825,18 @@ mod update_tests {
     fn the_rollback_generation_is_kept_while_an_update_is_in_flight() {
         for phase in ["system-prepared", "system-probation", "system-restoring", "prepared", "probation", "restoring\n"] {
             assert!(update_in_flight(phase), "{phase}");
-            assert!(!replaces_previous(update_in_flight(phase)), "{phase}");
         }
         for phase in ["", "accepted", "rolled-back", "system-accepted"] {
             assert!(!update_in_flight(phase), "{phase:?}");
-            assert!(replaces_previous(update_in_flight(phase)), "{phase:?}");
         }
+    }
+
+    #[test]
+    fn a_rebuilt_image_never_replaces_the_rollback_generation() {
+        // after an accepted kernel update the record unit rebuilds the image: the previous image must stay the one
+        // `prepare` saved with @rollback, so the rebuild writes the current image and the boot line only
+        assert_eq!(REBUILD_WRITES, &["bifrost.efi", "boot.cfg"]);
+        assert!(!REBUILD_WRITES.iter().any(|f| UKI_PREVIOUS.ends_with(f) || *f == "rollback.txt"));
     }
 
     #[test]
