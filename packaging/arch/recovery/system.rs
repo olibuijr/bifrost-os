@@ -2,10 +2,30 @@
 use super::*;
 const TOP: &str = "/run/bifrost/recovery-root";
 const ESP: &str = "/boot/EFI/BIFROST";
-/// The installed kernel package: `linux-rt` (the default since 2026-10-12) when its image is in /boot, else the
-/// stock `linux` (older installs, or an install whose package source had no linux-rt).
-fn kernel() -> &'static str {
-    if Path::new("/boot/vmlinuz-linux-rt").exists() { "linux-rt" } else { "linux" }
+/// The kernel package among the file names in /boot: every `vmlinuz-<name>` is a candidate, those with a mkinitcpio
+/// preset (`has_preset`) first. `linux-rt` (the default since 2026-10-12) wins, then any other variant the installer
+/// chose for the hardware (`linux-lts-t2`), then the stock `linux` (older installs, or the fallback kernel).
+pub fn kernel_from(boot: &[String], has_preset: impl Fn(&str) -> bool) -> String {
+    let mut found: Vec<&str> = boot
+        .iter()
+        .filter_map(|n| n.strip_prefix("vmlinuz-"))
+        .filter(|k| !k.is_empty() && k.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.')))
+        .collect();
+    if found.iter().any(|k| has_preset(*k)) {
+        found.retain(|k| has_preset(*k));
+    }
+    found.sort_unstable();
+    if found.contains(&"linux-rt") {
+        return "linux-rt".into();
+    }
+    found.iter().find(|k| **k != "linux").map_or_else(|| "linux".to_owned(), |k| (*k).to_owned())
+}
+/// The installed kernel package (see `kernel_from`).
+fn kernel() -> String {
+    let boot: Vec<String> = fs::read_dir("/boot")
+        .map(|d| d.flatten().filter_map(|e| e.file_name().into_string().ok()).collect())
+        .unwrap_or_default();
+    kernel_from(&boot, |k| Path::new(&format!("/etc/mkinitcpio.d/{k}.preset")).exists())
 }
 fn kernel_files() -> [String; 2] {
     let k = kernel();
@@ -330,7 +350,10 @@ pub fn fallback_line(line: &str) -> String {
             if s.starts_with("uki=") {
                 format!("uki={UKI_PREVIOUS}")
             } else if s.starts_with("initrd=") {
-                format!("initrd=\\EFI\\BIFROST\\previous\\initramfs-{}.img", if s.ends_with("initramfs-linux-rt.img") { "linux-rt" } else { "linux" })
+                // the initramfs the line names (any kernel package), by the name `prepare` saved it under
+                let name = s.rsplit(['\\', '/', '=']).next().unwrap_or_default();
+                let keep = name.starts_with("initramfs-") && name.ends_with(".img");
+                format!("initrd=\\EFI\\BIFROST\\previous\\{}", if keep { name } else { "initramfs-linux.img" })
             } else if s.starts_with("rootflags=") {
                 "rootflags=subvol=@rollback".to_owned()
             } else {
@@ -614,7 +637,7 @@ pub fn record_modules() -> io::Result<bool> {
         // the list is the same, but an update can change how the drop-in is made from it (0.6.3 kept only the boot
         // modules): rebuild only when the drop-in on disk is not the one wanted now
         if reconcile_modules()? {
-            run("mkinitcpio", &["-p", kernel()])?;
+            run("mkinitcpio", &["-p", &kernel()])?;
             build_uki()?;
             return Ok(true);
         }
@@ -623,7 +646,7 @@ pub fn record_modules() -> io::Result<bool> {
     if fw_changed && fs::read_to_string(store.join("modules")).is_ok_and(|s| module_names(&s) == names) {
         // modules and drop-in are unchanged, but the firmware list is a build input of the initramfs
         reconcile_modules()?;
-        run("mkinitcpio", &["-p", kernel()])?;
+        run("mkinitcpio", &["-p", &kernel()])?;
         return build_uki().map(|_| true);
     }
     save(&store.join("modules"), names.join("\n").as_bytes())?;
@@ -635,7 +658,7 @@ pub fn record_modules() -> io::Result<bool> {
 /// The initramfs for this machine (rebuilt only when the drop-in changed), then the unified image from it.
 pub fn build_boot_image() -> io::Result<()> {
     if reconcile_modules()? {
-        run("mkinitcpio", &["-p", kernel()])?;
+        run("mkinitcpio", &["-p", &kernel()])?;
     }
     build_uki().map(|_| ())
 }
@@ -676,9 +699,10 @@ pub fn build_uki() -> io::Result<bool> {
     }
     let out = esp.join(REBUILD_WRITES[0]);
     let tmp = esp.join("bifrost.efi.new");
-    let mut args: Vec<String> = vec!["build".into(), format!("--linux=/boot/vmlinuz-{}", kernel())];
+    let kernel = kernel();
+    let mut args: Vec<String> = vec!["build".into(), format!("--linux=/boot/vmlinuz-{kernel}")];
     args.extend(microcode.iter().map(|m| format!("--initrd={m}")));
-    args.push(format!("--initrd=/boot/initramfs-{}.img", kernel()));
+    args.push(format!("--initrd=/boot/initramfs-{kernel}.img"));
     args.push(format!("--cmdline={}", cmdline_options(&line)));
     args.push(format!("--output={}", tmp.display()));
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -726,6 +750,27 @@ mod uki_tests {
         // an install still on the kernel plus initramfs keeps the previous files
         assert!(fallback_line(&LINE.replace("initramfs-linux", "initramfs-linux-rt")).starts_with("initrd=\\EFI\\BIFROST\\previous\\initramfs-linux-rt.img "));
         assert!(fallback_line(LINE).starts_with("initrd=\\EFI\\BIFROST\\previous\\initramfs-linux.img "));
+        // any other kernel package keeps its own initramfs name
+        assert!(fallback_line(&LINE.replace("initramfs-linux", "initramfs-linux-lts-t2"))
+            .starts_with("initrd=\\EFI\\BIFROST\\previous\\initramfs-linux-lts-t2.img "));
+    }
+
+    #[test]
+    fn the_kernel_package_is_the_one_installed_in_boot() {
+        let names = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<String>>();
+        let any = |_: &str| true;
+        // the hardware variant is the only kernel of its install
+        let t2 = names(&["EFI", "initramfs-linux-lts-t2.img", "intel-ucode.img", "vmlinuz-linux-lts-t2"]);
+        assert_eq!(kernel_from(&t2, any), "linux-lts-t2");
+        // the realtime kernel wins over the stock fallback next to it
+        assert_eq!(kernel_from(&names(&["vmlinuz-linux", "vmlinuz-linux-rt"]), any), "linux-rt");
+        assert_eq!(kernel_from(&names(&["vmlinuz-linux"]), any), "linux");
+        // a kernel image without a preset loses to one that has it
+        assert_eq!(kernel_from(&names(&["vmlinuz-linux", "vmlinuz-linux-zen"]), |k| k == "linux"), "linux");
+        assert_eq!(kernel_from(&names(&["vmlinuz-linux", "vmlinuz-linux-zen"]), |_| false), "linux-zen");
+        // nothing readable: the stock name, as before
+        assert_eq!(kernel_from(&[], any), "linux");
+        assert_eq!(kernel_from(&names(&["vmlinuz-", "vmlinuz-a b"]), any), "linux");
     }
 
     #[test]
