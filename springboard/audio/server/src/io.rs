@@ -371,6 +371,18 @@ struct SlotState {
     start_cycle: u64,
     every: u64,
     trigger: bool,
+    /// The cycle of the latest trigger (clients whose buffer is not a whole number of quanta).
+    last_trigger: u64,
+}
+
+/// Whether a client whose buffer is not a whole number of quanta is triggered this cycle. Such a client writes (and
+/// reads) one buffer per trigger while the device moves one quantum per cycle, so a trigger every `every` cycles
+/// would leave it short by `every * q - buffer` frames each time; it is triggered by what its rings hold instead.
+/// `due`: its output ring holds less than `every` quanta (or, for a capture-only client, its input ring holds a whole
+/// buffer). It is not triggered again while it still works on the last trigger, unless that was `every` cycles ago
+/// (a client that never reports back keeps the old schedule).
+fn uneven_trigger(due: bool, finished: bool, since: u64, every: u64) -> bool {
+    due && (finished || since >= every)
 }
 
 /// What one cycle did.
@@ -541,6 +553,7 @@ impl DeviceRunner {
                 start_cycle: 0,
                 every: 1,
                 trigger: false,
+                last_trigger: 0,
             });
             self.spare.push(st);
         }
@@ -644,6 +657,7 @@ impl DeviceRunner {
             if !st.active {
                 st.active = true;
                 st.start_cycle = cycle;
+                st.last_trigger = cycle;
                 if every > 1 {
                     if let Some(ring) = s.output_ring() {
                         // Pre-roll so the first cycles of a large-buffer client find data.
@@ -658,8 +672,19 @@ impl DeviceRunner {
                 }
             }
             st.every = every;
-            st.trigger = (cycle - st.start_cycle) % every == 0;
+            st.trigger = if every == 1 || s.buffer_frames as usize % q == 0 {
+                (cycle - st.start_cycle) % every == 0
+            } else {
+                let due = match (s.output_ring(), s.input_ring()) {
+                    (Some(out), _) => (out.readable() as usize) < every as usize * q,
+                    (None, Some(inp)) => inp.readable() as usize >= s.buffer_frames as usize,
+                    (None, None) => true,
+                };
+                let finished = s.done().pending.load(Ordering::Acquire) == 0;
+                uneven_trigger(due, finished, cycle - st.last_trigger, every)
+            };
             if st.trigger {
+                st.last_trigger = cycle;
                 shm::reset(s.activation(), want, rate);
                 shm::reset(s.done(), want, rate);
                 shm::finish(&self.drv, &[s.activation()], now_ns);
@@ -1300,6 +1325,54 @@ mod tests {
         }
         assert_eq!(triggers, vec![1, 0, 0, 0, 1, 0, 0, 0]);
         assert_eq!(a.missed_total.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn a_client_whose_buffer_is_not_a_multiple_of_the_quantum_is_never_starved() {
+        assert!(uneven_trigger(true, true, 0, 2));
+        assert!(!uneven_trigger(false, true, 5, 2), "enough queued");
+        assert!(!uneven_trigger(true, false, 1, 2), "still working on the last trigger");
+        assert!(uneven_trigger(true, false, 2, 2), "a client that never reports back keeps the old schedule");
+        // 480 frames per trigger against 256 per cycle: a trigger every 2 cycles would deliver 480 of every 512
+        let mut r = rig(256);
+        let a = r.add(1, 0, 2, 480);
+        let mut triggers = 0u64;
+        for cycle in 0..400 {
+            let rep = r.step();
+            assert_eq!(rep.late, 0, "cycle {cycle}");
+            if rep.triggered == 1 {
+                triggers += 1;
+                Rig::play(&a, 480, &[0.5, 0.5]);
+                shm::finish(a.activation(), &[a.done()], 0);
+            }
+        }
+        assert_eq!(a.missed_total.load(Ordering::Relaxed), 0);
+        // one quantum of pre-roll, then the client's samples without a gap
+        let w = r.h.written(UID);
+        assert_eq!(w[0].len(), 400 * 256);
+        assert!(w[0][256..].iter().all(|v| *v == 0.5));
+        // it was asked for what the device played, to within the two quanta it keeps queued
+        assert!(triggers * 480 >= 399 * 256 && triggers * 480 <= 402 * 256 + 480, "{triggers} triggers");
+    }
+
+    #[test]
+    fn a_capture_client_whose_buffer_is_not_a_multiple_of_the_quantum_loses_no_input() {
+        let mut r = rig(256);
+        let a = r.add(1, 2, 0, 480);
+        let (mut l, mut rr) = (vec![0.0f32; 480], vec![0.0f32; 480]);
+        let mut read = 0u64;
+        for cycle in 0..400 {
+            let before = a.input_ring().unwrap().readable() as u64;
+            let rep = r.step();
+            let ring = a.input_ring().unwrap();
+            assert_eq!(ring.readable() as u64, before + 256, "cycle {cycle}: the quantum was dropped");
+            if rep.triggered == 1 {
+                assert_eq!(ring.read(&mut [&mut l[..], &mut rr[..]], 480), 480, "cycle {cycle}: a whole buffer is ready");
+                read += 480;
+                shm::finish(a.activation(), &[a.done()], 0);
+            }
+        }
+        assert_eq!(read + a.input_ring().unwrap().readable() as u64, 400 * 256);
     }
 
     impl Rig {
