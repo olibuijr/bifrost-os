@@ -12,7 +12,8 @@ pub enum Compression {
 }
 
 fn first(b: &Block, e: &[Entry], tag: u16) -> Option<i64> {
-    e.iter().find(|x| x.tag == tag).and_then(|x| b.uints(x).first().copied())
+    // only the first value is read, however many the entry holds
+    e.iter().find(|x| x.tag == tag).and_then(|x| b.uints(&Entry { count: x.count.min(1), ..*x }).first().copied())
 }
 
 fn all(b: &Block, e: &[Entry], tag: u16) -> Vec<i64> {
@@ -243,7 +244,8 @@ fn decode_page(b: &Block, entries: &[Entry], data: &[u8], page0: bool) -> Option
         return None;
     }
     let extra = first(b, entries, 338).unwrap_or(0);
-    let palette: Vec<u16> = entries.iter().find(|e| e.tag == 320).map(|e| (0..e.count).filter_map(|i| b.u16(e.at + i * 2)).collect()).unwrap_or_default();
+    // three tables of at most 65536 SHORTs, read only for a palette image
+    let palette: Vec<u16> = entries.iter().find(|e| e.tag == 320 && photo == 3).map(|e| (0..e.count.min(3 << 16)).filter_map(|i| b.u16(e.at + i * 2)).collect()).unwrap_or_default();
     // sample (x, y, c) scaled to 0..=65535
     let sample = |x: usize, y: usize, c: usize| -> u32 {
         let row = &raw[y * row_len..];
