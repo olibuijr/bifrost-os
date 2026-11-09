@@ -32,7 +32,12 @@ for b in "${!bins[@]}"; do
     install+="install -m755 /tmp/push.$b ${bins[$b]} && "
     echo "pushed $b -> ${bins[$b]}"
 done
-"${SSH[@]}" "${install}systemctl restart springboard && sleep 6 && journalctl -u springboard -b --since '-10s' --no-pager | grep -iE 'panic|error' | tail -5" || true
+if ! "${SSH[@]}" "${install}systemctl restart springboard"; then
+    echo "install or restart failed on Midget; the pushed binaries are not running, no screenshot taken" >&2
+    exit 1
+fi
+# The journal check is only a report: it may find nothing, and a failure here does not mean the push failed.
+"${SSH[@]}" "sleep 6; journalctl -u springboard -b --since '-10s' --no-pager | grep -iE 'panic|error' | tail -5" || true
 python3 "$here/midget.py" unlock >/dev/null || echo "unlock failed; check the lock screen" >&2
 sleep 2
 python3 "$here/midget.py" shot "$out" --max 1280 | tail -2

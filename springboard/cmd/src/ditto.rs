@@ -121,7 +121,44 @@ pub fn copy_target(src: &Path, dst: &Path) -> PathBuf {
 
 /// Copies `src` to the place `copy_target` gives for `dst`.
 pub fn copy_into(src: &Path, dst: &Path) -> io::Result<()> {
-    copy_tree(src, &copy_target(src, dst))
+    let target = copy_target(src, dst);
+    refuse_self_copy(src, &target)?;
+    copy_tree(src, &target)
+}
+
+/// Refuses a copy onto the source itself (the copy would empty the file it reads) and a folder copy into the folder
+/// being copied (the copy would follow the tree it is creating).
+fn refuse_self_copy(src: &Path, target: &Path) -> io::Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    let same = || io::Error::new(io::ErrorKind::InvalidInput, "source and destination are the same");
+    let from = fs::symlink_metadata(src)?;
+    // A link is copied as a link, so only the link itself counts; a file or folder is written through a link.
+    let to = if from.file_type().is_symlink() { fs::symlink_metadata(target) } else { fs::metadata(target) };
+    if let Ok(to) = to {
+        if (to.dev(), to.ino()) == (from.dev(), from.ino()) {
+            return Err(same());
+        }
+    }
+    if !from.is_dir() {
+        return Ok(());
+    }
+    let root = fs::canonicalize(src)?;
+    // The target may not exist yet: its nearest existing ancestor says where it will be.
+    let mut at = target;
+    loop {
+        let here = if at.as_os_str().is_empty() { Path::new(".") } else { at };
+        if let Ok(real) = fs::canonicalize(here) {
+            return if real.starts_with(&root) {
+                Err(io::Error::new(io::ErrorKind::InvalidInput, "the destination is inside the source"))
+            } else {
+                Ok(())
+            };
+        }
+        match at.parent() {
+            Some(parent) => at = parent,
+            None => return Ok(()),
+        }
+    }
 }
 
 fn copy_tree(src: &Path, dst: &Path) -> io::Result<()> {
@@ -277,6 +314,66 @@ mod tests {
         assert_eq!(fs::read_link(dst.join("link")).unwrap(), PathBuf::from("a.txt"));
         let mode = fs::metadata(dst.join("a.txt")).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o750);
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn copying_a_file_into_its_own_folder_is_refused_and_keeps_the_data() {
+        let root = std::env::temp_dir().join(format!("bifrost-ditto-self-file-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let file = root.join("report.txt");
+        fs::write(&file, "hello").unwrap();
+
+        let err = copy_into(&file, &root).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(fs::read_to_string(&file).unwrap(), "hello");
+
+        // A second name for the same file, and a link to it, are the same file too.
+        fs::hard_link(&file, root.join("twin.txt")).unwrap();
+        assert!(copy_into(&file, &root.join("twin.txt")).is_err());
+        std::os::unix::fs::symlink("report.txt", root.join("link")).unwrap();
+        assert!(copy_into(&file, &root.join("link")).is_err());
+        assert_eq!(fs::read_to_string(&file).unwrap(), "hello");
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn copying_a_folder_into_its_own_parent_is_refused_and_keeps_the_data() {
+        let root = std::env::temp_dir().join(format!("bifrost-ditto-self-dir-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let src = root.join("photos");
+        fs::create_dir_all(src.join("sub")).unwrap();
+        fs::write(src.join("a.txt"), "hello").unwrap();
+        fs::write(src.join("sub").join("b.txt"), "nested").unwrap();
+
+        let err = copy_into(&src, &root).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(fs::read_to_string(src.join("a.txt")).unwrap(), "hello");
+        assert_eq!(fs::read_to_string(src.join("sub").join("b.txt")).unwrap(), "nested");
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn copying_a_folder_into_itself_is_refused_and_creates_nothing() {
+        let root = std::env::temp_dir().join(format!("bifrost-ditto-inside-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let src = root.join("tree");
+        fs::create_dir_all(src.join("sub")).unwrap();
+        fs::write(src.join("a.txt"), "hello").unwrap();
+
+        // An existing folder inside the source, the source itself (the copy would land in tree/tree), and a new name.
+        assert!(copy_into(&src, &src.join("sub")).is_err());
+        assert!(copy_into(&src, &src).is_err());
+        assert!(copy_into(&src, &src.join("new").join("deeper")).is_err());
+        assert!(!src.join("sub").join("tree").exists());
+        assert!(!src.join("tree").exists());
+        assert!(!src.join("new").exists());
+        assert_eq!(fs::read_to_string(src.join("a.txt")).unwrap(), "hello");
+
+        // A sibling whose name only starts with the source's name is a different place.
+        copy_into(&src, &root.join("tree-copy")).unwrap();
+        assert_eq!(fs::read_to_string(root.join("tree-copy").join("a.txt")).unwrap(), "hello");
         fs::remove_dir_all(&root).unwrap();
     }
 }
