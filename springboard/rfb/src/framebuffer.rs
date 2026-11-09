@@ -11,10 +11,31 @@ pub struct Framebuffer {
     pub px: Vec<u32>,
 }
 
+/// The longest side of a desktop the viewer accepts from a server.
+pub const MAX_SIDE: usize = 16384;
+/// The most pixels of a desktop the viewer accepts from a server (256 MiB of framebuffer).
+pub const MAX_PIXELS: usize = 8192 * 8192;
+
+/// Whether a desktop size announced by a server is one the viewer will allocate. The size is two 16-bit numbers the
+/// server chooses, so without a limit it can ask for about 17 GiB. An empty desktop is accepted.
+pub fn check_size(w: usize, h: usize) -> Result<(), Error> {
+    if w > MAX_SIDE || h > MAX_SIDE || w * h > MAX_PIXELS {
+        return Err(Error::Protocol(format!("desktop too large: {w}x{h}")));
+    }
+    Ok(())
+}
+
 impl Framebuffer {
-    /// A black framebuffer of the given size.
+    /// A black framebuffer of the given size. For a size the viewer chose; a size from a server goes through
+    /// [`Framebuffer::checked`].
     pub fn new(w: usize, h: usize) -> Self {
         Framebuffer { w, h, px: vec![0; w * h] }
+    }
+
+    /// A black framebuffer of a size a server announced: refused when it is larger than the viewer accepts.
+    pub fn checked(w: usize, h: usize) -> Result<Self, Error> {
+        check_size(w, h)?;
+        Ok(Framebuffer::new(w, h))
     }
 
     /// Changes the size. The contents are cleared: the server sends a full update after a DesktopSize change.
@@ -31,11 +52,12 @@ impl Framebuffer {
         }
     }
 
-    /// Applies one rectangle from an update, read in `fmt`. A rectangle that leaves the framebuffer, or a Raw payload
-    /// of the wrong length, is a protocol error and nothing is drawn.
+    /// Applies one rectangle from an update, read in `fmt`. A rectangle that leaves the framebuffer, a Raw payload
+    /// of the wrong length, or a DesktopSize larger than the viewer accepts is a protocol error and nothing is drawn.
     pub fn apply(&mut self, rect: &Rect, fmt: &PixelFormat) -> Result<(), Error> {
         match &rect.payload {
             Payload::DesktopSize => {
+                check_size(rect.w, rect.h)?;
                 self.resize(rect.w, rect.h);
                 Ok(())
             }
@@ -123,6 +145,20 @@ mod tests {
         fb.apply(&Rect { x: 0, y: 0, w: 5, h: 4, payload: Payload::DesktopSize }, &PixelFormat::VIEWER).unwrap();
         assert_eq!((fb.w, fb.h, fb.px.len()), (5, 4, 20));
         assert!(fb.px.iter().all(|p| *p == 0));
+    }
+
+    #[test]
+    fn a_desktop_larger_than_the_limit_is_refused_and_the_framebuffer_is_kept() {
+        let mut fb = Framebuffer::new(2, 2);
+        let huge = Rect { x: 0, y: 0, w: 65535, h: 65535, payload: Payload::DesktopSize };
+        assert!(matches!(fb.apply(&huge, &PixelFormat::VIEWER), Err(Error::Protocol(_))));
+        assert_eq!((fb.w, fb.h, fb.px.len()), (2, 2, 4), "the refused size allocates nothing");
+        let wide = Rect { x: 0, y: 0, w: MAX_SIDE + 1, h: 1, payload: Payload::DesktopSize };
+        assert!(fb.apply(&wide, &PixelFormat::VIEWER).is_err(), "one side over the limit, few pixels");
+        assert!(Framebuffer::checked(MAX_SIDE, MAX_SIDE).is_err(), "both sides allowed, too many pixels");
+        assert!(Framebuffer::checked(65535, 65535).is_err());
+        assert_eq!(Framebuffer::checked(0, 0), Ok(Framebuffer::new(0, 0)), "an empty desktop is accepted");
+        assert_eq!(Framebuffer::checked(3, 2).map(|f| f.px.len()), Ok(6));
     }
 
     #[test]
