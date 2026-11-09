@@ -810,6 +810,36 @@ fn a_note_window_edits_its_note_with_the_edit_commands() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// One autosave is pending at a time: an edit in the main editor writes the waiting edit of a note in its own window
+/// before taking the slot, so neither is lost when the app closes within the debounce.
+#[test]
+fn an_edit_in_the_main_editor_keeps_the_pending_save_of_a_note_window() {
+    use bifrost_app::app_windows::WindowId;
+    let dir = scratch("two-pending");
+    let ui = ui();
+    let mut n = app(&ui, &dir);
+    n.set_hardware_keyboard(true);
+    let main = n.import_note(&ui, "Main note", 1000.0);
+    let other = n.import_note(&ui, "Window note", 1100.0);
+    assert!(n.show_note(&ui, &main, 1200.0));
+    assert_eq!(n.editing().map(|x| x.id.as_str()), Some(main.as_str()));
+    let win = WindowId(7);
+    n.windows.bind(win, &other);
+    let mut buf = vec![0u32; 600 * 500];
+    n.draw_window(&mut Surface { w: 600, h: 500, stride: 600, px: &mut buf, y0: 0 }, &ui, win, true, 2000.0);
+    assert!(n.window_select_all(win));
+    assert!(n.window_key(&ui, win, Out::Text("Typed in the window".into()), 2100.0));
+    // 100 ms later, inside the debounce, the main editor's note is edited
+    n.editor.replace_range(&ui, 0..0, "Typed here. ", 2200.0, false);
+    n.changed(&ui, 2200.0);
+    n.flush();
+    let again = app(&ui, &dir);
+    let text = |id: &str| again.notes.iter().find(|x| x.id == id).map(|x| x.text.clone()).unwrap_or_default();
+    assert!(text(&other).contains("Typed in the window"), "the window's edit reached the disk: {:?}", text(&other));
+    assert!(text(&main).contains("Typed here. "), "and so did the main editor's: {:?}", text(&main));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// An input method composes in the window being typed in: the main editor or a note window, each saved as typing.
 #[test]
 fn marked_text_composes_in_the_main_editor_and_in_a_note_window() {
