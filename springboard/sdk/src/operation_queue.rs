@@ -123,7 +123,10 @@ impl OperationQueue {
             };
             let shared = Arc::clone(&self.shared);
             thread::spawn(move || {
-                job();
+                // a panicking operation still gives its slot back, so the queue keeps running and waiters wake
+                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(job)).is_err() {
+                    eprintln!("operation queue: an operation panicked");
+                }
                 let mut s = shared.state.lock().unwrap();
                 s.running -= 1;
                 shared.idle.notify_all();
@@ -197,5 +200,27 @@ mod tests {
         queue.set_suspended(false);
         queue.wait_until_all_operations_are_finished();
         assert_eq!(done.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_panicking_operation_gives_its_slot_back() {
+        let queue = Arc::new(OperationQueue::new());
+        queue.set_max_concurrent_operation_count(1);
+        let done = Arc::new(AtomicUsize::new(0));
+        queue.add_operation(|| panic!("expected test panic"));
+        let d = Arc::clone(&done);
+        queue.add_operation(move || {
+            d.fetch_add(1, Ordering::SeqCst);
+        });
+        // wait on a helper thread, so a leaked slot fails the test instead of hanging it
+        let (tx, rx) = std::sync::mpsc::channel();
+        let q = Arc::clone(&queue);
+        thread::spawn(move || {
+            q.wait_until_all_operations_are_finished();
+            let _ = tx.send(());
+        });
+        assert!(rx.recv_timeout(std::time::Duration::from_secs(5)).is_ok(), "the queue never became idle after a panic");
+        assert_eq!(done.load(Ordering::SeqCst), 1);
+        assert_eq!(queue.operation_count(), 0);
     }
 }
