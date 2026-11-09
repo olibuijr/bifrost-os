@@ -110,6 +110,17 @@ pub(crate) fn take_origin(bin: &Path, stored: &str) -> Option<PathBuf> {
     Some(PathBuf::from(origin))
 }
 
+/// Puts the trashed item `path` back into the folder it came from (`home` when that folder is gone). The recorded
+/// origin is dropped only once the item is back, so a Put Back that failed can be tried again.
+pub(crate) fn restore_to_origin(bin: &Path, home: &Path, path: &Path) -> std::io::Result<PathBuf> {
+    let stored = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let origin = read_origins(bin).into_iter().find(|(name, _)| *name == stored).map(|(_, origin)| PathBuf::from(origin));
+    let target = origin.filter(|o| o.is_dir()).unwrap_or_else(|| home.to_path_buf());
+    let put = trash::restore(path, &target)?;
+    let _ = take_origin(bin, &stored);
+    Ok(put)
+}
+
 /// Drops origins for items that are no longer in `bin` (purged or restored by hand).
 pub(crate) fn prune_origins(bin: &Path) {
     let lines: Vec<_> = read_origins(bin).into_iter().filter(|(name, _)| bin.join(name).symlink_metadata().is_ok()).collect();
@@ -528,9 +539,7 @@ impl Files {
         let home = self.home.clone();
         let mut failed = None;
         for path in self.selected_paths() {
-            let stored = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-            let target = take_origin(&bin, &stored).filter(|o| o.is_dir()).unwrap_or_else(|| home.clone());
-            if let Err(e) = trash::restore(&path, &target) {
+            if let Err(e) = restore_to_origin(&bin, &home, &path) {
                 failed = Some(e.to_string());
             }
         }
@@ -738,6 +747,25 @@ mod receive_tests {
     fn source(path: &Path, bytes: &[u8]) -> std::fs::File {
         std::fs::write(path, bytes).unwrap();
         std::fs::File::open(path).unwrap()
+    }
+
+    #[test]
+    fn a_put_back_that_fails_keeps_the_origin_for_the_next_try() {
+        let d = dir("origin");
+        let (bin, home, from) = (d.join("bin"), d.join("home"), d.join("from"));
+        for p in [&bin, &home, &from] {
+            std::fs::create_dir_all(p).unwrap();
+        }
+        record_origin(&bin, "note.txt", &from);
+        // the item cannot be moved (it is not there): the restore fails and the origin stays on record
+        assert!(restore_to_origin(&bin, &home, &bin.join("note.txt")).is_err());
+        assert_eq!(read_origins(&bin).len(), 1);
+        // the next try goes to the folder it came from, not to Home, and only then is the record dropped
+        std::fs::write(bin.join("note.txt"), b"n").unwrap();
+        assert_eq!(restore_to_origin(&bin, &home, &bin.join("note.txt")).unwrap(), from.join("note.txt"));
+        assert!(read_origins(&bin).is_empty());
+        assert_eq!(std::fs::read_dir(&home).unwrap().count(), 0);
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
