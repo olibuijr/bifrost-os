@@ -30,6 +30,9 @@ pub const MAX_CH: usize = bifrost_audio_types::control::MAX_CLIENT_CHANNELS;
 pub const MIN_QUANTUM: u32 = 16;
 pub const MAX_QUANTUM: u32 = 4096;
 pub const DEFAULT_QUANTUM: u32 = 256;
+/// The largest magnitude a client sample is mixed with (+36 dB over full scale). With `MAX_CLIENTS` streams the sum
+/// stays far inside what an f32 holds, so the device stages never see an infinity.
+pub const MAX_CLIENT_SAMPLE: f32 = 64.0;
 /// SCHED_FIFO priority of the device IO threads (Decisions, 2).
 pub const IO_PRIORITY: u32 = 88;
 /// SCHED_FIFO priority granted to client IO threads.
@@ -327,6 +330,17 @@ impl Shared {
 
 // ---------------------------------------------------------------------------------------------------------------
 // The device runner
+
+/// Makes what a client wrote safe to mix: its ring is memory the client fills, and one NaN or infinity in the mix
+/// would stay in the state of the device's filters and silence the device for every application. A non-finite sample
+/// becomes silence, anything else is bounded to `MAX_CLIENT_SAMPLE`. No allocation (IO thread).
+fn tame_client_samples(planes: &mut [&mut [f32]]) {
+    for plane in planes.iter_mut() {
+        for x in plane.iter_mut() {
+            *x = if x.is_finite() { x.clamp(-MAX_CLIENT_SAMPLE, MAX_CLIENT_SAMPLE) } else { 0.0 };
+        }
+    }
+}
 
 /// How step 4 waits for clients.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -707,6 +721,7 @@ impl DeviceRunner {
             let mut it = self.scratch.iter_mut();
             let mut d: [&mut [f32]; MAX_CH] = std::array::from_fn(|_| &mut it.next().unwrap()[..q]);
             ring.read(&mut d[..ch], want);
+            tame_client_samples(&mut d[..ch]);
             let target = if s.muted.load(Ordering::Relaxed) { 0.0 } else { s.volume() * s.session_gain() };
             if st.ramp.target() != target {
                 st.ramp.set_target(target, RAMP_FRAMES);
@@ -1133,6 +1148,26 @@ mod tests {
         let w = r.h.written(UID);
         assert_eq!(w[0], vec![0.375; 256]);
         assert_eq!(w[1], vec![0.0; 256]);
+    }
+
+    #[test]
+    fn non_finite_and_absurd_client_samples_never_reach_the_mix() {
+        let mut r = rig(256);
+        let a = r.add(1, 0, 2, 256);
+        let b = r.add(2, 0, 2, 256);
+        Rig::play(&a, 256, &[f32::NAN, f32::NEG_INFINITY]);
+        Rig::play(&b, 256, &[0.25, 0.5]);
+        r.step();
+        Rig::play(&a, 256, &[f32::MAX, -1.0e30]);
+        Rig::play(&b, 256, &[0.25, 0.5]);
+        r.step();
+        let w = r.h.written(UID);
+        // the bad samples are silence and the other client is untouched
+        assert_eq!(w[0][..256], vec![0.25; 256][..]);
+        assert_eq!(w[1][..256], vec![0.5; 256][..]);
+        // a huge finite sample is bounded, so no sum of clients overflows to an infinity
+        assert_eq!(w[0][256..], vec![MAX_CLIENT_SAMPLE + 0.25; 256][..]);
+        assert_eq!(w[1][256..], vec![0.5 - MAX_CLIENT_SAMPLE; 256][..]);
     }
 
     #[test]

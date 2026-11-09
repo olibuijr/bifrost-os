@@ -100,6 +100,10 @@ impl Peaking {
                 z2 = self.b2 * input - self.a2 * out;
                 *x = out as f32;
             }
+            if !(z1.is_finite() && z2.is_finite()) {
+                // A non-finite sample got in: without this the state stays NaN and the channel is silent for good.
+                (z1, z2) = (0.0, 0.0);
+            }
             self.z1[c] = z1;
             self.z2[c] = z2;
         }
@@ -501,6 +505,21 @@ mod tests {
         s.process(&mut far, 9600);
         let gain = rms(&far[0].data[4800..]) / rms(&sine(100.0, 0.1, 4800));
         assert!((gain - 1.0).abs() < 0.1, "a decade away it is nearly flat: {gain}");
+    }
+
+    #[test]
+    fn a_peaking_filter_recovers_from_a_non_finite_sample() {
+        let mut s = compile(vec![Stage::new("e", Kind::Eq).with("freq", 1000.0).with("gain_db", 12.0).with("q", 1.0)], 1);
+        let mut bad = planes(1, 64, 0.1);
+        bad[0].data[3] = f32::NAN;
+        bad[0].data[9] = f32::INFINITY;
+        s.process(&mut bad, 64);
+        // the block after the bad one is filtered as if the stage had just started
+        let mut next = vec![Buffer { channels: 1, data: sine(1000.0, 0.1, 9600) }];
+        s.process(&mut next, 9600);
+        assert!(next[0].data.iter().all(|v| v.is_finite()));
+        let gain = rms(&next[0].data[4800..]) / rms(&sine(1000.0, 0.1, 4800));
+        assert!((gain - 3.98).abs() < 0.15, "12 dB at the centre: {gain}");
     }
 
     #[test]
