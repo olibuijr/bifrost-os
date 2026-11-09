@@ -188,6 +188,10 @@ fn decode_page(b: &Block, entries: &[Entry], data: &[u8], page0: bool) -> Option
     if planar != 1 || sample_format != 1 || !matches!(bps, 1 | 2 | 4 | 8 | 16) || spp == 0 || spp > 5 {
         return None;
     }
+    // RGB reads three samples of every pixel and CMYK four: fewer in the file would index past the row.
+    if (photo == 2 && spp < 3) || (photo == 5 && spp < 4) {
+        return None;
+    }
     let rps = (first(b, entries, 278).unwrap_or(h as i64) as usize).clamp(1, h);
     let offsets = all(b, entries, 273);
     let counts = all(b, entries, 279);
@@ -518,6 +522,40 @@ mod tests {
         let mut r = Vec::new();
         packbits(&[5, 5, 5, 5, 1, 2, 3], &mut r);
         assert_eq!(unpackbits(&r, 7), vec![5, 5, 5, 5, 1, 2, 3]);
+    }
+
+    /// A little-endian TIFF with one directory of inline `(tag, type, value)` entries (count 1 each) and the pixel
+    /// bytes after it; a tag of 273 gets the offset of those bytes.
+    fn raw_tiff(entries: &[(u16, u16, u32)], pixels: &[u8]) -> Vec<u8> {
+        let mut t = vec![b'I', b'I', 42, 0, 8, 0, 0, 0];
+        let strip_at = 8 + 2 + entries.len() * 12 + 4;
+        t.extend((entries.len() as u16).to_le_bytes());
+        for &(tag, typ, value) in entries {
+            t.extend(tag.to_le_bytes());
+            t.extend(typ.to_le_bytes());
+            t.extend(1u32.to_le_bytes());
+            t.extend((if tag == 273 { strip_at as u32 } else { value }).to_le_bytes());
+        }
+        t.extend(0u32.to_le_bytes());
+        t.extend_from_slice(pixels);
+        t
+    }
+
+    #[test]
+    fn rgb_with_too_few_samples_per_pixel_is_refused() {
+        // RGB photometric with no SamplesPerPixel tag (so one sample), then with two.
+        let base = [(256, 3, 4), (257, 3, 4), (258, 3, 8), (262, 3, 2), (273, 4, 0), (279, 4, 16)];
+        assert!(decode(&raw_tiff(&base, &[7; 16])).is_none());
+        let mut two = base.to_vec();
+        two.insert(4, (277, 3, 2));
+        two[6] = (279, 4, 32);
+        assert!(decode(&raw_tiff(&two, &[7; 32])).is_none());
+        // The same layout as gray is a valid picture.
+        let mut gray = base;
+        gray[3] = (262, 3, 1);
+        let d = decode(&raw_tiff(&gray, &[7; 16])).unwrap();
+        assert_eq!((d.frames[0].w, d.frames[0].h), (4, 4));
+        assert_eq!(&d.frames[0].rgba8[..4], &[7, 7, 7, 255]);
     }
 
     #[test]
