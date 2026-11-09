@@ -1014,6 +1014,12 @@ impl Shell {
         let mut effects = Vec::new();
         if std::mem::take(&mut self.notify.wake) && !self.screen_on {
             self.screen_on = true;
+            // nobody asked for this wake, so it is no proof the person is back: a Require Password grace still running
+            // ends here and the display comes on locked, as every other wake does once the grace is over
+            if self.grace_from.take().is_some() {
+                self.screen = Screen::Lock;
+            }
+            self.screen_woke(t);
             self.last_input = t;
             self.dirty = true;
             effects.push(Effect::ScreenOn);
@@ -1504,6 +1510,21 @@ mod tests {
         assert_eq!(sh.tick(2500.0), vec![Effect::ScreenOn]);
         assert!(sh.screen_on() && sh.is_locked());
         assert!(sh.notify.banner().is_none());
+    }
+
+    #[test]
+    fn a_notification_wake_during_or_after_the_password_grace_lands_on_the_lock_screen() {
+        for later in [5_000.0, 61_000.0] {
+            let mut sh = shell();
+            sh.prefs.set("lock_grace_seconds", "60").unwrap();
+            unlock(&mut sh);
+            sh.tick(1000.0);
+            sh.event(Event::Power, 2000.0);
+            assert!(!sh.screen_on() && !sh.is_locked(), "with a grace the dark screen is not locked yet");
+            sh.notify(note(AppId::Files, "Alarm"));
+            assert!(sh.tick(2000.0 + later).contains(&Effect::ScreenOn));
+            assert!(sh.screen_on() && sh.is_locked(), "a notification never shows the session unlocked ({later} ms after the display went off)");
+        }
     }
 
     #[test]
