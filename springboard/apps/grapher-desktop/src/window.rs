@@ -243,14 +243,14 @@ impl Grapher {
                 // a line break in pasted or typed text starts a new equation, as Return does; the first line goes into
                 // the selected one. Empty lines add nothing, so a trailing break or a lone newline changes nothing.
                 let mut changed = false;
-                let mut new_row = false;
+                let mut typed = false;
                 for line in break_lines(&text).split('\n') {
                     let clean: String = line.chars().filter(|c| !c.is_control()).collect();
                     if clean.is_empty() {
-                        new_row = true;
                         continue;
                     }
-                    if std::mem::take(&mut new_row) {
+                    // every line after the first one that held text gets a row of its own
+                    if std::mem::replace(&mut typed, true) {
                         self.model.add("");
                     }
                     changed |= self.model.type_text(&clean);

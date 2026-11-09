@@ -936,33 +936,51 @@ mod rename_tests {
         assert!(files.naming.is_none(), "Return in the editor commits it");
     }
 
+    /// A window on a real folder that holds the folders Alpha and Beta. A folder that is not on disk opens the nearest
+    /// one above it, so the tests that open a folder need real ones.
+    fn real_folders(name: &str) -> (PathBuf, Files) {
+        let root = std::env::temp_dir().join(format!("files-ops-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let entry = |n: &str| {
+            std::fs::create_dir_all(root.join(n)).unwrap();
+            Entry { path: root.join(n), ..crate::tests::folder(n) }
+        };
+        let mut files = crate::tests::fixture(vec![entry("Alpha"), entry("Beta")]);
+        files.home = root.clone();
+        files.path = root.clone();
+        (root, files)
+    }
+
     #[test]
     fn return_in_the_search_field_still_opens_the_hit() {
         let ctx = test_ctx();
-        let mut files = crate::tests::fixture(vec![crate::tests::folder("Alpha"), crate::tests::folder("Beta")]);
+        let (root, mut files) = real_folders("search-open");
         files.select_only(1);
         files.searching = true;
         assert!(files.event(&ctx, Input::Key(KeyInput::Code(13))));
         assert!(files.naming.is_none(), "no rename from the search field");
-        assert_eq!(files.path, PathBuf::from("/fixture/Beta"), "the selected hit opens");
+        assert_eq!(files.path, root.join("Beta"), "the selected hit opens");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
     fn cmd_o_and_cmd_down_open_and_cmd_up_goes_to_the_enclosing_folder() {
-        let mut files = crate::tests::fixture(vec![crate::tests::folder("Alpha"), crate::tests::folder("Beta")]);
+        let (root, mut files) = real_folders("open-keys");
+        let beta = files.rows[1].clone();
         files.select_only(0);
         assert!(files.chord(24, CHORD_META), "Cmd+O");
-        assert_eq!(files.path, PathBuf::from("/fixture/Alpha"));
+        assert_eq!(files.path, root.join("Alpha"));
         assert!(files.chord(103, CHORD_META), "Cmd+Up");
-        assert_eq!(files.path, PathBuf::from("/fixture"));
-        files.rows = vec![crate::tests::folder("Beta")];
+        assert_eq!(files.path, root);
+        files.rows = vec![beta];
         files.select_only(0);
         assert!(files.chord(108, CHORD_META), "Cmd+Down");
-        assert_eq!(files.path, PathBuf::from("/fixture/Beta"));
+        assert_eq!(files.path, root.join("Beta"));
         // nothing selected: nothing to open
         files.selection.clear();
         assert!(files.chord(24, CHORD_META));
-        assert_eq!(files.path, PathBuf::from("/fixture/Beta"));
+        assert_eq!(files.path, root.join("Beta"));
+        let _ = std::fs::remove_dir_all(&root);
         // the editor owns the keys while it is open
         files.rows = vec![file("c.txt")];
         files.select_only(0);

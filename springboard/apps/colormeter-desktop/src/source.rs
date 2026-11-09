@@ -249,8 +249,9 @@ mod tests {
         assert!(s.wants((50, 40), 11).is_empty());
         assert!(s.answer(1, &Ok(size(100, 80))));
         assert!(!s.answer(2, &Ok(point(50, 40))));
+        // the pointer is asked again on every turn (it moves); the display size is known and not asked again
         let next = s.wants((50, 40), 11);
-        assert_eq!(next, vec![Ask::Loupe(PixelRect { x: 43, y: 33, w: 15, h: 15 })]);
+        assert_eq!(next, vec![Ask::Pointer, Ask::Loupe(PixelRect { x: 43, y: 33, w: 15, h: 15 })]);
     }
 
     #[test]

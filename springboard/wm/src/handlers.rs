@@ -677,7 +677,7 @@ mod tests {
 
     #[test]
     fn a_layer_surface_that_only_asks_for_the_exclusive_keyboard_does_not_hold_it() {
-        assert!(holds_exclusive_keyboard(true, false, true), "the shell's menu or Spotlight");
+        assert!(holds_exclusive_keyboard(true, false, true), "the shell's menu or Search");
         assert!(!holds_exclusive_keyboard(true, false, false), "an app's layer surface: presses still focus windows");
         assert!(!holds_exclusive_keyboard(true, true, true), "nothing holds it under the lock");
         assert!(!holds_exclusive_keyboard(false, false, true), "the shell's bar does not ask");
