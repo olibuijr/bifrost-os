@@ -193,7 +193,7 @@ impl Drop for HalStream {
     }
 }
 
-/// The HAL-backed implementation. Sinks and sources are the devices that have output or input streams.
+/// The HAL-backed implementation. Sinks and sources are the devices that have output or input channels.
 pub struct HalBackend {
     system: System,
 }
@@ -204,11 +204,9 @@ impl HalBackend {
     }
 
     fn describe(&self, d: &Device, scope: Scope) -> Option<DeviceInfo> {
-        let streams = d.get(PropertyAddress::scoped(props::STREAMS, scope)).ok()?;
-        match streams {
-            PropertyValue::Objects(v) if !v.is_empty() => {}
-            _ => return None,
-        }
+        // The server publishes a device's `LEVEL` per scope, and only for a direction the device has channels in.
+        // (It publishes no stream objects: asking for `STREAMS` left every device without a direction.)
+        d.get(PropertyAddress::scoped(props::LEVEL, scope)).ok()?;
         let string = |sel| match d.get(PropertyAddress::global(sel)) {
             Ok(PropertyValue::String(s)) => Some(s),
             _ => None,
