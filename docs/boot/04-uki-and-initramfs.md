@@ -9,8 +9,8 @@ once after the waves merge); every item below is checked by reading only.
 1. **Unified kernel image `EFI/BIFROST/bifrost.efi`** (`packaging/arch/recovery/system.rs`, `build_uki`).
    Built with `ukify build` from `/boot/vmlinuz-linux`, every `*-ucode.img` (sorted), `/boot/initramfs-linux.img`, and
    the boot line's options (the `initrd=` and `uki=` tokens are dropped; everything else keeps its order). The output is
-   written to `bifrost.efi.new` and renamed in place only after ukify succeeded. The old image becomes
-   `bifrost-previous.efi`. `boot.cfg` is rewritten last (`uki=\EFI\BIFROST\bifrost.efi <options>`), so a failed build
+   written to `bifrost.efi.new` and renamed in place only after ukify succeeded. The build never touches
+   `bifrost-previous.efi` (only `prepare()` writes it, see Rollback). `boot.cfg` is rewritten last (`uki=\EFI\BIFROST\bifrost.efi <options>`), so a failed build
    keeps the last good boot line. An unchanged image is detected by byte comparison and nothing is touched.
 2. **Build triggers**: pacman hook `packaging/arch/recovery/95-bifrost-uki.hook` (PostTransaction on kernel install or
    upgrade, runs `bifrost-update-guard uki`); the installer (`springboard/src/installer/plan.rs`, after

@@ -2,10 +2,30 @@
 use super::*;
 const TOP: &str = "/run/bifrost/recovery-root";
 const ESP: &str = "/boot/EFI/BIFROST";
-/// The installed kernel package: `linux-rt` (the default since 2026-10-12) when its image is in /boot, else the
-/// stock `linux` (older installs, or an install whose package source had no linux-rt).
-fn kernel() -> &'static str {
-    if Path::new("/boot/vmlinuz-linux-rt").exists() { "linux-rt" } else { "linux" }
+/// The kernel package among the file names in /boot: every `vmlinuz-<name>` is a candidate, those with a mkinitcpio
+/// preset (`has_preset`) first. `linux-rt` (the default since 2026-10-12) wins, then any other variant the installer
+/// chose for the hardware (`linux-lts-t2`), then the stock `linux` (older installs, or the fallback kernel).
+pub fn kernel_from(boot: &[String], has_preset: impl Fn(&str) -> bool) -> String {
+    let mut found: Vec<&str> = boot
+        .iter()
+        .filter_map(|n| n.strip_prefix("vmlinuz-"))
+        .filter(|k| !k.is_empty() && k.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.')))
+        .collect();
+    if found.iter().any(|k| has_preset(*k)) {
+        found.retain(|k| has_preset(*k));
+    }
+    found.sort_unstable();
+    if found.contains(&"linux-rt") {
+        return "linux-rt".into();
+    }
+    found.iter().find(|k| **k != "linux").map_or_else(|| "linux".to_owned(), |k| (*k).to_owned())
+}
+/// The installed kernel package (see `kernel_from`).
+fn kernel() -> String {
+    let boot: Vec<String> = fs::read_dir("/boot")
+        .map(|d| d.flatten().filter_map(|e| e.file_name().into_string().ok()).collect())
+        .unwrap_or_default();
+    kernel_from(&boot, |k| Path::new(&format!("/etc/mkinitcpio.d/{k}.preset")).exists())
 }
 fn kernel_files() -> [String; 2] {
     let k = kernel();
@@ -125,7 +145,7 @@ pub fn prepare() -> io::Result<()> {
     fs::create_dir_all(store)?;
     // a new rollback generation: forget the last one's restore bookkeeping and its kernel files (a different kernel
     // package would otherwise leave stale names behind)
-    for marker in [RESTORE_SWAPPED, RESTORE_ATTEMPTS] {
+    for marker in [RESTORE_SWAPPED, RESTORE_ATTEMPTS, super::TRANSACTION_PACKAGES] {
         let _ = fs::remove_file(store.join(marker));
     }
     let _ = fs::remove_dir_all(format!("{ESP}/previous"));
@@ -330,7 +350,10 @@ pub fn fallback_line(line: &str) -> String {
             if s.starts_with("uki=") {
                 format!("uki={UKI_PREVIOUS}")
             } else if s.starts_with("initrd=") {
-                format!("initrd=\\EFI\\BIFROST\\previous\\initramfs-{}.img", if s.ends_with("initramfs-linux-rt.img") { "linux-rt" } else { "linux" })
+                // the initramfs the line names (any kernel package), by the name `prepare` saved it under
+                let name = s.rsplit(['\\', '/', '=']).next().unwrap_or_default();
+                let keep = name.starts_with("initramfs-") && name.ends_with(".img");
+                format!("initrd=\\EFI\\BIFROST\\previous\\{}", if keep { name } else { "initramfs-linux.img" })
             } else if s.starts_with("rootflags=") {
                 "rootflags=subvol=@rollback".to_owned()
             } else {
@@ -614,7 +637,7 @@ pub fn record_modules() -> io::Result<bool> {
         // the list is the same, but an update can change how the drop-in is made from it (0.6.3 kept only the boot
         // modules): rebuild only when the drop-in on disk is not the one wanted now
         if reconcile_modules()? {
-            run("mkinitcpio", &["-p", kernel()])?;
+            run("mkinitcpio", &["-p", &kernel()])?;
             build_uki()?;
             return Ok(true);
         }
@@ -623,7 +646,7 @@ pub fn record_modules() -> io::Result<bool> {
     if fw_changed && fs::read_to_string(store.join("modules")).is_ok_and(|s| module_names(&s) == names) {
         // modules and drop-in are unchanged, but the firmware list is a build input of the initramfs
         reconcile_modules()?;
-        run("mkinitcpio", &["-p", kernel()])?;
+        run("mkinitcpio", &["-p", &kernel()])?;
         return build_uki().map(|_| true);
     }
     save(&store.join("modules"), names.join("\n").as_bytes())?;
@@ -635,9 +658,31 @@ pub fn record_modules() -> io::Result<bool> {
 /// The initramfs for this machine (rebuilt only when the drop-in changed), then the unified image from it.
 pub fn build_boot_image() -> io::Result<()> {
     if reconcile_modules()? {
-        run("mkinitcpio", &["-p", kernel()])?;
+        run("mkinitcpio", &["-p", &kernel()])?;
     }
     build_uki().map(|_| ())
+}
+
+/// Whether this install boots the unified image (an older install still on kernel plus initramfs has none).
+pub fn boot_image_in_use() -> bool {
+    Path::new(ESP).join(REBUILD_WRITES[0]).exists()
+}
+
+/// Whether an image written at `image` is older than one of its build inputs (the kernel, the initramfs). A time
+/// that cannot be read counts as stale.
+pub fn image_stale(image: Option<std::time::SystemTime>, inputs: &[Option<std::time::SystemTime>]) -> bool {
+    match image {
+        Some(built) => inputs.iter().any(|t| t.map_or(true, |t| t > built)),
+        None => true,
+    }
+}
+
+/// Whether the unified image predates the installed kernel or its initramfs (see `image_stale`).
+pub fn boot_image_stale() -> bool {
+    let modified = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).ok();
+    let inputs: Vec<Option<std::time::SystemTime>> =
+        kernel_files().iter().map(|f| modified(&Path::new("/boot").join(f))).collect();
+    image_stale(modified(&Path::new(ESP).join(REBUILD_WRITES[0])), &inputs)
 }
 
 fn ucode_images() -> io::Result<Vec<String>> {
@@ -650,14 +695,14 @@ fn ucode_images() -> io::Result<Vec<String>> {
     Ok(v)
 }
 
-/// Whether a rebuilt image makes the current one the rollback generation. Not while an update is in flight.
-pub fn replaces_previous(update_in_flight: bool) -> bool {
-    !update_in_flight
-}
+/// The files in `EFI/BIFROST` a rebuilt image replaces: the image itself and the boot line. The rollback generation
+/// (`bifrost-previous.efi`, `rollback.txt`) is not among them: only `prepare` writes it, together with `@rollback`.
+pub const REBUILD_WRITES: &[&str] = &["bifrost.efi", "boot.cfg"];
 
 /// Builds `EFI/BIFROST/bifrost.efi` from the kernel, the microcode and the initramfs, with the boot line's options.
-/// The old image becomes `bifrost-previous.efi`, except while an update is in flight (`prepare` saved the rollback
-/// generation, which stays). `boot.cfg` is rewritten only after the new image exists, so a
+/// `bifrost-previous.efi` is never touched here: it is the rollback generation and changes only in `prepare`, together
+/// with `@rollback` and `rollback.txt` (a rebuild after an accepted kernel update would otherwise put the new kernel's
+/// image next to the old root). `boot.cfg` is rewritten only after the new image exists, so a
 /// failed build leaves the last good boot line in place. Returns whether the image changed.
 pub fn build_uki() -> io::Result<bool> {
     let esp = Path::new(ESP);
@@ -674,11 +719,12 @@ pub fn build_uki() -> io::Result<bool> {
     } else if !hooks_embed_microcode(&conf) {
         microcode = ucode_images()?;
     }
-    let out = esp.join("bifrost.efi");
+    let out = esp.join(REBUILD_WRITES[0]);
     let tmp = esp.join("bifrost.efi.new");
-    let mut args: Vec<String> = vec!["build".into(), format!("--linux=/boot/vmlinuz-{}", kernel())];
+    let kernel = kernel();
+    let mut args: Vec<String> = vec!["build".into(), format!("--linux=/boot/vmlinuz-{kernel}")];
     args.extend(microcode.iter().map(|m| format!("--initrd={m}")));
-    args.push(format!("--initrd=/boot/initramfs-{}.img", kernel()));
+    args.push(format!("--initrd=/boot/initramfs-{kernel}.img"));
     args.push(format!("--cmdline={}", cmdline_options(&line)));
     args.push(format!("--output={}", tmp.display()));
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -690,19 +736,13 @@ pub fn build_uki() -> io::Result<bool> {
         fs::remove_file(&tmp)?;
         return Ok(false);
     }
-    if out.exists() {
-        // While an update is in flight (prepared, on probation, restoring) bifrost-previous.efi is the rollback
-        // generation `prepare` saved: the image built here is not accepted yet and must never replace it.
-        if replaces_previous(in_flight_now()) {
-            copy(&out, &esp.join("bifrost-previous.efi"))?;
-        }
-    } else if !esp.join("rollback.txt").exists() {
+    if !out.exists() && !esp.join("rollback.txt").exists() {
         // The first image on an older install: the boot line it replaces is the rollback.
         save(&esp.join("rollback.txt"), line.as_bytes())?;
     }
     fs::File::open(&tmp)?.sync_all()?;
     fs::rename(&tmp, &out)?;
-    save(&esp.join("boot.cfg"), uki_line(&line).as_bytes())?;
+    save(&esp.join(REBUILD_WRITES[1]), uki_line(&line).as_bytes())?;
     Ok(true)
 }
 
@@ -732,6 +772,27 @@ mod uki_tests {
         // an install still on the kernel plus initramfs keeps the previous files
         assert!(fallback_line(&LINE.replace("initramfs-linux", "initramfs-linux-rt")).starts_with("initrd=\\EFI\\BIFROST\\previous\\initramfs-linux-rt.img "));
         assert!(fallback_line(LINE).starts_with("initrd=\\EFI\\BIFROST\\previous\\initramfs-linux.img "));
+        // any other kernel package keeps its own initramfs name
+        assert!(fallback_line(&LINE.replace("initramfs-linux", "initramfs-linux-lts-t2"))
+            .starts_with("initrd=\\EFI\\BIFROST\\previous\\initramfs-linux-lts-t2.img "));
+    }
+
+    #[test]
+    fn the_kernel_package_is_the_one_installed_in_boot() {
+        let names = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<String>>();
+        let any = |_: &str| true;
+        // the hardware variant is the only kernel of its install
+        let t2 = names(&["EFI", "initramfs-linux-lts-t2.img", "intel-ucode.img", "vmlinuz-linux-lts-t2"]);
+        assert_eq!(kernel_from(&t2, any), "linux-lts-t2");
+        // the realtime kernel wins over the stock fallback next to it
+        assert_eq!(kernel_from(&names(&["vmlinuz-linux", "vmlinuz-linux-rt"]), any), "linux-rt");
+        assert_eq!(kernel_from(&names(&["vmlinuz-linux"]), any), "linux");
+        // a kernel image without a preset loses to one that has it
+        assert_eq!(kernel_from(&names(&["vmlinuz-linux", "vmlinuz-linux-zen"]), |k| k == "linux"), "linux");
+        assert_eq!(kernel_from(&names(&["vmlinuz-linux", "vmlinuz-linux-zen"]), |_| false), "linux-zen");
+        // nothing readable: the stock name, as before
+        assert_eq!(kernel_from(&[], any), "linux");
+        assert_eq!(kernel_from(&names(&["vmlinuz-", "vmlinuz-a b"]), any), "linux");
     }
 
     #[test]
@@ -831,12 +892,32 @@ mod update_tests {
     fn the_rollback_generation_is_kept_while_an_update_is_in_flight() {
         for phase in ["system-prepared", "system-probation", "system-restoring", "prepared", "probation", "restoring\n"] {
             assert!(update_in_flight(phase), "{phase}");
-            assert!(!replaces_previous(update_in_flight(phase)), "{phase}");
         }
         for phase in ["", "accepted", "rolled-back", "system-accepted"] {
             assert!(!update_in_flight(phase), "{phase:?}");
-            assert!(replaces_previous(update_in_flight(phase)), "{phase:?}");
         }
+    }
+
+    #[test]
+    fn a_rebuilt_image_never_replaces_the_rollback_generation() {
+        // after an accepted kernel update the record unit rebuilds the image: the previous image must stay the one
+        // `prepare` saved with @rollback, so the rebuild writes the current image and the boot line only
+        assert_eq!(REBUILD_WRITES, &["bifrost.efi", "boot.cfg"]);
+        assert!(!REBUILD_WRITES.iter().any(|f| UKI_PREVIOUS.ends_with(f) || *f == "rollback.txt"));
+    }
+
+    #[test]
+    fn an_image_older_than_the_kernel_or_the_initramfs_is_stale() {
+        let at = |s: u64| Some(std::time::UNIX_EPOCH + Duration::from_secs(s));
+        // the hook built the image after the kernel and the initramfs: good
+        assert!(!image_stale(at(120), &[at(100), at(110)]));
+        assert!(!image_stale(at(110), &[at(100), at(110)]), "the same instant is not older");
+        // a failed hook left the image of the previous kernel behind
+        assert!(image_stale(at(50), &[at(100), at(110)]));
+        assert!(image_stale(at(105), &[at(100), at(110)]));
+        // nothing to compare with: do not trust it
+        assert!(image_stale(None, &[at(100)]));
+        assert!(image_stale(at(120), &[at(100), None]));
     }
 
     #[test]
