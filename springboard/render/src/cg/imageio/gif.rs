@@ -196,6 +196,10 @@ pub fn decode(data: &[u8]) -> Option<Decoded> {
                 p = next;
             }
             0x2C => {
+                // Every frame is kept as a whole canvas, so the frames after the first stop at the shared budget.
+                if !super::png::within_frame_budget(frames.len() * w * h, w * h) {
+                    break;
+                }
                 let (fx, fy, fw, fh) = (le16(data, p + 1)?, le16(data, p + 3)?, le16(data, p + 5)?, le16(data, p + 7)?);
                 let lf = *data.get(p + 9)?;
                 p += 10;
@@ -211,16 +215,25 @@ pub fn decode(data: &[u8]) -> Option<Decoded> {
                 let min = *data.get(p)?;
                 let (body, next) = gather_blocks(data, p + 1)?;
                 p = next;
-                let idx = lzw_decode(&body, min, fw * fh);
+                // The part of the frame that lies on the canvas. A frame with nothing on it, or one that declares
+                // more pixels than the whole canvas holds, is not decoded (its size comes straight from the file and
+                // sizes the index buffer); the frame is still shown, as the canvas before it.
+                let (vw, vh) = (fw.min(w.saturating_sub(fx)), fh.min(h.saturating_sub(fy)));
+                let idx = if vw == 0 || vh == 0 || fw * fh > w * h { Vec::new() } else { lzw_decode(&body, min, fw * fh) };
                 let saved = (disposal == 3).then(|| canvas.clone());
                 let interlaced = lf & 0x40 != 0;
-                let rows: Vec<usize> = if interlaced {
+                let rows: Vec<usize> = if idx.is_empty() {
+                    Vec::new()
+                } else if interlaced {
                     [(0, 8), (4, 8), (2, 4), (1, 2)].iter().flat_map(|&(s, st)| (s..fh).step_by(st)).collect()
                 } else {
                     (0..fh).collect()
                 };
                 for (src_row, &y) in rows.iter().enumerate() {
-                    for x in 0..fw {
+                    if y >= vh {
+                        continue;
+                    }
+                    for x in 0..vw {
                         let Some(&ci) = idx.get(src_row * fw + x) else { continue };
                         if Some(ci) == transparent {
                             continue;
@@ -499,6 +512,53 @@ mod tests {
         for k in 0..3 {
             assert!((src[k] as i32 - got[k] as i32).abs() < 60);
         }
+    }
+
+    /// A GIF on a 2 x 2 canvas with a two-colour global table (red, green) and the given image blocks.
+    fn tiny_gif(blocks: &[u8]) -> Vec<u8> {
+        let mut g = b"GIF89a\x02\x00\x02\x00\x80\x00\x00".to_vec();
+        g.extend([255, 0, 0, 0, 255, 0]);
+        g.extend_from_slice(blocks);
+        g.push(0x3B);
+        g
+    }
+
+    /// One image block at `(x, y)` of `w` by `h` pixels, all of colour index `ci`.
+    fn image_block(x: u16, y: u16, w: u16, h: u16, ci: u8, pixels: usize) -> Vec<u8> {
+        let mut b = vec![0x2C];
+        for v in [x, y, w, h] {
+            b.extend(v.to_le_bytes());
+        }
+        b.extend([0, 2]);
+        let body = lzw_encode(&vec![ci; pixels], 2);
+        b.push(body.len() as u8);
+        b.extend(body);
+        b.push(0);
+        b
+    }
+
+    #[test]
+    fn frame_larger_than_the_canvas_is_not_decoded() {
+        // 65535 x 65535 declared on a 2 x 2 canvas: no 4 GB index buffer, no 4e9 pixel loop, the canvas stays clear.
+        let d = decode(&tiny_gif(&image_block(0, 0, 65535, 65535, 1, 4))).unwrap();
+        assert_eq!(d.frames.len(), 1);
+        assert_eq!((d.frames[0].w, d.frames[0].h), (2, 2));
+        assert!(d.frames[0].rgba8.iter().all(|&v| v == 0));
+        // A frame that starts outside the canvas draws nothing either.
+        let d = decode(&tiny_gif(&image_block(2, 0, 1, 1, 1, 1))).unwrap();
+        assert!(d.frames[0].rgba8.iter().all(|&v| v == 0));
+    }
+
+    #[test]
+    fn frame_partly_off_the_canvas_draws_its_visible_part() {
+        // 2 x 1 at (1, 1): only its first pixel is on the canvas.
+        let d = decode(&tiny_gif(&image_block(1, 1, 2, 1, 1, 2))).unwrap();
+        let px = &d.frames[0].rgba8;
+        assert_eq!(&px[12..16], &[0, 255, 0, 255]);
+        assert!(px[..12].iter().all(|&v| v == 0));
+        // A full frame still fills the canvas.
+        let d = decode(&tiny_gif(&image_block(0, 0, 2, 2, 0, 4))).unwrap();
+        assert_eq!(d.frames[0].rgba8, [255, 0, 0, 255].repeat(4));
     }
 
     #[test]
