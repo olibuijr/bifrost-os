@@ -253,6 +253,21 @@ impl ScreenSaver {
         redraw
     }
 
+    /// When `tick` next has something to do without input, in shell milliseconds: the moment the idle time is up while
+    /// no saver runs, and the next frame of a running one (frames fall every frame interval from the start). None with
+    /// the display off, and while Start After is Never and no saver runs.
+    pub fn next_wake(&self, now_ms: f64, screen_on: bool) -> Option<f64> {
+        if !screen_on {
+            return None;
+        }
+        if self.active() {
+            let every_ms = self.view.animation_time_interval() * 1000.0;
+            let done = ((now_ms - self.started_ms) / every_ms).floor().max(0.0);
+            return Some(self.started_ms + (done + 1.0) * every_ms);
+        }
+        self.idle.next_check_at().map(|at| at as f64)
+    }
+
     /// Draws the saver over the whole `w` by `h` screen. `clock` and `date` are the status bar's texts, used by Clock.
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, w: i32, h: i32, clock: &str, date: &str, now_ms: f64) {
         let elapsed = (now_ms - self.started_ms).max(0.0) / 1000.0;
@@ -417,6 +432,24 @@ mod tests {
         assert!(!s.active());
         assert!(s.tick(61_000.0, 1_000.0, true));
         assert!(s.active());
+    }
+
+    #[test]
+    fn the_shell_is_woken_for_the_idle_start_and_for_each_frame() {
+        let mut s = ScreenSaver::new();
+        s.configure(0, 0);
+        assert_eq!(s.next_wake(5_000.0, true), None, "Start After Never asks for no wake");
+        s.configure(0, 1);
+        s.set_sheet(ConfigureSheet::new());
+        s.tick(2_000.0, 1_000.0, true);
+        assert_eq!(s.next_wake(2_000.0, true), Some(61_000.0), "the idle time is up a minute after the last input");
+        assert_eq!(s.next_wake(2_000.0, false), None, "nothing starts with the display off");
+        assert!(s.tick(61_000.0, 1_000.0, true));
+        assert!(s.active());
+        // the Clock saver draws one frame a second, counted from its start
+        assert_eq!(s.next_wake(61_000.0, true), Some(62_000.0));
+        assert_eq!(s.next_wake(62_300.0, true), Some(63_000.0));
+        assert_eq!(s.next_wake(62_300.0, false), None);
     }
 
     #[test]

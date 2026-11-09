@@ -2439,6 +2439,10 @@ impl Shell {
         if self.desktop_menu == Some(desktop_bar::Menu::Stack) && self.stack_thumbs_pending() { due.add(Some(t + 50.0)); }
         // a rest on a green button opens its menu when the dwell is over
         if self.desktop_menu.is_none() { if let Some((_,since))=self.desk.as_ref().and_then(|d|d.arrange_at) { if since.is_finite() { due.add(Some(since+desk::ARRANGE_DWELL_MS)); } } }
+        // a rest in a hot corner runs its action when the dwell is over; no pointer motion arrives to wake the loop for it
+        if self.screen_on && !self.is_locked() { due.add(self.hot_corners.next_wake()); }
+        // the screen saver starts when its idle time is up, and a running one advances frame by frame
+        due.add(self.saver.next_wake(t, self.screen_on));
         if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
         if self.live.look() != live_wallpaper::Look::Still && self.desk_active() && self.screen_on { due.add(live_wallpaper::next_due(self.live.look(), t, self.live_still_only())); }
         if self.metrics_active() {

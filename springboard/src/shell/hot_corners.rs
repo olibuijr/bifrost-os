@@ -112,6 +112,13 @@ impl HotCorners {
         Some(c)
     }
 
+    /// When `due` next has an action to run: the end of the dwell while the pointer rests in a corner whose action has
+    /// not run yet. The shell wakes for it, since a resting pointer sends no more motion.
+    pub fn next_wake(&self) -> Option<f64> {
+        let (_, since) = self.resting?;
+        (!self.fired).then_some(since + DWELL_MS)
+    }
+
     /// The corner the pointer is resting in, if any.
     pub fn resting_corner(&self) -> Option<usize> {
         self.resting.map(|(c, _)| c)
@@ -198,6 +205,18 @@ mod tests {
         c.pointer(None, 9000.0);
         c.pointer(Some(1), 9100.0);
         assert_eq!(c.due(9100.0 + DWELL_MS), Some(1));
+    }
+
+    #[test]
+    fn the_shell_is_woken_at_the_end_of_the_dwell_and_not_after_the_action_ran() {
+        let mut c = HotCorners::new();
+        assert_eq!(c.next_wake(), None, "no corner, no wake");
+        c.pointer(Some(1), 1000.0);
+        assert_eq!(c.next_wake(), Some(1000.0 + DWELL_MS));
+        assert_eq!(c.due(1000.0 + DWELL_MS), Some(1));
+        assert_eq!(c.next_wake(), None, "the action ran: nothing more to wake for while the pointer rests");
+        c.pointer(None, 2000.0);
+        assert_eq!(c.next_wake(), None);
     }
 
     #[test]

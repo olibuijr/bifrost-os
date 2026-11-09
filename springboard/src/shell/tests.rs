@@ -868,6 +868,16 @@
         assert_eq!(sh.desktop_menu,Some(Menu::Arrange));
     }
 
+    /// A pointer left resting in a hot corner sends no more motion: the shell asks to be woken when the dwell is over.
+    #[cfg(feature="desktop-wayland")]
+    #[test]
+    fn a_rest_in_a_hot_corner_wakes_the_shell_when_the_dwell_is_over() {
+        let mut sh=desktop_shell();sh.screen=Screen::Home;sh.anim=None;sh.screen_on=true;
+        sh.hot_corner_pointer(0.,0.,1000.);
+        assert_eq!(sh.hot_corners.resting_corner(),Some(0));
+        assert!(sh.next_wake(1000.).is_some_and(|w|w<=1000.+hot_corners::DWELL_MS),"the shell wakes for it");
+    }
+
     /// A press on the green button while its menu is open is still the button's own click, so full screen keeps
     /// working for anyone who rests on the button before clicking.
     #[cfg(feature="desktop-wayland")]
