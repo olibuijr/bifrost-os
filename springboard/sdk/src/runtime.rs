@@ -700,6 +700,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut clip_seen = kit::clipboard::text();
     let mut clip_rev = kit::clipboard::revision();
     let mut open = true;
+    // the shell's end of the channel closed (the shell died): nothing can be sent any more, the app saves to disk and ends
+    let mut closed = false;
     let mut commands_seen = None;
     let mut pointer_interest_sent = 0u32;
     let mut close_requests_sent = false;
@@ -786,6 +788,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 Ok(Recv::Empty) => break,
                 Ok(Recv::Closed) | Err(_) => {
                     open = false;
+                    closed = true;
                     break;
                 }
             };
@@ -998,6 +1001,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     if let Some(c) = &ctx {
                         if active {
                             app.suspend(c);
+                            // suspended once: a channel that closes in this same turn does not suspend it again
+                            active = false;
                         }
                         flush_restorable(&app, c, true);
                     }
@@ -1199,6 +1204,22 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             busy |= changed;
         }
         if !open {
+            if let Some(c) = &ctx {
+                if closed {
+                    // the shell is gone without a `Quit`: save what the disk can take (the app's `suspend`, the
+                    // restorable state still inside its debounce); what needs the shell cannot be sent any more
+                    if active {
+                        app.suspend(c);
+                    }
+                    flush_restorable(&app, c, true);
+                } else {
+                    // `Quit`: what `suspend` queued (a document saved in place, the clipboard) still reaches the shell
+                    if let Some(text) = clipboard_changed(&mut clip_rev, &mut clip_seen) {
+                        send_message(&chan, &ToShell::SetClipboard { text });
+                    }
+                    finish_saves(&chan, &mut app, c, QUIT_SAVE_WAIT_MS);
+                }
+            }
             break;
         }
         let Some(c) = &ctx else { continue };
@@ -1229,6 +1250,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 app.suspend(c);
             }
             flush_restorable(&app, c, true);
+            if let Some(text) = clipboard_changed(&mut clip_rev, &mut clip_seen) {
+                send_message(&chan, &ToShell::SetClipboard { text });
+            }
+            finish_saves(&chan, &mut app, c, QUIT_SAVE_WAIT_MS);
             open = false;
             continue;
         }
@@ -1355,6 +1380,42 @@ fn reconfigure(c: &mut Ctx, cfg: Configure) {
 fn flush_out(chan: &Channel, ctx: &Ctx) {
     for m in ctx.take_sent() {
         send_message(chan, &m);
+    }
+}
+
+/// How long an app that is ending waits for the shell to finish the saves it has in flight (ms). Shorter than the
+/// shell's quit grace period (1500 ms), so the app leaves by itself instead of being killed in the middle of a save.
+const QUIT_SAVE_WAIT_MS: f64 = 1000.0;
+
+/// The last turn of an app that ends (`ToApp::Quit`, `Ctx::terminate`), after its `suspend`: sends what the app queued,
+/// then serves the shell's document replies (a save in place is answered twice, with `commit_document` in between)
+/// until no save is in flight, the shell goes away or `wait_ms` has passed. Every other message is dropped: the app
+/// is leaving.
+fn finish_saves<A: App>(chan: &Channel, app: &mut A, c: &Ctx, wait_ms: f64) {
+    flush_out(chan, c);
+    let deadline = now_ms() + wait_ms;
+    while !c.docs.borrow().saves.is_empty() {
+        let left = deadline - now_ms();
+        if left <= 0.0 {
+            break;
+        }
+        if !chan.wait(Some(left.ceil() as i32)) {
+            continue;
+        }
+        loop {
+            let (pkt, mut fds) = match chan.recv(false) {
+                Ok(Recv::Packet(p, f)) => (p, f),
+                Ok(Recv::Empty) => break,
+                Ok(Recv::Closed) | Err(_) => return,
+            };
+            let Ok(m @ (ToApp::DocGranted { .. } | ToApp::DocError { .. } | ToApp::DocBatch { .. })) = ToApp::decode(&pkt) else { continue };
+            let file = if matches!(m, ToApp::DocBatch { .. }) { None } else { fds.pop().map(into_file) };
+            let ev = c.docs.borrow_mut().event(m, file);
+            if let Some(ev) = ev {
+                app.document(c, ev);
+            }
+        }
+        flush_out(chan, c);
     }
 }
 
@@ -1972,6 +2033,85 @@ mod badge_tests {
         assert!(d.event(ToApp::DocBatch { request: 5, count: 3 }, None).is_none());
         assert!(matches!(d.event(ToApp::DocError { request: 5, code: DocErrorCode::Denied }, None), Some(DocumentEvent::Failed { .. })));
         assert!(d.batches.is_empty(), "an error drops the batch");
+    }
+}
+
+#[cfg(test)]
+mod finish_saves_tests {
+    use super::*;
+    use crate::proto::DocMode;
+    use std::os::fd::AsRawFd;
+
+    /// A document app reduced to its save: it commits the temporary file it is handed.
+    #[derive(Default)]
+    struct Saver {
+        seen: Vec<&'static str>,
+    }
+    impl App for Saver {
+        fn id(&self) -> &str {
+            "is.test.saver"
+        }
+        fn draw(&mut self, _: &Ctx, s: &mut Surface, _: f64) -> Damage {
+            Damage::new(s.w, s.h)
+        }
+        fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+            match ev {
+                DocumentEvent::SaveTo(d) => {
+                    self.seen.push("save to");
+                    ctx.commit_document(d.request);
+                }
+                DocumentEvent::Saved(_) => self.seen.push("saved"),
+                DocumentEvent::Failed { .. } => self.seen.push("failed"),
+                _ => self.seen.push("other"),
+            }
+            false
+        }
+    }
+
+    fn sent(shell_end: &Channel) -> Vec<ToShell> {
+        let mut seen = Vec::new();
+        while let Ok(Recv::Packet(p, _)) = shell_end.recv(false) {
+            seen.push(ToShell::decode(&p).unwrap());
+        }
+        seen
+    }
+
+    #[test]
+    fn a_save_in_place_started_by_suspend_is_sent_and_finished_before_the_app_ends() {
+        let (a, shell_end) = crate::proto::sys::socketpair_pair().unwrap();
+        let ctx = test_ctx();
+        let mut app = Saver::default();
+        // what `DocumentController::suspend` does for a document that has a file
+        let request = ctx.save_document_in_place([7; 16]);
+        // the shell's two answers: the temporary file, then the saved one
+        let file = std::fs::File::open("/dev/null").unwrap();
+        let granted = ToApp::DocGranted { request, grant: [7; 16], mode: DocMode::Write, name: "a".into(), size: 0 }.encode();
+        shell_end.send(&granted, &[file.as_raw_fd()]).unwrap();
+        shell_end.send(&granted, &[file.as_raw_fd()]).unwrap();
+        finish_saves(&a, &mut app, &ctx, 1000.0);
+        assert_eq!(app.seen, ["save to", "saved"]);
+        assert!(ctx.docs.borrow().saves.is_empty(), "no save is left in flight");
+        let seen = sent(&shell_end);
+        assert!(matches!(seen[..], [ToShell::DocSaveGrant { request: r, .. }, ToShell::DocCommit { request: q }] if r == request && q == request), "the request, then the commit: {seen:?}");
+    }
+
+    #[test]
+    fn an_ending_app_sends_what_it_queued_and_does_not_wait_past_the_bound_or_for_a_shell_that_left() {
+        let (a, shell_end) = crate::proto::sys::socketpair_pair().unwrap();
+        let ctx = test_ctx();
+        let mut app = Saver::default();
+        // nothing in flight: the queue is sent and the app leaves at once
+        ctx.set_document_state("a", false, "a");
+        finish_saves(&a, &mut app, &ctx, 60_000.0);
+        assert!(matches!(sent(&shell_end)[..], [ToShell::DocumentState { .. }]));
+        // a save the shell never answers: sent, then given up after the bound
+        let request = ctx.save_document_in_place([7; 16]);
+        finish_saves(&a, &mut app, &ctx, 20.0);
+        assert!(matches!(sent(&shell_end)[..], [ToShell::DocSaveGrant { request: r, .. }] if r == request));
+        assert!(app.seen.is_empty());
+        // the shell is gone: no waiting at all
+        drop(shell_end);
+        finish_saves(&a, &mut app, &ctx, 60_000.0);
     }
 }
 
