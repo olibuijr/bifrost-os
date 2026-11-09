@@ -207,6 +207,13 @@ fn is_cancel(e: &io::Error) -> bool {
     e.kind() == io::ErrorKind::Interrupted
 }
 
+/// Returns the item a Replace moved aside to `dst`, after the replacement failed and left nothing there.
+fn put_back(aside: &Option<PathBuf>, dst: &Path) {
+    if let Some(old) = aside {
+        let _ = std::fs::rename(old, dst);
+    }
+}
+
 /// Copies or moves `sources` into `dest`. On a name collision `ask` is
 /// consulted (once, or once per item unless the answer applies to all).
 /// `tick` is called as bytes move and returns false to cancel; a half-copied
@@ -239,6 +246,8 @@ pub fn transfer(op: Op, sources: &[PathBuf], dest: &Path, ask: &mut dyn FnMut(&P
             report.failed.push((src.clone(), "Cannot put a folder into itself".into()));
             continue;
         }
+        // the item a Replace takes the place of, kept under a hidden name until the replacement is whole
+        let mut aside: Option<PathBuf> = None;
         let dst = if target.symlink_metadata().is_ok() {
             let choice = match sticky {
                 Some(c) => c,
@@ -266,10 +275,17 @@ pub fn transfer(op: Op, sources: &[PathBuf], dest: &Path, ask: &mut dyn FnMut(&P
                 Resolution::Replace if same_place => fs::unique_name(dest, &name),
                 Resolution::KeepBoth => fs::unique_name(dest, &name),
                 Resolution::Replace => {
-                    if let Err(e) = fs::delete(&target) {
-                        report.failed.push((src.clone(), e.to_string()));
+                    // the item to replace holds the source: removing it would remove the source too
+                    if src.starts_with(&target) {
+                        report.failed.push((src.clone(), "Cannot replace a folder with an item inside it".into()));
                         continue;
                     }
+                    let old = fs::unique_name(dest, &format!(".{name}.sbold"));
+                    if let Err(e) = std::fs::rename(&target, &old) {
+                        report.failed.push((src.clone(), friendly(&e)));
+                        continue;
+                    }
+                    aside = Some(old);
                     target
                 }
             }
@@ -298,9 +314,16 @@ pub fn transfer(op: Op, sources: &[PathBuf], dest: &Path, ask: &mut dyn FnMut(&P
                     // cross-device move: verify the copy, and only then remove the original
                     if let Err(e) = verify_copy(src, &dst) {
                         let _ = fs::delete(&dst);
+                        put_back(&aside, &dst);
                         report.failed.push((src.clone(), e.to_string()));
                         continue;
                     }
+                }
+                // the replacement is whole: only now does the replaced item go
+                if let Some(old) = &aside {
+                    let _ = fs::delete(old);
+                }
+                if op == Op::Move && src.symlink_metadata().is_ok() {
                     if let Err(e) = fs::delete(src) {
                         report.failed.push((src.clone(), e.to_string()));
                         continue;
@@ -314,15 +337,20 @@ pub fn transfer(op: Op, sources: &[PathBuf], dest: &Path, ask: &mut dyn FnMut(&P
                 report.done.push(dst);
             }
             Err(e) if is_cancel(&e) => {
+                put_back(&aside, &dst);
                 report.cancelled = true;
                 return report;
             }
             Err(e) if is_disk_full(&e) => {
+                put_back(&aside, &dst);
                 report.failed.push((src.clone(), "The disk is full".into()));
                 report.stopped = true;
                 return report;
             }
-            Err(e) => report.failed.push((src.clone(), friendly(&e))),
+            Err(e) => {
+                put_back(&aside, &dst);
+                report.failed.push((src.clone(), friendly(&e)));
+            }
         }
     }
     run.progress.current.clear();
@@ -487,6 +515,47 @@ mod tests {
         assert_eq!(r.done.len(), 2);
         assert_eq!(std::fs::read_to_string(b.join("q")).unwrap(), "new");
         assert!(!a.join("q").exists());
+    }
+
+    #[test]
+    fn replace_refuses_a_source_inside_the_item_it_would_replace() {
+        let (_d, a, _b) = setup("batch-replace-inside");
+        std::fs::create_dir_all(a.join("foo/foo")).unwrap();
+        std::fs::write(a.join("foo/foo/x"), "x").unwrap();
+        std::fs::write(a.join("foo/other"), "o").unwrap();
+        for op in [Op::Move, Op::Copy] {
+            let r = transfer(op, &[a.join("foo/foo")], &a, &mut |_| Some((Resolution::Replace, false)), &mut |_| true);
+            assert_eq!(r.failed.len(), 1);
+            assert!(r.done.is_empty());
+            assert_eq!(std::fs::read_to_string(a.join("foo/foo/x")).unwrap(), "x");
+            assert_eq!(std::fs::read_to_string(a.join("foo/other")).unwrap(), "o");
+        }
+    }
+
+    #[test]
+    fn a_failed_or_cancelled_replace_keeps_the_old_item() {
+        let (_d, a, b) = setup("batch-replace-keep");
+        std::fs::write(a.join("big"), vec![7u8; 2_000_000]).unwrap();
+        std::fs::write(b.join("big"), "old").unwrap();
+        let mut calls = 0;
+        let r = transfer(Op::Copy, &[a.join("big")], &b, &mut |_| Some((Resolution::Replace, false)), &mut |_| {
+            calls += 1;
+            calls < 3
+        });
+        assert!(r.cancelled);
+        assert_eq!(std::fs::read_to_string(b.join("big")).unwrap(), "old");
+        assert_eq!(std::fs::read_dir(&b).unwrap().count(), 1, "nothing is left beside it");
+        // a source that is gone fails the move, and the item it would have replaced stays
+        std::fs::write(b.join("gone"), "old").unwrap();
+        let mut ask = |_: &Path| Some((Resolution::Replace, false));
+        let r = transfer(Op::Move, &[a.join("gone")], &b, &mut ask, &mut |_| true);
+        assert_eq!(r.failed.len(), 1);
+        assert_eq!(std::fs::read_to_string(b.join("gone")).unwrap(), "old");
+        // a replace that goes through leaves the new item alone under the name
+        let r = transfer(Op::Copy, &[a.join("big")], &b, &mut ask, &mut |_| true);
+        assert_eq!(r.done, [b.join("big")]);
+        assert_eq!(std::fs::read(b.join("big")).unwrap().len(), 2_000_000);
+        assert_eq!(std::fs::read_dir(&b).unwrap().count(), 2);
     }
 
     #[test]
