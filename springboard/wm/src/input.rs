@@ -515,10 +515,15 @@ impl WmState {
     pub fn focus_at(&mut self, pos: Point<f64, Logical>, serial: Serial) {
         if let Some(output) = self.output() {
             let map = smithay::desktop::layer_map_for_output(&output);
+            // only a surface that was given the exclusive keyboard counts (`layer_commit` grants it with the same rule):
+            // an app's layer surface that merely asks for it must not turn off click-to-focus for the desktop
+            let locked = self.locked;
             let has_exclusive = map.layers().any(|l| {
-                smithay::wayland::compositor::with_states(l.wl_surface(), |states| {
+                let asks = smithay::wayland::compositor::with_states(l.wl_surface(), |states| {
                     states.cached_state.get::<smithay::wayland::shell::wlr_layer::LayerSurfaceCachedState>().current().keyboard_interactivity == smithay::wayland::shell::wlr_layer::KeyboardInteractivity::Exclusive
-                })
+                });
+                let privileged = l.wl_surface().client().is_some_and(|client| crate::privileged::is_privileged(&client));
+                crate::handlers::holds_exclusive_keyboard(asks, locked, privileged)
             });
             if has_exclusive {
                 return;
