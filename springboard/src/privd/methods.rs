@@ -330,11 +330,8 @@ fn store_install(p: &Json) -> Result<Json, PErr> {
     if !install::valid_id(id) {
         return Err(PErr::bad("invalid app id"));
     }
+    // a package that declares another id is refused inside the install, before it is unpacked
     let app = install::install_store_app(Path::new(STATE_DIR), id).map_err(PErr::internal)?;
-    if app.id != id {
-        let _ = install::uninstall_local(Path::new(STATE_DIR), &app.id);
-        return Err(PErr::bad("package identity mismatch"));
-    }
     Ok(obj(vec![("id", s(app.id)), ("version", s(app.version)), ("name", s(app.name))]))
 }
 
