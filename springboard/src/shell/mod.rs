@@ -3473,6 +3473,14 @@ impl Shell {
         self.screen = if options::grace_lapsed(off, t, grace_s) { Screen::Lock } else { before };
     }
 
+    /// The machine was suspended for `slept_ms`. The shell clock stood still for that time, so the moment the display
+    /// went off moves back by it and the Require Password grace counts the time asleep. Call it before the wake.
+    pub fn system_slept(&mut self, slept_ms: f64) {
+        if let Some((off, _)) = self.grace_from.as_mut() {
+            *off -= slept_ms.max(0.0);
+        }
+    }
+
     /// Puts both pagers back on their first page and resets the Today View.
     fn leave_today(&mut self) {
         self.today.reset();

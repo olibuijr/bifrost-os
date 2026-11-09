@@ -3925,6 +3925,22 @@
         eprintln!("focus switch: {:.2} ms a frame at {w}x{h}",start.elapsed().as_secs_f64()*1000./n as f64);
     }
 
+    /// Require Password after a minute: a wake inside the minute returns the session, but time the machine spent
+    /// suspended counts although the shell clock stood still for it.
+    #[test]
+    fn time_asleep_counts_toward_the_password_grace() {
+        let mut sh = shell();
+        sh.prefs.set("lock_grace_seconds", "60").unwrap();
+        unlock(&mut sh);
+        sh.event(Event::Power, 2000.0);
+        assert_eq!(sh.event(Event::Wake, 5000.0), vec![Effect::ScreenOn]);
+        assert!(!sh.is_locked(), "three seconds are inside the grace");
+        sh.event(Event::Power, 6000.0);
+        sh.system_slept(3_600_000.0);
+        assert_eq!(sh.event(Event::Wake, 9000.0), vec![Effect::ScreenOn]);
+        assert!(sh.is_locked(), "an hour asleep is past the grace");
+    }
+
 #[cfg(test)]
 mod live_wallpaper_tests {
     use super::*;
