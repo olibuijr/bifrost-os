@@ -208,6 +208,13 @@ pub fn decode_region(data: &[u8], x: usize, y: usize, w: usize, h: usize) -> Opt
 /// shows its first image.
 pub const MAX_ANIMATION_PIXELS: usize = 96 << 20;
 
+/// Whether a picture of `next` pixels may join frames that already hold `held` pixels: the first one always may,
+/// later ones only while the total stays within [`MAX_ANIMATION_PIXELS`]. The readers that keep every frame or page
+/// of a file use it, so a small file that declares many large pictures cannot exhaust memory.
+pub(super) fn within_frame_budget(held: usize, next: usize) -> bool {
+    held == 0 || held.saturating_add(next) <= MAX_ANIMATION_PIXELS
+}
+
 /// What happens to a frame's rectangle after it was shown (APNG `dispose_op`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Dispose {
@@ -472,6 +479,14 @@ mod tests {
 
     fn sub(x: usize, y: usize, w: usize, h: usize, dispose: Dispose, blend: Blend, c: [u8; 4]) -> SubFrame {
         SubFrame { x, y, w, h, delay_ms: 10, dispose, blend, rgba8: solid(w, h, c) }
+    }
+
+    #[test]
+    fn frame_budget_keeps_the_first_picture_and_caps_the_total() {
+        assert!(within_frame_budget(0, usize::MAX), "the first picture is always kept");
+        assert!(within_frame_budget(MAX_ANIMATION_PIXELS - 16, 16));
+        assert!(!within_frame_budget(MAX_ANIMATION_PIXELS - 16, 17));
+        assert!(!within_frame_budget(1, usize::MAX), "the sum saturates instead of wrapping");
     }
 
     #[test]

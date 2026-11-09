@@ -206,6 +206,8 @@ fn decode_page(b: &Block, entries: &[Entry], data: &[u8], page0: bool) -> Option
         let src = data.get(off as usize..(off as usize).checked_add(len)?)?;
         let want = row_len * rows;
         let mut strip = match comp {
+            // an uncompressed strip holds every byte of its rows; one that is shorter is not padded into a page
+            1 if src.len() < want => return None,
             1 => src.to_vec(),
             5 => lzw(src, want),
             8 | 32946 => miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(src, want + 16).ok()?,
@@ -316,9 +318,18 @@ pub fn decode(data: &[u8]) -> Option<Decoded> {
     let b = Block::new(data)?;
     let mut frames = Vec::new();
     let mut props = Vec::new();
+    let mut held = 0usize;
     for (i, off) in ifds(&b).into_iter().enumerate() {
         let (entries, _) = b.ifd(off)?;
+        // Every page is kept decoded, so the pages after the first stop at the shared pixel budget. The size comes
+        // from the directory, before the page is allocated; a size `decode_page` refuses is left to it.
+        let side = |tag: u16| first(&b, &entries, tag).map_or(0, |v| v as usize);
+        let (pw, ph) = (side(256), side(257));
+        if pw <= MAX_SIDE && ph <= MAX_SIDE && !super::png::within_frame_budget(held, pw * ph) {
+            break;
+        }
         if let Some((f, p)) = decode_page(&b, &entries, data, i == 0) {
+            held += f.w * f.h;
             frames.push(f);
             props.push(p);
         }
@@ -556,6 +567,15 @@ mod tests {
         let d = decode(&raw_tiff(&gray, &[7; 16])).unwrap();
         assert_eq!((d.frames[0].w, d.frames[0].h), (4, 4));
         assert_eq!(&d.frames[0].rgba8[..4], &[7, 7, 7, 255]);
+    }
+
+    #[test]
+    fn uncompressed_strip_shorter_than_its_rows_is_refused() {
+        // A 4 x 4 gray page whose only strip is declared empty: nothing to pad into a picture.
+        let page = |len: u32| raw_tiff(&[(256, 3, 4), (257, 3, 4), (258, 3, 8), (262, 3, 1), (273, 4, 0), (279, 4, len)], &[9; 16]);
+        assert!(decode(&page(0)).is_none());
+        assert!(decode(&page(15)).is_none());
+        assert_eq!(decode(&page(16)).unwrap().frames.len(), 1);
     }
 
     #[test]
