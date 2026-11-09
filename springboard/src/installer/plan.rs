@@ -801,22 +801,17 @@ pub fn install(cfg: &Config, progress: &Shared) {
         // A previous attempt that failed part way leaves its subvolumes mounted under /mnt, and parted then refuses to
         // rewrite the table ("Partition(s) are being used"). Release the target first; errors just mean "not mounted".
         let _ = r.cmd(&["sh", "-c", &format!("umount -R /mnt 2>/dev/null; for p in $(lsblk -nrpo PATH {dev}); do umount \"$p\" 2>/dev/null; done; swapoff -a 2>/dev/null; true")]);
-        let before = list_parts(&r, dev);
-        for c in partition_commands(&cfg.disk, cfg.mode) {
+        let before = list_parts(&r, dev)?;
+        let commands = partition_commands(&cfg.disk, cfg.mode);
+        for c in &commands {
             let args: Vec<&str> = c.iter().map(String::as_str).collect();
             r.cmd(&args)?;
         }
         let _ = r.cmd(&["udevadm", "settle"]);
-        let after = list_parts(&r, dev);
-        // Erase rewrites the table, so the new partitions reuse the old names: take every partition then.
-        let mut new: Vec<&String> = after.iter().filter(|p| p.as_str() != dev && (cfg.mode == Mode::Erase || !before.contains(p))).collect();
-        new.sort_by_key(|p| (p.len(), p.to_string()));
-        let (efi, root): (String, String) = match (cfg.mode, new.as_slice()) {
-            (Mode::Erase, [e, rt, ..]) | (Mode::FreeSpace, [e, rt, ..]) => ((*e).clone(), (*rt).clone()),
-            (Mode::FreeSpace, [rt]) => (cfg.disk.reusable_esp().map(|p| p.path.clone()).ok_or("no EFI partition to reuse")?, (*rt).clone()),
-            _ => return Err("the new partitions did not appear".into()),
-        };
-        let new_esp = !(cfg.mode == Mode::FreeSpace && new.len() == 1);
+        let after = list_parts(&r, dev)?;
+        let existing: Vec<&str> = cfg.disk.parts.iter().map(|p| p.path.as_str()).filter(|p| !p.is_empty()).collect();
+        let reuse = cfg.disk.reusable_esp().map(|p| p.path.as_str());
+        let (efi, root, new_esp) = new_partitions(cfg.mode, &before, &after, &existing, commands.len(), reuse)?;
         r.set(0, 3, "Formatting");
         if new_esp {
             r.cmd(&["mkfs.fat", "-F32", &efi])?;
@@ -1142,8 +1137,32 @@ fn part_number(path: &str) -> String {
     path.chars().rev().take_while(|c| c.is_ascii_digit()).collect::<Vec<_>>().into_iter().rev().collect()
 }
 
-fn list_parts(r: &Run, dev: &str) -> Vec<String> {
-    r.cmd(&["lsblk", "-nrpo", "PATH", dev]).map(|t| t.lines().filter(|l| *l != dev).map(String::from).collect()).unwrap_or_default()
+/// The partitions of `dev`. A listing that fails is an error: an empty "before" list would make every existing
+/// partition look new, and the new ones are formatted.
+fn list_parts(r: &Run, dev: &str) -> Result<Vec<String>, String> {
+    r.cmd(&["lsblk", "-nrpo", "PATH", dev]).map(|t| t.lines().map(str::trim).filter(|l| !l.is_empty() && *l != dev).map(String::from).collect())
+}
+
+/// The partitions to format, as (EFI, root, whether the EFI partition is new), from the partition lists taken before
+/// and after partitioning. Erase rewrites the table, so the new partitions reuse the old names: every partition is
+/// new then. A free-space install formats only partitions that were not there before: the listing taken before must
+/// hold every partition the disk was planned with (`existing`), and exactly `created` new ones must have appeared
+/// (one per partitioning command; a single one is the root next to the reused EFI partition `reuse`).
+fn new_partitions(mode: Mode, before: &[String], after: &[String], existing: &[&str], created: usize, reuse: Option<&str>) -> Result<(String, String, bool), String> {
+    let mut new: Vec<&String> = after.iter().filter(|p| mode == Mode::Erase || !before.contains(p)).collect();
+    new.sort_by_key(|p| (p.len(), p.to_string()));
+    match (mode, new.as_slice()) {
+        (Mode::Erase, [e, rt, ..]) => Ok(((*e).clone(), (*rt).clone(), true)),
+        (Mode::FreeSpace, _) if existing.iter().any(|p| !before.iter().any(|b| b.as_str() == *p)) => {
+            Err("the disk's partitions could not be listed before partitioning; nothing was formatted".into())
+        }
+        (Mode::FreeSpace, _) if new.len() != created || new.iter().any(|p| existing.contains(&p.as_str())) => {
+            Err(format!("expected {created} new partition(s), found {}; nothing was formatted", new.len()))
+        }
+        (Mode::FreeSpace, [e, rt]) => Ok(((*e).clone(), (*rt).clone(), true)),
+        (Mode::FreeSpace, [rt]) => Ok((reuse.ok_or("no EFI partition to reuse")?.to_string(), (*rt).clone(), false)),
+        _ => Err("the new partitions did not appear".into()),
+    }
 }
 
 fn used_bytes(mount: &str) -> Option<f64> {
@@ -1249,6 +1268,37 @@ mod tests {
 
     use super::*;
     use crate::installer::keymaps::{layout_index, layouts};
+
+    #[test]
+    fn a_free_space_install_formats_only_partitions_that_were_not_there_before() {
+        let v = |names: &[&str]| names.iter().map(|s| s.to_string()).collect::<Vec<String>>();
+        let existing = ["/dev/nvme0n1p1", "/dev/nvme0n1p2"];
+        let before = v(&existing);
+        // a new EFI partition and the root
+        let after = v(&["/dev/nvme0n1p1", "/dev/nvme0n1p2", "/dev/nvme0n1p3", "/dev/nvme0n1p4"]);
+        assert_eq!(
+            new_partitions(Mode::FreeSpace, &before, &after, &existing, 2, None),
+            Ok(("/dev/nvme0n1p3".to_string(), "/dev/nvme0n1p4".to_string(), true))
+        );
+        // the existing EFI partition is reused: only the root is new
+        let after_one = v(&["/dev/nvme0n1p1", "/dev/nvme0n1p2", "/dev/nvme0n1p3"]);
+        assert_eq!(
+            new_partitions(Mode::FreeSpace, &before, &after_one, &existing, 1, Some("/dev/nvme0n1p1")),
+            Ok(("/dev/nvme0n1p1".to_string(), "/dev/nvme0n1p3".to_string(), false))
+        );
+        // the listing before came back empty: the other system's partitions must not count as new
+        assert!(new_partitions(Mode::FreeSpace, &[], &after_one, &existing, 1, Some("/dev/nvme0n1p1")).is_err());
+        assert!(new_partitions(Mode::FreeSpace, &[], &after, &existing, 2, None).is_err());
+        // more or fewer new partitions than were created: refuse
+        assert!(new_partitions(Mode::FreeSpace, &before, &after, &existing, 1, Some("/dev/nvme0n1p1")).is_err());
+        assert!(new_partitions(Mode::FreeSpace, &before, &before, &existing, 1, Some("/dev/nvme0n1p1")).is_err());
+        // erase takes the whole new table, whatever was there before
+        assert_eq!(
+            new_partitions(Mode::Erase, &before, &v(&["/dev/sda1", "/dev/sda2"]), &existing, 1, None),
+            Ok(("/dev/sda1".to_string(), "/dev/sda2".to_string(), true))
+        );
+        assert!(new_partitions(Mode::Erase, &[], &v(&["/dev/sda1"]), &[], 1, None).is_err());
+    }
 
     fn test_bundle(root: &Path) -> String {
         std::fs::create_dir_all(root.join("repo")).unwrap();
