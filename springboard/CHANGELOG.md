@@ -17,6 +17,7 @@ Fixes from a code review of the whole system: 66 defects found by reading, each 
 - Window server: a pointer lock ends when its app loses the keyboard or the session locks, and an app’s layer surface cannot turn off click-to-focus.
 - Audio: the server no longer stops on a device it cannot probe, the PulseAudio bridge lists devices, a re-plugged sound card is found again, and one bad sample no longer silences a device.
 - Apps: a document saved on quit reaches the disk, Notes keeps edits from two windows, monthly reminders return to the 31st after a short month, and Grapher makes one equation from each pasted line.
+- Idle: the background services read their clock in milliseconds, so the desktop no longer uses a processor core while nothing happens (found in the 0.10.45 app scan).
 - Smaller fixes: Game Mode priority reaches the game, old swap files are removed at start, the computer name may start with a hyphen, and custom DNS servers take effect.
 
 ## 0.10.45 — 2026-10-29
