@@ -1910,6 +1910,10 @@ impl Notes {
             self.loc.insert(id.clone(), f.clone());
         }
         self.search.set_text(ui, "");
+        if self.unsaved.is_some() {
+            // an edit of another note (made in its own window) is still waiting: it is written first
+            self.save(t, true);
+        }
         self.unsaved = Some(id.clone());
         self.autosave.touch(t);
         self.save(t, true);
@@ -2192,6 +2196,10 @@ impl Notes {
         if let Screen::Editor(i) = self.screen {
             self.notes[i].text = self.editor.text().to_string();
             self.notes[i].modified = self.wall.now(t);
+            if self.unsaved.as_deref().is_some_and(|u| u != self.notes[i].id) {
+                // an edit of another note (made in its own window) is still waiting: it is written first
+                self.save(t, true);
+            }
             self.unsaved = Some(self.notes[i].id.clone());
             self.autosave.touch(t);
         }
@@ -2295,8 +2303,11 @@ impl Notes {
         self.dirty = true;
         let Some(i) = self.notes.iter().position(|n| n.id == id) else { return };
         if self.screen == Screen::Editor(i) {
-            self.autosave.fire(t, true);
-            self.unsaved = None;
+            // only this note's pending save is dropped; one waiting for another note (edited in its own window) stays armed
+            if self.unsaved.as_deref().is_none_or(|u| u == id) {
+                self.autosave.fire(t, true);
+                self.unsaved = None;
+            }
             self.screen = Screen::List;
             self.keyboard.set_shown(false, t);
             self.editor.focused = false;
