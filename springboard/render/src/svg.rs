@@ -61,11 +61,11 @@ pub fn rasterize(doc: &str, out_w: u32, out_h: u32) -> Option<SvgImage> {
             } else {
                 WindingRule::NonZero
             };
-            paint(&mut img, &path.fill_mask(out_w as usize, out_h as usize, rule), rgb, opacity);
+            paint(&mut img, &path.fill_mask_in_bounds(out_w as usize, out_h as usize, rule), rgb, opacity);
         }
         if let Some((rgb, opacity, width)) = stroke_of(e, &xf) {
             let outline = stroke_outline(&path, width, &StrokeStyle::of(e));
-            paint(&mut img, &outline.fill_mask(out_w as usize, out_h as usize, WindingRule::NonZero), rgb, opacity);
+            paint(&mut img, &outline.fill_mask_in_bounds(out_w as usize, out_h as usize, WindingRule::NonZero), rgb, opacity);
         }
     }
     Some(img)
@@ -952,27 +952,37 @@ fn join_piece(out: &mut BezierPath, p: Point, d0: Point, d1: Point, hw: f32, sty
     }
 }
 
-/// Source-over composite of one solid colour through a 0 or 255 coverage mask.
-fn paint(img: &mut SvgImage, mask: &[u8], rgb: u32, opacity: f32) {
+/// Source-over composite of one solid colour through a 0 or 255 coverage mask. The mask is the rectangle
+/// `(x0, y0, width, height, coverage)` of the image that [`BezierPath::fill_mask_in_bounds`] returns, so only the
+/// pixels the shape can touch are visited.
+fn paint(img: &mut SvgImage, part: &(usize, usize, usize, usize, Vec<u8>), rgb: u32, opacity: f32) {
+    let (x0, y0, mw, mh) = (part.0, part.1, part.2, part.3);
     let shape_alpha = (opacity * 255.0).round() as u32;
-    for (px, cover) in img.pixels.iter_mut().zip(mask) {
-        if *cover == 0 || shape_alpha == 0 {
-            continue;
+    if shape_alpha == 0 || mw == 0 {
+        return;
+    }
+    let stride = img.width as usize;
+    for r in 0..mh {
+        let row = &mut img.pixels[(y0 + r) * stride + x0..][..mw];
+        for (px, cover) in row.iter_mut().zip(&part.4[r * mw..][..mw]) {
+            if *cover == 0 {
+                continue;
+            }
+            let src_a = shape_alpha * u32::from(*cover) / 255;
+            let old = *px;
+            let dst_a = old >> 24;
+            let dst_w = dst_a * (255 - src_a) / 255;
+            let out_a = src_a + dst_w;
+            if out_a == 0 {
+                continue;
+            }
+            let ch = |shift: u32| {
+                let s = (rgb >> shift) & 0xff;
+                let d = (old >> shift) & 0xff;
+                (s * src_a + d * dst_w) / out_a
+            };
+            *px = (out_a << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0);
         }
-        let src_a = shape_alpha * u32::from(*cover) / 255;
-        let old = *px;
-        let dst_a = old >> 24;
-        let dst_w = dst_a * (255 - src_a) / 255;
-        let out_a = src_a + dst_w;
-        if out_a == 0 {
-            continue;
-        }
-        let ch = |shift: u32| {
-            let s = (rgb >> shift) & 0xff;
-            let d = (old >> shift) & 0xff;
-            (s * src_a + d * dst_w) / out_a
-        };
-        *px = (out_a << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0);
     }
 }
 
@@ -992,6 +1002,23 @@ mod tests {
         assert_eq!(at(&img, 2, 2), 0xffff0000);
         assert_eq!(at(&img, 0, 0), 0);
         assert_eq!(at(&img, 3, 3), 0);
+    }
+
+    #[test]
+    fn small_shapes_on_a_large_canvas_land_on_their_own_pixels() {
+        // Each shape is composited through a mask of its own bounds, at its offset in the picture.
+        let doc = r##"<svg viewBox="0 0 2000 2000"><rect x="1500" y="700" width="3" height="2" fill="#00ff00"/><rect x="100" y="100" width="10" height="10" fill="none" stroke="#ff0000" stroke-width="2"/></svg>"##;
+        let img = rasterize(doc, 2000, 2000).unwrap();
+        assert_eq!(at(&img, 1500, 700), 0xff00ff00);
+        assert_eq!(at(&img, 1502, 701), 0xff00ff00);
+        for (x, y) in [(1499, 700), (1503, 700), (1500, 699), (1500, 702)] {
+            assert_eq!(at(&img, x, y), 0, "({x}, {y})");
+        }
+        assert_eq!(at(&img, 100, 100), 0xffff0000);
+        assert_eq!(at(&img, 104, 99), 0xffff0000);
+        for (x, y) in [(105, 105), (97, 97), (104, 97), (1999, 1999), (0, 0)] {
+            assert_eq!(at(&img, x, y), 0, "({x}, {y})");
+        }
     }
 
     #[test]
