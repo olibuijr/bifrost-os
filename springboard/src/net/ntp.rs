@@ -160,12 +160,12 @@ fn desktop() -> bool {
 /// The Date & Time line under Set Automatically. `auto` is the switch, `enabled` and `synchronized` are what the system
 /// says (`timezone::timesyncd_enabled`, `timesyncd_synchronized`), and `busy` is a request to change it that is still
 /// on its way. The line never contradicts the switch: where the system has not followed it, it says so. `enabled` is
-/// looked at before `synchronized`, because the sync mark in `/run` outlives a service that was stopped.
+/// looked at before `synchronized`, because the clock stays marked synchronized for a while after the service stops.
 pub fn timesyncd_text(synchronized: Option<&str>, enabled: Option<&str>, auto: bool, busy: bool) -> String {
     match (auto, enabled, synchronized) {
         (_, None, _) => "Network time is not available on this computer",
-        (true, Some("yes"), Some("yes")) => "Synchronized by systemd-timesyncd",
-        (true, Some("yes"), _) => "Waiting for systemd-timesyncd",
+        (true, Some("yes"), Some("yes")) => "Synchronized with network time",
+        (true, Some("yes"), _) => "Waiting for network time",
         (true, _, _) if busy => "Turning on network time…",
         (true, _, _) => "Network time could not be turned on",
         (false, Some("yes"), _) if busy => "Turning off network time…",
@@ -279,8 +279,8 @@ mod tests {
 
     #[test]
     fn timesyncd_status_wording() {
-        assert_eq!(timesyncd_text(Some("yes"), Some("yes"), true, false), "Synchronized by systemd-timesyncd");
-        assert_eq!(timesyncd_text(Some("no"), Some("yes"), true, false), "Waiting for systemd-timesyncd");
+        assert_eq!(timesyncd_text(Some("yes"), Some("yes"), true, false), "Synchronized with network time");
+        assert_eq!(timesyncd_text(Some("no"), Some("yes"), true, false), "Waiting for network time");
         assert_eq!(timesyncd_text(Some("no"), Some("no"), false, false), "Network time is off");
         assert_eq!(timesyncd_text(None, None, true, false), "Network time is not available on this computer");
     }
