@@ -586,15 +586,21 @@ impl super::Shell {
         }
     }
 
+    /// Shows the file at `path` in a Files window, selected in the folder that holds it.
+    fn stack_show_item(&mut self, path: &Path, t: f64) {
+        if let Err(e) = self.desktop_show_in_files(path, t) {
+            eprintln!("BifrOSt Downloads: {e}");
+        }
+    }
+
     /// Opens a stack item the way Files opens it: a folder in Files; a file, after the malware gate, with the app its type
-    /// opens with (a package archive on the install sheet). A suspicious file, or one no app opens, is shown in its folder
-    /// in Files, whose open asks on the gate's card; a known threat gets the refusal card.
+    /// opens with (a package archive on the install sheet). A suspicious file, or one no app opens, is shown selected in
+    /// its folder in Files, whose open asks on the gate's card; a known threat gets the refusal card.
     fn stack_open_item(&mut self, item: &Item, t: f64) {
         use super::malware_gate::{check, rules_dir, Gate, MalwareAlert};
         if item.dir {
             return self.stack_reveal(&item.path, t);
         }
-        let folder = item.path.parent().map_or_else(|| self.stack_downloads(), Path::to_path_buf);
         match check(&rules_dir(), std::slice::from_ref(&item.path)) {
             Gate::Open => {}
             gate @ Gate::Refuse { .. } => {
@@ -603,14 +609,14 @@ impl super::Shell {
                 self.drawn = super::Drawn::Nothing;
                 return;
             }
-            Gate::Ask { .. } => return self.stack_reveal(&folder, t),
+            Gate::Ask { .. } => return self.stack_show_item(&item.path, t),
         }
         if super::pacman_update::is_package_file(&item.name) && self.package_open_files(std::slice::from_ref(&item.path)) {
             return;
         }
         let opened = self.default_app_for_file(&item.name).is_some_and(|key| self.open_path_with(&key, &item.path, t));
         if !opened {
-            self.stack_reveal(&folder, t);
+            self.stack_show_item(&item.path, t);
         }
     }
 

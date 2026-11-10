@@ -71,6 +71,28 @@ pub fn application_to_open<'a>(installed: &'a [apphost::Installed], id: &str) ->
     installed.iter().find(|a| a.manifest.id == id && !a.is_removed() && launchable(&a.manifest.kind))
 }
 
+/// Checks the `open-file <app id> <path>` control request before anything is opened: an app ID of letters, digits,
+/// `.`, `_` and `-` (as `open-folder` takes), and an absolute path, with no `..` step or control character, to an
+/// existing file. Whether the app is installed and may be granted the file is the shell's to check after.
+pub fn check_open_file(id: &str, path: &Path) -> Result<(), String> {
+    if id.is_empty() || !id.bytes().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c)) {
+        return Err("Invalid app ID".into());
+    }
+    let plain = path.is_absolute()
+        && !path.components().any(|c| matches!(c, std::path::Component::ParentDir))
+        && path.to_str().is_some_and(|s| !s.chars().any(char::is_control));
+    if !plain {
+        return Err("Expected an absolute file path".into());
+    }
+    if path.is_dir() {
+        return Err("Expected a file, not a folder".into());
+    }
+    if !path.is_file() {
+        return Err("File not found".into());
+    }
+    Ok(())
+}
+
 /// The folder Reveal opens for `path`: the folder itself, or the folder that holds the file.
 pub fn reveal_target(path: &Path) -> PathBuf {
     if path.is_dir() {
@@ -285,9 +307,8 @@ impl super::Shell {
                 (status, moved)
             }
             WorkspaceOp::Reveal => {
-                // one Files window: the folder of the first file (gap: a selection across folders)
-                let folder = reveal_target(&files[0].0);
-                match self.desktop_open_folder(FILES_APP, &folder.to_string_lossy(), t) {
+                // one Files window: the first file selected in its folder (gap: a selection of several files)
+                match self.desktop_show_in_files(&files[0].0, t) {
                     Ok(()) => (WorkspaceStatus::Ok, Vec::new()),
                     Err(_) => (WorkspaceStatus::Failed, Vec::new()),
                 }
@@ -490,6 +511,24 @@ mod tests {
         let out = trash_into(&home, &[home.clone(), bin.join("1__x")], &bin);
         assert!(out.iter().all(|r| r.is_err()));
         assert!(home.exists());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn an_open_file_request_names_an_app_and_an_existing_absolute_file() {
+        let home = scratch("openfile");
+        let f = home.join("to do.txt");
+        std::fs::write(&f, "x").unwrap();
+        assert_eq!(check_open_file("is.olibuijr.textedit.desktop", &f), Ok(()));
+        assert_eq!(check_open_file("bifrost.photos", &f), Ok(()), "a built-in app's key has the same shape");
+        for id in ["", "a b", "a/b", "../x", "a\nb"] {
+            assert_eq!(check_open_file(id, &f), Err("Invalid app ID".into()), "{id:?}");
+        }
+        for bad in [PathBuf::from("to do.txt"), home.join("sub/../to do.txt"), PathBuf::from(format!("{}\n", f.display()))] {
+            assert_eq!(check_open_file("a.b", &bad), Err("Expected an absolute file path".into()), "{bad:?}");
+        }
+        assert_eq!(check_open_file("a.b", &home), Err("Expected a file, not a folder".into()));
+        assert_eq!(check_open_file("a.b", &home.join("missing.txt")), Err("File not found".into()));
         let _ = std::fs::remove_dir_all(&home);
     }
 
