@@ -236,6 +236,7 @@ impl Reminders {
     fn draw_deleted(&mut self, s: &mut Surface, ui: &Ui) {
         let wpx = self.w as f32;
         let kept = self.deleted.clone().unwrap_or_default();
+        // compliance-allow: LAY-07 the page title is tinted and has the kept count at its right, which widgets::large_title cannot draw
         self.text(s, ui, "Recently Deleted", MAC_LARGE_TITLE_PT, Weight::Bold, BLUE, ui.pt(SPACE_XL), ui.pt(self.top_pt + 62.0));
         self.right(s, ui, &kept.len().to_string(), MAC_LARGE_TITLE_PT, Weight::Regular, BLUE, wpx - ui.pt(SPACE_XL), ui.pt(self.top_pt + 62.0));
         let (top, bottom) = (self.top_px(ui), self.bottom(ui));
