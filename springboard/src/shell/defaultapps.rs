@@ -316,6 +316,20 @@ mod tests {
     }
 
     #[test]
+    fn an_svg_picture_opens_in_the_viewer_and_the_browser_stays_an_alternative() {
+        let (preview, browser) = ("is.olibuijr.preview.desktop", "is.olibuijr.browser.desktop");
+        let mut r = Registry::new();
+        // the Browser is registered first, so a tie in rank would go to it
+        r.register(first_party(browser).unwrap());
+        let m = apphost::Manifest::parse(include_str!("../../apps/preview-desktop/manifest.toml")).unwrap();
+        r.register(manifest_handler(&m).unwrap());
+        assert_eq!(r.default_for_file("logo.svg"), Some(preview), "SVG is ranked like the other pictures");
+        let svg = r.open_with("logo.svg");
+        assert!(svg[0].app == preview && svg.iter().any(|c| c.app == browser), "{svg:?}");
+        assert_eq!(r.default_for_file("page.html"), Some(browser));
+    }
+
+    #[test]
     fn script_editor_is_offered_for_scripts_and_plain_text_but_takes_no_default() {
         let r = shipped();
         let editor = "is.olibuijr.scripteditor.desktop";
