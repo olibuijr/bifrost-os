@@ -36,7 +36,8 @@ pub(crate) fn folder_emblem(home: &Path, path: &Path) -> Option<&'static str> {
 }
 
 impl Files {
-    /// One cell of the icon view: icon, tag dots and name (Files's icon view).
+    /// One cell of the icon view: icon, tag dots and name (Files's icon view). A cell that reaches past the view (above
+    /// `body_top`, below `bottom`) is still drawn: `paint` hands in the view's rows as the surface, which cuts it there.
     pub(crate) fn paint_icon_cell(&self, ui: &Ui, s: &mut Surface, n: usize, i: usize, cols: usize, bottom: f32) {
         let e = &self.rows[i];
         let name_field = self.naming.as_ref().filter(|(p, _)| *p == e.path).map(|(_, f)| f);
@@ -44,7 +45,7 @@ impl Files {
         let x = (self.side() + 16.) + (n % cols) as f32 * self.grid_w();
         let y = self.rows_top() + 16. + (n / cols) as f32 * self.grid_h() - self.scroll;
         let cell_h = self.grid_h() - 6.;
-        if y < self.body_top() + 4. || y + cell_h > bottom || ui.pt(y+cell_h) < s.y0 as f32 || ui.pt(y-6.) >= s.h as f32 {
+        if y + cell_h <= self.body_top() || y - 6. >= bottom || ui.pt(y+cell_h) < s.y0 as f32 || ui.pt(y-6.) >= s.h as f32 {
             return;
         }
         let icon_x = x + (self.grid_w() - self.grid_icon()) / 2.;
@@ -117,5 +118,37 @@ mod tests {
         let (min_x, min_y) = (hits.iter().map(|p| p.0).min().unwrap() as f32, hits.iter().map(|p| p.1).min().unwrap() as f32);
         assert!(min_x >= icon_x, "the dot starts inside the tile, not left of it: {min_x} < {icon_x}");
         assert!(min_y >= icon_y, "the dot starts inside the tile, not above it: {min_y} < {icon_y}");
+    }
+
+    #[test]
+    fn a_line_that_only_partly_fits_is_drawn_cut_at_the_bottom_of_the_view() {
+        let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let ui = Ui::new(font, 1.0);
+        // nine items, four a line: the ninth has the third line to itself, and it carries a purple tag dot
+        let mut files = fixture((0..9).map(|i| crate::tests::folder(&format!("item{i}"))).collect());
+        files.grid = true;
+        assert_eq!(files.grid_cols(), 4);
+        let path = files.rows[8].path.clone();
+        files.tag_index.toggle(&path, Tag::Purple);
+        // the window ends in the middle of that dot: the top of the third line is in the view, the rest is below it
+        let dot_top = files.rows_top() + 16. + 2. * files.grid_h() + 4.;
+        files.h = dot_top + SPACE_S / 2.;
+        let bottom = files.bottom();
+        assert_eq!(bottom, files.h, "no footer: the view ends with the window");
+        let (w, h) = (1200usize, 800usize);
+        let mut px = vec![0u32; w * h];
+        files.paint(&ui, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 });
+        let colour = crate::info::tag_colour(Tag::Purple);
+        let side = files.side() as usize;
+        let rows: Vec<usize> = (0..w * h).filter(|&i| px[i] == colour && i % w >= side).map(|i| i / w).collect();
+        assert!(!rows.is_empty(), "the line that partly fits is drawn, not left out");
+        let (first, last) = (*rows.iter().min().unwrap() as f32, *rows.iter().max().unwrap() as f32);
+        assert!(first >= dot_top - 1., "the dot is the ninth item's: {first} < {dot_top}");
+        assert!(last < bottom, "and it is cut at the bottom of the view: {last} >= {bottom}");
+        // a line wholly below the view is not drawn
+        files.h = dot_top - 12.;
+        px.fill(0);
+        files.paint(&ui, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 });
+        assert!(!(0..w * h).any(|i| px[i] == colour && i % w >= side), "nothing of a line below the view");
     }
 }

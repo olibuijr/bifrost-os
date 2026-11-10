@@ -18,6 +18,9 @@ pub(crate) struct FileManagerState {
     pub(crate) drag_paths: Vec<PathBuf>,
     /// Option was held during the drag: drop copies instead of moves.
     pub(crate) copy_drag: bool,
+    /// When a finger pressed an item and has rested on it since (ms, the touch clock): after `hold_ms` it lifts the item
+    /// (`Files::lift_item`). None for a mouse press, and once the finger moved past the drag slop, which is a scroll.
+    pub(crate) hold: Option<f64>,
     /// The decoded picture of the Preview panel (JPEG and PNG).
     pub(crate) preview_image: Option<springboard::gfx::Image>,
     /// Go > Connect to Server: the address sheet, the remote folder browser and the recent servers.
