@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.18
+
+- Show in Files scrolls the item into the middle of the view in the list, icon and columns views. The list view shows a row that only partly fits instead of leaving a gap under the header. Switching the view keeps the selection and the place. The columns view scrolls a long folder. The list and icon views show a scroll knob while there is more than fits.
+
 ## 1.34.17
 
 - On a touchscreen, resting a finger on an item picks it up so it can be dragged to a folder; a finger that moves at once still scrolls. The icon view shows the top of a row that does not fit, so a folder with more items below no longer looks complete.
