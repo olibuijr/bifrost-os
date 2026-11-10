@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.11
+
+- The window measures itself on the first draw instead of assuming a size; adds the app compliance test.
+
 ## 0.1.10
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
