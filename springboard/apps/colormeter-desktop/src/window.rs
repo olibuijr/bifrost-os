@@ -272,6 +272,12 @@ impl ColorMeter {
         }
     }
 
+    /// The line the loupe shows while it has no pixels: the shell's reason when it refused the capture (the person has
+    /// not allowed screen recording for this app, for example), else that capture is not available.
+    pub fn capture_note(&self) -> String {
+        capture_note(self.source.refusal())
+    }
+
     /// The loupe's sample square and its pixels, row by row.
     pub fn loupe_pixels(&self) -> Option<(PixelRect, Vec<Rgb8>)> {
         let (w, h) = self.display()?;
@@ -471,6 +477,16 @@ impl ColorMeter {
     }
 }
 
+/// [`ColorMeter::capture_note`] for the shell's `reason`, as a sentence that starts with a capital letter.
+fn capture_note(reason: Option<&str>) -> String {
+    let reason = reason.map(str::trim).unwrap_or("");
+    let mut chars = reason.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => "Screen capture is not available".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -578,6 +594,14 @@ mod tests {
         m.cells = ZOOMS[ZOOMS.len() - 1];
         m.activate(Target::Toolbar(B_ZOOM));
         assert_eq!(m.cells, ZOOMS[0]);
+    }
+
+    #[test]
+    fn the_loupe_says_why_the_shell_refused_the_capture() {
+        assert_eq!(capture_note(Some("Screen recording is off for Digital Color Meter.")), "Screen recording is off for Digital Color Meter.");
+        assert_eq!(capture_note(Some("screen recording is restricted on this system")), "Screen recording is restricted on this system");
+        assert_eq!(capture_note(None), "Screen capture is not available");
+        assert_eq!(capture_note(Some("  ")), "Screen capture is not available");
     }
 
     /// A source that reports itself refused or not, and nothing else.

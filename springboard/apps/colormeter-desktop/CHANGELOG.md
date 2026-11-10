@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.14
+
+- When the shell refuses a capture, the loupe shows the shell's reason ("Screen recording is off for Digital Color Meter.") instead of "Screen capture is not available".
+
 ## 0.5.13
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
