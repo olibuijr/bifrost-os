@@ -38,6 +38,8 @@ pub struct PageState<'a> {
     pub revealed: Option<Shown<'a>>,
     /// Zone offset in seconds east of UTC, for the modified times.
     pub offset: i32,
+    /// Date & Time > 24-Hour Time, for the modified times.
+    pub clock_24h: bool,
     /// Whether revealing a password asks for the passcode first (only used for the footer text).
     pub passcode_on: bool,
 }
@@ -52,7 +54,7 @@ pub fn spec(s: &PageState) -> Spec {
             .logins
             .iter()
             .map(|l| {
-                let value = format!("{}  ·  {}", l.account, date_text(l.modified as i64, s.offset));
+                let value = format!("{}  ·  {}", l.account, date_text(l.modified as i64, s.offset, s.clock_24h));
                 Item::new(l.site.as_str()).value(value).action(Action::Passwords(Act::Reveal { site: l.site.clone(), account: l.account.clone() }))
             })
             .collect();
@@ -83,7 +85,7 @@ mod tests {
 
     #[test]
     fn an_empty_store_says_so_and_has_no_rows_to_tap() {
-        let s = spec(&PageState { logins: &[], revealed: None, offset: 0, passcode_on: false });
+        let s = spec(&PageState { logins: &[], revealed: None, offset: 0, clock_24h: true, passcode_on: false });
         assert_eq!(s.id, PageId::Passwords);
         assert_eq!(s.title, "Passwords");
         assert_eq!(s.groups.len(), 1);
@@ -95,11 +97,13 @@ mod tests {
     fn each_login_shows_site_then_account_and_modified_time() {
         // 1791073395 is Oct 4, 00:23 UTC (checked with date -u)
         let logins = [login("a.example", "alice", 1_791_073_395)];
-        let s = spec(&PageState { logins: &logins, revealed: None, offset: 0, passcode_on: true });
+        let s = spec(&PageState { logins: &logins, revealed: None, offset: 0, clock_24h: true, passcode_on: true });
         assert_eq!(s.groups.len(), 1);
         let row = &s.groups[0].items[0];
         assert_eq!(row.label, "a.example");
         assert_eq!(row.value, "alice  ·  Oct 4, 00:23");
+        let twelve = spec(&PageState { logins: &logins, revealed: None, offset: 0, clock_24h: false, passcode_on: true });
+        assert_eq!(twelve.groups[0].items[0].value, "alice  ·  Oct 4, 12:23 AM", "24-Hour Time off");
         assert_eq!(row.action, Action::Passwords(Act::Reveal { site: "a.example".into(), account: "alice".into() }));
         assert!(s.groups[0].footer.as_deref().unwrap_or("").contains("passcode"));
     }
@@ -108,7 +112,7 @@ mod tests {
     fn a_revealed_login_adds_the_password_and_copy_hide_delete_rows() {
         let logins = [login("a.example", "alice", 0)];
         let shown = Shown { site: "a.example", account: "alice", password: "hunter2" };
-        let s = spec(&PageState { logins: &logins, revealed: Some(shown), offset: 0, passcode_on: false });
+        let s = spec(&PageState { logins: &logins, revealed: Some(shown), offset: 0, clock_24h: true, passcode_on: false });
         assert_eq!(s.groups.len(), 3);
         assert_eq!(s.groups[1].items[0].label, "Password");
         assert_eq!(s.groups[1].items[0].value, "hunter2");

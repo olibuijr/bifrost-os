@@ -2717,12 +2717,13 @@ impl Shell {
             return;
         }
         let ui = &self.ui;
-        let clock = status::clock_in(info.hour, info.min, self.clock_style.use_24h);
+        // the status bar's time and the lock screen's large clock are the same text
         let lock_clock = lock_clock_text(&self.clock_style, &info);
+        let clock = &lock_clock;
         let short_date = status::date_text(info.wday, info.mday, info.mon);
         let minute_changed = (info.hour, info.min, info.mday) != (self.info.hour, self.info.min, self.info.mday) || self.chrome.time.is_none();
         if minute_changed {
-            self.chrome.time = Some(ui.chrome(&clock, 12.0, Weight::Semibold, WHITE));
+            self.chrome.time = Some(ui.chrome(clock, 12.0, Weight::Semibold, WHITE));
             self.chrome.date = Some(ui.chrome(&short_date, 12.0, Weight::Semibold, WHITE));
             self.lock_time = Some(ui.chrome(&lock_clock, 110.0, Weight::Semibold, WHITE));
             self.lock_date = Some(ui.chrome(&lock_date_text(&info), 22.0, Weight::Semibold, WHITE));
@@ -2766,7 +2767,7 @@ impl Shell {
     fn refresh_today(&mut self, t: f64) {
         self.today_stale = false;
         let term = self.term.as_ref().filter(|t| t.alive()).map(|t| t.tail(widgets::terminal::LINES));
-        let src = today::Sources { info: &self.info, term, unix: self.wall.now(t) };
+        let src = today::Sources { info: &self.info, term, unix: self.wall.now(t), clock_24h: self.clock_style.use_24h };
         let changed = self.today.refresh(&self.ui, &src, t);
         if changed && !self.home_widgets.is_empty() {
             self.rebuild_widgets();

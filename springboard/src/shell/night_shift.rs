@@ -190,6 +190,17 @@ mod tests {
     }
 
     #[test]
+    fn the_schedule_rows_write_the_time_as_the_menu_bar_does() {
+        let n = NightShift::default();
+        let edges = |h24: bool| {
+            let s = n.spec(h24);
+            (s.groups[0].items[1].value.clone(), s.groups[0].items[2].value.clone())
+        };
+        assert_eq!(edges(true), ("22:00".to_string(), "07:00".to_string()));
+        assert_eq!(edges(false), ("10:00 PM".to_string(), "7:00 AM".to_string()));
+    }
+
+    #[test]
     fn tint_keeps_red_and_cuts_blue() {
         let mut d = Damage::new(3, 1);
         d.all();

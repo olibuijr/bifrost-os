@@ -19,13 +19,19 @@ pub fn cities() -> [&'static City; 4] {
     SHOWN.map(|i| &CITIES[i])
 }
 
-/// Changes once a minute: the minute of each city's local time.
-pub fn key(unix: i64) -> String {
-    format!("clock:{}", unix.div_euclid(60))
+/// Changes once a minute (the minute of each city's local time) and with the 24-Hour Time switch.
+pub fn key(unix: i64, clock_24h: bool) -> String {
+    format!("clock:{}:{}", unix.div_euclid(60), u8::from(clock_24h))
+}
+
+/// The time under a city's face, as the menu bar writes it: "09:13", or "9:13 AM" with 24-Hour Time off.
+pub fn time_label(city: &City, unix: i64, clock_24h: bool) -> String {
+    let local = city.local(unix);
+    crate::status::clock_in(local.hour as i32, local.min as i32, clock_24h)
 }
 
 /// Renders the tile for Unix time `unix`.
-pub fn render(ui: &Ui, unix: i64) -> Image {
+pub fn render(ui: &Ui, unix: i64, clock_24h: bool) -> Image {
     let s = ui.s;
     let (w, h) = Kind::Clock.size(s);
     let mut img = tile(s, w, h);
@@ -53,7 +59,7 @@ pub fn render(ui: &Ui, unix: i64) -> Image {
         }
         let name = ui.text(&ui.fit(city.name, 12.0, pitch - ui.pt(4.0)), 12.0, Weight::Semibold, WHITE);
         put(&mut img, &name, c.0 - name.w as f32 / 2.0, ui.pt(FACE_CY_PT + FACE_R_PT + 10.0));
-        let time = ui.text(&format!("{}:{:02}", local.hour, local.min), 11.0, Weight::Regular, SECONDARY);
+        let time = ui.text(&ui.fit(&time_label(city, unix, clock_24h), 11.0, pitch - ui.pt(4.0)), 11.0, Weight::Regular, SECONDARY);
         put(&mut img, &time, c.0 - time.w as f32 / 2.0, ui.pt(FACE_CY_PT + FACE_R_PT + 28.0));
     }
     img
@@ -66,12 +72,13 @@ mod tests {
 
     #[test]
     fn key_changes_with_the_minute_and_faces_follow_the_zone() {
-        assert_eq!(key(120), key(179));
-        assert_ne!(key(120), key(180));
+        assert_eq!(key(120, true), key(179, true));
+        assert_ne!(key(120, true), key(180, true));
+        assert_ne!(key(120, true), key(120, false), "the 24-Hour Time switch redraws the tile");
         let ui = crate::shell::tests::ui();
         // 2026-10-03 12:00 UTC: day in Reykjavik and London, night in Tokyo (21:00)
         let noon = days_from_civil(2026, 10, 3) * 86_400 + 12 * 3600;
-        let img = render(&ui, noon);
+        let img = render(&ui, noon, true);
         let (w, h) = Kind::Clock.size(ui.s);
         assert_eq!((img.w, img.h), (w, h));
         let pitch = (w as f32 - 2.0 * ui.pt(PAD_PT)) / 4.0;
@@ -84,5 +91,17 @@ mod tests {
         assert_eq!(probe(0), WHITE, "Reykjavik at noon has a light face");
         assert_eq!(probe(3), NIGHT, "Tokyo at 21:00 has a dark face");
         assert_eq!(cities()[2].name, "New York");
+    }
+
+    /// The tile read "9:13" while the menu bar read "09:13": the time under a face is the menu bar's time text.
+    #[test]
+    fn the_time_under_a_face_is_written_as_the_menu_bar_writes_it() {
+        // 2026-10-03 09:13 UTC is 09:13 in Reykjavik and 18:13 in Tokyo
+        let unix = days_from_civil(2026, 10, 3) * 86_400 + 9 * 3600 + 13 * 60;
+        let [reykjavik, _, _, tokyo] = cities();
+        assert_eq!(time_label(reykjavik, unix, true), "09:13");
+        assert_eq!(time_label(reykjavik, unix, false), "9:13 AM");
+        assert_eq!(time_label(tokyo, unix, true), "18:13");
+        assert_eq!(time_label(tokyo, unix, false), "6:13 PM");
     }
 }
