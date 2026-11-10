@@ -6,6 +6,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use bifrost_app::thumbnails;
+use bifrost_app::time_zone::TimeZone;
 use springboard::shell::search_thumbs::FileThumbs;
 
 /// What the thumbnail providers drew for one file at one pixel edge.
@@ -63,13 +64,14 @@ impl Group {
             }
             Group::Size => {
                 const MB: u64 = 1 << 20;
+                const GB: u64 = 1 << 30;
                 if e.is_dir {
                     (0, "Folders".to_string())
                 } else if e.size < MB {
                     (1, "Under 1 MB".to_string())
                 } else if e.size < 100 * MB {
                     (2, "1 MB to 100 MB".to_string())
-                } else if e.size < 1024 * MB {
+                } else if e.size < GB {
                     (3, "100 MB to 1 GB".to_string())
                 } else {
                     (4, "Over 1 GB".to_string())
@@ -79,17 +81,62 @@ impl Group {
     }
 }
 
-fn now_secs() -> i64 {
-    std::time::SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
+/// How long the zone and the clock style are kept before they are read again: a change in Settings > Date & Time
+/// reaches an open window within this time, and a repaint does not read them for every row.
+const CLOCK_KEPT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// What the dates are written with: the time zone the system uses (`TimeZone::current`, as Mail and Printers take
+/// it) and Date & Time > 24-Hour Time, the switch the menu bar clock follows.
+pub(crate) struct Clock {
+    zone: TimeZone,
+    pub(crate) h24: bool,
+    read: std::time::Instant,
 }
 
-/// Files's date groups: Today, Yesterday, Previous 7 Days, Previous 30 Days, Earlier.
-pub(crate) fn date_bucket(mtime: i64) -> (u8, &'static str) {
-    if mtime <= 0 {
-        return (4, "Earlier");
+thread_local! {
+    static CLOCK: RefCell<Option<Clock>> = const { RefCell::new(None) };
+}
+
+impl Clock {
+    fn read() -> Clock {
+        let read = std::time::Instant::now();
+        // snapshot tests pin the clock: UTC and 24-hour time, whatever the machine they run on is set to
+        if bifrost_core::pin::pinned() {
+            return Clock { zone: TimeZone::utc(), h24: true, read };
+        }
+        // the shell keeps the switch in its settings, where `Locale::current` reads the region; on unless turned off
+        let dir = std::env::var("BIFROST_SHELL_DIR").unwrap_or_else(|_| bifrost_app::service_client::DEFAULT_ROOT.into());
+        let h24 = springboard::shell::prefs::Prefs::load(Path::new(&dir).join("settings.ini")).get_bool("clock_24h", true);
+        Clock { zone: TimeZone::current(), h24, read }
     }
-    let age = now_secs().div_euclid(86400) - mtime.div_euclid(86400);
-    match age {
+    /// Now, in Unix seconds: the pinned instant in a snapshot test.
+    pub(crate) fn now(&self) -> i64 {
+        if bifrost_core::pin::pinned() {
+            return bifrost_core::pin::PINNED_UNIX_SECS;
+        }
+        std::time::SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
+    }
+    /// The zone's seconds east of UTC at `unix` (daylight saving time as it was then).
+    pub(crate) fn offset(&self, unix: i64) -> i64 {
+        i64::from(self.zone.seconds_from_gmt(bifrost_app::coding::Date(unix as f64)))
+    }
+}
+
+/// Runs `f` with the clock the dates are written with.
+pub(crate) fn with_clock<R>(f: impl FnOnce(&Clock) -> R) -> R {
+    CLOCK.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.as_ref().is_some_and(|c| c.read.elapsed() >= CLOCK_KEPT) {
+            *slot = None;
+        }
+        f(slot.get_or_insert_with(Clock::read))
+    })
+}
+
+/// The date group of a time: `at` and `now` are local readings (Unix seconds plus the zone's offset), so a day
+/// starts at local midnight.
+fn bucket_at(at: i64, now: i64) -> (u8, &'static str) {
+    match now.div_euclid(86_400) - at.div_euclid(86_400) {
         i64::MIN..=0 => (0, "Today"),
         1 => (1, "Yesterday"),
         2..=7 => (2, "Previous 7 Days"),
@@ -98,34 +145,52 @@ pub(crate) fn date_bucket(mtime: i64) -> (u8, &'static str) {
     }
 }
 
-/// Days since 1970-01-01 to (year, month, day), proleptic Gregorian.
-fn civil(days: i64) -> (i64, u32, u32) {
-    let z = days + 719468;
-    let era = z.div_euclid(146097);
-    let doe = z.rem_euclid(146097);
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
-    (yoe + era * 400 + i64::from(m <= 2), m, d)
+/// Files's date groups: Today, Yesterday, Previous 7 Days, Previous 30 Days, Earlier, by the local calendar day.
+pub(crate) fn date_bucket(mtime: i64) -> (u8, &'static str) {
+    if mtime <= 0 {
+        return (4, "Earlier");
+    }
+    with_clock(|c| {
+        let now = c.now();
+        bucket_at(mtime + c.offset(mtime), now + c.offset(now))
+    })
 }
 
-/// "Today at 14:05", "Yesterday at 09:30" or "Oct 11, 2026" (UTC; the SDK has no time zone yet).
-pub(crate) fn date_text(mtime: i64) -> String {
-    if mtime <= 0 {
-        return "—".into();
-    }
-    let clock = format!("{:02}:{:02}", mtime.rem_euclid(86400) / 3600, mtime.rem_euclid(3600) / 60);
-    match date_bucket(mtime) {
+/// `date_text` for local readings `at` and `now`, with the time in 24-hour style or with AM and PM.
+fn date_text_at(at: i64, now: i64, h24: bool) -> String {
+    let (y, m, d, hour, min) = fs::civil(at);
+    // the time as every clock of the system writes it: 14:05, or 2:05 PM with 24-Hour Time off
+    let clock = springboard::status::clock_in(hour as i32, min as i32, h24);
+    match bucket_at(at, now) {
         (0, _) => format!("Today at {clock}"),
         (1, _) => format!("Yesterday at {clock}"),
         _ => {
-            let (y, m, d) = civil(mtime.div_euclid(86400));
             const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
             format!("{} {d}, {y}", MONTHS[(m as usize + 11) % 12])
         }
     }
+}
+
+/// "Today at 14:05", "Yesterday at 09:30" or "Oct 11, 2026", in the system's time zone; the time follows
+/// Date & Time > 24-Hour Time ("Today at 2:05 PM" with it off).
+pub(crate) fn date_text(mtime: i64) -> String {
+    if mtime <= 0 {
+        return "—".into();
+    }
+    with_clock(|c| {
+        let now = c.now();
+        date_text_at(mtime + c.offset(mtime), now + c.offset(now), c.h24)
+    })
+}
+
+/// The rows of Get Info and of the preview of a file without a picture, with their dates in the system's time zone
+/// and the user's clock style, as the views write theirs.
+pub(crate) fn info_rows(entry: &Entry, summary: Option<springboard::files::info::Summary>, created: Option<i64>, tags: &TagIndex) -> Vec<(&'static str, String)> {
+    let (now, offset, h24) = with_clock(|c| {
+        let now = c.now();
+        (now, c.offset(now), c.h24)
+    });
+    springboard::files::info::rows_in(entry, summary, created, tags, now, offset as i32, h24)
 }
 
 /// A small solid triangle drawn from rects (no glyph needed): `dir` 0 points right, 1 down, 2 up.
@@ -279,6 +344,12 @@ impl ViewOpts {
     }
 }
 
+/// True when a picture of `size` pixels lies inside a box of `room` pixels. One pixel over is the rounding of the
+/// box and of the picture's edge, not a picture of another shape.
+fn thumb_fits(size: (usize, usize), room: (i32, i32)) -> bool {
+    size.0 as i32 <= room.0 + 1 && size.1 as i32 <= room.1 + 1
+}
+
 impl Files {
     pub(crate) fn grid_icon(&self) -> f32 {
         self.vo.icon
@@ -361,15 +432,25 @@ impl Files {
     /// A file's thumbnail from the system thumbnail providers, fitted into the box (x, y, w, h in pt) and centred in it.
     /// False while there is no picture for the file yet (it is drawn in the background), for folders, and for a file
     /// whose type has only an icon.
+    ///
+    /// The providers fit a picture into a square. One asked for at the box's longer side fills a box of its own shape,
+    /// but a picture of the other shape is then larger than the box: an upright page in the gallery's wide preview
+    /// was as tall as the preview is wide, over the toolbar and the strip. Such a picture is asked for again at the
+    /// shorter side, which fits whatever its shape.
     pub(crate) fn blit_thumb(&self, s: &mut Surface, ui: &Ui, e: &Entry, b: (f32, f32, f32, f32)) -> bool {
         if e.is_dir {
             return false;
         }
-        let side = b.2.max(b.3).round().max(1.0) as u32;
-        let Some(im) = self.vo.thumb(&e.path, e.mtime, side, ui.pt(1.0)) else {
-            return false;
-        };
         let (pw, ph) = (ui.pt(b.2) as i32, ui.pt(b.3) as i32);
+        let edge = |side: f32| side.round().max(1.0) as u32;
+        let im = match self.vo.thumb(&e.path, e.mtime, edge(b.2.max(b.3)), ui.pt(1.0)) {
+            Some(im) if thumb_fits((im.w, im.h), (pw, ph)) => im,
+            Some(_) => match self.vo.thumb(&e.path, e.mtime, edge(b.2.min(b.3)), ui.pt(1.0)) {
+                Some(im) => im,
+                None => return false,
+            },
+            None => return false,
+        };
         let x = ui.pt(b.0) as i32 + (pw - im.w as i32) / 2;
         let y = ui.pt(b.1) as i32 + (ph - im.h as i32) / 2;
         s.blit(&im, x, y, 255, 255);
@@ -430,10 +511,15 @@ impl Files {
         let info_h = 56.;
         let box_h = (y1 - y0 - info_h - 16.).max(32.);
         let cx = (x0 + x1) / 2.;
-        let shown = self.blit_thumb(s, ui, e, (x0 + 8., y0 + 8., x1 - x0 - 16., box_h));
-        if !shown {
-            let side = box_h.min(128.).min(x1 - x0 - 16.);
-            self.paint_entry_icon(ui, s, e, cx - side / 2., y0 + 8. + (box_h - side) / 2., side, false);
+        {
+            // the preview has the card's own rows: in a window too low for it, it is cut at the card's edges and
+            // never reaches the toolbar above or the strip below
+            let mut card = s.rows(ui.pt(y0).ceil() as usize, ui.pt(y1.max(y0)).floor() as usize);
+            let shown = self.blit_thumb(&mut card, ui, e, (x0 + 8., y0 + 8., x1 - x0 - 16., box_h));
+            if !shown {
+                let side = box_h.min(128.).min(x1 - x0 - 16.);
+                self.paint_entry_icon(ui, &mut card, e, cx - side / 2., y0 + 8. + (box_h - side) / 2., side, false);
+            }
         }
         let ty = y1 - info_h + 4.;
         if let Some(field) = self.naming.as_ref().filter(|(p, _)| *p == e.path).map(|(_, f)| f) {
@@ -628,6 +714,117 @@ mod group_tests {
         assert_eq!(Group::Size.key(&entry("b", false, 5 * MB)).1, "1 MB to 100 MB");
         assert_eq!(Group::Size.key(&entry("c", false, 500 * MB)).1, "100 MB to 1 GB");
         assert_eq!(Group::Size.key(&entry("d", false, 2048 * MB)).1, "Over 1 GB");
+    }
+}
+
+#[cfg(test)]
+mod date_tests {
+    use super::*;
+
+    /// 2026-10-04 00:22 UTC.
+    const NOW: i64 = 1_791_073_320;
+
+    #[test]
+    fn the_time_is_local_and_follows_the_clock_style() {
+        // local readings: the instant plus the zone's offset
+        assert_eq!(date_text_at(NOW - 60, NOW, true), "Today at 00:21");
+        assert_eq!(date_text_at(NOW - 60, NOW, false), "Today at 12:21 AM");
+        assert_eq!(date_text_at(NOW - 3600, NOW, true), "Yesterday at 23:22");
+        assert_eq!(date_text_at(NOW - 3600, NOW, false), "Yesterday at 11:22 PM");
+        // two hours east of UTC the same two instants are 02:22 and 01:22 of the same day
+        let east = 2 * 3600;
+        assert_eq!(date_text_at(NOW - 3600 + east, NOW + east, true), "Today at 01:22", "the zone moves the hour and the day");
+        assert_eq!(date_text_at(NOW - 3600 + east, NOW + east, false), "Today at 1:22 AM");
+        // five hours west it is still the evening of the day before for both
+        let west = -5 * 3600;
+        assert_eq!(date_text_at(NOW - 3600 + west, NOW + west, false), "Today at 6:22 PM");
+        assert_eq!(date_text_at(NOW + 12 * 3600, NOW + 13 * 3600, false), "Today at 12:22 PM", "noon is 12 PM");
+        // an older file shows its local date
+        assert_eq!(date_text_at(NOW - 40 * 86_400, NOW, true), "Aug 25, 2026");
+        assert_eq!(date_text_at(NOW - 40 * 86_400 + west, NOW + west, true), "Aug 24, 2026", "the day is the zone's too");
+        assert_eq!(date_text(0), "—");
+    }
+
+    #[test]
+    fn the_date_groups_start_at_local_midnight() {
+        assert_eq!(bucket_at(NOW - 60, NOW).1, "Today");
+        assert_eq!(bucket_at(NOW - 3600, NOW).1, "Yesterday");
+        assert_eq!(bucket_at(NOW - 3600 + 7200, NOW + 7200).1, "Today", "the same instants two hours east");
+        assert_eq!(bucket_at(NOW - 3 * 86_400, NOW).1, "Previous 7 Days");
+        assert_eq!(bucket_at(NOW - 20 * 86_400, NOW).1, "Previous 30 Days");
+        assert_eq!(bucket_at(NOW - 90 * 86_400, NOW).1, "Earlier");
+        assert_eq!(bucket_at(NOW + 86_400, NOW).1, "Today", "a file dated ahead of the clock");
+        assert_eq!(date_bucket(0), (4, "Earlier"));
+    }
+
+    #[test]
+    fn the_clock_gives_the_zones_offset_at_the_time_asked_for() {
+        // a zone with daylight saving time: one hour east in winter, two in summer
+        let zone = TimeZone::from_posix_rule("Test/Zone", "CET-1CEST,M3.5.0,M10.5.0/3").unwrap();
+        let clock = Clock { zone, h24: false, read: std::time::Instant::now() };
+        let (january, july) = (1_767_268_800, 1_782_907_200); // 2026-01-01 and 2026-07-01, 12:00 UTC
+        assert_eq!(clock.offset(january), 3600);
+        assert_eq!(clock.offset(july), 7200);
+        assert_eq!(date_text_at(july + clock.offset(july), NOW + clock.offset(NOW), clock.h24), "Jul 1, 2026");
+        // a file written at 12:00 UTC that July day reads 2:00 PM there
+        assert_eq!(date_text_at(july + clock.offset(july), july + 60 + clock.offset(july), clock.h24), "Today at 2:00 PM");
+    }
+
+    #[test]
+    fn the_size_groups_split_at_one_gigabyte() {
+        let entry = |size: u64| Entry { kind: Kind::Other, name: "f".into(), path: PathBuf::from("f"), is_dir: false, size, mtime: 0, items: None };
+        assert_eq!(Group::Size.key(&entry((1 << 30) - 1)).1, "100 MB to 1 GB");
+        assert_eq!(Group::Size.key(&entry(1 << 30)).1, "Over 1 GB");
+    }
+}
+
+/// A picture is never drawn larger than the box it is asked into (the gallery's preview is wider than it is tall).
+#[cfg(test)]
+mod fit_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_picture_fits_when_it_is_no_larger_than_the_box() {
+        assert!(thumb_fits((300, 100), (300, 100)));
+        assert!(thumb_fits((301, 75), (300, 100)), "a pixel of rounding is not another shape");
+        assert!(!thumb_fits((75, 300), (300, 100)), "an upright page fitted to the long side of a wide box");
+        assert!(!thumb_fits((300, 75), (100, 300)), "and a wide picture in a tall box");
+    }
+
+    #[test]
+    fn an_upright_picture_in_a_wide_box_stays_inside_the_box() {
+        let dir = std::env::temp_dir().join(format!("bifrost-files-fit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("page.png");
+        std::fs::write(&file, springboard::pngenc::encode_rgba(110, 440, &vec![0xFF3366CC; 110 * 440])).unwrap();
+        let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let ui = Ui::new(font, 1.0);
+        let mut files = crate::tests::fixture(vec![]);
+        files.vo.pictures = RefCell::new(FileThumbs::with_cache(dir.join("cache")));
+        let e = Entry { kind: fs::kind_of("page.png", false), name: "page.png".into(), path: file.clone(), is_dir: false, size: 1, mtime: 1, items: None };
+        // a box three times as wide as it is tall, well inside the surface
+        let (bx, by, bw, bh) = (50., 150., 330., 110.);
+        let (w, h) = (500usize, 500usize);
+        let mut px = vec![0u32; w * h];
+        let end = Instant::now() + Duration::from_secs(10);
+        let mut shown = false;
+        while !shown && Instant::now() < end {
+            px.fill(0);
+            shown = files.blit_thumb(&mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, &e, (bx, by, bw, bh));
+            files.vo.poll_thumbs();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(shown, "the picture is drawn");
+        let drawn: Vec<(usize, usize)> = (0..w * h).filter(|&i| px[i] != 0).map(|i| (i % w, i / w)).collect();
+        assert!(!drawn.is_empty());
+        let (top, bottom) = (drawn.iter().map(|p| p.1).min().unwrap() as f32, drawn.iter().map(|p| p.1).max().unwrap() as f32);
+        let (left, right) = (drawn.iter().map(|p| p.0).min().unwrap() as f32, drawn.iter().map(|p| p.0).max().unwrap() as f32);
+        assert!(top >= by - 1. && bottom <= by + bh + 1., "inside the box from top to bottom: {top}..{bottom}");
+        assert!(left >= bx && right <= bx + bw, "and from side to side: {left}..{right}");
+        assert!(bottom - top > bh / 2., "at the size the box allows, not smaller: {top}..{bottom}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 

@@ -610,14 +610,13 @@ impl Files {
                     }
                     None => self.focus_entry().cloned().ok_or_else(|| invalid("get_info needs path or a focused item"))?,
                 };
-                let wall = Wall::sample(bifrost_app::proto::sys::now_ms());
                 let summary = entry.is_dir.then(|| {
                     let deadline = Instant::now() + INFO_BUDGET;
                     springboard::files::info::summarize(&entry.path, &mut || Instant::now() < deadline)
                 });
                 let tags = TagIndex::load(&sidecar_path(&self.home));
                 let created = springboard::files::info::created_at(&entry.path);
-                let rows = springboard::files::info::rows(&entry, summary, created, &tags, wall.unix, wall.offset);
+                let rows = info_rows(&entry, summary, created, &tags);
                 Ok(obj(vec![
                     ("entry", self.entry_json(&entry)),
                     ("rows", Json::Arr(rows.into_iter().map(|(k, v)| obj(vec![("label", text(k)), ("value", text(&v))])).collect())),

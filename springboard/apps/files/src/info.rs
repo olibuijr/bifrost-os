@@ -191,14 +191,13 @@ impl Files {
             return;
         };
         self.open_with = None;
-        let wall = Wall::sample(bifrost_app::proto::sys::now_ms());
         let summary = entry.is_dir.then(|| {
             let deadline = Instant::now() + INFO_BUDGET;
             springboard::files::info::summarize(&entry.path, &mut || Instant::now() < deadline)
         });
         let tags = TagIndex::load(&sidecar_path(&self.home));
         let created = springboard::files::info::created_at(&entry.path);
-        let mut rows = springboard::files::info::rows(&entry, summary, created, &tags, wall.unix, wall.offset);
+        let mut rows = info_rows(&entry, summary, created, &tags);
         if !entry.is_dir {
             rows.extend(disk_image_rows(&entry.path, entry.size));
             rows.extend(exif_rows(&entry.path));
