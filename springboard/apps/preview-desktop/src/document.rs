@@ -7,7 +7,7 @@
 use crate::model::{self, fit_box, Adjust, Mark};
 use crate::pdfjob::{self, Inbox, Job, Jobs, Key, Opened, Outline, Reply, DOCUMENT_RENDER_BOUNDS};
 use bifrost_app::image_filter::{Filter, FilterChain};
-use bifrost_app::image_source::{ImageSource, SourceError};
+use bifrost_app::image_source::{Format, ImageSource, SourceError};
 use bifrost_app::kit::cg::imageio;
 use bifrost_app::kit::Image;
 use std::cell::RefCell;
@@ -353,6 +353,13 @@ pub fn decode_picture(bytes: &[u8]) -> Result<Image, SourceError> {
     }
 }
 
+/// The file extensions the open panel offers: PDF, every raster format `decode_picture` reads, and SVG. The list comes
+/// from the decoder's own table, so a format the app opens is never greyed out in the panel.
+pub fn open_types() -> Vec<String> {
+    let pictures = Format::ALL.iter().flat_map(|f| f.extensions().iter().copied());
+    std::iter::once("pdf").chain(pictures).chain(std::iter::once("svg")).map(str::to_string).collect()
+}
+
 /// Why a picture could not be opened, as a sentence for the person.
 pub fn picture_error(e: SourceError) -> &'static str {
     match e {
@@ -526,6 +533,24 @@ mod tests {
         assert_eq!((img.w, img.h), (6, 4));
         assert!(img.px.iter().any(|p| *p != 0), "the rectangle is drawn");
         assert_eq!(decode_picture(b"plain text, not a picture").err(), Some(SourceError::NotImage));
+    }
+
+    #[test]
+    fn the_open_panel_offers_every_type_the_app_opens() {
+        let types = open_types();
+        for ext in ["pdf", "png", "jpg", "jpeg", "gif", "tif", "tiff", "bmp", "webp", "ico", "svg"] {
+            assert!(types.iter().any(|t| t == ext), "{ext} is greyed out in the open panel");
+        }
+        // every type the manifest declares is offered under each of its extensions
+        let manifest = include_str!("../manifest.toml");
+        let handles = manifest.lines().find(|l| l.starts_with("handles")).expect("the manifest declares what it opens");
+        let declared: Vec<&str> = handles.split('"').skip(1).step_by(2).map(|h| h.split(':').next().unwrap_or(h)).collect();
+        assert!(declared.contains(&"public.png") && declared.contains(&"com.adobe.pdf"), "{declared:?}");
+        for uti in declared {
+            for ext in bifrost_app::controls::uttype::extensions(uti) {
+                assert!(types.iter().any(|t| t == ext), "{uti} is declared, but .{ext} is greyed out in the open panel");
+            }
+        }
     }
 
     #[test]

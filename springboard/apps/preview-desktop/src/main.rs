@@ -69,8 +69,6 @@ const MENU_SHOT_SCREEN: u32 = 0x5009;
 const TEXT_BOX: (f32, f32) = (0.3, 0.06);
 /// The width an inserted signature takes, as a share of the page.
 const SIGNATURE_WIDTH: f32 = 0.3;
-/// The kinds of file the open panel offers.
-const OPEN_TYPES: [&str; 4] = ["pdf", "png", "jpg", "jpeg"];
 /// The type a JPEG has on the pasteboard (the PNG type is `bifrost_app::pasteboard::PNG`).
 const JPEG: &str = "public.jpeg";
 
@@ -661,7 +659,7 @@ impl Viewer {
         let options = OpenOptions {
             mode: DocMode::Read,
             title: "Open".into(),
-            filters: OPEN_TYPES.iter().map(|s| s.to_string()).collect(),
+            filters: document::open_types(),
             ..Default::default()
         };
         ctx.open_panel(&options);
