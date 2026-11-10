@@ -206,11 +206,13 @@ fn write(tabs: &[(String, String)], sel: usize, zoom: &HashMap<String, f32>) {
 }
 
 impl Browser {
-    /// The open tabs as (url, title).
+    /// The open tabs as (url, title). A private copy of a handed file is gone with the window, so its tab is saved as
+    /// an empty one, which restore skips like a tab that never loaded.
     fn snapshot(&self) -> Vec<(String, String)> {
         self.tabs
             .iter()
             .map(|t| self.pool.as_ref().and_then(|p| p.state(t.view)).map(|s| (s.url.clone(), s.title.clone())).unwrap_or_default())
+            .map(|page| if self.private_copy(&page.0) { Default::default() } else { page })
             .collect()
     }
 
@@ -274,6 +276,8 @@ impl Browser {
         let (list, index) = self.discard.entries(view).map(|(list, at)| (list.to_vec(), at)).unwrap_or_default();
         let history: Vec<String> = list.into_iter().take(index + 1).collect();
         let (url, title) = closed_page(state, &history);
+        // a private copy of a handed file is listed by the address it is shown under, not the copy's path
+        let title = if title.trim().is_empty() { self.uploads.shown(&url).unwrap_or(title) } else { title };
         self.session.closed.push(ClosedTab { url, title, history, at: i });
     }
 
