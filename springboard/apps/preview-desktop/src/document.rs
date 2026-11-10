@@ -33,9 +33,6 @@ enum Source {
 
 /// An open document: its pages and the markup saved for it.
 pub struct Document {
-    /// Shown as the window title once the SDK can set one (apps have no window title API yet).
-    #[allow(dead_code)]
-    pub title: String,
     pub path: PathBuf,
     pub is_pdf: bool,
     /// Each source page's size in picture pixels, before rotation.
@@ -78,9 +75,7 @@ impl Document {
             Source::Picture(img) => Some(img.clone()),
             Source::Pdf { .. } => None,
         };
-        let title = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Document").to_string();
         Document {
-            title,
             path: path.to_path_buf(),
             is_pdf,
             sizes,
@@ -100,6 +95,13 @@ impl Document {
             drawn: RefCell::new(HashMap::new()),
             asked: RefCell::new(HashSet::new()),
         }
+    }
+
+    /// Whether the document holds changes its file does not: markup, moved, deleted or turned pages, filled form
+    /// fields, or a picture whose pixels were changed. File > Save writes them, and the window title says "Edited".
+    pub fn edited(&self) -> bool {
+        let pixels = matches!((&self.source, &self.original), (Source::Picture(now), Some(opened)) if !Rc::ptr_eq(now, opened));
+        pixels || self.form_changed || !self.marks.is_empty() || self.turns.iter().any(|t| *t != 0) || !self.order.iter().copied().eq(0..self.sizes.len())
     }
 
     /// The widget under the point `a` (normalised, unrotated page coordinates) of source page `src`, if there is one.
@@ -524,6 +526,28 @@ mod tests {
     fn picture_doc(w: usize, h: usize) -> Document {
         let img = Image { w, h, px: vec![0; w * h] };
         Document::new(Path::new("/a/b.png"), Path::new("/nonexistent"), vec![(w, h)], Source::Picture(Rc::new(img)), Vec::new(), false)
+    }
+
+    #[test]
+    fn a_document_is_edited_while_it_holds_what_its_file_does_not() {
+        let mut doc = tests_support::pictures(3);
+        assert!(!doc.edited(), "as opened");
+        doc.set_turn(1, 1);
+        assert!(doc.edited(), "a turned page");
+        doc.set_turn(1, 0);
+        assert!(!doc.edited(), "turned back");
+        doc.move_page(0, 1);
+        assert!(doc.edited(), "a moved page");
+        doc.move_page(1, -1);
+        assert!(!doc.edited());
+        assert!(doc.delete_page(2) && doc.edited(), "a deleted page");
+        let mut doc = picture_doc(2, 2);
+        doc.replace_picture(Rc::new(Image { w: 1, h: 1, px: vec![0] }));
+        assert!(doc.edited(), "changed pixels");
+        doc.restore_original();
+        assert!(!doc.edited(), "the picture as it was opened");
+        doc.form_changed = true;
+        assert!(doc.edited(), "a filled form field");
     }
 
     #[test]

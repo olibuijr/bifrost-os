@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.23
+
+- The window shows the document's name at the head of the toolbar, with "Edited" while it has unsaved changes; the Window menu and the close light follow.
+- Saving a PDF shows "Saved" as soon as the file is written, not at the next click or key.
+- Save does not write over a file that was changed, replaced or removed since it was opened: an alert says so and offers Save As, and the file chosen there becomes the document.
+- Two files of the same name from different folders no longer share one working copy.
+- A picture's colour adjustment is no longer applied a second time after it is saved.
+
 ## 0.11.22
 
 - Save writes the file the picture or PDF was opened from, not only Viewer's own copy of it; when that file cannot be written, an alert says why and offers Save As.

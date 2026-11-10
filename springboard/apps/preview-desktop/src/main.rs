@@ -48,7 +48,7 @@ use origin::Origins;
 use recents::Recents;
 use signature::Signature;
 use springboard::shell::books::engine;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -102,14 +102,21 @@ struct PendingExport {
     /// The panel's request, once it is shown.
     request: Option<u32>,
     what: Export,
+    /// Save As: the chosen file becomes the document, so the title names it and File > Save writes it from then on.
+    /// An export leaves the document as it is.
+    adopt: bool,
 }
 
 /// A File > Save on its way into the file the document was opened from. The saved document is already written to
-/// `written` in the data folder; the shell is asked for a temporary file beside the original (`request`), `written` goes
-/// into it, and the commit renames it into place. Only then is the working copy `copy` replaced.
+/// `written` in the data folder. The original is first opened again through its grant (`check`): the shell refuses that
+/// when the file is gone or another file took its place, and the open file tells whether it was written since. Then
+/// the shell is asked for a temporary file beside the original (`request`), `written` goes into it, and the commit
+/// renames it into place. Only then is the working copy `copy` replaced.
 struct OriginalSave {
     grant: GrantId,
-    /// The save-in-place request, once it is sent (on the next frame).
+    /// The request that opens the original again to see that it is still the file that was opened, once it is sent.
+    check: Option<u32>,
+    /// The save-in-place request, once the check has passed.
     request: Option<u32>,
     copy: PathBuf,
     written: PathBuf,
@@ -209,6 +216,12 @@ struct Viewer {
     pending_original: Option<OriginalSave>,
     /// The alert shown while the original could not be written.
     save_alert: Option<SaveAlert>,
+    /// What the open document's file was when it was opened, so a save sees that it was changed or removed since.
+    opened: Option<origin::Stamp>,
+    /// The save panel request of a Save As whose file becomes the document once it is saved.
+    adopting: Option<u32>,
+    /// The title and edited flag the shell was last told (`Ctx::set_document_state`).
+    shell_state: Option<(String, bool)>,
     /// The source page to show once the document is open, from the last time it was shown.
     restore_page: Option<usize>,
     /// The author's name being typed after Settings > Annotation Author.
@@ -278,6 +291,9 @@ impl Viewer {
             released: Vec::new(),
             pending_original: None,
             save_alert: None,
+            opened: None,
+            adopting: None,
+            shell_state: None,
             restore_page: None,
             authoring: None,
             after_open: None,
@@ -394,6 +410,7 @@ impl Viewer {
         self.selection = None;
         self.loupe = None;
         self.facts = inspector::read(path);
+        self.opened = origin::Stamp::at(path);
         self.status.clear();
         self.remember(path);
         self.restore_page = if self.prefs.remember_page { document::load_position(&self.data_dir, path) } else { None };
@@ -425,16 +442,16 @@ impl Viewer {
         }
     }
 
-    /// Notes that the working copy named `name` was made from the file `grant` names, so File > Save reaches that file.
-    /// `None` is a copy with no original (a clipboard picture, a file merged into a PDF): the name's old original, if
-    /// any, is forgotten, so a save never goes to a file the copy did not come from.
-    fn set_origin(&mut self, name: &str, grant: Option<GrantId>) {
-        let name = recents::copy_name(name);
-        let old = match grant {
-            Some(grant) => self.origins.set(&name, grant),
-            None => self.origins.forget(&name),
+    /// Notes that the working copy at `place` under `opened/` was made from the file the grant names, which is the
+    /// stamp now, so File > Save reaches that file. `None` is a copy with no original (a clipboard picture, a file
+    /// merged into a PDF): the place's old original, if any, is forgotten, so a save never goes to a file the copy did
+    /// not come from.
+    fn set_origin(&mut self, place: &str, from: Option<(GrantId, Option<origin::Stamp>)>) {
+        let old = match from {
+            Some((grant, stamp)) => self.origins.set(place, grant, stamp),
+            None => self.origins.forget(place),
         };
-        if grant.is_none() && old.is_none() {
+        if from.is_none() && old.is_none() {
             return;
         }
         self.released.extend(old);
@@ -527,10 +544,21 @@ impl Viewer {
     fn save_written(&mut self, copy: PathBuf, written: PathBuf) {
         match self.origins.grant_of(&self.data_dir, &copy) {
             Some(grant) => {
-                self.pending_original = Some(OriginalSave { grant, request: None, copy, written });
+                self.pending_original = Some(OriginalSave { grant, check: None, request: None, copy, written });
                 self.status = "Saving".into();
             }
-            None => self.finish_copy_save(&copy, &written),
+            None => {
+                // a document opened by its path is its own file: it is written only while it is still the file that
+                // was opened, so a file another app wrote or put in its place meanwhile is not written over
+                let now = origin::Stamp::at(&copy);
+                let open = self.doc.as_ref().is_some_and(|d| d.path == copy);
+                if open && self.opened.is_some() && (now.is_none() || origin::changed_since(self.opened, now)) {
+                    let reason = if now.is_none() { origin::failure_reason(Some(DocErrorCode::NotFound)) } else { origin::CHANGED };
+                    self.refuse_save(&copy, reason);
+                    return;
+                }
+                self.finish_copy_save(&copy, &written)
+            }
         }
     }
 
@@ -539,10 +567,35 @@ impl Viewer {
         self.pending_original.as_ref().is_some_and(|p| p.request == Some(request))
     }
 
-    /// The shell committed the save: the original holds the document, so the working copy is brought in step and the
-    /// document is opened again without its markup (which is in the file now).
-    fn original_saved(&mut self) {
+    /// Whether `request` is the look at the original before the save that is under way.
+    fn checking_original(&self, request: u32) -> bool {
+        self.pending_original.as_ref().is_some_and(|p| p.check == Some(request))
+    }
+
+    /// The shell opened the original again, so it is still the file the grant was given for; `now` is what it holds.
+    /// When that is what it held when it was opened or last saved, the save in place is asked for. Otherwise another
+    /// app wrote it meanwhile: nothing is written and the alert offers Save As.
+    fn original_checked(&mut self, ctx: &Ctx, now: Option<origin::Stamp>) {
+        let Some(pending) = self.pending_original.as_ref() else { return };
+        if origin::changed_since(self.origins.stamp_of(&self.data_dir, &pending.copy), now) {
+            let Some(OriginalSave { copy, .. }) = self.pending_original.take() else { return };
+            self.refuse_save(&copy, origin::CHANGED);
+            return;
+        }
+        let request = ctx.save_document_in_place(pending.grant);
+        if let Some(pending) = self.pending_original.as_mut() {
+            pending.request = Some(request);
+        }
+    }
+
+    /// The shell committed the save: the original holds the document (`now` is the file as it was written, which the
+    /// next save is compared with), so the working copy is brought in step and the document is opened again without its
+    /// markup (which is in the file now).
+    fn original_saved(&mut self, now: Option<origin::Stamp>) {
         let Some(OriginalSave { copy, written, .. }) = self.pending_original.take() else { return };
+        if self.origins.restamp(&self.data_dir, &copy, now) {
+            let _ = origin::save(&self.data_dir, &self.origins);
+        }
         self.finish_copy_save(&copy, &written);
     }
 
@@ -560,7 +613,13 @@ impl Viewer {
     /// copy and the document's unsaved changes stay as they are, and an alert offers Save As.
     fn original_failed(&mut self, code: Option<DocErrorCode>) {
         let Some(OriginalSave { copy, .. }) = self.pending_original.take() else { return };
-        let name = name_of(&copy);
+        self.refuse_save(&copy, origin::failure_reason(code));
+    }
+
+    /// The document whose file is `copy` was not saved, for `reason`: its unsaved changes stay, and an alert offers
+    /// Save As when it is still the open document.
+    fn refuse_save(&mut self, copy: &Path, reason: &str) {
+        let name = name_of(copy);
         if !self.doc.as_ref().is_some_and(|d| d.path == copy) {
             self.status = format!("{name} could not be saved.");
             return;
@@ -568,7 +627,7 @@ impl Viewer {
         self.status = "Save failed".into();
         self.save_alert = Some(SaveAlert {
             title: format!("\u{201c}{name}\u{201d} could not be saved."),
-            message: format!("{} Choose Save As to keep your changes in another file.", origin::failure_reason(code)),
+            message: format!("{reason} Choose Save As to keep your changes in another file."),
             focus: None,
         });
     }
@@ -584,7 +643,7 @@ impl Viewer {
     fn answer_save_alert(&mut self, choice: u32) {
         self.save_alert = None;
         if choice == ALERT_SAVE_AS {
-            self.save_as();
+            self.save_as_document();
         }
     }
 
@@ -600,6 +659,48 @@ impl Viewer {
         let scale = std::mem::replace(&mut self.export_scale, 1.0);
         self.export_raster(raster);
         self.export_scale = scale;
+    }
+
+    /// Save As from the save alert: as `save_as`, and the chosen file becomes the document once it is saved.
+    fn save_as_document(&mut self) {
+        // an export that was still waiting for its panel is replaced by this one or, when nothing could be written, stays
+        self.pending_export = None;
+        self.save_as();
+        if let Some(pending) = self.pending_export.as_mut() {
+            pending.adopt = true;
+        }
+    }
+
+    /// The window title: the document's file name (the name of the file it was opened from, not the place of the
+    /// working copy), with "Edited" after it while it has unsaved changes, as the document apps show it. Empty with no
+    /// document. The window is full-size, so the shell draws no title row: the title leads the toolbar.
+    fn window_title(&self) -> String {
+        match self.document_name() {
+            Some(name) if self.edited() => format!("{name} \u{2013} Edited"),
+            Some(name) => name,
+            None => String::new(),
+        }
+    }
+
+    /// The file name of the open document, or of the PDF that is being opened.
+    fn document_name(&self) -> Option<String> {
+        let path = self.doc.as_ref().map(|d| &d.path).or(self.loading.as_ref().map(|l| &l.path))?;
+        Some(name_of(path))
+    }
+
+    /// Whether File > Save has something to write: the document's own changes, or a picture's colour adjustment.
+    fn edited(&self) -> bool {
+        self.doc.as_ref().is_some_and(|d| d.edited() || (!d.is_pdf && self.adjust != Adjust::default()))
+    }
+
+    /// Tells the shell the document's name and whether it has unsaved changes, when they changed: the Window menu
+    /// lists the window by it and the close light shows the dot.
+    fn sync_document_state(&mut self, ctx: &Ctx) {
+        let state = (self.document_name().unwrap_or_default(), self.edited());
+        if self.shell_state.as_ref() != Some(&state) {
+            ctx.set_document_state(&state.0, state.1, &state.0);
+            self.shell_state = Some(state);
+        }
     }
 
     /// A key while the save alert is up, through the kit's sheet keys: Return is Save As, Escape and Cmd+. cancel, Tab
@@ -638,6 +739,10 @@ impl Viewer {
     fn reopen(&mut self, path: &Path, message: String) {
         if let Some(doc) = &mut self.doc {
             doc.marks.clear();
+            // a picture's colour adjustment is in the saved file (or goes with a revert): applied again it would show twice
+            if !doc.is_pdf {
+                self.adjust = Adjust::default();
+            }
         }
         self.save();
         self.open_path(path);
@@ -1015,19 +1120,6 @@ impl Viewer {
         for grant in self.released.drain(..) {
             ctx.release_document(grant);
         }
-        // a save asks for the file beside the original once: the shell answers with `DocumentEvent::SaveTo`
-        if let Some(pending) = self.pending_original.as_mut() {
-            if pending.request.is_none() {
-                pending.request = Some(ctx.save_document_in_place(pending.grant));
-            }
-        }
-        // an export asks for its file once: the save panel answers with `DocumentEvent::SaveTo`
-        if let Some(pending) = self.pending_export.as_mut() {
-            if pending.request.is_none() {
-                let request = ctx.save_document(&pending.name, &[pending.ext]);
-                pending.request = Some(request);
-            }
-        }
         let mut results = None;
         let mut saved = None;
         let mut exported = None;
@@ -1076,6 +1168,23 @@ impl Viewer {
         }
         if let Some((query, hits)) = results {
             self.show_results(query, hits);
+        }
+        // These come after the worker's replies are taken: a PDF's save is written by the worker, and its request has
+        // to leave in the turn the reply arrives in. Nothing else wakes the loop, so a request left for the next turn
+        // waited for the next input event, and "Saved" showed only then.
+        // A save first opens the original again, once: the shell answers with `DocumentEvent::Opened` when it is still
+        // the file that was opened (`original_checked` then asks for the save in place), else with `Failed`.
+        if let Some(pending) = self.pending_original.as_mut() {
+            if pending.check.is_none() && pending.request.is_none() {
+                pending.check = Some(ctx.reopen_document(pending.grant));
+            }
+        }
+        // an export asks for its file once: the save panel answers with `DocumentEvent::SaveTo`
+        if let Some(pending) = self.pending_export.as_mut() {
+            if pending.request.is_none() {
+                let request = ctx.save_document(&pending.name, &[pending.ext]);
+                pending.request = Some(request);
+            }
         }
         changed
     }
@@ -2016,7 +2125,7 @@ impl Viewer {
 
     /// Holds `what` until the save panel answers. The panel is asked for on the next frame, suggesting `target`'s name.
     fn ask_export(&mut self, target: &Path, ext: &'static str, what: Export) {
-        self.pending_export = Some(PendingExport { name: name_of(target), ext, request: None, what });
+        self.pending_export = Some(PendingExport { name: name_of(target), ext, request: None, what, adopt: false });
     }
 
     /// Whether the export waiting for its file is drawn by the PDF worker, so the worker's reply is its result.
@@ -2032,7 +2141,9 @@ impl Viewer {
             ctx.abort_document(request);
             return false;
         }
-        let Some(PendingExport { name, ext, what, .. }) = self.pending_export.take() else { return false };
+        let Some(PendingExport { name, ext, what, adopt, .. }) = self.pending_export.take() else { return false };
+        // a Save As: the file the commit answers with becomes the document (`DocumentEvent::Saved`)
+        self.adopting = adopt.then_some(request);
         match what {
             Export::Picture(bytes) => match doc.file.write_all(&bytes) {
                 Ok(()) => ctx.commit_document(request),
@@ -2045,7 +2156,7 @@ impl Viewer {
                 let sent = job.is_some_and(|job| self.doc.as_ref().is_some_and(|d| d.send(job)));
                 if sent {
                     let what = Export::Worker { job: None, temp, file: Some(doc.file) };
-                    self.pending_export = Some(PendingExport { name, ext, request: Some(request), what });
+                    self.pending_export = Some(PendingExport { name, ext, request: Some(request), what, adopt });
                 } else {
                     self.status = "The document is not open.".into();
                     ctx.abort_document(request);
@@ -2101,7 +2212,7 @@ impl Viewer {
             self.slide_by(1);
             return true;
         }
-        if let Some(action) = canvas::button_hit(ui, lay, self.doc.is_some(), self.tool, self.side, x, y) {
+        if let Some(action) = canvas::button_hit(ui, lay, self.doc.is_some(), &self.window_title(), self.tool, self.side, x, y) {
             return self.act(ui, lay, action);
         }
         // the signature picker takes the clicks on its side; a click on a signature places it on the shown page
@@ -2865,16 +2976,19 @@ impl App for Viewer {
 
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
         let lay = self.layout(&ctx.ui, ctx.cfg.w as i32, ctx.cfg.h as i32);
-        let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, self.doc.is_some(), self.tool, self.side);
+        let title = self.window_title();
+        let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, self.doc.is_some(), &title, self.tool, self.side);
         layout
             .visible
             .into_iter()
             .filter_map(|(id, bounds)| {
                 let item = bar.items.iter().find(|item| item.id == id)?;
+                // the title is text, read as what it says
+                let (role, label) = if id == canvas::TITLE_ID { (Role::StaticText, title.clone()) } else { (Role::Button, item.label.clone()) };
                 Some(Node {
                     id: id as u64,
-                    role: Role::Button,
-                    label: item.label.clone(),
+                    role,
+                    label,
                     value: String::new(),
                     bounds,
                     enabled: item.enabled,
@@ -2886,6 +3000,7 @@ impl App for Viewer {
     /// The answer to the open panel: the chosen file is copied into the app's data folder and opened from there, and
     /// its grant is kept so File > Save writes the chosen file. The answers to that save arrive here too.
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        let mut saved_as = false;
         let doc = match ev {
             DocumentEvent::SaveTo(mut doc) if self.saving_original(doc.request) => {
                 let written = self.pending_original.as_ref().map(|p| p.written.clone()).unwrap_or_default();
@@ -2900,10 +3015,16 @@ impl App for Viewer {
             }
             // the grant is the original's own, which the next save needs: it is kept
             DocumentEvent::Saved(doc) if self.saving_original(doc.request) => {
-                self.original_saved();
+                self.original_saved(origin::Stamp::of(&doc.file));
                 return true;
             }
-            DocumentEvent::Failed { request, code } if self.saving_original(request) => {
+            // the original is still the file that was opened; the open file only tells what it holds now
+            DocumentEvent::Opened(doc) if self.checking_original(doc.request) => {
+                self.original_checked(ctx, origin::Stamp::of(&doc.file));
+                return true;
+            }
+            // the save, or the look at the original before it, was refused: the file is gone, replaced or read-only
+            DocumentEvent::Failed { request, code } if self.saving_original(request) || self.checking_original(request) => {
                 self.original_failed(Some(code));
                 return true;
             }
@@ -2913,15 +3034,28 @@ impl App for Viewer {
                 None => return false,
             },
             DocumentEvent::SaveTo(doc) => return self.write_export(ctx, doc),
+            // Save As: the saved file is the document from now on. It is read from its start, like a file that was
+            // opened, so the title names it and File > Save writes it through its grant.
+            DocumentEvent::Saved(mut doc) if self.adopting == Some(doc.request) => {
+                self.adopting = None;
+                if doc.file.seek(SeekFrom::Start(0)).is_err() {
+                    ctx.release_document(doc.grant);
+                    self.status = format!("Saved {}", doc.name);
+                    return true;
+                }
+                saved_as = true;
+                doc
+            }
             DocumentEvent::Saved(doc) => {
                 ctx.release_document(doc.grant);
                 self.status = format!("Exported {}", doc.name);
                 return true;
             }
             DocumentEvent::Failed { request, code } => {
-                let ours = self.pending_export.as_ref().is_some_and(|p| p.request == Some(request));
+                let ours = self.pending_export.as_ref().is_some_and(|p| p.request == Some(request)) || self.adopting == Some(request);
                 if ours {
                     self.pending_export = None;
+                    self.adopting = None;
                     if code != DocErrorCode::Cancelled {
                         self.status = "The export could not be saved.".into();
                     }
@@ -2929,6 +3063,8 @@ impl App for Viewer {
                 return ours;
             }
         };
+        // what the file is now: the next save is compared with it, and it tells files of one name apart
+        let stamp = origin::Stamp::of(&doc.file);
         let mut bytes = Vec::new();
         if let Err(e) = (&doc.file).read_to_end(&mut bytes) {
             ctx.release_document(doc.grant);
@@ -2941,17 +3077,24 @@ impl App for Viewer {
             ctx.release_document(doc.grant);
             match recents::keep_copy(&self.data_dir, &doc.name, &bytes) {
                 Ok(path) => {
-                    self.set_origin(&doc.name, None);
+                    self.set_origin(&recents::copy_name(&doc.name), None);
                     self.insert_pages(pdfmarks::Insertion::File { path, at })
                 }
                 Err(e) => self.status = format!("Could not insert {}: {e}", doc.name),
             }
             return true;
         }
-        match recents::keep_copy(&self.data_dir, &doc.name, &bytes) {
+        // the copy is kept by what the file is, not only by its name: a.png from another folder gets its own copy
+        let place = self.origins.place(&recents::copy_name(&doc.name), stamp.as_ref());
+        match recents::keep_copy_at(&self.data_dir, &place, &bytes) {
             Ok(path) => {
-                self.set_origin(&doc.name, Some(doc.grant));
-                self.open_path(&path)
+                self.set_origin(&place, Some((doc.grant, stamp)));
+                self.open_path(&path);
+                if saved_as {
+                    let message = format!("Saved {}", name_of(&path));
+                    self.status = message.clone();
+                    self.after_open = self.loading.is_some().then_some(message);
+                }
             }
             Err(e) => {
                 ctx.release_document(doc.grant);
@@ -2984,7 +3127,9 @@ impl App for Viewer {
     }
 
     fn tick(&mut self, ctx: &Ctx, _t: f64) -> bool {
-        self.pump(ctx)
+        let changed = self.pump(ctx);
+        self.sync_document_state(ctx);
+        changed
     }
 
     fn suspend(&mut self, _ctx: &Ctx) {
@@ -3001,6 +3146,7 @@ impl App for Viewer {
         let export = (self.export_shown && lay.inspector > 0 && self.mode != Mode::Slideshow)
             .then(|| export_panel::panel(&canvas::export_metrics(&ctx.ui, &lay), &self.export_choices()));
         let signatures = (self.signatures_shown && lay.inspector > 0 && self.mode != Mode::Slideshow).then(|| self.signatures.as_slice());
+        let title = self.window_title();
         let scene = Scene {
             doc: self.doc.as_ref(),
             view: self.view,
@@ -3011,6 +3157,7 @@ impl App for Viewer {
             editing: self.editing,
             form_focus: self.form_focus,
             status: &self.status,
+            title: &title,
             mode: self.mode,
             selection: self.selection_now(&lay),
             loupe: if self.loupe_on { self.loupe } else { None },
@@ -3370,24 +3517,31 @@ mod tests {
     #[test]
     fn save_goes_to_the_original_first_and_the_copy_follows_the_commit() {
         let (mut v, copy) = viewer_on_copy("commit");
-        v.set_origin("b.png", Some([9; 16]));
+        v.set_origin("b.png", Some(([9; 16], None)));
         v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
         v.save_document();
         let pending = v.pending_original.as_ref().expect("the save waits for the file beside the original");
-        assert_eq!((pending.grant, pending.request, &pending.copy), ([9; 16], None, &copy));
+        assert_eq!((pending.grant, pending.check, pending.request, &pending.copy), ([9; 16], None, None, &copy));
         assert!(std::fs::read(&pending.written).unwrap().starts_with(b"\x89PNG"));
         assert_eq!(std::fs::read(&copy).unwrap(), b"as opened", "the copy is not written before the original");
         assert_eq!(v.doc.as_ref().unwrap().marks.len(), 1, "the changes stay unsaved until the original is written");
-        // the next frame asks the shell to save in place through the original's grant
+        // the next frame first opens the original again through its grant, to see that it is still the file that was opened
         let ctx = menu_ctx();
         v.pump(&ctx);
+        let check = v.pending_original.as_ref().unwrap().check.expect("the look at the original is asked for");
+        assert!(matches!(ctx.take_sent()[..], [bifrost_app::proto::ToShell::DocReopen { grant: [9, ..], .. }]));
+        assert!(v.checking_original(check) && !v.saving_original(check));
+        v.pump(&ctx);
+        assert!(ctx.take_sent().is_empty(), "it is asked for once");
+        // it is: the save in place is asked for at once, not a frame later
+        v.original_checked(&ctx, None);
         let request = v.pending_original.as_ref().unwrap().request.expect("the request is sent");
         assert!(matches!(ctx.take_sent()[..], [bifrost_app::proto::ToShell::DocSaveGrant { grant: [9, ..], .. }]));
         assert!(v.saving_original(request) && !v.saving_original(request + 1));
         v.pump(&ctx);
         assert!(ctx.take_sent().is_empty(), "it is asked for once");
         // the shell committed: the copy takes the saved picture and the document opens again from it, clean
-        v.original_saved();
+        v.original_saved(None);
         assert!(v.pending_original.is_none());
         assert!(std::fs::read(&copy).unwrap().starts_with(b"\x89PNG"));
         assert_eq!(v.status, "Saved b.png");
@@ -3400,7 +3554,7 @@ mod tests {
     #[test]
     fn a_refused_save_keeps_the_changes_and_the_alert_offers_save_as() {
         let (mut v, copy) = viewer_on_copy("refused");
-        v.set_origin("b.png", Some([9; 16]));
+        v.set_origin("b.png", Some(([9; 16], None)));
         v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
         v.save_document();
         let ctx = menu_ctx();
@@ -3427,6 +3581,7 @@ mod tests {
         assert!(v.save_alert.is_none());
         let export = v.pending_export.as_ref().expect("Save As asks where to save");
         assert_eq!((export.name.as_str(), export.ext), ("b-markup.png", "png"));
+        assert!(export.adopt, "the file chosen for Save As becomes the document");
         assert_eq!(v.doc.as_ref().unwrap().marks.len(), 1);
         cleanup(&v);
     }
@@ -3435,7 +3590,7 @@ mod tests {
     fn a_document_with_no_original_is_saved_into_its_own_file() {
         let (mut v, copy) = viewer_on_copy("own");
         // the copy was made from a chosen file once, then replaced by a clipboard picture of the same name
-        v.set_origin("b.png", Some([9; 16]));
+        v.set_origin("b.png", Some(([9; 16], None)));
         v.set_origin("b.png", None);
         assert_eq!(v.released, [[9; 16]], "the grant is given back");
         v.save_document();
@@ -3451,13 +3606,174 @@ mod tests {
     #[test]
     fn a_save_that_ends_after_another_document_opened_does_not_touch_that_document() {
         let (mut v, copy) = viewer_on_copy("moved-on");
-        v.set_origin("b.png", Some([9; 16]));
+        v.set_origin("b.png", Some(([9; 16], None)));
         v.save_document();
         v.doc.as_mut().unwrap().path = PathBuf::from("/a/other.png");
         v.original_failed(Some(DocErrorCode::Denied));
         assert!(v.save_alert.is_none(), "no alert about a document that is not open");
         assert_eq!(v.status, "b.png could not be saved.");
         assert_eq!(std::fs::read(&copy).unwrap(), b"as opened");
+        cleanup(&v);
+    }
+
+    #[test]
+    fn the_title_names_the_file_and_says_when_it_has_unsaved_changes() {
+        assert_eq!(Viewer::new().window_title(), "", "no document, no title");
+        let mut v = viewer_with(Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] });
+        assert_eq!(v.window_title(), "b.png");
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
+        assert_eq!(v.window_title(), "b.png \u{2013} Edited");
+        v.doc.as_mut().unwrap().marks.clear();
+        assert_eq!(v.window_title(), "b.png");
+        // a colour adjustment is saved into a picture, so it counts
+        v.adjust.exposure = 1.0;
+        assert_eq!(v.window_title(), "b.png \u{2013} Edited");
+        v.adjust = Adjust::default();
+        // the working copy of a second file of the same name sits in a numbered folder: the title is the file's name
+        v.doc.as_mut().unwrap().path = v.data_dir.join("opened/2/holiday.png");
+        assert_eq!(v.window_title(), "holiday.png");
+    }
+
+    #[test]
+    fn the_shell_is_told_the_title_and_the_edited_flag_when_they_change() {
+        use bifrost_app::proto::ToShell;
+        let ctx = menu_ctx();
+        let mut v = viewer_with(Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] });
+        v.sync_document_state(&ctx);
+        assert_eq!(ctx.take_sent(), [ToShell::DocumentState { title: "b.png".into(), edited: false, represented: "b.png".into() }]);
+        v.sync_document_state(&ctx);
+        assert!(ctx.take_sent().is_empty(), "nothing changed, nothing is sent");
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
+        v.sync_document_state(&ctx);
+        assert_eq!(ctx.take_sent(), [ToShell::DocumentState { title: "b.png".into(), edited: true, represented: "b.png".into() }]);
+        v.doc = None;
+        v.sync_document_state(&ctx);
+        assert_eq!(ctx.take_sent(), [ToShell::DocumentState { title: String::new(), edited: false, represented: String::new() }]);
+    }
+
+    #[test]
+    fn the_title_leads_the_toolbar_and_is_no_button() {
+        let ctx = menu_ctx();
+        let lay = Layout::new(&ctx.ui, 2400, 800);
+        let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, true, "b.png", Tool::Pan, Side::Pages);
+        assert_eq!(bar.items[0].id, canvas::TITLE_ID);
+        let (id, slot) = layout.visible[0];
+        assert_eq!(id, canvas::TITLE_ID);
+        assert!(slot.w > 0.0 && layout.visible.iter().skip(1).all(|(_, r)| r.x >= slot.x + slot.w), "the buttons follow the title");
+        let k = ctx.ui.pt(1.0);
+        let at = ((slot.x + slot.w / 2.0) * k, (slot.y + slot.h / 2.0) * k);
+        assert_eq!(canvas::button_hit(&ctx.ui, &lay, true, "b.png", Tool::Pan, Side::Pages, at.0, at.1), None, "a press on the title does nothing");
+        // a long name takes a bounded slot, so it cannot push every button off the bar
+        let long = "a very long file name that goes on and on and on and on and on and on.png";
+        let (_, wide) = canvas::toolbar(&ctx.ui, &lay, true, long, Tool::Pan, Side::Pages);
+        assert!(wide.visible[0].1.w < lay.w as f32 / k / 2.0 && wide.visible.len() > 1);
+        // with no document there is no title and the bar is as before
+        let (bar, _) = canvas::toolbar(&ctx.ui, &lay, false, "", Tool::Pan, Side::Pages);
+        assert!(bar.items.iter().all(|item| item.id != canvas::TITLE_ID));
+    }
+
+    /// The worker writes a PDF's save, so its reply arrives with no input event: the request for the original has to
+    /// leave in the same turn, or the save waits for the next event and "Saved" shows late.
+    #[test]
+    fn a_pdf_save_asks_for_its_original_in_the_turn_the_worker_answers() {
+        let mut v = Viewer::new();
+        v.data_dir = std::env::temp_dir().join(format!("viewer-save-pdf-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&v.data_dir);
+        let copy = recents::keep_copy(&v.data_dir, "b.pdf", b"as opened").unwrap();
+        let (jobs, inbox) = pdfjob::spawn(v.data_dir.join("none.pdf"), Vec::new());
+        let opened = pdfjob::Opened { sizes: vec![(4, 4)], outline: Vec::new(), info: Vec::new(), encrypted: false, form: Default::default() };
+        v.doc = Some(document::from_pdf(&copy, &v.data_dir, opened, jobs, inbox.clone()));
+        v.set_origin("b.pdf", Some(([9; 16], None)));
+        v.pending_save = Some(copy.clone());
+        let written = v.saving_file(&copy, "pdf");
+        std::fs::write(&written, b"saved").unwrap();
+        inbox.lock().unwrap().push_back(Reply::Written(Ok(written)));
+        let ctx = menu_ctx();
+        assert!(v.pump(&ctx), "the reply asks for a frame");
+        assert!(v.pending_save.is_none());
+        let sent = ctx.take_sent();
+        assert!(matches!(sent[..], [bifrost_app::proto::ToShell::DocReopen { grant: [9, ..], .. }]), "{sent:?}");
+        cleanup(&v);
+    }
+
+    #[test]
+    fn a_save_stops_when_the_original_was_written_since_it_was_opened() {
+        let (mut v, copy) = viewer_on_copy("changed");
+        let opened = origin::Stamp::at(&copy).expect("any real file's stamp");
+        v.set_origin("b.png", Some(([9; 16], Some(opened))));
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
+        let ctx = menu_ctx();
+        v.save_document();
+        v.pump(&ctx);
+        ctx.take_sent();
+        // another app wrote the original meanwhile: nothing is asked of the shell, and the alert offers Save As
+        v.original_checked(&ctx, Some(origin::Stamp { len: opened.len + 1, ..opened }));
+        assert!(ctx.take_sent().is_empty() && v.pending_original.is_none());
+        assert!(v.save_sheet().expect("the alert is up").message.contains("changed by another app"));
+        assert_eq!(std::fs::read(&copy).unwrap(), b"as opened");
+        assert_eq!(v.doc.as_ref().unwrap().marks.len(), 1, "the changes stay unsaved");
+        // the file was put back as it was (or the alert was only cancelled): the next save goes through
+        v.save_alert = None;
+        v.save_document();
+        v.pump(&ctx);
+        ctx.take_sent();
+        v.original_checked(&ctx, Some(opened));
+        assert!(matches!(ctx.take_sent()[..], [bifrost_app::proto::ToShell::DocSaveGrant { grant: [9, ..], .. }]));
+        // the commit hands the file as it was written: the next save is compared with that
+        let written = origin::Stamp { secs: opened.secs + 5, ino: opened.ino + 1, ..opened };
+        v.original_saved(Some(written));
+        assert_eq!(v.origins.stamp_of(&v.data_dir, &copy), Some(written));
+        assert_eq!(origin::load(&v.data_dir).stamp_of(&v.data_dir, &copy), Some(written), "and it is kept for the next run");
+        // the shell's refusal of the look (the file is gone, or another one took its place) is the same alert
+        v.save_document();
+        v.pump(&ctx);
+        v.original_failed(Some(DocErrorCode::Stale));
+        assert!(v.save_sheet().unwrap().message.contains("replaced"));
+        cleanup(&v);
+    }
+
+    #[test]
+    fn a_document_opened_by_its_path_is_not_written_over_a_file_that_took_its_place() {
+        let mut v = viewer_with(Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] });
+        v.data_dir = std::env::temp_dir().join(format!("viewer-save-path-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&v.data_dir);
+        let folder = v.data_dir.join("Pictures");
+        std::fs::create_dir_all(&folder).unwrap();
+        let file = folder.join("b.png");
+        std::fs::write(&file, b"as opened").unwrap();
+        v.doc.as_mut().unwrap().path = file.clone();
+        v.opened = origin::Stamp::at(&file);
+        // another file is moved into its place
+        std::fs::write(folder.join("other"), b"another picture").unwrap();
+        std::fs::rename(folder.join("other"), &file).unwrap();
+        v.save_document();
+        assert!(v.save_sheet().expect("the alert is up").message.contains("changed by another app"));
+        assert_eq!(std::fs::read(&file).unwrap(), b"another picture", "it is not written over");
+        // the file is removed: the save does not quietly make it again
+        v.save_alert = None;
+        std::fs::remove_file(&file).unwrap();
+        v.save_document();
+        assert!(v.save_sheet().unwrap().message.contains("no longer there") && !file.exists());
+        // the file as it was opened is saved into
+        v.save_alert = None;
+        std::fs::write(&file, b"as opened").unwrap();
+        v.opened = origin::Stamp::at(&file);
+        v.save_document();
+        assert!(v.save_alert.is_none() && std::fs::read(&file).unwrap().starts_with(b"\x89PNG"));
+        assert_eq!(v.status, "Saved b.png");
+        assert_eq!(v.opened, origin::Stamp::at(&file), "the saved file is what the next save is compared with");
+        cleanup(&v);
+    }
+
+    #[test]
+    fn a_saved_picture_drops_its_colour_adjustment_and_is_no_longer_edited() {
+        let (mut v, _copy) = viewer_on_copy("adjust");
+        v.adjust.exposure = 1.0;
+        assert!(v.edited());
+        v.save_document();
+        assert_eq!(v.status, "Saved b.png");
+        assert_eq!(v.adjust, Adjust::default(), "the adjustment is in the file, not applied a second time");
+        assert!(!v.edited());
         cleanup(&v);
     }
 }

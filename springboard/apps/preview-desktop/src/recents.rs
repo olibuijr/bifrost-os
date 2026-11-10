@@ -76,11 +76,6 @@ pub fn list_path(data_dir: &Path) -> PathBuf {
     data_dir.join("recents.txt")
 }
 
-/// Where the copy of an opened file named `name` is kept.
-pub fn copy_path(data_dir: &Path, name: &str) -> PathBuf {
-    data_dir.join("opened").join(copy_name(name))
-}
-
 /// Loads the list; a missing or unreadable file gives an empty one.
 pub fn load(data_dir: &Path) -> Recents {
     let mut recents = std::fs::read_to_string(list_path(data_dir)).map(|t| Recents::parse(&t)).unwrap_or_default();
@@ -96,7 +91,13 @@ pub fn save(data_dir: &Path, recents: &Recents) -> std::io::Result<()> {
 
 /// Writes `bytes` into the data directory as the opened file `name` and returns the copy's path.
 pub fn keep_copy(data_dir: &Path, name: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
-    let target = copy_path(data_dir, name);
+    keep_copy_at(data_dir, &copy_name(name), bytes)
+}
+
+/// Writes `bytes` as the working copy `place` under `opened/`: a file name, or a numbered folder and a file name for a
+/// second file of the same name (`origin::Origins::place`). Returns the copy's path.
+pub fn keep_copy_at(data_dir: &Path, place: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
+    let target = data_dir.join("opened").join(place);
     if let Some(dir) = target.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -107,18 +108,26 @@ pub fn keep_copy(data_dir: &Path, name: &str, bytes: &[u8]) -> std::io::Result<P
 /// Removes the working copies that nothing refers to any more: every file under `opened/` that is neither an Open
 /// Recent entry (a recent file is opened again from its copy) nor `keep`, the document that is open. So the folder
 /// holds at most the recent files and the open one, instead of every file ever opened. Returns how many were removed.
+/// The numbered folders (the copies of further files of one name) are swept the same way and go once they are empty.
 pub fn sweep_copies(data_dir: &Path, recents: &Recents, keep: Option<&Path>) -> usize {
     if data_dir.as_os_str().is_empty() {
         return 0;
     }
-    let Ok(entries) = std::fs::read_dir(data_dir.join("opened")) else { return 0 };
+    let files = |dir: &Path| std::fs::read_dir(dir).map(|entries| entries.flatten().map(|e| e.path()).collect::<Vec<_>>()).unwrap_or_default();
     let mut removed = 0;
-    for path in entries.flatten().map(|e| e.path()) {
-        if keep == Some(path.as_path()) || recents.paths().contains(&path) {
-            continue;
+    for path in files(&data_dir.join("opened")) {
+        let inner = if path.is_dir() { files(&path) } else { vec![path.clone()] };
+        for file in inner {
+            if keep == Some(file.as_path()) || recents.paths().contains(&file) {
+                continue;
+            }
+            if std::fs::remove_file(&file).is_ok() {
+                removed += 1;
+            }
         }
-        if std::fs::remove_file(&path).is_ok() {
-            removed += 1;
+        if path.is_dir() {
+            // only an empty folder goes
+            let _ = std::fs::remove_dir(&path);
         }
     }
     removed
@@ -188,6 +197,23 @@ mod tests {
         assert_eq!(sweep_copies(&dir, &r, None), 2);
         assert!(!recent.exists() && !open.exists());
         assert_eq!(sweep_copies(Path::new(""), &r, None), 0, "no data folder yet, so nothing is looked at");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_copies_of_further_files_of_one_name_are_swept_with_their_folders() {
+        let dir = std::env::temp_dir().join(format!("viewer-sweep-places-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let first = keep_copy(&dir, "a.png", b"x").unwrap();
+        let second = keep_copy_at(&dir, "2/a.png", b"y").unwrap();
+        let third = keep_copy_at(&dir, "3/a.png", b"z").unwrap();
+        assert_eq!(second, dir.join("opened/2/a.png"));
+        assert_eq!(std::fs::read(&first).unwrap(), b"x", "the first file's copy is not written over");
+        let mut r = Recents::default();
+        r.add(&second);
+        assert_eq!(sweep_copies(&dir, &r, Some(&first)), 1);
+        assert!(first.exists() && second.exists() && !third.exists());
+        assert!(!dir.join("opened/3").exists() && dir.join("opened/2").exists(), "an emptied folder goes, a used one stays");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
