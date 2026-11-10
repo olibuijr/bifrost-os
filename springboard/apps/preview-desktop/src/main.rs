@@ -367,7 +367,7 @@ impl Viewer {
         }
         match document::open_picture(path, &self.data_dir) {
             Ok(doc) => self.doc = Some(doc),
-            Err(e) => self.status = format!("Could not open {}: {e}", path.display()),
+            Err(e) => self.status = document::open_failure(&name_of(path), &e),
         }
     }
 
@@ -835,7 +835,7 @@ impl Viewer {
                 }
                 Some(Err(e)) => {
                     changed = true;
-                    self.status = format!("Could not open {}: {e}", loading.path.display());
+                    self.status = document::open_failure(&name_of(&loading.path), &e);
                 }
             }
         }
@@ -1511,7 +1511,7 @@ impl Viewer {
             return;
         };
         if let Err(e) = document::decode_picture(&bytes) {
-            self.status = format!("The clipboard picture could not be read: {e}");
+            self.status = format!("The clipboard picture could not be read. {}", document::picture_error(e));
             return;
         }
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
@@ -2702,7 +2702,7 @@ impl App for Viewer {
         };
         let mut bytes = Vec::new();
         if let Err(e) = (&doc.file).read_to_end(&mut bytes) {
-            self.status = format!("Could not read {}: {e}", doc.name);
+            self.status = document::open_failure(&doc.name, document::read_error(&e));
             return true;
         }
         // a file chosen by Pages > Insert > Page from File is merged into the document instead of opened
@@ -2715,7 +2715,7 @@ impl App for Viewer {
         }
         match recents::keep_copy(&self.data_dir, &doc.name, &bytes) {
             Ok(path) => self.open_path(&path),
-            Err(e) => self.status = format!("Could not open {}: {e}", doc.name),
+            Err(e) => self.status = document::open_failure(&doc.name, &format!("Viewer could not keep its working copy ({})", e.kind())),
         }
         true
     }

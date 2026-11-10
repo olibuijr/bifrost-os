@@ -110,7 +110,7 @@ unsafe impl Send for Pdf {}
 
 impl Pdf {
     fn open(path: &Path, password: &[u8]) -> Result<Pdf, String> {
-        let data = std::fs::read(path).map_err(|e| e.to_string())?;
+        let data = std::fs::read(path).map_err(|e| crate::document::read_error(&e).to_string())?;
         let doc = Doc::open_with_password(data, password)?;
         let pages = page::pages(&doc);
         if pages.is_empty() {

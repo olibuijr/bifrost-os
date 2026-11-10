@@ -345,12 +345,44 @@ impl Document {
 
 /// Decodes the bytes of a picture file. An SVG document is not one of the raster formats `ImageSource` reads from a
 /// header, so it is drawn at its own size by the decoder every other picture view uses (`imageio::decode`).
-pub fn decode_picture(bytes: &[u8]) -> Result<Image, String> {
+pub fn decode_picture(bytes: &[u8]) -> Result<Image, SourceError> {
     match ImageSource::new(bytes) {
-        Ok(source) => source.decode().map_err(|e| format!("{e:?}")),
-        Err(SourceError::NotImage) => imageio::decode(bytes).ok_or_else(|| format!("{:?}", SourceError::NotImage)),
-        Err(e) => Err(format!("{e:?}")),
+        Ok(source) => source.decode(),
+        Err(SourceError::NotImage) => imageio::decode(bytes).ok_or(SourceError::NotImage),
+        Err(e) => Err(e),
     }
+}
+
+/// Why a picture could not be opened, as a sentence for the person.
+pub fn picture_error(e: SourceError) -> &'static str {
+    match e {
+        SourceError::NotImage => "It is not a picture or a PDF that Viewer can show.",
+        SourceError::Truncated => "The file is incomplete.",
+        SourceError::TooLarge { .. } | SourceError::FileTooLarge { .. } => "The picture is too large to open.",
+        SourceError::Undecodable | SourceError::EmptyBox => "The file is damaged or in a variant of its format that Viewer cannot read.",
+        SourceError::Unreadable => "The file could not be read.",
+    }
+}
+
+/// Why a file could not be read, as a sentence for the person.
+pub fn read_error(e: &std::io::Error) -> &'static str {
+    match e.kind() {
+        std::io::ErrorKind::NotFound => "The file is no longer there.",
+        std::io::ErrorKind::PermissionDenied => "You do not have permission to read it.",
+        _ => "The file could not be read.",
+    }
+}
+
+/// The message for a document that did not open: the document's own name (never the path of the working copy) and the
+/// reason as a sentence. A reason from the PDF reader is a phrase, so it gets its capital and full stop here.
+pub fn open_failure(name: &str, why: &str) -> String {
+    let why = why.trim();
+    let mut chars = why.chars();
+    let mut reason: String = chars.next().map(|c| c.to_uppercase().chain(chars).collect()).unwrap_or_default();
+    if !reason.is_empty() && !reason.ends_with(['.', '!', '?']) {
+        reason.push('.');
+    }
+    format!("\u{201c}{name}\u{201d} could not be opened. {reason}").trim_end().to_string()
 }
 
 /// The file name a picture taken from the clipboard is kept under: `Clipboard <stamp>.png`, or `.jpg` for JPEG data.
@@ -359,10 +391,10 @@ pub fn clipboard_file_name(bytes: &[u8], stamp: u64) -> String {
     format!("Clipboard {stamp}.{ext}")
 }
 
-/// Opens the picture at `path` (PNG or JPEG). `data_dir` is the app's private storage directory.
+/// Opens the picture at `path`; the error is a sentence for the person. `data_dir` is the app's private storage directory.
 pub fn open_picture(path: &Path, data_dir: &Path) -> Result<Document, String> {
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    let img = decode_picture(&bytes)?;
+    let bytes = std::fs::read(path).map_err(|e| read_error(&e).to_string())?;
+    let img = decode_picture(&bytes).map_err(|e| picture_error(e).to_string())?;
     let sizes = vec![(img.w, img.h)];
     Ok(Document::new(path, data_dir, sizes, Source::Picture(Rc::new(img)), Vec::new(), false))
 }
@@ -493,7 +525,27 @@ mod tests {
         let img = decode_picture(svg).expect("the manifest declares SVG, so it opens");
         assert_eq!((img.w, img.h), (6, 4));
         assert!(img.px.iter().any(|p| *p != 0), "the rectangle is drawn");
-        assert!(decode_picture(b"plain text, not a picture").is_err());
+        assert_eq!(decode_picture(b"plain text, not a picture").err(), Some(SourceError::NotImage));
+    }
+
+    #[test]
+    fn a_document_that_does_not_open_is_named_with_a_plain_reason() {
+        let dir = std::env::temp_dir().join(format!("viewer-open-failure-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("opened")).unwrap();
+        let path = dir.join("opened").join("notes.png");
+        std::fs::write(&path, b"plain text, not a picture").unwrap();
+        let why = open_picture(&path, &dir).err().expect("text is no picture");
+        assert_eq!(why, "It is not a picture or a PDF that Viewer can show.");
+        let gone = open_picture(&dir.join("opened").join("gone.png"), &dir).err().unwrap();
+        assert_eq!(gone, "The file is no longer there.");
+        let _ = std::fs::remove_dir_all(&dir);
+        // no debug names of the error type and no numbers from a damaged header
+        for e in [SourceError::NotImage, SourceError::Truncated, SourceError::TooLarge { width: 2147483647, height: 1 }, SourceError::Undecodable, SourceError::Unreadable] {
+            let text = picture_error(e);
+            assert!(!text.contains(&format!("{e:?}")) && !text.contains("2147483647") && text.ends_with('.'), "{text}");
+        }
+        assert_eq!(open_failure("ok.svg", picture_error(SourceError::Truncated)), "\u{201c}ok.svg\u{201d} could not be opened. The file is incomplete.");
+        assert_eq!(open_failure("a.pdf", "not a PDF file"), "\u{201c}a.pdf\u{201d} could not be opened. Not a PDF file.");
     }
 
     #[test]
