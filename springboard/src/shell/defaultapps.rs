@@ -306,6 +306,16 @@ mod tests {
     }
 
     #[test]
+    fn every_picture_format_opens_in_the_viewer_by_default() {
+        let r = shipped();
+        let preview = "is.olibuijr.preview.desktop";
+        for name in ["scan.tif", "scan.tiff", "SCAN.TIFF", "old.bmp", "favicon.ico", "anim.gif", "pic.webp", "photo.jpe"] {
+            assert_eq!(r.default_for_file(name), Some(preview), "{name} has no app that opens it");
+            assert!(r.open_with(name).first().is_some_and(|c| c.app == preview && c.is_default), "{name}");
+        }
+    }
+
+    #[test]
     fn script_editor_is_offered_for_scripts_and_plain_text_but_takes_no_default() {
         let r = shipped();
         let editor = "is.olibuijr.scripteditor.desktop";
