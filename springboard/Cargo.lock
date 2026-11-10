@@ -1040,7 +1040,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-textedit"
-version = "1.13.15"
+version = "1.13.16"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
