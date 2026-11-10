@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.10.50 — 2026-11-10
+
+What the test of 0.10.49 on the lab PC found.
+
+- Settings, Date & Time: the Time row follows the 24-Hour Time switch at once, and becomes settable as soon as Set Automatically goes off. The network time line agrees with the switch and no longer names a command; turning network time on also acts when the service runs without being enabled.
+- No battery notice on a computer without a battery, and none when the clock is only redrawn in another style. The same redraw could post a false Wi-Fi notice.
+- Files 1.34.18: a revealed row lands in the middle of the list with no gap under the header; a row that only partly fits is drawn cut in list view; a view switch keeps the selection and scrolls to it; the columns view scrolls; list and icon view show a scroll knob.
+- Files: every window, tab and history leaves a volume that is gone, also one unmounted elsewhere. The dragged item's image is drawn above the windows, where before it showed only over the wallpaper.
+- Viewer 0.11.23: the file's name is shown at the head of the toolbar, with "Edited" while there are unsaved changes. Save stops when the original was changed or replaced since it was opened and offers Save As. Two files of one name keep separate working copies. A saved picture's colour adjustment is not applied twice.
+- Browser 0.17.15: a file opened with the browser shows its own address, not the private copy's path. A file under the home folder is loaded from its own place.
+- TextEdit 1.13.17: new documents and plain text are typed at the 13 pt body size.
+- The state report, the accessibility map and the Control Center's control gallery list running apps only.
+- `open FILE` with no app named opens the file in its default app (control request `open-document`); the launcher's `--open FILE` and the MCP `open` tool (`file`, `reveal`) use the shell's checked path. Spotlight's Show in Folder selects the file, and its file dates follow 24-Hour Time.
+- Security: `open-file` refuses a file outside the home folder for built-in apps too, links followed. Before, a built-in app could be made to read any path as the shell.
+
 ## 0.10.49 — 2026-11-10
 
 The open items left after 0.10.48.

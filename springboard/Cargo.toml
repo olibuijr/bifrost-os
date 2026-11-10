@@ -1,6 +1,6 @@
 [package]
 name = "springboard"
-version = "0.10.49"
+version = "0.10.50"
 edition = "2021"
 description = "BifrOSt OS shell for Arch Linux"
 
