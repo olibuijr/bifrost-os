@@ -795,6 +795,12 @@ fn reveal_target(folder: &Path, name: &str) -> PathBuf {
     if plain && file.exists() { file } else { folder.to_path_buf() }
 }
 
+/// The banner of a file action that failed: the file's name with what did not happen, over the reason.
+fn file_problem_banner(path: &Path, what: &str, why: &str) -> (String, String) {
+    let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
+    (format!("\u{201c}{name}\u{201d} {what}"), why.to_string())
+}
+
 /// Splits a merged query into the Top Hit group, the sections, and the files group (with "Show in Folder" after it).
 /// `top` is the hit shown as the top hit; it is taken out of the sections, so no row is listed twice.
 fn split_merged(merged: &search_rank::Merged, hits: &BTreeMap<String, Hit>, top: Option<Hit>) -> (Option<Group>, Vec<Group>, Vec<Group>) {
@@ -808,7 +814,7 @@ fn split_merged(merged: &search_rank::Merged, hits: &BTreeMap<String, Hit>, top:
         }
         if section.source == "Files" {
             let show = match rows.first() {
-                Some(Hit::File { path, name, .. }) => Some(Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: path.parent().map_or_else(|| path.clone(), Path::to_path_buf), name: name.clone() }] }),
+                Some(Hit::File { path, name, .. }) => Some(Group { title: "Show in Folder", hits: vec![reveal_of(path, name)] }),
                 _ => None,
             };
             files.push(Group { title: "Files", hits: rows });
@@ -818,6 +824,75 @@ fn split_merged(merged: &search_rank::Merged, hits: &BTreeMap<String, Hit>, top:
         }
     }
     (top_group, sections, files)
+}
+
+/// What the document icon of a file depends on: its name's extension, lower case ("" for a name without one).
+fn file_icon_key(name: &str) -> String {
+    Path::new(name).extension().map_or_else(String::new, |e| e.to_string_lossy().to_lowercase())
+}
+
+/// The "Show in Folder" hit of the file at `path` named `name`.
+fn reveal_of(path: &Path, name: &str) -> Hit {
+    Hit::Reveal { folder: path.parent().map_or_else(|| path.to_path_buf(), Path::to_path_buf), name: name.to_string() }
+}
+
+/// The modification time (Unix seconds, at least 1) of the plain file at `path` when Search may list it: None for a
+/// folder, a file that is gone, one in a folder Settings > Search excludes, or any file while its Files section is off.
+fn listable_file(path: &Path) -> Option<i64> {
+    let prefs = super::search_prefs::current();
+    if !prefs.source_on("Files") || prefs.folder_excluded(path) {
+        return None;
+    }
+    let md = std::fs::metadata(path).ok().filter(|m| m.is_file())?;
+    Some(md.modified().ok().and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok()).map_or(1, |d| (d.as_secs() as i64).max(1)))
+}
+
+/// Turns the documents the Files app put into the index (a file it opened; the item's id is the file's path) into
+/// file rows. As an indexed item such a file read as a row of the Files app with its kind alone: no folder or date,
+/// the app's icon, and no "Show in Folder" (E2E5 2 to 4: the only row "note.txt" gave). `modified` gives the
+/// modification time of a path that is a file Search may list; an item it knows nothing of stays as it is. A file
+/// the walk (or the Top Hit `top`) lists already is not listed twice.
+fn fold_indexed_files(documents: Vec<Group>, mut files: Vec<Group>, top: Option<&Group>, modified: impl Fn(&Path) -> Option<i64>) -> (Vec<Group>, Vec<Group>) {
+    let mut found: Vec<Hit> = vec![];
+    let documents: Vec<Group> = documents
+        .into_iter()
+        .filter_map(|mut g| {
+            g.hits.retain(|h| {
+                let Hit::Indexed { app_id, unique_id, .. } = h else { return true };
+                let path = Path::new(unique_id);
+                if app_id != super::workspace::FILES_APP || !path.is_absolute() {
+                    return true;
+                }
+                let (Some(name), Some(at)) = (path.file_name(), modified(path)) else { return true };
+                found.push(Hit::File { path: path.to_path_buf(), name: name.to_string_lossy().into_owned(), modified: at });
+                false
+            });
+            (!g.hits.is_empty()).then_some(g)
+        })
+        .collect();
+    let path_of = |h: &Hit| match h {
+        Hit::File { path, .. } => Some(path.clone()),
+        _ => None,
+    };
+    let mut listed: Vec<PathBuf> = top.iter().flat_map(|g| &g.hits).chain(files.iter().flat_map(|g| &g.hits)).filter_map(path_of).collect();
+    found.retain(|h| {
+        let new = path_of(h).is_some_and(|p| !listed.contains(&p));
+        listed.extend(path_of(h).filter(|_| new));
+        new
+    });
+    let Some(first) = found.first().cloned() else { return (documents, files) };
+    match files.iter_mut().find(|g| g.title == "Files") {
+        Some(g) => g.hits.extend(found),
+        None => {
+            let show = match &first {
+                Hit::File { path, name, .. } => Some(Group { title: "Show in Folder", hits: vec![reveal_of(path, name)] }),
+                _ => None,
+            };
+            files.push(Group { title: "Files", hits: found });
+            files.extend(show);
+        }
+    }
+    (documents, files)
 }
 
 /// The definition row of `query` as its group ("Dictionary"), and whether the query asked for it ("define x").
@@ -978,7 +1053,8 @@ impl QuickSearch {
             self.start_run(&query);
         }
         let (top, sections, files) = self.run_groups();
-        let groups = compose(&query, calculator_group(&query), top, sections, indexed_groups(&query, &self.opens), files);
+        let (documents, files) = fold_indexed_files(indexed_groups(&query, &self.opens), files, top.as_ref(), listable_file);
+        let groups = compose(&query, calculator_group(&query), top, sections, documents, files);
         let groups = self.keep_shown_order(groups);
         self.shown = groups.iter().map(|g| g.title).collect();
         groups
@@ -1223,6 +1299,10 @@ pub struct QuickSearch {
     thumbs: Vec<(String, usize, Option<Image>)>,
     /// pictures of the files in the file rows, drawn by the system thumbnail providers on worker threads
     file_thumbs: super::search_thumbs::FileThumbs,
+    /// the document icons of the file rows, by (`file_icon_key` of the name, icon size in pixels): the icon of the
+    /// file's type as the open panel and the Dock's stack draw it. The shell draws them (`Shell::quicksearch_file_icons`)
+    /// before the card is drawn; a row whose icon is not here yet shows the Files icon
+    file_icons: Vec<(String, usize, Image)>,
     searches_header: Image,
     /// (app, 60 pt icon, 29 pt icon, label)
     icons: Vec<(AppId, Image, Image, Image)>,
@@ -1265,7 +1345,8 @@ pub struct QuickSearch {
     usage_path: Option<PathBuf>,
     /// the wallpaper catalogue as (id, name), for the "Set Wallpaper to" rows (`set_wallpapers`)
     wallpapers: Vec<(String, String)>,
-    /// the person's home folder, walked for files besides the Files root (`refresh_sources`); None when there is none
+    /// a home folder to walk besides the Files root in place of the account's, which `refresh_sources` looks up at
+    /// every scan (`files_walk::search_home`); None outside tests
     home: Option<PathBuf>,
     /// the shortcut runs this panel started (`ShortcutRuns`)
     shortcut_runs: ShortcutRuns,
@@ -1377,6 +1458,7 @@ impl QuickSearch {
             scroll_query: String::new(),
             thumbs: vec![],
             file_thumbs: super::search_thumbs::FileThumbs::default(),
+            file_icons: vec![],
             deildu_titles: vec![],
             deildu_folded: vec![],
             contacts: vec![],
@@ -1392,9 +1474,7 @@ impl QuickSearch {
             opens: Default::default(),
             usage_path: None,
             wallpapers: Vec::new(),
-            // tests never walk the home folder of the machine they run on: its files would come in as results whenever
-            // the walk happened to finish inside a test
-            home: if cfg!(test) { None } else { files_walk::user_home() },
+            home: None,
             shortcut_runs: Default::default(),
             launches: Default::default(),
             launches_path: None,
@@ -1586,7 +1666,10 @@ impl QuickSearch {
             crate::bare::sys::spawn_named("quicksearch-files", move || {
                 // Privacy: files in the folders Settings > Search excludes are never listed
                 let excluded = super::search_prefs::current();
-                // the Files root and the home folder, in a bounded walk (`quicksearch_files`)
+                // the Files root and the account's home folder, in a bounded walk (`quicksearch_files`). Tests never
+                // walk the home folder of the machine they run on: its files would come in as results whenever the
+                // walk happened to finish inside a test
+                let home = home.or_else(|| if cfg!(test) { None } else { files_walk::search_home() });
                 let roots = files_walk::roots(&root, home.as_deref());
                 let files: Vec<crate::files::fs::Entry> = files_walk::walk(&roots, files_walk::LIMIT, files_walk::VISIT_BUDGET).into_iter().filter(|e| !excluded.folder_excluded(&e.path)).collect();
                 let _ = tx.send(files);
@@ -1704,6 +1787,8 @@ impl QuickSearch {
         self.field.set_text(ui, "");
         self.field.focused = false;
         self.scroll = 0.0;
+        // the document icons carry the appearance's colours: drawn again for each showing
+        self.file_icons.clear();
         self.search(ui, h);
         self.touch = None;
         let mut drag = Drag::new(y0, t, 0.0, range);
@@ -1815,6 +1900,37 @@ impl QuickSearch {
         None
     }
 
+    /// The file rows whose document icon is not drawn yet, as (file name, icon size in pixels), one per kind of file
+    /// (`file_icon_key`).
+    pub(super) fn file_icons_wanted(&self, ui: &Ui) -> Vec<(String, usize)> {
+        let px = self.px(ui, self.m().row_icon).round() as usize;
+        let mut out: Vec<(String, usize)> = vec![];
+        for (hit, _) in self.sections.iter().flat_map(|s| &s.rows) {
+            let Hit::File { name, .. } = hit else { continue };
+            let key = file_icon_key(name);
+            if px > 0 && self.file_icon(name, px).is_none() && !out.iter().any(|(n, _)| file_icon_key(n) == key) {
+                out.push((name.clone(), px));
+            }
+        }
+        out
+    }
+
+    /// Keeps the document icon `icon` (a square of `px` pixels) for files named like `name`.
+    pub(super) fn set_file_icon(&mut self, name: &str, px: usize, icon: Image) {
+        // another scale leaves icons of a size no row asks for; a long session many kinds
+        self.file_icons.retain(|(_, s, _)| *s == px);
+        if self.file_icons.len() >= 64 {
+            self.file_icons.clear();
+        }
+        self.file_icons.push((file_icon_key(name), px, icon));
+    }
+
+    /// The document icon kept for files named like `name` at `px` pixels.
+    fn file_icon(&self, name: &str, px: usize) -> Option<&Image> {
+        let key = file_icon_key(name);
+        self.file_icons.iter().find(|(k, s, _)| *k == key && *s == px).map(|(_, _, img)| img)
+    }
+
     /// The row the arrow keys are on, if any.
     pub fn selected_hit(&self) -> Option<Hit> {
         let (si, ri) = self.selected?;
@@ -1825,7 +1941,7 @@ impl QuickSearch {
     /// file is listed.
     pub fn reveal_hit(&self) -> Option<Hit> {
         let file = |h: &Hit| match h {
-            Hit::File { path, name, .. } => Some(Hit::Reveal { folder: path.parent().map_or_else(|| path.clone(), Path::to_path_buf), name: name.clone() }),
+            Hit::File { path, name, .. } => Some(reveal_of(path, name)),
             Hit::Reveal { .. } => Some(h.clone()),
             _ => None,
         };
@@ -2523,6 +2639,12 @@ impl QuickSearch {
                     }
                     let sized = app.and_then(|app| self.row_icons.iter().find(|(a, _)| *a == app)).map(|(_, img)| img).filter(|img| self.mac && img.h == isz.round() as usize);
                     let icon = sized.or_else(|| app.and_then(|app| self.icons.iter().find(|(a, ..)| *a == app)).map(|(_, _, small, _)| small));
+                    // a file shows the document icon of its type, as Files and the Dock's stack do, not the Files app's
+                    let doc_icon = match hit {
+                        Hit::File { name, .. } => self.file_icon(name, isz.round() as usize),
+                        _ => None,
+                    };
+                    let icon = doc_icon.or(icon);
                     match (icon, result_symbol(hit)) {
                         // an app icon: the row-square copy fills the slot, the 29 pt one is centred in it
                         (Some(small), _) if thumb_img.is_none() => {
@@ -2753,12 +2875,7 @@ impl Shell {
                     self.open(AppId::External(n as u8), t)
                 }
             }
-            Hit::File { path, .. } => {
-                self.open(AppId::Files, t);
-                if let Some(entry) = self.quicksearch.files.iter().find(|e| e.path == path).cloned() {
-                    self.preview_in_files(&entry, t);
-                }
-            }
+            Hit::File { path, name, modified } => self.quicksearch_open_file(&path, &name, modified, t),
             Hit::Definition { word, .. } => {
                 if std::mem::take(&mut self.quicksearch.space_preview) {
                     // Space: the whole definition in the Look Up popover
@@ -2769,11 +2886,22 @@ impl Shell {
             }
             Hit::Reveal { folder, name } => {
                 // on the desktop the Files app shows the folder with the file selected, as the Services menu and the
-                // Downloads stack do; elsewhere (or with no Files app) the built-in view opens at the folder
-                if self.desktop_show_in_files(&reveal_target(&folder, &name), t).is_err() {
+                // Downloads stack do, and a failure is said (the built-in view is not what the desktop shows: opening
+                // it there left the person with no window and no word, E2E5 2); elsewhere the built-in view opens at
+                // the folder
+                let target = reveal_target(&folder, &name);
+                if self.desk_active() {
+                    if let Err(e) = self.desktop_show_in_files(&target, t) {
+                        self.file_action_failed(&target, "could not be shown in Files", &e);
+                    }
+                } else {
                     self.open(AppId::Files, t);
-                    if let Some(f) = &mut self.files {
-                        f.show_folder(&self.ui, &folder, t);
+                    let shown = match &mut self.files {
+                        Some(f) => f.show_folder(&self.ui, &folder, t),
+                        None => false,
+                    };
+                    if !shown {
+                        self.file_action_failed(&target, "could not be shown in Files", "No location in Files holds its folder");
                     }
                 }
             }
@@ -2832,6 +2960,40 @@ impl Shell {
         vec![]
     }
 
+    /// Return on a file row. On the desktop the file opens the way the Dock's Downloads stack opens one: with the app
+    /// its type opens with after the malware check, else shown selected in Files (`stack_open_item`); a failure of
+    /// that last step is said (`file_action_failed`). Elsewhere the built-in Files view previews it.
+    fn quicksearch_open_file(&mut self, path: &Path, name: &str, modified: i64, t: f64) {
+        #[cfg(feature = "desktop-wayland")]
+        if self.desk_active() {
+            let item = super::dock_stack::Item { name: name.to_string(), path: path.to_path_buf(), dir: false };
+            return self.stack_open_item(&item, t);
+        }
+        self.open(AppId::Files, t);
+        // a row that came from the index (`fold_indexed_files`) is not in the walk's list
+        let entry = self.quicksearch.files.iter().find(|e| e.path == path).cloned().unwrap_or_else(|| crate::files::fs::Entry {
+            kind: crate::files::fs::kind_of(name, false),
+            name: name.to_string(),
+            path: path.to_path_buf(),
+            is_dir: false,
+            size: std::fs::metadata(path).map_or(0, |m| m.len()),
+            mtime: modified,
+            items: None,
+        });
+        self.preview_in_files(&entry, t);
+    }
+
+    /// Says that something asked of the file (or folder) at `path` did not happen: a banner "<name> <what>" with the
+    /// reason under it, and a line in the log. Search and the Downloads stack close before they act, so without this a
+    /// failure looked like a key that did nothing.
+    pub(super) fn file_action_failed(&mut self, path: &Path, what: &str, why: &str) {
+        let (title, body) = file_problem_banner(path, what, why);
+        bifrost_core::log::shell_logger("quicksearch").error(format!("{}: {what}: {why}", path.display()));
+        let time = self.notify.now();
+        self.notify(super::notify::Notification::new(AppId::Files, title, body, time));
+        self.dirty = true;
+    }
+
     /// Launches Settings on the page a row name stands for ("Wi-Fi",
     /// "Wallpaper", …; the rest show the root page).
     pub fn open_settings_page(&mut self, name: &str, t: f64) -> Vec<Effect> {
@@ -2882,11 +3044,30 @@ impl Shell {
         if !self.quicksearch.is_shown() {
             return false;
         }
-        if let Some(hit) = self.quicksearch.reveal_hit() {
-            let _ = self.quicksearch_act(hit, t);
+        match self.quicksearch.reveal_hit() {
+            Some(hit) => {
+                let _ = self.quicksearch_act(hit, t);
+            }
+            // nothing to show in a folder: the panel stays as it is, and the log says why the chord did nothing
+            None => bifrost_core::log::shell_logger("quicksearch").info("Cmd+Return: no file among the results to show in its folder"),
         }
         self.dirty = true;
         true
+    }
+
+    /// Draws the document icons the card's file rows still lack, with the icon the open panel and the Dock's stack use
+    /// for a file (`draw_file_icon`), each into a transparent square the card then blits. Called before the card is drawn.
+    #[cfg(feature = "desktop-wayland")]
+    pub(super) fn quicksearch_file_icons(&mut self) {
+        for (name, px) in self.quicksearch.file_icons_wanted(&self.ui) {
+            let mut img = Image::new(px, px);
+            {
+                let mut sub = Surface { w: img.w, h: img.h, stride: img.w, px: &mut img.px, y0: 0 };
+                let entry = super::docpanel::Entry { name: name.clone(), dir: false, enabled: true, path: None };
+                self.draw_file_icon(&mut sub, &entry, 0.0, 0.0, px as f32, 0);
+            }
+            self.quicksearch.set_file_icon(&name, px, img);
+        }
     }
 
     /// Advances the card's settle and keyboard; true when a frame is needed.
@@ -2925,6 +3106,8 @@ impl Shell {
             let wp = self.home_still();
             s.band(edge.max(0.0) as usize).copy(wp, (self.w - wp.w as i32) / 2, (self.h - wp.h as i32) / 2);
         }
+        #[cfg(feature = "desktop-wayland")]
+        self.quicksearch_file_icons();
         self.quicksearch.draw(s, &self.ui, self.w, self.h, t);
     }
 }

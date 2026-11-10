@@ -1,4 +1,4 @@
-//! The files Search lists: the Files root ("On My PC") and the person's home folder, walked on a worker thread when
+//! The files Search lists: the Files root ("On My PC") and the person's home folder (`search_home`), walked on a worker thread when
 //! Search opens (`QuickSearch::refresh_sources`) and reused for a while after. The shell has no file-system metadata
 //! index, so this is a bounded name walk: breadth first (shallow files are reached before a deep tree uses up the
 //! budget), hidden folders and build or package trees skipped, symbolic links not followed, at most `VISIT_BUDGET`
@@ -31,9 +31,21 @@ pub fn roots(files_root: &Path, home: Option<&Path>) -> Vec<PathBuf> {
     out
 }
 
-/// The user's home folder (`$HOME`), when it is set.
-pub fn user_home() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from).filter(|p| !p.as_os_str().is_empty())
+/// The home folder Search walks: the installed account's home, else `$HOME`. The desktop shell runs as root from a
+/// system service that sets no `$HOME`, so the variable alone never named the person's home there and no file under
+/// it was listed (E2E5: "file-37" found nothing). Read on the walk's worker thread at every scan, so an account made
+/// after the shell started is picked up.
+pub fn search_home() -> Option<PathBuf> {
+    #[cfg(feature = "desktop-wayland")]
+    let account = crate::bare::app_policy::Account::installed().ok().map(|a| a.home);
+    #[cfg(not(feature = "desktop-wayland"))]
+    let account = None;
+    pick_home(account, std::env::var_os("HOME").map(PathBuf::from))
+}
+
+/// The home folder from its sources, best first: the account's, else `$HOME`; an empty path counts as none.
+pub fn pick_home(account: Option<PathBuf>, env: Option<PathBuf>) -> Option<PathBuf> {
+    account.filter(|p| !p.as_os_str().is_empty()).or_else(|| env.filter(|p| !p.as_os_str().is_empty()))
 }
 
 /// True for a folder the walk does not enter: hidden ones and generated trees.
@@ -92,6 +104,32 @@ mod tests {
         assert_eq!(roots(files, Some(Path::new("/"))), vec![files.to_path_buf()], "a home of / is not walked");
         assert_eq!(roots(Path::new("/home/me/Files"), Some(Path::new("/home/me"))), vec![PathBuf::from("/home/me")], "the outer root covers the inner");
         assert_eq!(roots(files, Some(Path::new("/var/lib/springboard/Files/me"))), vec![files.to_path_buf()]);
+    }
+
+    #[test]
+    fn the_account_home_is_walked_whatever_the_shell_has_for_home() {
+        let p = |s: &str| Some(PathBuf::from(s));
+        assert_eq!(pick_home(p("/home/me"), None), p("/home/me"), "a root shell with no $HOME still walks the account's home");
+        assert_eq!(pick_home(p("/home/me"), p("/root")), p("/home/me"), "the account's home, not the shell's own");
+        assert_eq!(pick_home(None, p("/home/dev")), p("/home/dev"), "no account (a host preview): $HOME");
+        assert_eq!(pick_home(p(""), p("")), None);
+        assert_eq!(pick_home(None, None), None);
+    }
+
+    /// E2E5 1: forty files two folders below the home, made minutes ago, are each found by name.
+    #[test]
+    fn a_folder_of_many_new_files_two_levels_down_is_listed_whole() {
+        let home = scratch("many");
+        fs::create_dir_all(home.join("E2E/many")).unwrap();
+        fs::write(home.join("E2E/note.txt"), "n").unwrap();
+        for i in 1..=40 {
+            fs::write(home.join(format!("E2E/many/file-{i:02}.txt")), "x").unwrap();
+        }
+        let found = walk(&roots(Path::new("/nonexistent/Files"), Some(&home)), LIMIT, VISIT_BUDGET);
+        assert_eq!(found.len(), 41, "{found:?}");
+        let hit = found.iter().find(|e| e.name == "file-37.txt").expect("file-37.txt is listed");
+        assert_eq!(hit.path, home.join("E2E/many/file-37.txt"));
+        let _ = fs::remove_dir_all(&home);
     }
 
     #[test]

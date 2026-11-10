@@ -179,3 +179,83 @@ fn show_in_folder_hands_files_the_file_so_it_is_selected() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+fn indexed(app_id: &str, unique_id: &str, title: &str) -> Hit {
+    Hit::Indexed { app_id: app_id.into(), unique_id: unique_id.into(), domain: "documents".into(), title: title.into(), kind: "Plain Text".into(), thumb: String::new(), snippet: String::new() }
+}
+
+/// E2E5 2 to 4: a file the Files app had opened came back as that app's indexed document, a row with the kind alone
+/// and the app's icon that Cmd+Return could not show in its folder. It is a file row now, with "Show in Folder".
+#[test]
+fn a_document_the_files_app_indexed_becomes_a_file_row() {
+    let files_app = super::super::workspace::FILES_APP;
+    let note = "/home/me/E2E4/note.txt";
+    let known = |p: &Path| (p == Path::new(note)).then_some(1_700_000_000);
+    let docs = vec![Group { title: "Files", hits: vec![indexed(files_app, note, "note.txt"), indexed(files_app, "/home/me/gone.txt", "gone.txt")] }, Group { title: "Notes", hits: vec![indexed("is.olibuijr.notes", "/home/me/E2E4/note.txt", "note.txt")] }];
+    let (documents, files) = fold_indexed_files(docs.clone(), vec![], None, known);
+    let file = Hit::File { path: PathBuf::from(note), name: "note.txt".into(), modified: 1_700_000_000 };
+    assert_eq!(files, vec![Group { title: "Files", hits: vec![file.clone()] }, Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: PathBuf::from("/home/me/E2E4"), name: "note.txt".into() }] }]);
+    assert_eq!(documents[0].hits, vec![indexed(files_app, "/home/me/gone.txt", "gone.txt")], "an item that is no file Search may list stays as it was");
+    assert_eq!(documents[1], docs[1], "another app's items are its own, whatever their ids look like");
+    // the row reads kind, folder, date
+    let (title, sub) = row_text(&file, |_| String::new(), (1_700_000_060, 0, true));
+    assert_eq!(title, "note.txt");
+    assert!(sub.starts_with("Plain Text \u{b7} E2E4 \u{b7} Today at "), "{sub}");
+
+    // the walk lists the file already: no second row, and the emptied section goes
+    let walked = vec![Group { title: "Files", hits: vec![file.clone()] }, Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: PathBuf::from("/home/me/E2E4"), name: "note.txt".into() }] }];
+    let only = vec![Group { title: "Files", hits: vec![indexed(files_app, note, "note.txt")] }];
+    let (documents, files) = fold_indexed_files(only.clone(), walked.clone(), None, known);
+    assert!(documents.is_empty(), "{documents:?}");
+    assert_eq!(files, walked);
+    // the same when it is the Top Hit, which was taken out of its section
+    let top = Group { title: "Top Hit", hits: vec![file.clone()] };
+    let (documents, files) = fold_indexed_files(only.clone(), vec![], Some(&top), known);
+    assert!(documents.is_empty() && files.is_empty(), "{documents:?} {files:?}");
+    // another file joins the walk's rows, after them
+    let other = Hit::File { path: PathBuf::from("/home/me/a/other.txt"), name: "other.txt".into(), modified: 5 };
+    let (_, files) = fold_indexed_files(only, vec![Group { title: "Files", hits: vec![other.clone()] }], None, known);
+    assert_eq!(files, vec![Group { title: "Files", hits: vec![other, file] }]);
+    // a relative id is not a path
+    let odd = vec![Group { title: "Files", hits: vec![indexed(files_app, "note.txt", "note.txt")] }];
+    assert_eq!(fold_indexed_files(odd.clone(), vec![], None, |_| Some(1)), (odd, vec![]));
+}
+
+/// The folded row is one Cmd+Return shows in its folder.
+#[test]
+fn cmd_return_reveals_a_file_that_came_from_the_index() {
+    let u = ui();
+    let mut q = QuickSearch::new(&u, 800.0, 1.0);
+    let (_, files) = fold_indexed_files(vec![Group { title: "Files", hits: vec![indexed(super::super::workspace::FILES_APP, "/home/me/E2E4/note.txt", "note.txt")] }], vec![], None, |_| Some(9));
+    q.sections = files.into_iter().map(|g| Section { header: Image::new(1, 1), subs: g.hits.iter().map(|_| None).collect(), rows: g.hits.into_iter().map(|h| (h, u.text("x", 13.0, Weight::Regular, WHITE))).collect() }).collect();
+    q.selected = Some((0, 0));
+    assert_eq!(q.reveal_hit(), Some(Hit::Reveal { folder: PathBuf::from("/home/me/E2E4"), name: "note.txt".into() }));
+}
+
+#[test]
+fn a_file_row_asks_for_the_document_icon_of_its_type_once_per_kind() {
+    assert_eq!(file_icon_key("Notes.TXT"), "txt");
+    assert_eq!(file_icon_key("archive.tar.gz"), "gz");
+    assert_eq!(file_icon_key("Makefile"), "");
+    let u = ui();
+    let mut q = QuickSearch::new(&u, 800.0, 1.0);
+    let file = |p: &str| Hit::File { path: PathBuf::from(p), name: Path::new(p).file_name().unwrap().to_string_lossy().into_owned(), modified: 0 };
+    let row = |h: Hit| (h, u.text("x", 13.0, Weight::Regular, WHITE));
+    q.sections = vec![Section { header: Image::new(1, 1), rows: vec![row(Hit::App(AppId::Files)), row(file("/d/a.txt")), row(file("/d/b.TXT")), row(file("/d/c.pdf"))], subs: vec![None, None, None, None] }];
+    let wanted = q.file_icons_wanted(&u);
+    let names: Vec<&str> = wanted.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(names, vec!["a.txt", "c.pdf"], "one icon per kind of file, none for an app row");
+    let px = wanted[0].1;
+    assert!(px > 0);
+    assert!(q.file_icon("b.TXT", px).is_none());
+    q.set_file_icon("a.txt", px, Image::new(px, px));
+    assert!(q.file_icon("b.TXT", px).is_some(), "files of one kind share the icon");
+    assert!(q.file_icon("b.TXT", px + 1).is_none(), "another size is another icon");
+    assert_eq!(q.file_icons_wanted(&u).iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), vec!["c.pdf"]);
+}
+
+#[test]
+fn a_failed_file_action_is_said_with_the_file_name_and_the_reason() {
+    assert_eq!(file_problem_banner(Path::new("/home/me/E2E4/note.txt"), "could not be shown in Files", "App not installed"), ("\u{201c}note.txt\u{201d} could not be shown in Files".to_string(), "App not installed".to_string()));
+    assert_eq!(file_problem_banner(Path::new("/"), "could not be shown in Files", "x").0, "\u{201c}/\u{201d} could not be shown in Files");
+}
