@@ -38,6 +38,10 @@ impl Files {
             self.copy_item_path(); // Option+Cmd+C: Copy Item Path
             return true;
         }
+        if key == 47 && mods & CHORD_META != 0 && mods & CHORD_ALT != 0 && !shift && self.naming.is_none() {
+            self.paste_move(); // Option+Cmd+V: move the copied items here
+            return true;
+        }
         if mods & CHORD_ALT != 0 || mods & (CHORD_CTRL | CHORD_META) == 0 || self.naming.is_some() {
             return false;
         }

@@ -1,7 +1,8 @@
 //! `hdiutil`: disk images from the command line. Create blank RAW images and ISO discs from a folder, attach and detach
 //! them, and inspect, verify and convert them. The image model is `bifrost_core::disk_image`; attaching and detaching
 //! go to the shell over its control socket (`image-attach`, `image-detach`), because only the shell holds the session
-//! that privd checks. Files and Disk Utility use the same commands.
+//! that privd checks. Disk Utility uses the same commands; Files, whose sandbox has no control socket, asks the shell's
+//! `disks` service instead (`attach_image`, `detach_image`).
 
 use bifrost_core::disk_image::{self as img, BlockSize, ImageContents};
 use std::fs::File;
