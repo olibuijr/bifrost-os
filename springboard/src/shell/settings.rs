@@ -3939,6 +3939,9 @@ impl Settings {
                 if let Err(e) = prefs.set("time_auto", if auto { "1" } else { "0" }) {
                     eprintln!("springboard: settings.ini: {e}");
                 }
+                // the Time row opens the clock sheet only while the time is set by hand: build the page again, since
+                // the shell's next info already agrees with this flag and so would not
+                self.rebuild_visible(ui);
                 auto
             }
             Toggle::LowPower => flip(&mut self.opts.low_power),
