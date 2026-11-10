@@ -1221,6 +1221,7 @@ fn draw_closed(s: &mut Surface, pts: &[(f32, f32)], color: u32) {
 fn draw_widget(s: &mut Surface, ui: &Ui, p: &Placed, quarters: u8, w: &FormWidget, value: &str, on: bool, focused: bool) {
     let (x, y, bw, bh) = to_screen(p, quarters, w.rect);
     let (x, y, bw, bh) = (x as i32, y as i32, bw.max(1.0) as i32, bh.max(1.0) as i32);
+    // compliance-allow: COL-01 a form field is part of the PDF page: white paper in Light and Dark alike.
     fill(s, x, y, bw, bh, rgba(255, 255, 255, 255));
     let border = if focused { MARK_BLUE } else { ui::SEPARATOR_C.now() };
     s.stroke_rrect(x as f32, y as f32, bw as f32, bh as f32, 0.0, 1.0, border);
@@ -1228,6 +1229,7 @@ fn draw_widget(s: &mut Surface, ui: &Ui, p: &Placed, quarters: u8, w: &FormWidge
         Kind::Text => {
             if !value.is_empty() {
                 let img = ui.text(value, ui::MAC_CALLOUT_PT, Weight::Regular, ui::WHITE);
+                // compliance-allow: COL-01 the field's text is ink on the page's white paper, not window text.
                 s.blit_colored(&img, x + ui.pt(ui::SPACE_S) as i32, y + (bh - img.h as i32) / 2, rgba(0, 0, 0, 255), 255);
             }
         }
