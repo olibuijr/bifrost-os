@@ -69,6 +69,15 @@ pub fn grace_lapsed(off_ms: f64, now_ms: f64, grace_s: u32) -> bool {
     now_ms - off_ms > f64::from(grace_s) * 1000.0
 }
 
+/// What turned a dark display on (`Shell::wake_display`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum WakeCause {
+    /// The person: the power or wake key, a tap on the dark screen, a key on a dark desktop.
+    Person,
+    /// Nobody at the machine: an alarm, a timer, a notification. It is no proof the person is back.
+    Unattended,
+}
+
 pub fn speed_slider(speed: f32) -> f32 {
     ((speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN)).clamp(0.0, 1.0)
 }

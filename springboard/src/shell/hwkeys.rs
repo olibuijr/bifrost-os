@@ -1164,8 +1164,7 @@ impl Shell {
             if !(self.is_locked() && self.form() == bifrost_ui::form_factor::FormFactor::Desktop) {
                 return vec![];
             }
-            self.screen_on = true;
-            self.screen_woke(t);
+            self.wake_display(super::options::WakeCause::Person, t);
             woke.push(Effect::ScreenOn);
         }
         // the lock screen owns the keyboard before any sheet, panel, viewer or alert an app or the shell left open under
