@@ -2,8 +2,22 @@
 
 ## Unreleased
 
-- Disk images: an image with a partition table (an installer image, a memory-card dump) opens. Each partition with a file system that can be read is a volume, named by its label or by the image and the partition's number; ejecting one of them ejects the image.
+## 0.10.49 — 2026-11-10
+
+The open items left after 0.10.48.
+
+- Disk images: an image with a partition table (an installer image, a memory-card dump) opens. Each partition with a file system that can be read is a volume, named by its label or by the image and the partition's number; ejecting one closes them all.
 - Files: ejecting a USB stick is done by the shell, which unmounts the volume and powers the disk off; Files could not from inside its sandbox. A volume in use names the programs to close.
+- Files: a finger that rests on an item picks it up to drag; a finger that moves at once scrolls. A line of icons that only partly fits is drawn cut at the edge instead of hidden.
+- Show in Files selects the file and scrolls to it (control request `reveal-file`; `open -R FILE`). `open -a APP FILE` opens a file in an app (control request `open-file`).
+- Viewer: Save writes the file the document was opened from, and says why when it cannot, offering Save As.
+- Documents: a file saved in place keeps its permissions (a private file stayed private only until its first Save); a file you may not write opens read-only instead of being refused.
+- Browser: a page that asks for a dark colour scheme, in its style sheet or with the meta element alone, gets a dark page behind its light text (engine 0.7.0-bifrost.17, the first build with a patch to the engine's own source).
+- Time: the status bar, Settings, and the Clock widget write the time as the menu bar and lock screen do, and follow 24-Hour Time.
+- Setup Assistant: the time zone chosen there is set, by the shell, when the assistant finishes.
+- Apps: 14 apps meet the compliance rules again (layout constants, spacing tokens, background work on the shared queue, four new compliance tests).
+- Lab tools: `midget.py show-in-files` selects the file; new `open-file`.
+- Tests: the Search panel owns its state (home folder walk, usage counts, wallpaper list, running shortcuts), so tests in one process no longer disturb each other.
 
 ## 0.10.48 — 2026-11-10
 
