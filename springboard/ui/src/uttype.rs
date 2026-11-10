@@ -278,7 +278,7 @@ mod tag_class_tests {
 
     #[test]
     fn a_type_lists_its_own_extensions_and_mime_type() {
-        assert_eq!(tags("public.jpeg", TagClass::FilenameExtension), vec!["jpg", "jpeg"]);
+        assert_eq!(tags("public.jpeg", TagClass::FilenameExtension), vec!["jpg", "jpeg", "jpe"]);
         assert_eq!(tags("public.png", TagClass::MimeType), vec!["image/png"]);
         assert_eq!(tags("public.image", TagClass::MimeType), vec!["image/*"]);
         assert!(tags("public.image", TagClass::FilenameExtension).is_empty());
@@ -339,7 +339,7 @@ mod tests {
         assert_eq!(type_for_mime("image/*"), Some("public.image"));
         assert_eq!(type_for_mime(""), None);
         assert_eq!(type_for_mime("x/unknown"), None);
-        assert_eq!(extensions("public.jpeg"), ["jpg", "jpeg"]);
+        assert_eq!(extensions("public.jpeg"), ["jpg", "jpeg", "jpe"]);
         assert!(extensions("public.image").is_empty());
     }
     #[test]

@@ -330,7 +330,8 @@ mod tests {
     fn a_refused_reply_marks_the_source_and_a_good_one_clears_it() {
         let mut s = ShellSource::default();
         s.track(1, Ask::Display);
-        assert!(!s.answer(1, &Err("denied".into())));
+        // the reason is new, so the loupe needs a frame to show it
+        assert!(s.answer(1, &Err("denied".into())));
         assert!(s.refused());
         s.track(2, Ask::Display);
         assert!(s.answer(2, &Ok(size(10, 10))));
