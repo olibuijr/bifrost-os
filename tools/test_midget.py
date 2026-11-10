@@ -1,5 +1,7 @@
 """Check package-update restart boundaries without contacting a machine."""
+import contextlib
 import importlib.util
+import io
 import os
 import subprocess
 import unittest
@@ -47,6 +49,26 @@ class KeyCombos(unittest.TestCase):
         with patch.object(midget, 'run') as run:
             self.assertEqual(midget.cmd_key(['hyper+o']), 2)
             run.assert_not_called()
+
+    def test_escape_and_the_other_spellings_are_the_same_keys(self):
+        self.assertEqual(midget.key_codes('escape'), midget.key_codes('esc'))
+        self.assertEqual(midget.key_codes('Escape'), [1])
+        self.assertEqual(midget.key_codes('return'), midget.key_codes('enter'))
+        self.assertEqual(midget.key_codes('command+period'), [125, 52])
+        self.assertEqual(midget.key_steps(['escape*2', 'return']), [[1], [1], [28]])
+        for alias, name in midget.KEY_ALIASES.items():
+            self.assertEqual(midget.KEY_CODES[alias], midget.KEY_CODES[name], alias)
+
+    def test_an_unknown_key_is_named_on_stderr_and_fails(self):
+        self.assertEqual(midget.unknown_keys(['cmd+o', 'escap', 'hyper+o*2', 'escap']), ['escap', 'hyper'])
+        self.assertEqual(midget.unknown_keys(['escape', 'cmd+[', 'down*3']), [])
+        for command in (midget.cmd_key, midget.cmd_keydown, midget.cmd_keyup):
+            err = io.StringIO()
+            with patch.object(midget, 'run') as run, contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(command(['escap']), 2)
+                run.assert_not_called()
+            self.assertIn("unknown key name 'escap'", err.getvalue())
+            self.assertIn('nothing was pressed', err.getvalue())
 
     def test_a_combination_presses_in_order_and_releases_in_reverse(self):
         with patch.object(midget, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')) as run:

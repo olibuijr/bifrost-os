@@ -344,6 +344,10 @@ _PUNCT_SHIFT = {"_": "-", "+": "=", "{": "[", "}": "]", ":": ";", '"': "'", "~":
 PUNCT_NAMES = {"minus": "-", "equal": "=", "bracketleft": "[", "bracketright": "]", "semicolon": ";", "apostrophe": "'",
                "grave": "`", "backslash": "\\", "comma": ",", "period": ".", "slash": "/"}
 KEY_CODES.update({name: _PUNCT[ch] for name, ch in PUNCT_NAMES.items()})
+# other spellings of the named keys: `key escape` used to be an unknown name, so a test that sent it pressed nothing
+KEY_ALIASES = {"escape": "esc", "return": "enter", "del": "delete", "ins": "insert", "pgup": "pageup", "pgdn": "pagedown",
+               "control": "ctrl", "command": "cmd", "win": "super", "opt": "option", "spacebar": "space", "caps": "capslock"}
+KEY_CODES.update({alias: KEY_CODES[name] for alias, name in KEY_ALIASES.items()})
 
 
 def text_keys(text):
@@ -543,6 +547,28 @@ def key_codes(spec):
     parts = spec.lower().split("+")
     codes = [KEY_CODES.get(p) or _PUNCT.get(p) for p in parts]
     return None if not spec or None in codes else codes
+
+
+def unknown_keys(args):
+    """The key names in `args` (specs as `key` takes them) that no table knows, in order, each once: `escap`, `hyper`."""
+    bad = []
+    for a in args:
+        spec, star, n = a.rpartition("*")
+        if not star or not n.isdigit():
+            spec = a
+        for part in spec.lower().split("+"):
+            if not (KEY_CODES.get(part) or _PUNCT.get(part)) and part not in bad:
+                bad.append(part)
+    return bad
+
+
+def key_error(command, args):
+    """Says on stderr why `command` pressed nothing, naming each unknown key, and returns the exit status 2. The names
+    go to stderr and the status is not zero, so a script that sends a misspelt key fails instead of passing silently."""
+    bad = unknown_keys(args)
+    if bad:
+        print(f"midget {command}: unknown key name " + ", ".join(repr(b) for b in bad) + "; nothing was pressed", file=sys.stderr)
+    return 2
 
 
 def key_steps(args):
@@ -1165,7 +1191,7 @@ def cmd_key(args):
     if not steps:
         print("usage: key SPEC... where SPEC is NAME, MOD+KEY (cmd+shift+4, cmd+[) or either with *N (down*3); names: " + " ".join(sorted(KEY_CODES))
               + "; punctuation keys also as the character itself: " + " ".join(sorted(_PUNCT)))
-        return 2
+        return key_error("key", args)
     plan = []
     for codes in steps:
         plan += [("key", codes, 0.05), ("sleep", 0.05)]
@@ -1484,7 +1510,7 @@ def cmd_keydown(args):
     codes = key_codes(args[0]) if len(args) == 1 else None
     if not codes:
         print("usage: keydown NAME|MOD+KEY   (held until `keyup`; names: " + " ".join(sorted(KEY_CODES)) + ")")
-        return 2
+        return key_error("keydown", args)
     return run_plan([("kd", c) for c in codes] + [("sleep", 0.05)], hold=True)
 
 
@@ -1493,7 +1519,7 @@ def cmd_keyup(args):
     codes = key_codes(args[0]) if len(args) == 1 else None
     if not codes:
         print("usage: keyup NAME|MOD+KEY")
-        return 2
+        return key_error("keyup", args)
     return run_plan([("ku", c) for c in reversed(codes)] + [("sleep", 0.05)], hold=True)
 
 
