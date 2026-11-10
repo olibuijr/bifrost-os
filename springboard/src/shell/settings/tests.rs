@@ -1038,3 +1038,30 @@ fn opening_about_reads_the_computer_name_and_shows_it() {
     let (g, i) = p.find("Name").expect("the Name row");
     assert_eq!(p.item(g, i).value, "-=Lab=-");
 }
+
+/// Date & Time's Time row is text built with the page. Flipping 24-Hour Time left it in the old style ("18:02" beside a
+/// menu bar that already read "6:02 PM") until the page was built again; it follows the switch at once, both ways.
+#[test]
+fn the_time_row_follows_the_24_hour_switch_at_once() {
+    let ui = super::super::tests::ui();
+    let info = Info { hour: 18, min: 2, ..info() };
+    let (mut st, mut prefs) = settings(&ui, &info);
+    tap_row(&mut st, &ui, &mut prefs, "General");
+    tap_row(&mut st, &ui, &mut prefs, "Date & Time");
+    assert_eq!(st.page(), PageId::DateTime);
+    let time = |st: &Settings| {
+        let list = st.list().expect("a list page");
+        let (g, i) = list.find("Time").expect("the Time row");
+        list.item(g, i).value.clone()
+    };
+    assert!(st.options().clock_24h, "24-Hour Time is on by default");
+    assert_eq!(time(&st), "18:02");
+    let (g, i) = st.list().unwrap().find("24-Hour Time").expect("the switch");
+    st.activate(&ui, &mut prefs, Hit::Row(g, i), 0.0);
+    assert!(!st.options().clock_24h);
+    assert_eq!(time(&st), "6:02 PM", "no new info and no reopening in between");
+    assert_eq!(st.page(), PageId::DateTime, "the page stays");
+    let (g, i) = st.list().unwrap().find("24-Hour Time").expect("the switch is still there");
+    st.activate(&ui, &mut prefs, Hit::Row(g, i), 20.0);
+    assert_eq!(time(&st), "18:02");
+}

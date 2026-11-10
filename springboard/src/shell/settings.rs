@@ -3863,7 +3863,13 @@ impl Settings {
             Toggle::KeyboardClicks => flip(&mut self.opts.keyboard_clicks),
             Toggle::KeyboardHaptics => flip(&mut self.opts.keyboard_haptics),
             Toggle::LockSound => flip(&mut self.opts.lock_sound),
-            Toggle::Clock24 => flip(&mut self.opts.clock_24h),
+            Toggle::Clock24 => {
+                let on = flip(&mut self.opts.clock_24h);
+                // the rows that write a time (Date & Time's own Time row first) are text built with the page: build
+                // the page again, or the row keeps the old style until the next minute's info arrives
+                self.rebuild_visible(ui);
+                on
+            }
             Toggle::ClockDate => flip(&mut self.opts.clock_date),
             Toggle::ClockDay => flip(&mut self.opts.clock_day),
             Toggle::Layout(i) => super::kb_layouts::toggle(super::kb_layouts::Layout::ALL[i.min(super::kb_layouts::Layout::ALL.len() - 1)]),
