@@ -411,7 +411,8 @@ pub fn command(
     let form = bifrost_ui::form_factor::FormFactor::current();
     let account = Account::installed()?;
     prepare_container(data, &account)?;
-    let exec = fs::canonicalize(exec)?;
+    // the step is named: a bare "No such file or directory" in the log does not say which file a launch missed
+    let exec = fs::canonicalize(exec).map_err(|e| io::Error::new(e.kind(), format!("app executable {}: {e}", exec.display())))?;
     let package = exec
         .parent()
         .ok_or_else(|| io::Error::from(PolicyError::MissingPackageDirectory))?;

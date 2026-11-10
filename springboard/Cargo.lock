@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-setup-assistant"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bifrost-app",
  "springboard",
