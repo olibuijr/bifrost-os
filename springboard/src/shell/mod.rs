@@ -824,6 +824,8 @@ pub struct Shell {
     photo_dirs: Vec<PathBuf>,
     /// where settings and caches live (`set_data_dir`)
     data_dir: PathBuf,
+    /// the zone the Setup Assistant's user chose, until the shell has set it (`apply_setup_zone`)
+    setup_zone: Option<String>,
     /// the screenshot animation over the screen
     shot: Option<Overlay>,
     /// the Markup editor opened from the screenshot thumbnail
@@ -1350,6 +1352,7 @@ impl Shell {
             photos: None,
             photo_dirs: photos::library::dirs(),
             data_dir: deildu::data_dir().parent().map(Path::to_path_buf).unwrap_or_default(),
+            setup_zone: None,
             shot: None,
             markup: None,
             markup_load: None,
@@ -1630,10 +1633,9 @@ impl Shell {
         self.recent_dir = Some(PathBuf::from(dir));
         self.st_load();
         self.prefs = Prefs::load(format!("{dir}/settings.ini"));
-        // the Setup Assistant's choices reach settings.ini once, before the look is read below
-        if let Err(e) = crate::setup::apply_pending(Path::new(dir), &mut self.prefs) {
-            eprintln!("springboard: setup choices: {e}");
-        }
+        // the Setup Assistant's choices reach settings.ini once, before the look is read below (a run the shell did not
+        // see end: it normally copies them when the assistant exits, `setup_assistant_exited`)
+        self.copy_setup_choices();
         if let Some(v) = self.prefs.get_parsed::<f32>(settings::LIQUID_GLASS_PREF) { bifrost_render::glass::set_clarity(v); }
         // start in the saved scheme with no fade
         {
@@ -1663,6 +1665,7 @@ impl Shell {
         clock::adopt_old_dir(&PathBuf::from(dir).join("appdata").join(clock::APP_ID), &data);
         // first run: the Setup Assistant opens once the session is unlocked (no app starts on the login window)
         self.open_setup_assistant_if_due(t);
+        self.apply_setup_zone();
         let mut fx = self.clock.load(&data.join("clock.ini").to_string_lossy(), t);
         fx.push(Effect::AutoLock(self.idle_off_ms as u32));
         fx
@@ -4469,6 +4472,7 @@ impl Shell {
                         // the lock took the windows' toplevels down: they map again in the shell's order (E2E13 2)
                         self.desk_restack_after_unlock();
                         self.open_setup_assistant_if_due(t);
+                        self.apply_setup_zone();
                         // the lock screen's buffers are gone: hand their pages back to the system
                         #[cfg(target_env = "gnu")]
                         {

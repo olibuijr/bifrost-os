@@ -11,6 +11,10 @@
 //! records `done=1`, `applied=1` in its own file in the shell's data directory (`state_path`), which the app cannot
 //! change.
 //!
+//! The time zone travels the same way. The sandbox gives the window no way to the system service that sets the zone
+//! (no socket, and the service admits only the shell), so the window only records the zone; the shell sets it when
+//! the window is gone and the session is unlocked (`take_zone`, `Shell::apply_setup_zone`).
+//!
 //! The assistant is for a new install. A machine that already ran apps before it had any state file (one updated to
 //! the release that added the assistant) is marked done without being asked (`established`). The window opens only in
 //! an unlocked session (`due`): no app starts on the login window (`docs/privd-protocol.md`).
@@ -317,6 +321,20 @@ pub fn apply_pending(shell_dir: &Path, prefs: &mut Prefs) -> io::Result<Option<C
     Ok(Some(c))
 }
 
+/// The zone the shell sets now for a finished run, taken out of `pending` (the zone `apply_pending` returned). The
+/// assistant cannot set it: in the app sandbox the system service's socket is not there, the service admits only the
+/// shell's program, and the session token never leaves the shell. So the assistant records the zone in its state file
+/// and the shell, which owns the token, hands it to `bare::timezone::set` (the path Settings > Date & Time takes: the
+/// name is looked up in the zone database, and the system service checks it again). None while the session is locked,
+/// where the service answers no such call and the zone stays pending, when nothing is pending, and for a name that is
+/// not a zone name (a state file edited by hand).
+pub fn take_zone(pending: &mut Option<String>, locked: bool) -> Option<String> {
+    if locked {
+        return None;
+    }
+    pending.take().filter(|z| plan::valid_timezone(z))
+}
+
 /// The zone the system uses now: the target of `/etc/localtime` after `zoneinfo/`, or None.
 pub fn current_timezone(localtime: &Path) -> Option<String> {
     let target = std::fs::read_link(localtime).ok()?;
@@ -500,6 +518,55 @@ mod tests {
         State::default().save(&state_path(asked.path())).unwrap();
         assert_eq!(apply_pending(asked.path(), &mut prefs).unwrap(), None);
         assert!(needs_window(asked.path()));
+    }
+
+    /// The Setup Assistant could not set the zone from its sandbox. The zone now travels in its state file: the shell
+    /// gets it from `apply_pending` once, only from the assistant's own data directory, and sets it itself once the
+    /// session is unlocked.
+    #[test]
+    fn the_chosen_zone_reaches_the_shell_once_and_only_from_the_assistants_own_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut prefs = Prefs::memory();
+        // another app writing a finished state in its own data directory is not read
+        let other = dir.path().join("appdata").join("is.example.other");
+        std::fs::create_dir_all(&other).unwrap();
+        let wish = State { done: true, applied: false, choices: Choices { timezone: "Europe/Berlin".into(), ..Choices::default() } };
+        wish.save(&other.join(FILE)).unwrap();
+        assert_eq!(apply_pending(dir.path(), &mut prefs).unwrap(), None);
+        assert!(needs_window(dir.path()), "and it does not end the first run");
+
+        // the assistant's own file is: the zone comes back with the other choices, once
+        std::fs::create_dir_all(app_state_path(dir.path()).parent().unwrap()).unwrap();
+        wish.save(&app_state_path(dir.path())).unwrap();
+        let copied = apply_pending(dir.path(), &mut prefs).unwrap().unwrap();
+        assert_eq!(copied.timezone, "Europe/Berlin");
+        assert_eq!(apply_pending(dir.path(), &mut prefs).unwrap(), None, "a later start does not set the zone again");
+        assert_eq!(prefs.get("tz"), None, "the zone is not written to settings.ini unchecked: the shell sets it through the zone database");
+    }
+
+    #[test]
+    fn a_zone_name_that_is_not_one_never_leaves_the_state_file() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(app_state_path(dir.path()).parent().unwrap()).unwrap();
+        for bad in ["../../etc/shadow", "/etc/localtime", "Europe/Berlin; reboot", "Europe/Ber lin"] {
+            std::fs::write(app_state_path(dir.path()), format!("done=1\napplied=0\ntimezone={bad}\n")).unwrap();
+            let _ = std::fs::remove_file(state_path(dir.path()));
+            let copied = apply_pending(dir.path(), &mut Prefs::memory()).unwrap().unwrap();
+            assert_eq!(copied.timezone, "", "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_zone_is_set_only_in_an_unlocked_session_and_only_once() {
+        let mut pending = Some("Europe/Berlin".to_string());
+        assert_eq!(take_zone(&mut pending, true), None, "the login window: the system service answers no such call");
+        assert_eq!(pending.as_deref(), Some("Europe/Berlin"), "it stays pending until the session unlocks");
+        assert_eq!(take_zone(&mut pending, false).as_deref(), Some("Europe/Berlin"));
+        assert_eq!(take_zone(&mut pending, false), None, "once");
+        assert_eq!(take_zone(&mut None, false), None, "the user kept the system's zone");
+        for bad in ["", "../x", "/etc/localtime", "Europe/Berlin\nx"] {
+            assert_eq!(take_zone(&mut Some(bad.to_string()), false), None, "{bad:?}");
+        }
     }
 
     #[test]
