@@ -28,10 +28,19 @@ const IN_MOVED_TO: u32 = 0x80;
 const IN_CREATE: u32 = 0x100;
 const IN_DELETE: u32 = 0x200;
 const IN_DELETE_SELF: u32 = 0x400;
+/// The file system holding a watched folder was unmounted. The kernel sends it for every watch whatever the mask asks.
+const IN_UNMOUNT: u32 = 0x2000;
 const IN_Q_OVERFLOW: u32 = 0x4000;
 const IN_IGNORED: u32 = 0x8000;
 const IN_ISDIR: u32 = 0x4000_0000;
 const MASK: u32 = IN_MODIFY | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_CREATE | IN_DELETE | IN_DELETE_SELF;
+
+/// Whether a kernel event `mask` means the item is gone: it was deleted, or the volume it is on was unmounted (the
+/// watched folder then gets one event without a name and no deletion, and its watch ends). Without the unmount a
+/// folder on an ejected volume sent an event with no flags, and a window showing it kept its listing.
+fn removes(mask: u32) -> bool {
+    mask & (IN_DELETE | IN_DELETE_SELF | IN_UNMOUNT) != 0
+}
 
 /// `WatchStreamEventFlags`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -228,7 +237,7 @@ impl WatchStream {
                 if mask & IN_CREATE != 0 {
                     f = f.union(WatchEventFlags::CREATED);
                 }
-                if mask & (IN_DELETE | IN_DELETE_SELF) != 0 {
+                if removes(mask) {
                     f = f.union(WatchEventFlags::REMOVED);
                 }
                 if mask & (IN_MOVED_FROM | IN_MOVED_TO) != 0 {
@@ -474,6 +483,15 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         all
+    }
+
+    #[test]
+    fn an_unmount_reads_as_a_removal() {
+        assert!(removes(IN_DELETE) && removes(IN_DELETE_SELF | IN_ISDIR));
+        assert!(removes(IN_UNMOUNT), "the folder's volume was unmounted");
+        assert!(!removes(IN_CREATE | IN_MODIFY | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ISDIR));
+        // the event that follows an unmount ends the watch and is no removal of its own
+        assert!(!removes(IN_IGNORED));
     }
 
     #[test]
