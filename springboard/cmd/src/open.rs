@@ -1,13 +1,14 @@
 //! `open`: opens folders, files, URLs and apps with the desktop's own handlers. The shell does the work over its control
 //! socket, the same channel `bifrost-open-url` uses: `open-app <id>` starts an installed app, `open-folder <id> <path>`
 //! shows a folder in Files, `reveal-file <id> <path>` shows a file selected in its folder, `open-file <id> <path>` opens
-//! a file in an app, and `open-url <url>` routes a link by its scheme. The shell answers `ok` or `error: <why>`.
+//! a file in an app, `open-document <path>` opens a file in the default app for its type, and `open-url <url>` routes a
+//! link by its scheme. The shell answers `ok` or `error: <why>`.
 //!
 //! Supported: `-a`/`-b` (an installed app id, alone or with files to open in it), `-e`/`-t` (the text editor, alone or
 //! with files), `-R` (show a file selected in its folder in Files), `-u` (URL operands), URL operands, `file://` URLs,
-//! and folder operands (shown in Files).
-//! Refused with a message rather than run wrongly: an ordinary file opened with its default app (the shell has no
-//! request for that yet), a folder or a URL passed to an app, and the options
+//! folder operands (shown in Files), and file operands (opened in the default app for their type, which the shell
+//! picks; it opens files in the home folder only).
+//! Refused with a message rather than run wrongly: a folder or a URL passed to an app, and the options
 //! `-W -n -g -j -F -f -h -s --arch --env --stdin --stdout --stderr --args`.
 
 use crate::control;
@@ -83,6 +84,8 @@ pub enum Request {
     RevealFile { app: String, file: PathBuf },
     /// Open `file` in `app`, which receives it as a document.
     OpenFile { app: String, file: PathBuf },
+    /// Open `file` in the default app for its type, which the shell picks.
+    OpenDocument { file: PathBuf },
 }
 
 impl Request {
@@ -94,6 +97,7 @@ impl Request {
             Request::OpenFolder { app, folder } => format!("open-folder {app} {}", folder.to_string_lossy()),
             Request::RevealFile { app, file } => format!("reveal-file {app} {}", file.to_string_lossy()),
             Request::OpenFile { app, file } => format!("open-file {app} {}", file.to_string_lossy()),
+            Request::OpenDocument { file } => format!("open-document {}", file.to_string_lossy()),
         }
     }
 }
@@ -162,7 +166,7 @@ fn plan_path(path: &Path, o: &Options) -> Result<Request, String> {
     if full.is_dir() {
         return Ok(Request::OpenFolder { app: FILES_APP.into(), folder: full });
     }
-    Err(format!("{}: opening a file with its default app is not supported yet (use -R to show its folder)", path.display()))
+    Ok(Request::OpenDocument { file: full })
 }
 
 /// The folder Reveal shows for `path`: the folder itself, or the folder that holds the file.
@@ -352,10 +356,13 @@ mod tests {
         let reveal = Options { reveal: true, operands: vec![file.to_string_lossy().into_owned()], ..Options::default() };
         assert_eq!(plan(&reveal), Ok(vec![Request::RevealFile { app: FILES_APP.into(), file: canon_dir.join("note.txt") }]));
         let reveal_dir = Options { reveal: true, operands: vec![dir.to_string_lossy().into_owned()], ..Options::default() };
-        assert_eq!(plan(&reveal_dir), Ok(vec![Request::OpenFolder { app: FILES_APP.into(), folder: canon_dir }]));
+        assert_eq!(plan(&reveal_dir), Ok(vec![Request::OpenFolder { app: FILES_APP.into(), folder: canon_dir.clone() }]));
 
         let plain_file = Options { operands: vec![file.to_string_lossy().into_owned()], ..Options::default() };
-        assert!(plan(&plain_file).unwrap_err().contains("not supported yet"));
+        // a file with no app named opens in the default app for its type, which the shell picks
+        assert_eq!(plan(&plain_file), Ok(vec![Request::OpenDocument { file: canon_dir.join("note.txt") }]));
+        let file_url = Options { operands: vec![format!("file://{}", file.to_string_lossy())], ..Options::default() };
+        assert_eq!(plan(&file_url), Ok(vec![Request::OpenDocument { file: canon_dir.join("note.txt") }]));
 
         let missing = Options { operands: vec![dir.join("nope").to_string_lossy().into_owned()], ..Options::default() };
         assert!(plan(&missing).unwrap_err().contains("No such file or directory"));
@@ -372,6 +379,8 @@ mod tests {
         assert_eq!(reveal.line(), "reveal-file is.olibuijr.files.desktop /home/me/My Files/a b.txt");
         let file = Request::OpenFile { app: TEXT_EDITOR_APP.into(), file: PathBuf::from("/home/me/to do.txt") };
         assert_eq!(file.line(), "open-file is.olibuijr.textedit.desktop /home/me/to do.txt");
+        let document = Request::OpenDocument { file: PathBuf::from("/home/me/My Files/to do.txt") };
+        assert_eq!(document.line(), "open-document /home/me/My Files/to do.txt");
     }
 
     #[test]

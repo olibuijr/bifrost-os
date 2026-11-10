@@ -1280,4 +1280,32 @@ mod shell_tests {
         assert!(!sh.open_path_with(terminal, &png, 4.0), "a built-in that takes no file");
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// `open-document` (the `open FILE` command with no app named) checks the path as `open-file` does and opens
+    /// nothing outside the account's home folder, whatever the default app for the type is.
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn open_document_checks_the_path_and_refuses_a_file_outside_the_home_folder() {
+        let mut sh = crate::shell::tests::desktop_shell();
+        let dir = std::env::temp_dir().join(format!("bifrost-open-document-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (txt, png) = (dir.join("a.txt"), dir.join("shot.png"));
+        std::fs::write(&txt, "x").unwrap();
+        std::fs::write(&png, crate::cg::imageio::tests::png_bytes(4, 4, [10, 20, 30, 255])).unwrap();
+        let text = |p: &Path| p.to_string_lossy().into_owned();
+        assert_eq!(sh.desktop_open_document("a.txt", 1.0), Err("Expected an absolute file path".into()));
+        assert_eq!(sh.desktop_open_document(&text(&dir.join("sub/../a.txt")), 1.0), Err("Expected an absolute file path".into()));
+        assert_eq!(sh.desktop_open_document(&text(&dir), 1.0), Err("Expected a file, not a folder".into()));
+        assert_eq!(sh.desktop_open_document(&text(&dir.join("missing.txt")), 1.0), Err("File not found".into()));
+        // the temporary folder is not in any account's home: neither a document for an installed app nor a picture
+        // for the built-in Photos (which would read it as the shell) is opened
+        assert!(sh.desktop_open_document(&text(&txt), 2.0).is_err());
+        assert!(sh.desktop_open_document(&text(&png), 3.0).is_err());
+        assert!(sh.photos.as_ref().and_then(|p| p.viewing()).is_none(), "Photos did not open the picture");
+        assert_eq!(sh.desktop_open_file("bifrost.photos", &text(&png), 4.0), Err("The file is not in the home folder".into()));
+        sh.desk = None;
+        assert_eq!(sh.desktop_open_document(&text(&txt), 5.0), Err("The desktop is not active".into()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

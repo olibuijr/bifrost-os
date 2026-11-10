@@ -27,6 +27,20 @@ elif len(sys.argv) == 3 and sys.argv[1] == "--open":
             client.settimeout(5);client.connect('/run/bifrost/shell-control.sock');client.sendall(request);response=client.recv(4096).decode()
         if not response.startswith('ok'):sys.exit(response.strip())
         sys.exit(0)
+    # A file: the shell opens it in the default app for its type (`open-document`), with its own checks (a file in the
+    # home folder, the malware check). Its refusal is final. Only when no shell answers, or the shell is from before
+    # the request, does the desktop's generic opener run, as it always did.
+    path = path.resolve()
+    request = f'open-document {path}\n'.encode()
+    if len(request) > 511 or '\n' in str(path):
+        sys.exit('File path is too long')
+    try:
+        with socket.socket(socket.AF_UNIX) as client:
+            client.settimeout(5);client.connect('/run/bifrost/shell-control.sock');client.sendall(request);response=client.recv(4096).decode(errors='replace')
+    except OSError:
+        response = None
+    if response is not None and 'unknown command' not in response:
+        sys.exit(0 if response.startswith('ok') else response.strip() or 'No answer from the desktop')
     cmd = ['gio','open',str(path)]
 elif len(sys.argv) == 1:
     env.append('XDG_DATA_DIRS=/run/bifrost/user/share:/usr/local/share:/usr/share')

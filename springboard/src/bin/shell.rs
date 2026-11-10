@@ -864,6 +864,7 @@ fn run() -> std::io::Result<()> {
                     Ok(Request::OpenFolder(id,folder))=>{match shell.desktop_open_folder(&id,&folder,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
                     Ok(Request::RevealFile(id,path))=>{match shell.desktop_reveal_file(&id,&path,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
                     Ok(Request::OpenFile(id,path))=>{match shell.desktop_open_file(&id,&path,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
+                    Ok(Request::OpenDocument(path))=>{match shell.desktop_open_document(&path,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
                     Ok(Request::OpenUrl(url))=>{match shell.desktop_open_link(&url,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
                     Ok(Request::Tap(x, y)) => {
                         path((x, y), (x, y), 40.0);

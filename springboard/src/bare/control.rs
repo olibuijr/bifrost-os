@@ -104,6 +104,8 @@ pub enum Request {
     RevealFile(String, String),
     /// Opens a file in an installed app, which receives it as a document: `open-file <app id> <absolute file>`.
     OpenFile(String, String),
+    /// Opens a file in the default app for its type: `open-document <absolute file>`.
+    OpenDocument(String),
     Swipe { from: (f32, f32), to: (f32, f32), ms: f32 },
     /// One finger event now: phase 0 down, 1 move, 2 up (see `path`).
     Touch(u8, f32, f32),
@@ -238,6 +240,13 @@ pub fn parse(line: &str) -> Result<Request, String> {
     if let Some(rest) = line.trim_end().strip_prefix("open-file ") {
         let (id, path) = rest.split_once(' ').ok_or("Expected an app ID and a file")?;
         return Ok(Request::OpenFile(id.into(), path.into()));
+    }
+    // no app named: the shell picks the default app for the file's type. The path takes the rest of the line
+    if let Some(path) = line.trim_end().strip_prefix("open-document ") {
+        if path.trim().is_empty() {
+            return Err("Expected a file".into());
+        }
+        return Ok(Request::OpenDocument(path.into()));
     }
     // the image path may contain spaces, so it takes the rest of the line
     if let Some(rest) = line.trim_end().strip_prefix("image-attach ") {
@@ -838,7 +847,9 @@ mod tests {
         assert!(parse("open-file is.olibuijr.textedit.desktop").is_err());
         assert!(parse("reveal-file").is_err() && parse("open-file").is_err());
         // like the other requests that open something, both wait for a login and stay open to the account
-        for line in ["reveal-file a.b /home/me/a.txt", "open-file a.b /home/me/a.txt"] {
+        assert_eq!(parse("open-document /home/me/My Files/to do.txt\n"), Ok(Request::OpenDocument("/home/me/My Files/to do.txt".into())));
+        assert!(parse("open-document").is_err() && parse("open-document  ").is_err());
+        for line in ["reveal-file a.b /home/me/a.txt", "open-file a.b /home/me/a.txt", "open-document /home/me/a.txt"] {
             let request = parse(line).unwrap();
             assert!(!allowed_while_locked(&request), "{line} waits for a login");
             assert!(!privileged_only(&request), "{line} stays open to the account");
