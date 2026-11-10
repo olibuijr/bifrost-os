@@ -219,9 +219,9 @@ mod tests {
         dir
     }
 
-    /// A one-word StarDict dictionary in `dir`: `weather` defined as `text`.
-    fn one_word(dir: &Path, text: &str) {
-        let mut idx = b"weather\0".to_vec();
+    /// A one-word StarDict dictionary in `dir`: `word` defined as `text`.
+    fn one_word(dir: &Path, word: &str, text: &str) {
+        let mut idx = format!("{word}\0").into_bytes();
         idx.extend(0u32.to_be_bytes());
         idx.extend((text.len() as u32).to_be_bytes());
         fs::write(dir.join("test.idx"), &idx).unwrap();
@@ -233,16 +233,20 @@ mod tests {
     fn the_library_is_read_once_however_often_it_is_asked_for() {
         let dir = scratch("once");
         fs::create_dir_all(dir.join("dictionaries")).unwrap();
-        one_word(&dir.join("dictionaries"), "n. the atmosphere");
+        // `preload` fills the one library of the process, which every other test's Search reads from then on (or theirs
+        // came first and this one is never read). The word is one no test searches for, so either way a query in
+        // another test gets the rows it would get with no dictionary installed.
+        const WORD: &str = "zqdictonce";
+        one_word(&dir.join("dictionaries"), WORD, "n. the atmosphere");
         let before = loads();
         preload(dir.clone());
         // a second open while it loads, and after, starts no second read
         preload(dir.clone());
         let start = std::time::Instant::now();
-        while definition("weather").is_none() && start.elapsed() < std::time::Duration::from_secs(10) {
+        while definition(WORD).is_none() && start.elapsed() < std::time::Duration::from_secs(10) {
             std::thread::yield_now();
         }
-        assert!(definition("weather").is_some(), "the library came in");
+        assert!(definition(WORD).is_some(), "the library came in");
         preload(dir.clone());
         assert!(loads() - before <= 1, "read {} times", loads() - before);
         let after = loads();
@@ -254,7 +258,7 @@ mod tests {
     #[test]
     fn a_defined_word_gets_its_dictionary_and_preview_and_an_unknown_one_nothing() {
         let dir = scratch("define");
-        one_word(&dir, "n. the state of the\natmosphere at a place");
+        one_word(&dir, "weather", "n. the state of the\natmosphere at a place");
         let lib = Library::load(&[dir.clone()], &dir.join("no-words"));
         let def = define_in(&lib, "Weather").expect("defined");
         assert_eq!(def.dictionary, "Test Dictionary");

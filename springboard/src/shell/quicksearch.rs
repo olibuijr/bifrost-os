@@ -72,8 +72,6 @@ const PER_GROUP: usize = 3;
 const USAGE_FILE: &str = "search-usage.txt";
 /// The launch history the app prediction reads, beside quicksearch.ini (`bifrost_ui::app_prediction`).
 const LAUNCHES_FILE: &str = "app-launches.txt";
-/// The opens of indexed results, read by the Documents section; loaded by `QuickSearch::load`.
-static OPENS: std::sync::Mutex<Option<bifrost_ui::search_rank::Usage>> = std::sync::Mutex::new(None);
 
 /// A shortcut run from Search (`Hit::Shortcut`) that finished on its thread: the app's slot, the shortcut's title and
 /// what the run gave (its dialog text, or why it failed).
@@ -83,37 +81,38 @@ struct ShortcutRun {
     outcome: Result<Option<String>, String>,
 }
 
-/// The shortcut runs still on their threads, and the finished ones whose banner the shell has not posted yet
-/// (`Shell::shortcut_results_tick`).
-static SHORTCUT_RUNS: std::sync::Mutex<(usize, Vec<ShortcutRun>)> = std::sync::Mutex::new((0, Vec::new()));
+/// The shortcut runs a panel started that are still on their threads, and the finished ones whose banner the shell has
+/// not posted yet (`Shell::shortcut_results_tick`). Shared between the panel and its run threads only, so one shell
+/// never polls for (or posts) the runs of another in the same process.
+type ShortcutRuns = Arc<std::sync::Mutex<(usize, Vec<ShortcutRun>)>>;
 
-fn shortcut_runs() -> std::sync::MutexGuard<'static, (usize, Vec<ShortcutRun>)> {
-    SHORTCUT_RUNS.lock().unwrap_or_else(|e| e.into_inner())
+fn shortcut_runs(runs: &ShortcutRuns) -> std::sync::MutexGuard<'_, (usize, Vec<ShortcutRun>)> {
+    runs.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// One shortcut run counted in `SHORTCUT_RUNS` from before its thread starts until the thread ends, however it ends: a
-/// panic in the app's intent call unwinds through the drop, and a thread that could not be started drops its closure
-/// (and the guard in it) at once. A count that never dropped kept `next_wake` polling every 50 ms forever.
-struct ShortcutRunGuard;
+/// One shortcut run counted in its panel's `ShortcutRuns` from before its thread starts until the thread ends, however
+/// it ends: a panic in the app's intent call unwinds through the drop, and a thread that could not be started drops its
+/// closure (and the guard in it) at once. A count that never dropped kept `next_wake` polling every 50 ms forever.
+struct ShortcutRunGuard(ShortcutRuns);
 
 impl ShortcutRunGuard {
-    fn new() -> ShortcutRunGuard {
-        shortcut_runs().0 += 1;
-        ShortcutRunGuard
+    fn new(runs: &ShortcutRuns) -> ShortcutRunGuard {
+        shortcut_runs(runs).0 += 1;
+        ShortcutRunGuard(Arc::clone(runs))
     }
 }
 
 impl Drop for ShortcutRunGuard {
     fn drop(&mut self) {
-        let mut g = shortcut_runs();
+        let mut g = shortcut_runs(&self.0);
         g.0 = g.0.saturating_sub(1);
     }
 }
 
-/// Runs `f` on a thread of its own, counted as a shortcut run while it is out (`ShortcutRunGuard`). False when the
-/// thread could not be started (the count is back where it was).
-fn spawn_shortcut_run(f: impl FnOnce() + Send + 'static) -> bool {
-    let guard = ShortcutRunGuard::new();
+/// Runs `f` on a thread of its own, counted in `runs` as a shortcut run while it is out (`ShortcutRunGuard`). False
+/// when the thread could not be started (the count is back where it was).
+fn spawn_shortcut_run(runs: &ShortcutRuns, f: impl FnOnce() + Send + 'static) -> bool {
+    let guard = ShortcutRunGuard::new(runs);
     let started = std::thread::Builder::new().name("intent-retry".into()).spawn(move || {
         let _guard = guard;
         f();
@@ -127,11 +126,6 @@ fn spawn_shortcut_run(f: impl FnOnce() + Send + 'static) -> bool {
     }
 }
 
-/// True while a shortcut run from Search is out or its result is not shown yet: the shell polls for it.
-pub(super) fn shortcut_runs_pending() -> bool {
-    let g = shortcut_runs();
-    g.0 > 0 || !g.1.is_empty()
-}
 
 /// The banner of a finished shortcut, as the reference shows a shortcut's result: its name over its output, "Done" when
 /// it gave none, or the problem when it failed.
@@ -502,18 +496,9 @@ fn settings_intent_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::I
         .collect()
 }
 
-/// The wallpaper catalogue as (id, name), for the "Set Wallpaper to" Search rows. The shell sets it whenever its
-/// wallpaper list changes (`Shell::set_wallpapers`).
-static WALLPAPERS: std::sync::Mutex<Vec<(String, String)>> = std::sync::Mutex::new(Vec::new());
-
-/// Records the wallpaper catalogue Search offers rows for.
-pub fn set_wallpaper_catalogue(list: Vec<(String, String)>) {
-    *WALLPAPERS.lock().unwrap_or_else(|e| e.into_inner()) = list;
-}
-
 /// The shell action intents (`settings_actions`) Search lists: the Wi-Fi scan, the two Wi-Fi switch states, and one
-/// "Set Wallpaper to" row per picture in the catalogue.
-fn settings_action_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::Item, String)> {
+/// "Set Wallpaper to" row per picture of `wallpapers` (the catalogue as (id, name)).
+fn settings_action_rows(hits: &mut BTreeMap<String, Hit>, wallpapers: &[(String, String)]) -> Vec<(search_rank::Item, String)> {
     use super::settings_actions::SettingsIntent;
     let fixed: [(&str, &str, &str, SettingsIntent); 4] = [
         ("wifi-scan", "Scan for Wi-Fi Networks", "Look for Wi-Fi networks nearby", SettingsIntent::WifiScan),
@@ -525,8 +510,7 @@ fn settings_action_rows(hits: &mut BTreeMap<String, Hit>) -> Vec<(search_rank::I
         .into_iter()
         .map(|(key, title, text, intent)| table_row(hits, format!("settings-action:{key}"), title, text.to_string(), search_rank::Kind::Settings, Hit::SettingsAction { intent, title: title.to_string() }, fuzzy::fold(title)))
         .collect();
-    let pictures = WALLPAPERS.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    for (id, name) in pictures {
+    for (id, name) in wallpapers {
         let title = format!("Set Wallpaper to {name}");
         let folded = fuzzy::fold(&title);
         let hit = Hit::SettingsAction { intent: SettingsIntent::SetWallpaper(id.clone()), title: title.clone() };
@@ -582,7 +566,7 @@ pub fn results(query: &str, deildu: &[String]) -> Vec<Group> {
 fn results_with_contacts(query: &str, deildu: &[String], contacts: &[super::contactstore::Contact]) -> Vec<Group> {
     let folded: Vec<String> = deildu.iter().map(|t| fuzzy::fold(t)).collect();
     let contacts_folded: Vec<[String; 3]> = contacts.iter().map(folded_fields).collect();
-    results_folded(query, deildu, &folded, contacts, &contacts_folded)
+    results_folded(query, deildu, &folded, contacts, &contacts_folded, &[])
 }
 
 /// The name, phone and email-and-company of a contact, folded for matching (kept by the caller between keystrokes). The
@@ -623,6 +607,8 @@ struct Corpus<'a> {
     files: &'a [crate::files::fs::Entry],
     files_folded: &'a [String],
     events: &'a [super::calendar::store::CalendarEvent],
+    /// the wallpaper catalogue as (id, name), for the "Set Wallpaper to" rows
+    wallpapers: &'a [(String, String)],
 }
 
 /// The usage key of an app: its opens are counted under it (see `QuickSearch::note_open`).
@@ -761,7 +747,7 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
         .collect();
     let mut shortcut_rows: Vec<(search_rank::Item, String)> = shortcut_items().into_iter().enumerate().map(|(i, (hit, folded))| table_row(&mut hits, format!("shortcut:{i}"), &folded, String::new(), search_rank::Kind::Other, hit, folded.clone())).collect();
     shortcut_rows.extend(settings_intent_rows(&mut hits));
-    shortcut_rows.extend(settings_action_rows(&mut hits));
+    shortcut_rows.extend(settings_action_rows(&mut hits, c.wallpapers));
     shortcut_rows.extend(media_transport_rows(&mut hits));
     let file_rows = c.files.iter().zip(c.files_folded).map(|(e, f)| table_row(&mut hits, format!("file:{}", e.path.display()), &e.name, String::new(), search_rank::Kind::File, Hit::File { path: e.path.clone(), name: e.name.clone(), modified: e.mtime }, f.clone())).collect();
     let event_rows = c
@@ -915,13 +901,14 @@ fn scoped(groups: Vec<Group>, scope: &super::search_scope::Scope) -> Vec<Group> 
 }
 
 /// `deildu_folded` holds `fuzzy::fold` of each `deildu` title and `contacts_folded` the `folded_fields` of each contact,
-/// both kept by the caller between keystrokes. The sources are merged at once here; the Search panel streams them.
-fn results_folded(query: &str, deildu: &[String], deildu_folded: &[String], contacts: &[super::contactstore::Contact], contacts_folded: &[[String; 3]]) -> Vec<Group> {
+/// both kept by the caller between keystrokes; `wallpapers` is the catalogue as (id, name). The sources are merged at
+/// once here; the Search panel streams them.
+fn results_folded(query: &str, deildu: &[String], deildu_folded: &[String], contacts: &[super::contactstore::Contact], contacts_folded: &[[String; 3]], wallpapers: &[(String, String)]) -> Vec<Group> {
     let query = query.trim();
     if query.is_empty() {
         return vec![];
     }
-    let corpus = Corpus { deildu, deildu_folded, contacts, contacts_folded, files: &[], files_folded: &[], events: &[] };
+    let corpus = Corpus { deildu, deildu_folded, contacts, contacts_folded, files: &[], files_folded: &[], events: &[], wallpapers };
     let (tables, hits) = build_tables(&corpus);
     let mut run = search_rank::Query::start(query, &sources_of(tables), SYNC_DEADLINE);
     run.wait();
@@ -943,6 +930,7 @@ impl QuickSearch {
             files: &self.files,
             files_folded: &self.files_folded,
             events: &self.events,
+            wallpapers: &self.wallpapers,
         };
         let (tables, hits) = build_tables(&corpus);
         let mut run = search_rank::Query::start(query, &sources_of(tables), RUN_DEADLINE);
@@ -959,11 +947,7 @@ impl QuickSearch {
     fn run_groups(&mut self) -> (Option<Group>, Vec<Group>, Vec<Group>) {
         let Some(run) = self.run.as_mut() else { return (None, vec![], vec![]) };
         run.poll();
-        let guard = OPENS.lock().unwrap_or_else(|e| e.into_inner());
-        let empty = search_rank::Usage::default();
-        let usage = guard.as_ref().unwrap_or(&empty);
-        let merged = run.merge(PER_GROUP, usage, now_secs(), &search_rank::NoSemantic);
-        drop(guard);
+        let merged = run.merge(PER_GROUP, &self.opens, now_secs(), &search_rank::NoSemantic);
         if self.frozen_top.is_none() {
             let hits = &self.run_hits;
             self.frozen_top = merged.top.as_ref().and_then(|t| hits.get(&t.item.id).cloned());
@@ -986,7 +970,7 @@ impl QuickSearch {
             self.start_run(&query);
         }
         let (top, sections, files) = self.run_groups();
-        let groups = compose(&query, calculator_group(&query), top, sections, indexed_groups(&query), files);
+        let groups = compose(&query, calculator_group(&query), top, sections, indexed_groups(&query, &self.opens), files);
         let groups = self.keep_shown_order(groups);
         self.shown = groups.iter().map(|g| g.title).collect();
         groups
@@ -1028,8 +1012,8 @@ fn app_section_title(name: &str) -> &'static str {
 /// One section per app that has matching items, titled with the app's name. Items are ordered by the hybrid ranker
 /// (`bifrost_ui::search_rank`) across all apps at once: title and word match, recency of indexing, and local opens.
 /// Each section keeps its first `PER_GROUP` items in ranked order, and sections follow the best item of each app.
-/// Matches the ranker does not score keep their index order after the ranked ones.
-fn indexed_groups(query: &str) -> Vec<Group> {
+/// Matches the ranker does not score keep their index order after the ranked ones. `usage` holds the panel's open counts.
+fn indexed_groups(query: &str, usage: &search_rank::Usage) -> Vec<Group> {
     // Settings > Search: the Documents source or an app's items switched off are left out
     let prefs = super::search_prefs::current();
     if !prefs.source_on("Documents") {
@@ -1051,9 +1035,6 @@ fn indexed_groups(query: &str) -> Vec<Group> {
         })
         .collect();
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-    let guard = OPENS.lock().unwrap_or_else(|e| e.into_inner());
-    let empty = search_rank::Usage::default();
-    let usage = guard.as_ref().unwrap_or(&empty);
     // free document text is where a local semantic score helps; app and settings titles are too short for it
     let order = search_rank::order(query, &items, usage, now, &bifrost_ui::semantic_hash::HashedSemantic::new());
     let mut groups: Vec<Group> = vec![];
@@ -1269,8 +1250,17 @@ pub struct QuickSearch {
     /// modification times the contacts and Deildu title caches were read at
     contacts_stamp: Option<(PathBuf, std::time::SystemTime)>,
     deildu_stamp: Option<(PathBuf, std::time::SystemTime)>,
-    /// where the indexed-result open counts are saved (beside quicksearch.ini); None until `load`
+    /// how often each result was opened from this panel (`note_open`): the ranker's local usage signal. Owned by the
+    /// panel, so two panels in one process (the tests' shells) never rank by each other's opens
+    opens: search_rank::Usage,
+    /// where the open counts are saved (beside quicksearch.ini); None until `load`
     usage_path: Option<PathBuf>,
+    /// the wallpaper catalogue as (id, name), for the "Set Wallpaper to" rows (`set_wallpapers`)
+    wallpapers: Vec<(String, String)>,
+    /// the person's home folder, walked for files besides the Files root (`refresh_sources`); None when there is none
+    home: Option<PathBuf>,
+    /// the shortcut runs this panel started (`ShortcutRuns`)
+    shortcut_runs: ShortcutRuns,
     /// every app launch with its time, for the prediction of the next app; saved at `launches_path`
     launches: bifrost_ui::app_prediction::LaunchLedger,
     launches_path: Option<PathBuf>,
@@ -1389,7 +1379,13 @@ impl QuickSearch {
             files_at: None,
             contacts_stamp: None,
             deildu_stamp: None,
+            opens: Default::default(),
             usage_path: None,
+            wallpapers: Vec::new(),
+            // tests never walk the home folder of the machine they run on: its files would come in as results whenever
+            // the walk happened to finish inside a test
+            home: if cfg!(test) { None } else { files_walk::user_home() },
+            shortcut_runs: Default::default(),
             launches: Default::default(),
             launches_path: None,
             run: None,
@@ -1416,10 +1412,7 @@ impl QuickSearch {
     pub fn load(&mut self, path: impl Into<PathBuf>) {
         let path: PathBuf = path.into();
         let usage_path = path.with_file_name(USAGE_FILE);
-        let opens = std::fs::read_to_string(&usage_path).map(|t| search_rank::Usage::from_text(&t)).unwrap_or_default();
-        if let Ok(mut g) = OPENS.lock() {
-            *g = Some(opens);
-        }
+        self.opens = std::fs::read_to_string(&usage_path).map(|t| search_rank::Usage::from_text(&t)).unwrap_or_default();
         self.usage_path = Some(usage_path);
         let launches_path = path.with_file_name(LAUNCHES_FILE);
         self.launches = std::fs::read_to_string(&launches_path).map(|t| bifrost_ui::app_prediction::LaunchLedger::from_text(&t)).unwrap_or_default();
@@ -1430,18 +1423,29 @@ impl QuickSearch {
         self.search_imgs.clear();
     }
 
+    /// The wallpaper catalogue as (id, name) Search offers "Set Wallpaper to" rows for. The shell sets it whenever its
+    /// wallpaper list changes (`Shell::set_wallpapers`).
+    pub fn set_wallpapers(&mut self, list: Vec<(String, String)>) {
+        self.wallpapers = list;
+    }
+
+    /// What `query` finds at once outside the panel (the Look Up popover's Search section): the fixed sources and
+    /// this panel's wallpaper catalogue, merged as `results` does.
+    pub fn results_for(&self, query: &str) -> Vec<Group> {
+        results_folded(query, &[], &[], &[], &[], &self.wallpapers)
+    }
+
+    /// True while a shortcut run from this panel is out or its result is not shown yet: the shell polls for it.
+    pub(super) fn shortcut_runs_pending(&self) -> bool {
+        let g = shortcut_runs(&self.shortcut_runs);
+        g.0 > 0 || !g.1.is_empty()
+    }
+
     /// Counts an open of an indexed result (`indexed_key`) and saves the counts beside quicksearch.ini. Local only.
     pub fn note_open(&mut self, key: &str) {
-        let text = match OPENS.lock() {
-            Ok(mut g) => {
-                let u = g.get_or_insert_with(Default::default);
-                u.bump(key);
-                u.to_text()
-            }
-            Err(_) => return,
-        };
+        self.opens.bump(key);
         if let Some(path) = &self.usage_path {
-            if let Err(e) = std::fs::write(path, text) {
+            if let Err(e) = std::fs::write(path, self.opens.to_text()) {
                 eprintln!("springboard: {USAGE_FILE}: {e}");
             }
         }
@@ -1567,11 +1571,11 @@ impl QuickSearch {
         if self.files_rx.is_none() && !fresh {
             self.files_root = Some(root.clone());
             let (tx, rx) = std::sync::mpsc::channel();
+            let home = self.home.clone();
             crate::bare::sys::spawn_named("quicksearch-files", move || {
                 // Privacy: files in the folders Settings > Search excludes are never listed
                 let excluded = super::search_prefs::current();
                 // the Files root and the home folder, in a bounded walk (`quicksearch_files`)
-                let home = files_walk::user_home();
                 let roots = files_walk::roots(&root, home.as_deref());
                 let files: Vec<crate::files::fs::Entry> = files_walk::walk(&roots, files_walk::LIMIT, files_walk::VISIT_BUDGET).into_iter().filter(|e| !excluded.folder_excluded(&e.path)).collect();
                 let _ = tx.send(files);
@@ -2780,13 +2784,15 @@ impl Shell {
                     // the app may still be starting: retry the connection for a few seconds, off the UI thread; the
                     // result comes back as a banner with the shortcut's name (E2E12 5)
                     // counted while it is out, also when the intent call panics (`ShortcutRunGuard`)
-                    spawn_shortcut_run(move || {
+                    let runs = Arc::clone(&self.quicksearch.shortcut_runs);
+                    let done = Arc::clone(&runs);
+                    spawn_shortcut_run(&runs, move || {
                         let outcome = super::intents::run(&app_id, &intent, std::time::Duration::from_secs(8));
                         match &outcome {
                             Ok(_) => bifrost_core::log::shell_logger("quicksearch").info(format!("shortcut {intent} of {app_id} ran")),
                             Err(e) => bifrost_core::log::shell_logger("quicksearch").error(format!("shortcut {intent} of {app_id}: {e}")),
                         }
-                        shortcut_runs().1.push(ShortcutRun { slot: n as u8, title, outcome });
+                        shortcut_runs(&done).1.push(ShortcutRun { slot: n as u8, title, outcome });
                     });
                 }
             }
@@ -2880,7 +2886,7 @@ impl Shell {
     /// Posts the banner of every shortcut run from Search that finished since the last tick, through the ordinary
     /// notification path (the app's notification settings apply). True when one was posted.
     pub(super) fn shortcut_results_tick(&mut self) -> bool {
-        let done = std::mem::take(&mut shortcut_runs().1);
+        let done = std::mem::take(&mut shortcut_runs(&self.quicksearch.shortcut_runs).1);
         self.post_shortcut_runs(done)
     }
 

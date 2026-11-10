@@ -2477,7 +2477,7 @@ impl Shell {
             due.add(Some(t + 50.0));
         }
         // a shortcut run from Search posts its result banner when its thread finishes (`shortcut_results_tick`)
-        if quicksearch::shortcut_runs_pending() {
+        if self.quicksearch.shortcut_runs_pending() {
             due.add(Some(t + 50.0));
         }
         if self.screen_on {
@@ -2995,7 +2995,7 @@ impl Shell {
 
     /// The wallpaper catalogue shown by Settings › Wallpaper.
     pub fn set_wallpapers(&mut self, wallpapers: Vec<Wallpaper>) {
-        quicksearch::set_wallpaper_catalogue(wallpapers.iter().map(|w| (w.id.clone(), w.name.clone())).collect());
+        self.quicksearch.set_wallpapers(wallpapers.iter().map(|w| (w.id.clone(), w.name.clone())).collect());
         self.wallpapers = Rc::new(wallpapers);
     }
 
