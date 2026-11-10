@@ -58,8 +58,13 @@ fn walk(dir: &Path, s: &mut Summary, keep_going: &mut dyn FnMut() -> bool, depth
 }
 
 /// The rows of the info sheet for `entry`; `summary` fills Size and Items
-/// for folders, `now` and `offset` format the dates.
+/// for folders, `now` and `offset` format the dates, with the time in 24-hour style.
 pub fn rows(entry: &Entry, summary: Option<Summary>, created: Option<i64>, tags: &TagIndex, now: i64, offset: i32) -> Vec<(&'static str, String)> {
+    rows_in(entry, summary, created, tags, now, offset, true)
+}
+
+/// `rows` with the times as the user's clocks write them: `h24` is Date & Time > 24-Hour Time (`fs::date_text_in`).
+pub fn rows_in(entry: &Entry, summary: Option<Summary>, created: Option<i64>, tags: &TagIndex, now: i64, offset: i32, h24: bool) -> Vec<(&'static str, String)> {
     let mut r = vec![("Kind", fs::kind_description(&entry.name, entry.is_dir, entry.kind).to_string())];
     if entry.is_dir {
         match summary {
@@ -74,9 +79,9 @@ pub fn rows(entry: &Entry, summary: Option<Summary>, created: Option<i64>, tags:
     }
     r.push(("Where", entry.path.parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default()));
     if let Some(c) = created {
-        r.push(("Created", fs::date_text(c, now, offset)));
+        r.push(("Created", fs::date_text_in(c, now, offset, h24)));
     }
-    r.push(("Modified", fs::date_text(entry.mtime, now, offset)));
+    r.push(("Modified", fs::date_text_in(entry.mtime, now, offset, h24)));
     let t: Vec<&str> = tags.tags(&entry.path).into_iter().map(Tag::label).collect();
     if !t.is_empty() {
         r.push(("Tags", t.join(", ")));
