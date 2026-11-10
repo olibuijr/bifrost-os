@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.14
+
+- A page that declares a dark colour scheme and sets no background has a dark page behind its light text, whether the scheme comes from its CSS or only from a `color-scheme` meta element. A page that supports both light and dark follows the system appearance. A page that declares nothing stays light. Engine 0.7.0-bifrost.17.
+
 ## 0.17.13
 
 - A page that sets no colours of its own is readable in the dark appearance: its text is dark on the white page. A page that declares a dark colour scheme still gets light text. Engine 0.7.0-bifrost.16.

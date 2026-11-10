@@ -34,6 +34,13 @@ pub(super) fn preferences_from_env() -> Preferences {
 /// `shell_background_color_rgba`. In the dark appearance a page that sets no colours therefore drew pale text on
 /// white. This makes `light` the default scheme, so default text and default canvas agree. It is a normal user-origin
 /// declaration: a page's own `color-scheme` (author origin) still wins, and `prefers-color-scheme` is untouched.
+///
+/// The two other halves are changes to Servo itself (`patches/0001-page-color-scheme.patch`): the page's
+/// `<meta name="color-scheme">` becomes a presentational hint on the root element, which the cascade places above
+/// this user-origin rule and below the page's own CSS (upstream only turns the exact values `dark` and `light` into a
+/// document theme, which this rule would hide); and a top-level document whose root has a dark used scheme and no
+/// background reaching the canvas gets the dark `Canvas` colour painted as its canvas, so a dark scheme is never
+/// light text on the white shell background.
 pub(super) const DEFAULT_PAGE_STYLE: &str = ":root { color-scheme: light; }";
 
 #[cfg(test)]

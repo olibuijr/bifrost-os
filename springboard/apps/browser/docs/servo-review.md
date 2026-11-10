@@ -123,6 +123,9 @@ removal fails, and reports that failure; a stopped engine cannot make the clear 
   fork the three places above, keep the patches as `.patch` files applied by `build-webview-engine.sh` after the
   unpack step, and test with a page that stacks a translucent `backdrop-filter: blur(8px) saturate(180%)` bar over a
   striped background (blur visible, no blur on a parent with `opacity < 1`).
+  Since 0.7.0-bifrost.17 that patch step exists (`engine/patches/*.patch`, README "Engine"); its first patch is the
+  page colour scheme (meta element as a root presentational hint, dark canvas for a dark root scheme). It changes
+  Servo's `components/script` and `components/layout` only, not stylo.
 
 ## Official references
 

@@ -38,6 +38,53 @@ def icon():
             + chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00\xff')) + chunk(b'IEND', b''))
 
 
+def pixels(png):
+    """Rows of (r, g, b, a) from an 8-bit RGBA, non-interlaced PNG (what the engine's `dev shot` writes)."""
+    position, data = 8, b''
+    while position < len(png):
+        length, kind = struct.unpack('>I4s', png[position:position + 8])
+        if kind == b'IHDR':
+            width, height, depth, colour, _, _, interlace = struct.unpack('>IIBBBBB', png[position + 8:position + 21])
+            assert (depth, colour, interlace) == (8, 6, 0), (depth, colour, interlace)
+        elif kind == b'IDAT':
+            data += png[position + 8:position + 8 + length]
+        position += length + 12
+    raw, stride, rows, previous = zlib.decompress(data), width * 4, [], bytes(width * 4)
+    for y in range(height):
+        kind, line = raw[y * (stride + 1)], bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        for x in range(stride):
+            left, up, corner = line[x - 4] if x >= 4 else 0, previous[x], previous[x - 4] if x >= 4 else 0
+            if kind == 1:
+                line[x] = (line[x] + left) & 255
+            elif kind == 2:
+                line[x] = (line[x] + up) & 255
+            elif kind == 3:
+                line[x] = (line[x] + (left + up) // 2) & 255
+            elif kind == 4:
+                estimate = left + up - corner
+                nearest = min((abs(estimate - left), 0, left), (abs(estimate - up), 1, up), (abs(estimate - corner), 2, corner))[2]
+                line[x] = (line[x] + nearest) & 255
+        rows.append([tuple(line[x:x + 4]) for x in range(0, stride, 4)])
+        previous = bytes(line)
+    return rows
+
+
+# Colour scheme fixtures: short pages with no colours of their own, except where the name says so.
+SCHEME_PAGES = {
+    '/scheme/none': '',
+    '/scheme/css-dark': '<style>:root{color-scheme:dark}</style>',
+    '/scheme/css-both': '<style>:root{color-scheme:light dark}</style>',
+    '/scheme/meta-dark': '<meta name="color-scheme" content="dark">',
+    '/scheme/meta-both': '<meta name="color-scheme" content="light dark">',
+    '/scheme/meta-dark-css-light': '<meta name="color-scheme" content="dark"><style>:root{color-scheme:light}</style>',
+    '/scheme/css-dark-body-background': '<style>:root{color-scheme:dark}body{background:rgb(0,128,0)}</style>',
+}
+# Default text and canvas of a scheme: stylo 0.22 device/servo.rs `system_color` (CanvasText, Canvas); the light
+# canvas is Servo's white shell background.
+LIGHT = ('rgb(0, 0, 0)', (255, 255, 255))
+DARK = ('rgb(232, 232, 232)', (30, 30, 30))
+
+
 REQUESTS = []
 class Fixture(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -46,6 +93,9 @@ class Fixture(BaseHTTPRequestHandler):
         if self.path == '/favicon.png':
             body = icon()
             self.send_header('Content-Type', 'image/png')
+        elif self.path in SCHEME_PAGES:
+            body = ('<!doctype html><title>Colour scheme fixture</title>' + SCHEME_PAGES[self.path] + '<p>Words</p>').encode()
+            self.send_header('Content-Type', 'text/html')
         else:
             body = b'''<!doctype html><title>Native embedder fixture</title>
 <link rel="icon" href="/favicon.png"><style>body{margin:0}p{font:24px sans-serif;margin:0;height:40px}#space{height:2000px}</style>
@@ -116,6 +166,25 @@ class Engine:
                 return value
             time.sleep(.05)
         raise AssertionError(f'{javascript}: expected {expected!r}, received {value!r}')
+    def canvas(self, path):
+        """The colour of the page canvas: a 4x4 screenshot of the viewport's lower right, below the short fixture body."""
+        self.token += 1
+        prefix = f'dev shot {self.token} '
+        self.send(f'dev shot {self.token} 1 rect 700 500 4 4 1000000 {path}')
+        line = self.wait(lambda line: line.startswith(prefix))
+        if line.split(' ')[3] != 'ok':
+            raise AssertionError(line)
+        colours = {pixel[:3] for row in pixels(Path(path).read_bytes()) for pixel in row}
+        return colours.pop() if len(colours) == 1 else colours
+    def scheme(self, shot, expected, canvas=None):
+        """Waits until the page's default text colour and its canvas are the ones of the expected scheme."""
+        text, default_canvas = expected
+        self.eventually('getComputedStyle(document.body).color', text)
+        canvas, deadline = canvas or default_canvas, time.monotonic() + 10
+        while (seen := self.canvas(shot)) != canvas:
+            if time.monotonic() > deadline:
+                raise AssertionError(f'canvas: expected {canvas!r}, received {seen!r}')
+            time.sleep(.05)
     def navigate(self, url, first=False):
         self.lines = [line for line in self.lines if not line.startswith('load 1 ')]
         self.send(f'new 1 {url}' if first else f'load 1 {url}')
@@ -206,6 +275,40 @@ def main():
             engine.send('theme light')
             engine.eventually('matchMedia("(prefers-color-scheme: light)").matches')
             passed('a page without a colour scheme keeps dark default text in the dark appearance; a declared one wins')
+            shot = str(Path(profile) / 'canvas.png')
+            for appearance in ('dark', 'light'):
+                engine.send('theme ' + appearance)
+                engine.navigate(base + '/scheme/none')
+                engine.eventually(f'matchMedia("(prefers-color-scheme: {appearance})").matches')
+                engine.scheme(shot, LIGHT)
+            passed('no colour scheme declared: dark text on a white canvas in both appearances')
+            for page in ('/scheme/css-dark', '/scheme/meta-dark'):
+                for appearance in ('dark', 'light'):
+                    engine.send('theme ' + appearance)
+                    engine.navigate(base + page)
+                    engine.scheme(shot, DARK)
+            passed('a dark colour scheme, from CSS or from the meta element alone: light text on a dark canvas in both appearances')
+            for page in ('/scheme/css-both', '/scheme/meta-both'):
+                engine.send('theme dark')
+                engine.navigate(base + page)
+                engine.scheme(shot, DARK)
+                engine.send('theme light')
+                engine.scheme(shot, LIGHT)
+                engine.send('theme dark')
+                engine.scheme(shot, DARK)
+            passed('light and dark both supported, from CSS or from the meta element alone: the page follows the appearance, live')
+            engine.navigate(base + '/scheme/meta-dark-css-light')
+            engine.scheme(shot, LIGHT)
+            engine.evaluate('document.querySelector("style").remove();true')
+            engine.scheme(shot, DARK)
+            engine.evaluate('document.querySelector("meta[name=color-scheme]").remove();true')
+            engine.scheme(shot, LIGHT)
+            passed('the CSS colour scheme of a page wins over its meta element; removing the meta element returns to light')
+            engine.navigate(base + '/scheme/css-dark-body-background')
+            engine.scheme(shot, DARK, canvas=(0, 128, 0))
+            engine.send('theme light')
+            engine.eventually('matchMedia("(prefers-color-scheme: light)").matches')
+            passed('a background on the body still reaches the canvas of a dark page')
             engine.send('suspend')
             engine.send('ping 501')
             engine.wait(lambda line: line == 'pong 501')

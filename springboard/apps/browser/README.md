@@ -10,11 +10,25 @@ Safari-style tab strip that appears only with two or more tabs. Pages render thr
 ## Engine
 
 `engine/` is the engine crate: libservo 0.7.0 with a hardware GL context and an explicit CPU fallback. It is built as one extra
-workspace member of an unmodified Servo v0.7.0 checkout:
+workspace member of a Servo v0.7.0 checkout that carries the changes in `engine/patches/`:
 
 ```sh
-bifrost pc browser-engine 0.7.0-bifrost.16   # build (tools/build-webview-engine.sh), then pin engine.json and ENGINE
+bifrost pc browser-engine 0.7.0-bifrost.17   # build (tools/build-webview-engine.sh), then pin engine.json and ENGINE
 ```
+
+`engine/patches/*.patch` are the local changes to Servo's own sources (unified diffs, `-p1` from the Servo source root).
+The build script applies them in name order after the unpack step and keeps a copy of each applied patch in
+`out/servo-source/servo-0.7.0/.bifrost-patches`; when the set changes it reverses the old ones and applies the
+current ones, so no fresh unpack is needed. A patch that touches `components/script` or `components/layout` recompiles
+those crates, which takes far longer than an engine-only rebuild.
+
+- `0001-page-color-scheme.patch`: colour schemes per CSS Color Adjust. `<meta name="color-scheme">` is a
+  presentational hint for `color-scheme` on the root element (script: `htmlmetaelement.rs`, `document.rs`,
+  `element.rs`), and a top-level document whose root element has a dark used colour scheme and no background reaching
+  the canvas gets the dark `Canvas` colour as its canvas (layout: `display_list/mod.rs`, `layout_impl.rs`). Together
+  with the engine's user-origin default `:root { color-scheme: light; }` (`engine/src/configuration.rs`): no declaration
+  is light, `dark` (meta or CSS) is a dark canvas with light text, and `light dark` follows the system appearance. An
+  iframe's canvas stays transparent whatever its scheme.
 
 The command writes the archive's SHA-256 to `engine.json` and its first 12 hex digits to `ENGINE` (`src/main.rs`). `tools/pc-app.py` bundles the archive as `assets/servo.tar.gz`; the first launch unpacks it to
 `~/.cache/bifrost-browser/<ENGINE>/`. The profile (cookies, storage) is `~/.local/share/bifrost-browser/profile`.
