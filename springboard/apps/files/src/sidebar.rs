@@ -142,6 +142,12 @@ impl Files {
             let home = self.home.clone();
             self.navigate(home, true);
         }
+        // a disk image's volume: only the shell can unmount it and release its loop device
+        if springboard::shell::disk_image::is_loop_device(device) {
+            self.sys.effects.push(Effect::DetachImage(device.to_string(), name.to_string()));
+            self.revision += 1;
+            return;
+        }
         let (name, device, mount) = (name.to_string(), device.to_string(), mount.to_path_buf());
         DispatchQueue::global(Qos::Utility).async_(move || {
             if let Some(notice) = springboard::files::volumes::eject_with_notice(&name, &device, &mount) {

@@ -15,6 +15,7 @@ use bifrost_app::quick_look;
 use bifrost_app::quicksearch::{CSSearchableIndex, CSSearchableItem, CSSearchableItemAttributeSet};
 use bifrost_app::proto::GrantId;
 use bifrost_app::{Ctx, DocumentEvent};
+use springboard::shell::disk_image;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
@@ -34,8 +35,14 @@ const DOCK_STEP: f32 = 0.01;
 pub(crate) enum Effect {
     /// Copy: the paths go on the general pasteboard as file URLs with their names.
     CopyToBoard(Vec<PathBuf>),
-    /// Paste: read the general pasteboard for files to copy into the folder.
-    ReadBoard(PathBuf),
+    /// Paste: read the general pasteboard for files to copy into the folder. True moves them instead (Option+Cmd+V).
+    ReadBoard(PathBuf, bool),
+    /// Open on a disk image: the shell binds and mounts it (`disks` `attach_image`); its `image_attached` event
+    /// brings the folder to show, or why it failed.
+    AttachImage(PathBuf),
+    /// Eject on a disk image volume: the shell unmounts it and releases its loop device (`disks` `detach_image`).
+    /// The loop device and the volume's name.
+    DetachImage(String, String),
     /// Space: show the preview panel for these paths, starting at the index.
     ShowPreview(Vec<PathBuf>, usize),
     /// Space again: hide the preview panel.
@@ -151,12 +158,11 @@ fn release_open_grants(ctx: &Ctx, now: std::time::Instant) {
     }
 }
 
-/// What a worker thread hands to the main thread: a file to open (a provider's download), or a folder to show (a
-/// disk image that was mounted). Opening needs the `Ctx`, which only the main thread has.
+/// What a worker thread hands to the main thread: a file to open (a provider's download). Opening needs the `Ctx`,
+/// which only the main thread has.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum FromWorker {
     Open(PathBuf),
-    Show(PathBuf),
 }
 
 static FROM_WORKERS: std::sync::Mutex<Vec<FromWorker>> = std::sync::Mutex::new(Vec::new());
@@ -186,7 +192,12 @@ pub(crate) fn take_open_failure() -> Option<String> {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Waiting {
     Preview,
-    Paste(PathBuf),
+    /// The pasteboard's reply for a paste into this folder; true moves the items instead of copying them.
+    Paste(PathBuf, bool),
+    /// The shell's answer to opening this disk image (the outcome itself comes as an event).
+    ImageAttach(PathBuf),
+    /// The shell's answer to ejecting the disk image volume of this name.
+    ImageDetach(String),
     /// The Open With panel's reply, for the file at this path.
     OpenWith(PathBuf),
 }
@@ -214,9 +225,17 @@ impl SystemState {
                     let items: Vec<Item> = paths.iter().take(MAX_BOARD_ITEMS).map(board_item).collect();
                     Board::general().write(ctx, &items);
                 }
-                Effect::ReadBoard(dest) => {
+                Effect::ReadBoard(dest, as_move) => {
                     let id = Board::general().read(ctx);
-                    self.wait(id, Waiting::Paste(dest));
+                    self.wait(id, Waiting::Paste(dest, as_move));
+                }
+                Effect::AttachImage(path) => {
+                    let id = bifrost_app::service::call(ctx, bifrost_core::disk_wire::SERVICE, disk_image::M_ATTACH, &one_field("path", &path.to_string_lossy()));
+                    self.wait(id, Waiting::ImageAttach(path));
+                }
+                Effect::DetachImage(device, name) => {
+                    let id = bifrost_app::service::call(ctx, bifrost_core::disk_wire::SERVICE, disk_image::M_DETACH, &one_field("target", &device));
+                    self.wait(id, Waiting::ImageDetach(name));
                 }
                 Effect::ShowPreview(paths, index) => {
                     let items: Vec<PreviewItem> = paths.iter().map(|p| PreviewItem { url: file_url(p), title: file_name_of(p) }).collect();
@@ -385,6 +404,23 @@ pub(crate) fn paste_plan(clip: Option<&(Vec<PathBuf>, bool)>, board: &[PathBuf])
     }
 }
 
+/// Paste as a move (Option+Cmd+V): the items Paste would take are moved into the folder instead of copied.
+pub(crate) fn move_plan(plan: Option<(Op, Vec<PathBuf>)>) -> Option<(Op, Vec<PathBuf>)> {
+    plan.map(|(_, paths)| (Op::Move, paths))
+}
+
+/// The line shown when the disk image `name` could not be opened: the first line of `error` says why.
+pub(crate) fn image_notice(name: &str, error: &str) -> String {
+    match error.lines().map(str::trim).find(|l| !l.is_empty()) {
+        Some(why) => format!("The disk image \u{201C}{name}\u{201D} could not be opened: {why}"),
+        None => format!("The disk image \u{201C}{name}\u{201D} could not be opened."),
+    }
+}
+
+fn one_field(key: &str, value: &str) -> bifrost_core::json::Json {
+    bifrost_core::json::Json::Obj(vec![(key.to_string(), bifrost_core::json::Json::Str(value.to_string()))])
+}
+
 fn same_paths(a: &[PathBuf], b: &[PathBuf]) -> bool {
     a.len() == b.len() && a.iter().all(|p| b.contains(p))
 }
@@ -446,13 +482,25 @@ impl Files {
                     self.peek();
                 }
             }
-            Waiting::Paste(dest) => {
+            // the shell refused the request outright (the outcome of one it took comes as an event, `image_event`)
+            Waiting::ImageAttach(path) => {
+                if let Err(e) = result {
+                    self.notice = Some(image_notice(&file_name_of(&path), e));
+                }
+            }
+            Waiting::ImageDetach(name) => {
+                if let Err(e) = result {
+                    self.notice = Some(springboard::files::volumes::eject_notice(&name, e, &[]));
+                }
+            }
+            Waiting::Paste(dest, as_move) => {
                 // an error reply reads as an empty board: the app's own copy, if any, is then pasted
                 let board = match pasteboard_types::decode_read(result) {
                     Ok(snapshot) => board_files(&snapshot.items),
                     Err(_) => Vec::new(),
                 };
-                match paste_plan(self.clip.as_ref(), &board) {
+                let plan = paste_plan(self.clip.as_ref(), &board);
+                match if as_move { move_plan(plan) } else { plan } {
                     Some((op, paths)) => {
                         let title = if matches!(op, Op::Move) { "Moving" } else { "Copying" };
                         self.start_job(title, JobKind::Transfer(op), paths, dest);
@@ -467,6 +515,33 @@ impl Files {
                 }
             }
         }
+        self.revision += 1;
+        true
+    }
+
+    /// The shell finished opening or ejecting a disk image (`disks` events `image_attached`, `image_detached`). An
+    /// opened image's volume is shown in this window; every failure becomes a notice naming the image or the volume.
+    pub(crate) fn image_event(&mut self, event: &str, body: &bifrost_core::json::Json) -> bool {
+        let ok = body.get("ok") == Some(&bifrost_core::json::Json::Bool(true));
+        let error = body.str_field("error").unwrap_or_default();
+        match event {
+            disk_image::E_ATTACHED => {
+                let name = body.str_field("path").map(|p| file_name_of(Path::new(&p))).unwrap_or_default();
+                match body.str_field("mount_point").map(PathBuf::from).filter(|_| ok) {
+                    Some(folder) if folder.is_dir() => self.navigate(folder, true),
+                    Some(_) => self.notice = Some(format!("The disk image \u{201C}{name}\u{201D} is open, but its volume cannot be shown here.")),
+                    None => self.notice = Some(image_notice(&name, &error)),
+                }
+            }
+            disk_image::E_DETACHED if ok => {}
+            disk_image::E_DETACHED => {
+                let target = body.str_field("target").unwrap_or_default();
+                let name = self.places().into_iter().find(|p| p.eject.as_deref() == Some(target.as_str())).map(|p| p.label).unwrap_or(target);
+                self.notice = Some(springboard::files::volumes::eject_notice(&name, &error, &[]));
+            }
+            _ => return false,
+        }
+        // the sidebar lists the volumes mounted now
         self.revision += 1;
         true
     }
@@ -620,8 +695,8 @@ mod tests {
     fn workers_hand_files_and_folders_to_the_main_thread_in_order() {
         let _ = take_from_workers();
         from_worker(FromWorker::Open(PathBuf::from("/home/u/.cache/a.pdf")));
-        from_worker(FromWorker::Show(PathBuf::from("/run/media/disk")));
-        assert_eq!(take_from_workers(), vec![FromWorker::Open(PathBuf::from("/home/u/.cache/a.pdf")), FromWorker::Show(PathBuf::from("/run/media/disk"))]);
+        from_worker(FromWorker::Open(PathBuf::from("/home/u/.cache/b.pdf")));
+        assert_eq!(take_from_workers(), vec![FromWorker::Open(PathBuf::from("/home/u/.cache/a.pdf")), FromWorker::Open(PathBuf::from("/home/u/.cache/b.pdf"))]);
         assert!(take_from_workers().is_empty());
     }
 
@@ -807,6 +882,76 @@ mod tests {
         let plan = paste_plan(Some(&ours), &[PathBuf::from("/b/z")]);
         assert_eq!(plan, Some((Op::Copy, vec![PathBuf::from("/b/z")])));
         assert_eq!(paste_plan(None, &[PathBuf::from("/b/z")]), Some((Op::Copy, vec![PathBuf::from("/b/z")])));
+    }
+
+    #[test]
+    fn paste_as_move_moves_what_paste_would_copy() {
+        let ours = (vec![PathBuf::from("/a/x")], false);
+        assert_eq!(move_plan(paste_plan(Some(&ours), &[])), Some((Op::Move, vec![PathBuf::from("/a/x")])));
+        assert_eq!(move_plan(paste_plan(None, &[PathBuf::from("/b/z")])), Some((Op::Move, vec![PathBuf::from("/b/z")])));
+        assert_eq!(move_plan(paste_plan(None, &[])), None);
+        // Option+Cmd+V asks the pasteboard for a move into the open folder; Cmd+V for a copy
+        let mut f = crate::tests::fixture(vec![]);
+        assert!(f.chord(47, CHORD_META | CHORD_ALT));
+        assert!(f.chord(47, CHORD_META));
+        assert_eq!(f.sys.effects, vec![Effect::ReadBoard("/fixture".into(), true), Effect::ReadBoard("/fixture".into(), false)]);
+    }
+
+    #[test]
+    fn opening_a_disk_image_asks_the_shell_and_ejecting_its_volume_too() {
+        let ctx = test_ctx();
+        let mut sys = SystemState::default();
+        sys.effects.push(Effect::AttachImage(PathBuf::from("/home/u/t.img")));
+        sys.effects.push(Effect::DetachImage("/dev/loop0".into(), "T".into()));
+        sys.flush(&ctx);
+        let calls: Vec<(String, String, String)> = ctx
+            .take_sent()
+            .into_iter()
+            .filter_map(|m| match m {
+                ToShell::ServiceCall { service, method, body, .. } => Some((service, method, body)),
+                _ => None,
+            })
+            .collect();
+        let call = |method: &str, body: &str| ("disks".to_string(), method.to_string(), body.to_string());
+        assert_eq!(calls, vec![call("attach_image", r#"{"path":"/home/u/t.img"}"#), call("detach_image", r#"{"target":"/dev/loop0"}"#)]);
+    }
+
+    #[test]
+    fn a_disk_image_that_fails_to_open_is_never_silent() {
+        use bifrost_core::json::{parse, Json};
+        let mut f = crate::tests::fixture(vec![]);
+        // the shell refuses the call outright
+        f.sys.wait(7, Waiting::ImageAttach(PathBuf::from("/fixture/t.img")));
+        assert!(f.service_answer(7, &Err("disks: only system apps may use this service".into())));
+        assert_eq!(f.notice.as_deref(), Some("The disk image \u{201C}t.img\u{201D} could not be opened: disks: only system apps may use this service"));
+        // the mount fails
+        f.notice = None;
+        let failed = parse(r#"{"path":"/fixture/t.img","ok":false,"error":"\n wrong fs type\nmore"}"#).unwrap();
+        assert!(f.image_event(disk_image::E_ATTACHED, &failed));
+        assert_eq!(f.notice.as_deref(), Some("The disk image \u{201C}t.img\u{201D} could not be opened: wrong fs type"));
+        // it mounts where this app cannot look
+        let hidden = parse(r#"{"path":"/fixture/t.img","ok":true,"device":"/dev/loop0","mount_point":"/nowhere/T"}"#).unwrap();
+        assert!(f.image_event(disk_image::E_ATTACHED, &hidden));
+        assert!(f.notice.as_deref().is_some_and(|n| n.contains("t.img") && n.contains("cannot be shown")), "{:?}", f.notice);
+        // an eject that fails names the volume's device when the row is gone
+        let busy = parse(r#"{"target":"/dev/loop0","ok":false,"error":"target is busy"}"#).unwrap();
+        assert!(f.image_event(disk_image::E_DETACHED, &busy));
+        assert_eq!(f.notice.as_deref(), Some("\u{201C}/dev/loop0\u{201D} could not be ejected: target is busy"));
+        assert!(!f.image_event("disk_appeared", &Json::Null));
+    }
+
+    #[test]
+    fn an_opened_disk_image_shows_its_volume() {
+        let dir = temp("image");
+        let mut f = crate::tests::fixture(vec![]);
+        let body = bifrost_core::json::Json::Obj(vec![
+            ("path".to_string(), bifrost_core::json::Json::Str("/fixture/t.img".into())),
+            ("ok".to_string(), bifrost_core::json::Json::Bool(true)),
+            ("mount_point".to_string(), bifrost_core::json::Json::Str(dir.to_string_lossy().into_owned())),
+        ]);
+        assert!(f.image_event(disk_image::E_ATTACHED, &body));
+        assert_eq!((f.path.clone(), f.notice.clone()), (dir.clone(), None));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
