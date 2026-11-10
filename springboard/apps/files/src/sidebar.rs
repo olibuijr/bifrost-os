@@ -40,8 +40,27 @@ pub(crate) struct Place {
     pub(crate) eject: Option<String>,
 }
 
-/// Width of the row's right end where the Eject text is (points): a click there ejects the volume, not opens it.
-const EJECT_W: f32 = 56.;
+/// Width of the row's right end where the eject mark is (points): a click there ejects the volume, not opens it.
+/// The mark is `TRAILING_GLYPH_PT` wide and ends 18 points before the column's edge; the zone starts where the
+/// label's room ends.
+const EJECT_W: f32 = 40.;
+
+/// The glyph of a row that is a volume or a provider's storage, and the mark a removable volume ejects with.
+const VOLUME_SYMBOL: &str = "externaldrive";
+const EJECT_SYMBOL: &str = "eject";
+
+/// The source-list row of `place` with this id, under the section `header`. A removable volume has the drive glyph
+/// and a small eject mark at its end instead of the word, so its name has the row's width up to the mark.
+fn place_row(id: u32, place: &Place, header: Option<&str>) -> SidebarItem {
+    let row = SidebarItem::row(id, &place.label);
+    let row = if place.eject.is_some() { row.with_trailing_symbol(EJECT_SYMBOL) } else { row };
+    match place.dot {
+        Some(c) => row.with_dot(c),
+        // Favorites and the top rows take the accent; Locations (home, computer, trash, volumes) the secondary grey
+        None if header == Some("Locations") => row.with_symbol(place.symbol).neutral(),
+        None => row.with_symbol(place.symbol),
+    }
+}
 
 impl Files {
     pub(crate) fn sidebar_bounds(&self) -> Rect {
@@ -71,12 +90,12 @@ impl Files {
             place("Computer", "desktopcomputer", PathBuf::from("/")),
             place("Trash", "trash", self.bin()),
         ];
-        // removable volumes mounted now follow Trash, each with an Eject text; under the test pin none are listed, so a
+        // removable volumes mounted now follow Trash, each with an eject mark; under the test pin none are listed, so a
         // snapshot does not depend on the disks plugged into the machine that runs it
         let mounted = if bifrost_app::testing::pinned() { Vec::new() } else { springboard::files::volumes::mounted() };
-        let volumes = mounted.into_iter().map(|v| Place { label: v.name, symbol: "externaldrive", dot: None, path: v.mount, eject: Some(v.device) });
+        let volumes = mounted.into_iter().map(|v| Place { label: v.name, symbol: VOLUME_SYMBOL, dot: None, path: v.mount, eject: Some(v.device) });
         // file provider domains (installed apps that serve one) follow the volumes
-        let providers = provider::shared().rows().into_iter().map(|(label, path)| Place { label, symbol: "externaldrive", dot: None, path, eject: None });
+        let providers = provider::shared().rows().into_iter().map(|(label, path)| Place { label, symbol: VOLUME_SYMBOL, dot: None, path, eject: None });
         let locations: Vec<Place> = locations.into_iter().chain(volumes).chain(providers).collect();
         let tags = Tag::ALL.into_iter().map(|t| Place { label: t.label().into(), symbol: "tag", dot: Some(tag_colour(t)), path: tag_path(t), eject: None }).collect();
         vec![
@@ -110,14 +129,7 @@ impl Files {
                 items.push(SidebarItem::header(h));
             }
             for p in rows {
-                let row = SidebarItem::row(id, &p.label);
-                let row = if p.eject.is_some() { row.with_trailing("Eject") } else { row };
-                items.push(match p.dot {
-                    Some(c) => row.with_dot(c),
-                    // Favorites and the top rows take the accent; Locations (home, computer, trash, volumes) the secondary grey
-                    None if header == Some("Locations") => row.with_symbol(p.symbol).neutral(),
-                    None => row.with_symbol(p.symbol),
-                });
+                items.push(place_row(id, &p, header));
                 id += 1;
             }
         }
@@ -125,7 +137,7 @@ impl Files {
         list.set_selected(self.sidebar_id(&self.path));
         list
     }
-    /// A click in the sidebar: a row opens its place, and the Eject text of a removable volume ejects it.
+    /// A click in the sidebar: a row opens its place, and the eject mark of a removable volume ejects it.
     pub(crate) fn sidebar_click(&mut self, x: f32, y: f32) {
         let Some(id) = self.sidebar().hit(self.sidebar_bounds(), self.sidebar_scroll(), x, y) else { return };
         let Some(place) = self.places().into_iter().nth(id.saturating_sub(100) as usize) else { return };
@@ -202,6 +214,43 @@ mod tests {
         assert_eq!(neutral_of("Computer"), Some(true));
         assert_eq!(neutral_of("Trash"), Some(true));
         assert_eq!(neutral_of("Red"), Some(false), "a tag keeps its colour dot");
+    }
+
+    #[test]
+    fn a_mounted_volume_row_has_a_drawn_glyph_and_an_eject_mark_that_leaves_its_name_the_width() {
+        use bifrost_app::controls::sidebar::{label_room, TRAILING_GLYPH_PT};
+        let volume = Place { label: "TESTVOL".into(), symbol: VOLUME_SYMBOL, dot: None, path: PathBuf::from("/run/media/me/TESTVOL"), eject: Some("/dev/loop0".into()) };
+        let SidebarItem::Row { label, symbol, trailing, trailing_symbol, neutral, .. } = place_row(107, &volume, Some("Locations")) else { panic!("a row") };
+        assert_eq!(label, "TESTVOL");
+        assert_eq!(symbol.as_deref(), Some(VOLUME_SYMBOL));
+        assert!(neutral, "grey like the other Locations rows");
+        assert_eq!(trailing, None, "no word at the end of the row");
+        assert_eq!(trailing_symbol.as_deref(), Some(EJECT_SYMBOL));
+        // both names have a drawing: a name the glyph set does not know draws nothing and leaves the row without an icon
+        assert!(bifrost_app::glyphs::has(VOLUME_SYMBOL));
+        assert!(bifrost_app::glyphs::has(EJECT_SYMBOL));
+        // the row's geometry in the 160 pt column: the label starts after the 20 pt glyph and ends at the mark
+        let (text_x, right, gap) = (10. + 8. + 20. + 8., SIDEBAR_W - 10. - 8., 8.);
+        let room = label_room(text_x, right, &[TRAILING_GLYPH_PT], gap);
+        assert_eq!(room, 74.);
+        assert!(room >= label_room(text_x, right, &[32.], gap) + 18., "more than beside a word");
+        // the click zone covers the mark and stays clear of the label
+        assert!(SIDEBAR_W - EJECT_W <= right - TRAILING_GLYPH_PT, "the mark is inside the eject zone");
+        assert!(SIDEBAR_W - EJECT_W >= text_x + room, "the label is outside it");
+    }
+
+    #[test]
+    fn every_sidebar_place_has_a_glyph_the_set_draws_and_only_volumes_eject() {
+        let files = fixture(vec![]);
+        for (header, rows) in files.sections() {
+            for p in &rows {
+                assert!(p.dot.is_some() || bifrost_app::glyphs::has(p.symbol), "{} has no drawing for {}", p.label, p.symbol);
+                let marked = matches!(place_row(100, p, header), SidebarItem::Row { trailing_symbol: Some(_), .. });
+                assert_eq!(marked, p.eject.is_some(), "{}: only a row that ejects has the mark", p.label);
+            }
+        }
+        let provider = Place { label: "Cloud".into(), symbol: VOLUME_SYMBOL, dot: None, path: PathBuf::from("/provider"), eject: None };
+        assert!(matches!(place_row(100, &provider, Some("Locations")), SidebarItem::Row { trailing_symbol: None, trailing: None, .. }));
     }
 
     #[test]

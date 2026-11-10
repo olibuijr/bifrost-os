@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.16
+
+- The Kind column names the type of every file the system knows (TIFF, BMP, GIF, icon and SVG pictures say image, an HTML file says HTML Document, a disk image says Disk Image); a mounted volume has its drive icon and its full name beside a small eject mark; a notice too long for the status bar takes room from the path, and the reason a disk image can't be opened is shown; the icon view shows a partly filled last row again.
+
 ## 1.34.15
 
 - Disk images open and eject through the system: double-click mounts the image as a volume, a failure is shown, and Cmd+Option+V moves the copied items here.

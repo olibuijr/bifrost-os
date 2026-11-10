@@ -80,6 +80,6 @@ impl Files {
         let row_text = &self.row_text;
         cached_text(s, ui, row_text, &date_text(e.mtime), small, secondary, w - 430., y + 8., 135.);
         cached_text(s, ui, row_text, &if e.is_dir { "—".into() } else { fs::size_text(e.size) }, small, secondary, w - 290., y + 8., 105.);
-        cached_text(s, ui, row_text, e.kind.label(), small, secondary, w - 165., y + 8., 145.);
+        cached_text(s, ui, row_text, kind_text(e), small, secondary, w - 165., y + 8., 145.);
     }
 }
