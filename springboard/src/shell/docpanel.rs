@@ -1822,10 +1822,21 @@ impl super::Shell {
     /// A sheet blocks the window it belongs to: the window under the panel is dimmed, as a sheet dims its parent. The panel
     /// itself hangs from the top of that window (`doc_panel_rect`). Drawn before the panel's material.
     pub(super) fn draw_doc_dim(&self, s: &mut crate::gfx::Surface) {
-        let Some(p) = self.doc_panel.as_ref() else { return };
-        let Some(body) = self.desk.as_ref().and_then(|d| d.index_of(parent_app(p.slot)).map(|i| d.wins[i].body(&self.desk_metrics()))) else { return };
+        let Some((x, y, w, h)) = self.doc_dim_rect() else { return };
         let radius = self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
-        s.fill_rrect(body.x as f32, body.y as f32, body.w as f32, body.h as f32, radius, crate::gfx::rgba(0, 0, 0, SHEET_DIM_ALPHA));
+        s.fill_rrect(x as f32, y as f32, w as f32, h as f32, radius, crate::gfx::rgba(0, 0, 0, SHEET_DIM_ALPHA));
+    }
+
+    /// The rectangle `draw_doc_dim` paints (x, y, w, h px): the body of the window the panel hangs from, None with no
+    /// panel or no such window. It is a region of the desktop frame (`desk_regions_now`), so a partial frame clears it
+    /// before the dim is drawn again and the frame after the panel goes clears it for good. Outside the regions nothing
+    /// is cleared: the dim was blended over itself on every frame the panel showed, up to solid black, and those pixels
+    /// stayed in the frame after the window had gone (the black fragments of a window that quit through its sheet).
+    pub(super) fn doc_dim_rect(&self) -> Option<(i32, i32, i32, i32)> {
+        let p = self.doc_panel.as_ref()?;
+        let d = self.desk.as_ref()?;
+        let body = d.wins[d.index_of(parent_app(p.slot))?].body(&self.desk_metrics());
+        Some((body.x, body.y, body.w, body.h))
     }
 
     /// Draws the icon of item `e` centred in a square of `side` px whose top-left is (`x`, `y`): a folder in the folder
@@ -2400,6 +2411,37 @@ pub(crate) mod tests {
         let mut s = String::new();
         (&*f).read_to_string(&mut s).unwrap();
         assert_eq!(s, "b.txt", "the app reads the chosen file through the descriptor");
+        ALLOW.with(|a| a.set(false));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// E2E rev 1: the dim under a sheet covers the whole body of its window, far more than the panel's own region. A
+    /// partial desktop frame clears only its regions, so the dim outside them was blended again on every frame and
+    /// stayed in the frame as black fragments once the app had quit. The dimmed body is a region while the panel is up.
+    #[test]
+    fn the_dim_under_a_sheet_lies_inside_a_region_the_desktop_frame_clears() {
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                bifrost_render::glass::set_thread_gpu(None);
+            }
+        }
+        let _reset = Reset;
+        bifrost_render::glass::set_thread_gpu(Some(true));
+        ALLOW.with(|a| a.set(true));
+        let (d, mut sh, peer) = shell_with_app("e2e-dim");
+        let m = sh.desk_metrics();
+        let app = super::super::AppId::External(0);
+        sh.desk.as_mut().unwrap().open(&m, app, (1000, 1400));
+        ask(&peer, &mut sh, ToShell::DocSave { request: 4, suggested_name: "a.txt".into(), filters: vec![] });
+        let (bx, by, bw, bh) = sh.doc_dim_rect().expect("the panel dims its window");
+        let (_, _, pw, ph) = sh.doc_panel_rect().unwrap();
+        assert!(bw as usize > pw || bh as usize > ph, "the window is larger than its sheet: {bw}x{bh} vs {pw}x{ph}");
+        let covers = |&(x, y, w, h): &(i32, i32, i32, i32)| x <= bx && y <= by && x + w >= bx + bw && y + h >= by + bh;
+        assert!(sh.desk_regions_now().unwrap().iter().any(covers), "a region holds every pixel the dim paints");
+        // answered or gone with its app: the region goes with the panel (the frame after it clears the last one)
+        sh.doc_app_gone(0);
+        assert!(sh.doc_dim_rect().is_none());
         ALLOW.with(|a| a.set(false));
         fs::remove_dir_all(&d).unwrap();
     }
