@@ -791,11 +791,12 @@ dependencies = [
 
 [[package]]
 name = "bifrost-locate"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
  "bifrost-maps",
+ "springboard",
 ]
 
 [[package]]
