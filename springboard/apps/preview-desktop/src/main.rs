@@ -157,8 +157,28 @@ fn saving_status(path: &Path) -> String {
     format!("Saving {}\u{2026}", name_of(path))
 }
 
+/// A revert to the original as it is on the disk now, after the alert that says another app changed it: the original
+/// is opened again through its grant (`request`, sent by `pump`), and what it holds replaces the working copy `copy`.
+struct OriginalRevert {
+    grant: GrantId,
+    request: Option<u32>,
+    copy: PathBuf,
+}
+
+/// What the save alert is about, which decides its buttons.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AlertKind {
+    /// The file could not be written (gone, replaced, read-only): Save As or Cancel.
+    Refused,
+    /// Another app wrote the file since it was opened: Save As, Revert (to the file as it is now) or Cancel.
+    Changed,
+    /// Revert was chosen: asks before the document's changes are discarded.
+    ConfirmRevert,
+}
+
 /// The alert shown when the original could not be written.
 struct SaveAlert {
+    kind: AlertKind,
     title: String,
     message: String,
     /// The button Tab moved the focus ring to.
@@ -168,6 +188,9 @@ struct SaveAlert {
 /// The buttons of the save alert.
 const ALERT_SAVE_AS: u32 = 1;
 const ALERT_CANCEL: u32 = 2;
+/// Revert in the alert about a file another app changed, and Revert in the confirmation that follows it.
+const ALERT_REVERT: u32 = 3;
+const ALERT_CONFIRM_REVERT: u32 = 4;
 
 /// What an export writes into the chosen file.
 enum Export {
@@ -253,6 +276,8 @@ struct Viewer {
     pending_original: Option<OriginalSave>,
     /// The alert shown while the original could not be written.
     save_alert: Option<SaveAlert>,
+    /// The revert that is reading the original again.
+    pending_revert: Option<OriginalRevert>,
     /// What the open document's file was when it was opened, so a save sees that it was changed or removed since.
     opened: Option<origin::Stamp>,
     /// The save panel request of a Save As whose file becomes the document once it is saved.
@@ -329,6 +354,7 @@ impl Viewer {
             released: Vec::new(),
             pending_original: None,
             save_alert: None,
+            pending_revert: None,
             opened: None,
             adopting: None,
             shell_state: None,
@@ -704,7 +730,8 @@ impl Viewer {
     }
 
     /// The document whose file is `copy` was not saved, for `reason`: its unsaved changes stay, and an alert offers
-    /// Save As when it is still the open document.
+    /// Save As when it is still the open document. When the reason is that another app changed the file, the alert
+    /// also offers Revert: the file as it is now, without the document's changes.
     fn refuse_save(&mut self, copy: &Path, reason: &str) {
         let name = name_of(copy);
         if !self.doc.as_ref().is_some_and(|d| d.path == copy) {
@@ -712,25 +739,93 @@ impl Viewer {
             return;
         }
         self.status = "Save failed".into();
-        self.save_alert = Some(SaveAlert {
-            title: format!("\u{201c}{name}\u{201d} could not be saved."),
-            message: format!("{reason} Choose Save As to keep your changes in another file."),
-            focus: None,
-        });
+        let (kind, advice) = if reason == origin::CHANGED {
+            (AlertKind::Changed, "Choose Save As to keep your changes in another file, or Revert to discard them and open the file as it is now.")
+        } else {
+            (AlertKind::Refused, "Choose Save As to keep your changes in another file.")
+        };
+        self.save_alert = Some(SaveAlert { kind, title: format!("\u{201c}{name}\u{201d} could not be saved."), message: format!("{reason} {advice}"), focus: None });
     }
 
-    /// The save alert while it is up.
+    /// The save alert while it is up. The buttons are stacked, the default on top and Cancel last.
     fn save_sheet(&self) -> Option<Sheet> {
         let alert = self.save_alert.as_ref()?;
-        let buttons = vec![SheetButton::new(ALERT_SAVE_AS, "Save As\u{2026}", ButtonRole::Default), SheetButton::new(ALERT_CANCEL, "Cancel", ButtonRole::Cancel)];
+        let save_as = SheetButton::new(ALERT_SAVE_AS, "Save As\u{2026}", ButtonRole::Default);
+        let cancel = SheetButton::new(ALERT_CANCEL, "Cancel", ButtonRole::Cancel);
+        let buttons = match alert.kind {
+            AlertKind::Refused => vec![save_as, cancel],
+            AlertKind::Changed => vec![save_as, SheetButton::new(ALERT_REVERT, "Revert", ButtonRole::Normal), cancel],
+            // discarding changes is never what Return does: Cancel answers Escape, Revert is pressed
+            AlertKind::ConfirmRevert => vec![SheetButton::new(ALERT_CONFIRM_REVERT, "Revert", ButtonRole::Destructive), cancel],
+        };
         Some(Sheet::alert(&alert.title, &alert.message, buttons).with_focus(alert.focus))
     }
 
-    /// A button of the save alert was pressed: the alert goes, and Save As asks where to save.
+    /// A button of the save alert was pressed: the alert goes. Save As asks where to save; Revert asks first, and
+    /// then puts the file as it is on the disk in place of the document.
     fn answer_save_alert(&mut self, choice: u32) {
-        self.save_alert = None;
-        if choice == ALERT_SAVE_AS {
-            self.save_as_document();
+        let Some(alert) = self.save_alert.take() else { return };
+        match (alert.kind, choice) {
+            (AlertKind::Refused | AlertKind::Changed, ALERT_SAVE_AS) => self.save_as_document(),
+            (AlertKind::Changed, ALERT_REVERT) => {
+                let name = self.document_name().unwrap_or_default();
+                self.save_alert = Some(SaveAlert {
+                    kind: AlertKind::ConfirmRevert,
+                    title: format!("Do you want to revert \u{201c}{name}\u{201d} to the file on the disk?"),
+                    message: "Your changes will be lost.".into(),
+                    focus: None,
+                });
+            }
+            (AlertKind::ConfirmRevert, ALERT_CONFIRM_REVERT) => self.revert_to_disk(),
+            _ => {}
+        }
+    }
+
+    /// Revert from the alert about a file another app changed: the document becomes the file as it is on the disk
+    /// now, and its unsaved changes go. A working copy's original is read again through its grant (`pump` asks,
+    /// `original_read` takes the file); a document opened by its path is its own file and is read at once.
+    fn revert_to_disk(&mut self) {
+        let Some(path) = self.doc.as_ref().map(|d| d.path.clone()) else { return };
+        match self.origins.grant_of(&self.data_dir, &path) {
+            Some(grant) => {
+                self.status = format!("Reverting {}\u{2026}", name_of(&path));
+                self.pending_revert = Some(OriginalRevert { grant, request: None, copy: path });
+            }
+            None => self.revert_to_saved(),
+        }
+    }
+
+    /// Whether `request` is the look at the original a revert is waiting for.
+    fn reverting(&self, request: u32) -> bool {
+        self.pending_revert.as_ref().is_some_and(|p| p.request == Some(request))
+    }
+
+    /// The shell opened the original for a revert: what it holds now replaces the working copy, its stamp is what
+    /// the next save is compared with, and the document is opened again from the copy, without its changes. When
+    /// another document was opened meanwhile nothing is done.
+    fn original_read(&mut self, mut file: std::fs::File) {
+        let Some(OriginalRevert { copy, .. }) = self.pending_revert.take() else { return };
+        if !self.doc.as_ref().is_some_and(|d| d.path == copy) {
+            return;
+        }
+        let name = name_of(&copy);
+        let stamp = origin::Stamp::of(&file);
+        let mut bytes = Vec::new();
+        if file.read_to_end(&mut bytes).and_then(|_| std::fs::write(&copy, &bytes)).is_err() {
+            self.status = format!("{name} could not be reverted: the file could not be read.");
+            return;
+        }
+        if self.origins.restamp(&self.data_dir, &copy, stamp) {
+            let _ = origin::save(&self.data_dir, &self.origins);
+        }
+        self.reopen(&copy, format!("Reverted to the saved {name}"));
+    }
+
+    /// The shell refused to open the original for a revert (it is gone or was replaced): the document stays as it is.
+    fn revert_failed(&mut self) {
+        let Some(OriginalRevert { copy, .. }) = self.pending_revert.take() else { return };
+        if self.doc.as_ref().is_some_and(|d| d.path == copy) {
+            self.status = format!("{} could not be reverted: the file is no longer there.", name_of(&copy));
         }
     }
 
@@ -790,7 +885,7 @@ impl Viewer {
         }
     }
 
-    /// A key while the save alert is up, through the kit's sheet keys: Return is Save As, Escape and Cmd+. cancel, Tab
+    /// A key while the save alert is up, through the kit's sheet keys: Return is the default button, Escape and Cmd+. cancel, Tab
     /// moves the focus ring and Space presses the focused button. The alert takes every key.
     fn key_save_alert(&mut self, key: &KeyInput) -> bool {
         use bifrost_app::document::{sheet_key, AlertKey};
@@ -1062,6 +1157,32 @@ impl Viewer {
         true
     }
 
+    /// Keeps the file chosen for Pages > Insert > Page from File where the worker can read it, and returns that place.
+    /// It is a working copy like any opened file: its place under `opened/` comes from `Origins::place`, so a file
+    /// that shares its name with another working copy gets a place of its own instead of being written over that
+    /// copy and taking its original away, and its grant is kept with it until the copy is swept. The open document's
+    /// own file is not written again: its copy is what the document is read from, and it is inserted as it is.
+    fn insertion_source(&mut self, name: &str, grant: GrantId, stamp: Option<origin::Stamp>, bytes: &[u8]) -> std::io::Result<PathBuf> {
+        let place = self.origins.place(&recents::copy_name(name), stamp.as_ref());
+        let target = self.data_dir.join("opened").join(&place);
+        if self.doc.as_ref().is_some_and(|d| d.path == target) {
+            if self.origins.grant_of(&self.data_dir, &target) != Some(grant) {
+                self.released.push(grant);
+            }
+            return Ok(target);
+        }
+        match recents::keep_copy_at(&self.data_dir, &place, bytes) {
+            Ok(path) => {
+                self.set_origin(&place, Some((grant, stamp)));
+                Ok(path)
+            }
+            Err(e) => {
+                self.released.push(grant);
+                Err(e)
+            }
+        }
+    }
+
     /// The file an insert writes: a copy of the document under the app's data folder, which is opened when it is done.
     fn inserting_file(&self, path: &Path) -> PathBuf {
         let dir = self.data_dir.join("insert");
@@ -1266,6 +1387,12 @@ impl Viewer {
         if let Some(pending) = self.pending_original.as_mut() {
             if pending.check.is_none() && pending.request.is_none() {
                 pending.check = Some(ctx.reopen_document(pending.grant));
+            }
+        }
+        // a revert opens the original again, once: `DocumentEvent::Opened` hands over the file as it is now
+        if let Some(pending) = self.pending_revert.as_mut() {
+            if pending.request.is_none() {
+                pending.request = Some(ctx.reopen_document(pending.grant));
             }
         }
         // an export asks for its file once: the save panel answers with `DocumentEvent::SaveTo`
@@ -3117,6 +3244,15 @@ impl App for Viewer {
                 self.original_failed(Some(code));
                 return true;
             }
+            // a revert: the original as it is on the disk now
+            DocumentEvent::Opened(doc) if self.reverting(doc.request) => {
+                self.original_read(doc.file);
+                return true;
+            }
+            DocumentEvent::Failed { request, .. } if self.reverting(request) => {
+                self.revert_failed();
+                return true;
+            }
             DocumentEvent::Opened(doc) => doc,
             DocumentEvent::OpenedMany { docs, .. } => match docs.into_iter().next() {
                 Some(doc) => doc,
@@ -3162,13 +3298,8 @@ impl App for Viewer {
         }
         // a file chosen by Pages > Insert > Page from File is merged into the document instead of opened
         if let Some(at) = self.insert_at.take() {
-            // the merged file is only read: its grant is not needed, and its copy has no original to save to
-            ctx.release_document(doc.grant);
-            match recents::keep_copy(&self.data_dir, &doc.name, &bytes) {
-                Ok(path) => {
-                    self.set_origin(&recents::copy_name(&doc.name), None);
-                    self.insert_pages(pdfmarks::Insertion::File { path, at })
-                }
+            match self.insertion_source(&doc.name, doc.grant, stamp, &bytes) {
+                Ok(path) => self.insert_pages(pdfmarks::Insertion::File { path, at }),
                 Err(e) => self.status = format!("Could not insert {}: {e}", doc.name),
             }
             return true;
@@ -3876,6 +4007,117 @@ mod tests {
         v.pump(&ctx);
         v.original_failed(Some(DocErrorCode::Stale));
         assert!(v.save_sheet().unwrap().message.contains("replaced"));
+        cleanup(&v);
+    }
+
+    /// The alert about a file another app changed offers Revert as well; the other refusals do not. Revert asks
+    /// first, then reads the original through its grant and opens it in place of the document, without its changes.
+    #[test]
+    fn the_changed_file_alert_offers_revert_which_asks_and_then_opens_the_file_as_it_is_now() {
+        let (mut v, copy) = viewer_on_copy("revert");
+        let opened = origin::Stamp::at(&copy).expect("any real file's stamp");
+        v.set_origin("b.png", Some(([9; 16], Some(opened))));
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
+        let ctx = menu_ctx();
+        let changed = |v: &mut Viewer| {
+            v.save_document();
+            v.pump(&ctx);
+            ctx.take_sent();
+            v.original_checked(&ctx, Some(origin::Stamp { len: opened.len + 1, ..opened }));
+        };
+        changed(&mut v);
+        let sheet = v.save_sheet().expect("the alert is up");
+        let ids: Vec<u32> = bifrost_app::controls::sheet::stacked_order(&sheet.buttons).iter().map(|b| b.id).collect();
+        assert_eq!(ids, [ALERT_SAVE_AS, ALERT_REVERT, ALERT_CANCEL], "Save As on top, Cancel last");
+        assert!(sheet.message.contains("changed by another app") && sheet.message.contains("Revert"));
+        assert_eq!(sheet.default_button(), Some(ALERT_SAVE_AS));
+        // Revert asks first; Return does not discard anything, and Escape leaves the document as it is
+        v.answer_save_alert(ALERT_REVERT);
+        let confirm = v.save_sheet().expect("the confirmation is up");
+        assert!(confirm.title.contains("b.png") && confirm.message.contains("lost"));
+        assert_eq!((confirm.default_button(), confirm.cancel_button()), (None, Some(ALERT_CANCEL)));
+        v.key(&ctx, KeyInput::Code(13));
+        assert!(v.save_alert.is_some() && v.pending_revert.is_none());
+        assert!(v.key(&ctx, KeyInput::Code(27)));
+        assert!(v.save_alert.is_none() && v.pending_revert.is_none());
+        assert_eq!(v.doc.as_ref().unwrap().marks.len(), 1, "cancelled: the changes stay");
+        // confirmed: the original is opened again through its grant, once
+        changed(&mut v);
+        v.answer_save_alert(ALERT_REVERT);
+        v.answer_save_alert(ALERT_CONFIRM_REVERT);
+        assert!(v.save_alert.is_none());
+        assert_eq!(v.status, "Reverting b.png\u{2026}");
+        v.pump(&ctx);
+        v.pump(&ctx);
+        let sent = ctx.take_sent();
+        assert!(matches!(sent[..], [bifrost_app::proto::ToShell::DocReopen { grant: [9, ..], .. }]), "{sent:?}");
+        let request = v.pending_revert.as_ref().unwrap().request.expect("asked for");
+        assert!(v.reverting(request) && !v.checking_original(request));
+        // the file as the other app left it
+        let theirs = export::png_bytes(&Image { w: 3, h: 1, px: vec![0xff00_ff00; 3] }).unwrap();
+        let original = v.data_dir.join("original.png");
+        std::fs::write(&original, &theirs).unwrap();
+        v.original_read(std::fs::File::open(&original).unwrap());
+        assert!(v.pending_revert.is_none());
+        assert_eq!(std::fs::read(&copy).unwrap(), theirs, "the working copy holds the file as it is now");
+        let doc = v.doc.as_ref().expect("the file is open");
+        assert!(doc.path == copy && doc.marks.is_empty() && doc.sizes == [(3, 1)]);
+        assert!(!v.edited());
+        assert_eq!(v.status, "Reverted to the saved b.png");
+        assert_eq!(v.origins.stamp_of(&v.data_dir, &copy), origin::Stamp::at(&original), "the next save is compared with it");
+        // a refusal that is not about a changed file has no Revert
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
+        v.save_document();
+        v.original_failed(Some(DocErrorCode::Denied));
+        assert!(v.save_sheet().unwrap().buttons.iter().all(|b| b.id != ALERT_REVERT));
+        v.answer_save_alert(ALERT_REVERT);
+        assert!(v.save_alert.is_none() && v.pending_revert.is_none(), "a choice the alert did not offer does nothing");
+        cleanup(&v);
+    }
+
+    #[test]
+    fn a_revert_the_shell_refuses_or_that_ends_after_another_document_opened_changes_nothing() {
+        let (mut v, copy) = viewer_on_copy("revert-refused");
+        v.set_origin("b.png", Some(([9; 16], None)));
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
+        v.revert_to_disk();
+        v.revert_failed();
+        assert!(v.pending_revert.is_none() && v.status.contains("could not be reverted"));
+        assert_eq!(v.doc.as_ref().unwrap().marks.len(), 1);
+        assert_eq!(std::fs::read(&copy).unwrap(), b"as opened");
+        // another document was opened before the shell answered: its file is left alone, and so is the copy
+        v.revert_to_disk();
+        v.doc.as_mut().unwrap().path = PathBuf::from("/a/other.png");
+        let original = v.data_dir.join("original.png");
+        std::fs::write(&original, b"theirs").unwrap();
+        v.original_read(std::fs::File::open(&original).unwrap());
+        assert_eq!(std::fs::read(&copy).unwrap(), b"as opened");
+        assert_eq!(v.doc.as_ref().unwrap().marks.len(), 1);
+        cleanup(&v);
+    }
+
+    /// A file chosen for Insert > Page from File is kept like an opened file: it never takes the place, or the
+    /// original, of another working copy of the same name.
+    #[test]
+    fn a_file_chosen_for_insert_does_not_write_over_a_working_copy_of_the_same_name() {
+        let (mut v, copy) = viewer_on_copy("insert-place");
+        let mine = origin::Stamp { dev: 1, ino: 10, secs: 100, nanos: 0, len: 9 };
+        v.set_origin("b.png", Some(([9; 16], Some(mine))));
+        // another file named b.png, from another folder
+        let other = origin::Stamp { ino: 20, ..mine };
+        let source = v.insertion_source("b.png", [7; 16], Some(other), b"to insert").unwrap();
+        assert_eq!(source, v.data_dir.join("opened/2/b.png"));
+        assert_eq!(std::fs::read(&source).unwrap(), b"to insert");
+        assert_eq!(std::fs::read(&copy).unwrap(), b"as opened", "the open document's copy is not written over");
+        assert_eq!(v.origins.grant_of(&v.data_dir, &copy), Some([9; 16]), "and File > Save still reaches its original");
+        assert_eq!(v.origins.grant_of(&v.data_dir, &source), Some([7; 16]), "the grant goes when the copy is swept");
+        assert!(v.released.is_empty());
+        // the open document's own file: its copy is inserted as it is, and the second grant is given back
+        let again = v.insertion_source("b.png", [8; 16], Some(origin::Stamp { secs: 200, ..mine }), b"newer").unwrap();
+        assert_eq!(again, copy);
+        assert_eq!(std::fs::read(&copy).unwrap(), b"as opened");
+        assert_eq!(v.origins.stamp_of(&v.data_dir, &copy), Some(mine), "a change by another app is still seen at the next save");
+        assert_eq!(v.released, [[8; 16]]);
         cleanup(&v);
     }
 
