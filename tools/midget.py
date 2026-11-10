@@ -107,6 +107,7 @@ def ssh(cmd, timeout=30):
 # The shell's control socket on Midget: a Unix socket the shell serves to root (these ssh sessions) and the installed
 # account only. There is no TCP control port any more, so every helper reaches it with AF_UNIX on the remote side.
 CONTROL_SOCKET = "/run/bifrost/shell-control.sock"
+FILES_APP_ID = "is.olibuijr.files.desktop"
 
 
 def control_script(line, timeout=10, raw=False):
@@ -295,14 +296,34 @@ def cmd_screen(out):
     return 1
 
 
+# Remote side of show-in-files (argv[1] = the path): finds the folder to show and asks the shell for it on the control
+# socket. A folder is shown itself, anything else by the folder that holds it.
+SHOW_IN_FILES_SCRIPT = r"""import os,socket,sys
+p=os.path.normpath(sys.argv[1])
+if not os.path.lexists(p): sys.exit('error: no such file or folder: '+p)
+folder=p if os.path.isdir(p) else os.path.dirname(p)
+line=('open-folder %s '+folder+'\n').encode()
+if len(line)>511 or '\n' in folder: sys.exit('error: the folder path is too long or has a line break')
+s=socket.socket(socket.AF_UNIX); s.settimeout(10); s.connect(%r); s.sendall(line); d=b''
+while True:
+ c=s.recv(65536)
+ if not c: break
+ d+=c
+d=d.decode(errors='replace').strip()
+if not d.startswith('ok'): sys.exit(d or 'error: no answer from the shell')
+print('ok: Files shows '+folder+('' if folder==p else ' (the folder of '+os.path.basename(p)+'; the file is not selected)'))
+"""
+
+
 def cmd_show_in_files(args):
-    """Show in Files exactly as an app does it: bifrost-apps --open <folder>, run as the local account."""
+    """Show in Files: the Files app opens at the folder, or at the folder that holds the file. The request is the
+    shell's `open-folder` control line, so no default-application lookup is involved and every file type works. Files
+    has no request that selects an item, so a file is shown by its folder only."""
     if len(args) != 1 or not args[0].startswith("/"):
-        print("usage: show-in-files /absolute/folder")
+        print("usage: show-in-files /absolute/file-or-folder")
         return 2
-    script = ("user=$(sed -n 's/^username=//p' /var/lib/springboard/account); "
-              "runuser -u \"$user\" -- /usr/bin/bifrost-apps --open " + shlex.quote(args[0]))
-    r = run(SSH + [script], 20)
+    script = SHOW_IN_FILES_SCRIPT % (FILES_APP_ID, CONTROL_SOCKET)
+    r = run(SSH + ["python3 -c " + shlex.quote(script) + " " + shlex.quote(args[0])], 20)
     print(r.stdout, end="")
     if r.stderr:
         print(r.stderr, end="", file=sys.stderr)
