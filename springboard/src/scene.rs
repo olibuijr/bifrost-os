@@ -580,7 +580,7 @@ mod tests {
         let (wp, dock, grid, bg) = two_pages(&l);
         let (ui, mut today) = crate::shell::today::tests::today();
         let info = crate::shell::Info { battery: 50, ..Default::default() };
-        today.refresh(&ui, &crate::shell::today::Sources { info: &info, term: None, unix: 0 }, 0.0);
+        today.refresh(&ui, &crate::shell::today::Sources { info: &info, term: None, unix: 0, clock_24h: true }, 0.0);
         today.set_wallpaper(wp.view());
         let mut pager = Pager::new(1, W as f32);
         pager.set_leading(true);
@@ -600,7 +600,7 @@ mod tests {
         assert_eq!(rest.today, today.gen());
         let mut d = Damage::new(w, h);
         // a refresh while the page is hidden costs nothing
-        today.refresh(&ui, &crate::shell::today::Sources { info: &crate::shell::Info { battery: 20, ..Default::default() }, term: None, unix: 0 }, 1.0);
+        today.refresh(&ui, &crate::shell::today::Sources { info: &crate::shell::Info { battery: 20, ..Default::default() }, term: None, unix: 0, clock_24h: true }, 1.0);
         scene!(&pager, Some(&today)).damage(Some(rest), &mut d);
         assert!(d.is_empty(), "hidden page changes are free: {:?}", d.areas());
         let rest = scene!(&pager, Some(&today)).state();
@@ -629,7 +629,7 @@ mod tests {
         d.clear();
         scene!(&pager, Some(&today)).damage(Some(shown), &mut d);
         assert!(d.is_empty());
-        today.refresh(&ui, &crate::shell::today::Sources { info: &crate::shell::Info { battery: 90, ..Default::default() }, term: None, unix: 0 }, 2.0);
+        today.refresh(&ui, &crate::shell::today::Sources { info: &crate::shell::Info { battery: 90, ..Default::default() }, term: None, unix: 0, clock_24h: true }, 2.0);
         d.clear();
         scene!(&pager, Some(&today)).damage(Some(shown), &mut d);
         assert!(d.is_all(), "a tile changed while in view");

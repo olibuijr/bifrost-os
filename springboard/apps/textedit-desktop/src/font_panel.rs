@@ -12,7 +12,7 @@ use crate::format_bar::face_label;
 use crate::view::{blit, text_color};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::canvas::{Canvas, RectF};
-use bifrost_app::kit::ui::{Ui, Weight, DETAIL_BG, FIELD_BG, LABEL, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, SELECTION, SEPARATOR_C, WHITE};
+use bifrost_app::kit::ui::{Ui, Weight, CELL_RADIUS_PT, DETAIL_BG, FIELD_BG, LABEL, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, SELECTION, SEPARATOR_C, SPACE_XS, SPACE_XXS, WHITE};
 
 /// Family rows shown at once.
 pub const ROWS: usize = 9;
@@ -31,7 +31,7 @@ const TYPE_SELECT_MS: f64 = 1000.0;
 /// One colour swatch of the colour panel, and the gap between swatches.
 const SWATCH: f32 = 36.0;
 const SWATCH_GAP: f32 = 10.0;
-const RADIUS: f32 = 6.0;
+const RADIUS: f32 = CELL_RADIUS_PT;
 
 /// Where the font panel's parts are, in window points.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -240,7 +240,7 @@ fn column(c: &mut dyn Canvas, ui: &Ui, r: Rect, rows: &[&str], chosen: Option<us
         let row = Rect { x: r.x + 2.0, y: r.y + ROW_H * i as f32, w: r.w - 4.0, h: ROW_H };
         let on = chosen == Some(i);
         if on {
-            c.fill_rrect(px(ui, Rect { y: row.y + 1.0, h: row.h - 2.0, ..row }), ui.pt(4.0), SELECTION.now());
+            c.fill_rrect(px(ui, Rect { y: row.y + 1.0, h: row.h - 2.0, ..row }), ui.pt(SPACE_XS), SELECTION.now());
         }
         text_in(c, ui, row, 6.0, label, MAC_BODY_PT, Weight::Regular, if on { WHITE } else { LABEL.now() });
     }
@@ -281,7 +281,7 @@ pub fn draw_colors(c: &mut dyn Canvas, ui: &Ui, l: &ColorsLayout, current: u8) {
         c.stroke_rrect(px(ui, *r), ui.pt(RADIUS), ui.pt(1.0).max(1.0), SEPARATOR_C.now());
         if i == current as usize {
             let ring = Rect { x: r.x - 3.0, y: r.y - 3.0, w: r.w + 6.0, h: r.h + 6.0 };
-            c.stroke_rrect(px(ui, ring), ui.pt(RADIUS + 2.0), ui.pt(2.0), LINK);
+            c.stroke_rrect(px(ui, ring), ui.pt(RADIUS + 2.0), ui.pt(SPACE_XXS), LINK);
         }
     }
     done_button(c, ui, l.done);

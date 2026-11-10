@@ -6,6 +6,7 @@
 //! stays in use and the Convert panel shows its date; with no copy at all, Currency shows as unavailable.
 
 use crate::history::now_secs;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::url::{URLRequest, URLSession};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -169,14 +170,14 @@ pub struct Service {
 }
 
 impl Service {
-    /// Loads the cache from `dir` and starts a check on a worker thread if none has run today.
+    /// Loads the cache from `dir` and starts a check on a utility queue if none has run today.
     pub fn start(dir: &Path, today: i64) -> Service {
         let path = dir.join(CACHE_FILE);
         let cache = Cache::load(&path);
         let rx = due(&cache, today).then(|| {
             let (tx, rx) = mpsc::channel();
             let previous = cache.clone();
-            std::thread::spawn(move || {
+            DispatchQueue::global(Qos::Utility).async_(move || {
                 let result = fetch();
                 // a failed check keeps the previous rates, and the day is still recorded so offline launches do not retry
                 let rates = match &result {

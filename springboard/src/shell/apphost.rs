@@ -2278,6 +2278,46 @@ impl Shell {
         }
     }
 
+    /// Copies a finished Setup Assistant run into settings.ini (`setup::apply_pending`, once per run) and keeps the zone
+    /// the user chose for `apply_setup_zone`.
+    pub(super) fn copy_setup_choices(&mut self) {
+        let dir = self.data_dir.clone();
+        match crate::setup::apply_pending(&dir, &mut self.prefs) {
+            Ok(Some(c)) => self.setup_zone = Some(c.timezone).filter(|z| !z.is_empty()),
+            Ok(None) => {}
+            Err(e) => eprintln!("springboard: setup choices: {e}"),
+        }
+    }
+
+    /// Sets the zone the Setup Assistant's user chose, the way Settings > Date & Time sets one (`bare::timezone::set`:
+    /// the name must be in the zone database, the clock follows at once, and the system service, which checks the name
+    /// again, makes it the system's zone). The assistant cannot reach that service from its sandbox, so the shell does
+    /// this for it, and for no other app: the zone comes only from the assistant's own state file. Nothing happens on
+    /// the login window; the zone stays pending until the session unlocks (`setup::take_zone`).
+    pub(super) fn apply_setup_zone(&mut self) {
+        let locked = self.is_locked();
+        let Some(zone) = crate::setup::take_zone(&mut self.setup_zone, locked) else { return };
+        if !crate::bare::timezone::set(&zone) {
+            eprintln!("springboard: setup: no time zone named {zone:?}");
+            return;
+        }
+        if let Err(e) = self.prefs.set("tz", &zone) {
+            eprintln!("springboard: settings.ini: {e}");
+        }
+        self.dirty = true;
+    }
+
+    /// The app in `slot` has gone: when it is the Setup Assistant, a finished run's choices are copied and its zone is
+    /// set now, not at the next start.
+    fn setup_assistant_exited(&mut self, slot: u8) {
+        let assistant = self.ext.get(slot as usize).and_then(Option::as_ref).is_some_and(|h| h.id == crate::setup::APP_ID);
+        // a window closed before Get Started changes nothing here: the start-up step alone decides what an unfinished run means
+        if assistant && crate::setup::State::load(&crate::setup::app_state_path(&self.data_dir)).done {
+            self.copy_setup_choices();
+            self.apply_setup_zone();
+        }
+    }
+
     /// An installed app did not start (the spawn failed, or it exited before saying hello): the user gets an alert
     /// from the app, and the app's Dock launch bounce stops instead of running out its timeout.
     pub(super) fn launch_failed(&mut self, slot: usize) {
@@ -2859,6 +2899,7 @@ impl Shell {
             self.doc_keep_shown();
         }
         for &slot in &died { self.dnd_app_gone(slot); self.extras_app_gone(slot); self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidTerminateApplication, slot); }
+        for &slot in died.iter().chain(&vanished) { self.setup_assistant_exited(slot); }
         // a failed exit gets the "quit unexpectedly" alert (read before the host is dropped); the shell keeps running
         for &slot in &died { self.app_crashed(slot as usize); }
         for (id, code) in late_crashes() { self.app_crashed_late(&id, code); }

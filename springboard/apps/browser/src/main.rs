@@ -55,7 +55,7 @@ use bifrost_app::network_path::{self, Status};
 use bifrost_app::{glyphs, widgets, App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 
 /// The engine archive bundled in assets/servo.tar.gz (version and the first 12 hex digits of its SHA-256).
-const ENGINE: &str = "servo-0.7.0-bifrost.16-6de49021c91b";
+const ENGINE: &str = "servo-0.7.0-bifrost.17-1aa3e0c432cd";
 const START: &str = "about:blank";
 
 /// Toolbar ids.

@@ -10,7 +10,7 @@ use bifrost_app::controls::Rect;
 use bifrost_app::kit::canvas::{Canvas, ImageRef, RectF};
 use bifrost_app::kit::ui::{
     Ui, Weight, BLACK, CONTENT_BG, DESTRUCTIVE, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT,
-    SELECTION, SEGMENT_ON, SEPARATOR_C, WHITE,
+    SELECTION, SEGMENT_ON, SEPARATOR_C, SPACE_XXS, WHITE,
 };
 use bifrost_app::glyphs::glyph;
 use bifrost_app::kit::ui::system::FIND_HIGHLIGHT;
@@ -1011,7 +1011,7 @@ pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, c
             let x1 = lines.x_in_line(cells, line, m.end.min(line.end), &measure);
             if x1 > x0 {
                 let rect = Rect { x: origin_x + x0, y: origin_y + line.top, w: x1 - x0, h: line.height };
-                c.fill_rrect(to_px(ui, rect), ui.pt(2.0), FIND_HIGHLIGHT.now());
+                c.fill_rrect(to_px(ui, rect), ui.pt(SPACE_XXS), FIND_HIGHLIGHT.now());
             }
         }
     }

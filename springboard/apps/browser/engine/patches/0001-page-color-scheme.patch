@@ -1,0 +1,219 @@
+--- a/components/layout/display_list/mod.rs
++++ b/components/layout/display_list/mod.rs
+@@ -41,6 +41,7 @@
+ use style::values::generics::NonNegative;
+ use style::values::generics::color::ColorOrAuto;
+ use style::values::generics::rect::Rect as StyleRect;
++use style::values::specified::color::ColorSchemeFlags;
+ use style::values::specified::text::TextDecorationLine;
+ use style_traits::{CSSPixel as StyloCSSPixel, DevicePixel as StyloDevicePixel};
+ use webrender_api::units::{
+@@ -142,6 +143,12 @@
+     /// The background color used for the shell.
+     shell_background_color: AbsoluteColor,
+ 
++    /// BifrOSt: `Some(whether the device prefers the dark color scheme)` for a top-level document,
++    /// whose canvas is painted with the dark `Canvas` color when the root element's used color
++    /// scheme is dark and no background reaches the canvas. `None` for an iframe, whose canvas
++    /// stays transparent.
++    dark_canvas_preference: Option<bool>,
++
+     /// Whether or not the `WebView` this display list is being rendered for has system focus
+     /// and is the focused frame in the frame tree.
+     frame_focused: bool,
+@@ -197,6 +204,7 @@
+         paint_timing_handler: &mut PaintTimingHandler,
+         reflow_statistics: &mut ReflowStatistics,
+         frame_focused: bool,
++        dark_canvas_preference: Option<bool>,
+     ) -> BuiltDisplayList {
+         // Build the rest of the display list which inclues all of the WebRender primitives.
+         let paint_info = &mut stacking_context_tree.paint_info;
+@@ -240,6 +248,7 @@
+             reflow_statistics,
+             largest_contentful_paint_enabled: pref!(largest_contentful_paint_enabled),
+             shell_background_color,
++            dark_canvas_preference,
+             frame_focused,
+         };
+ 
+@@ -953,6 +962,27 @@
+         // This can happen if the root fragment does not have a `<body>` child (either because it is
+         // `display: none` or `display: contents`) or if the `<body>`'s background is transparent.
+         if source_style.background_is_transparent() {
++            // BifrOSt: <https://drafts.csswg.org/css-color-adjust/#color-scheme-effect>: when the
++            // root element's used color scheme is dark, the canvas surface is dark too. The shell
++            // background behind the page is a fixed color, so paint the dark `Canvas` system color
++            // (stylo `Device::system_color`) here. `Device::is_dark_color_scheme` decides the same
++            // way for the root's `CanvasText`.
++            if let Some(device_prefers_dark) = self.dark_canvas_preference {
++                let color_scheme = fragment.style().get_inherited_ui().color_scheme_bits();
++                let dark = color_scheme.contains(ColorSchemeFlags::DARK);
++                let light = color_scheme.contains(ColorSchemeFlags::LIGHT);
++                let used_dark = if dark != light { dark } else { device_prefers_dark };
++                if used_dark {
++                    let painting_area = self
++                        .fragment_tree
++                        .initial_containing_block
++                        .union(&self.fragment_tree.scrollable_overflow())
++                        .to_webrender();
++                    let common = self.common_properties(state, painting_area, &source_style);
++                    let color = rgba(AbsoluteColor::srgb_legacy(30, 30, 30, 1.0));
++                    self.wr().push_rect(&common, painting_area, color);
++                }
++            }
+             return;
+         }
+ 
+--- a/components/layout/layout_impl.rs
++++ b/components/layout/layout_impl.rs
+@@ -1570,6 +1570,8 @@
+             paint_timing_handler,
+             reflow_statistics,
+             reflow_request.frame_focused,
++            // BifrOSt: see `DisplayListBuilder::dark_canvas_preference`.
++            (!self.is_iframe).then(|| self.device().color_scheme() == PrefersColorScheme::Dark),
+         );
+ 
+         stacking_context_tree.paint_info.paint_timing_info = reflow_request.paint_timing_info;
+--- a/components/script/dom/document/document.rs
++++ b/components/script/dom/document/document.rs
+@@ -752,6 +752,12 @@
+     #[no_trace]
+     theme_override: Cell<Option<Theme>>,
+ 
++    /// BifrOSt: the page's supported color schemes from `<meta name=color-scheme>`, as the bits of
++    /// `ColorSchemeFlags` (1 light, 2 dark, 4 only). 0 when no meta element gives any. The root
++    /// element gets them as a `color-scheme` presentational hint.
++    /// <https://html.spec.whatwg.org/multipage/#meta-color-scheme>
++    page_color_scheme: Cell<u8>,
++
+     /// Language specific for this document, set by a meta element
+     default_language: DomRefCell<Option<String>>,
+ 
+@@ -3886,6 +3892,12 @@
+         self.unsafe_get().quirks_mode.get()
+     }
+ 
++    /// BifrOSt: see the `page_color_scheme` field of `Document`.
++    #[inline]
++    pub(crate) fn page_color_scheme_for_layout(self) -> u8 {
++        self.unsafe_get().page_color_scheme.get()
++    }
++
+     #[inline]
+     pub(crate) fn shared_style_locks(self) -> &'dom SharedRwLocks {
+         self.unsafe_get().shared_style_locks()
+@@ -4189,6 +4201,7 @@
+             history: Default::default(),
+             theme: Default::default(),
+             theme_override: Default::default(),
++            page_color_scheme: Default::default(),
+             default_language: Default::default(),
+             window_detached: Default::default(),
+             live_ranges: Default::default(),
+@@ -5349,6 +5362,16 @@
+         self.window.refresh_theme();
+     }
+ 
++    /// BifrOSt: see the `page_color_scheme` field. Restyles the root element when the value changes.
++    pub(crate) fn set_page_color_scheme(&self, no_gc: &NoGC, bits: u8) {
++        if self.page_color_scheme.replace(bits) == bits {
++            return;
++        }
++        if let Some(element) = self.GetDocumentElement() {
++            element.upcast::<Node>().dirty(no_gc, NodeDamage::Style);
++        }
++    }
++
+     pub(crate) fn default_language(&self) -> Option<String> {
+         self.default_language.borrow().clone()
+     }
+--- a/components/script/dom/element/element.rs
++++ b/components/script/dom/element/element.rs
+@@ -1286,6 +1286,18 @@
+             ))));
+         }
+ 
++        // BifrOSt: the page's supported color schemes (`<meta name=color-scheme>`) are a
++        // presentational hint for `color-scheme` on the root element.
++        // <https://html.spec.whatwg.org/multipage/#meta-color-scheme>
++        if self.is_root() {
++            let bits = document.page_color_scheme_for_layout();
++            if bits != 0 {
++                let mut color_scheme = specified::ColorScheme::normal();
++                color_scheme.bits = specified::color::ColorSchemeFlags::from_bits_truncate(bits);
++                push(PropertyDeclaration::ColorScheme(color_scheme));
++            }
++        }
++
+         let bgcolor = if let Some(this) = self.downcast::<HTMLBodyElement>() {
+             this.get_background_color()
+         } else if let Some(this) = self.downcast::<HTMLTableElement>() {
+--- a/components/script/dom/html/document_metadata/htmlmetaelement.rs
++++ b/components/script/dom/html/document_metadata/htmlmetaelement.rs
+@@ -200,6 +200,23 @@
+             });
+ 
+         doc.set_theme(new_theme);
++
++        // BifrOSt: the same candidates again, this time for the first valid `color-scheme` value
++        // (the theme above only knows the exact values `dark` and `light`). The root element gets
++        // it as a presentational hint.
++        let bits = doc
++            .upcast::<Node>()
++            .traverse_preorder_non_rooting(cx.no_gc(), ShadowIncluding::No)
++            .filter_map(UnrootedDom::downcast::<HTMLMetaElement>)
++            .filter_map(|meta| {
++                let element = UnrootedDom::upcast::<Element>(meta);
++                element
++                    .get_attribute_string_value(&local_name!("content"))
++                    .filter(|_| element.get_name().is_color_scheme())
++            })
++            .find_map(|content| page_color_scheme_bits(&content))
++            .unwrap_or(0);
++        doc.set_page_color_scheme(cx.no_gc(), bits);
+     }
+ 
+     /// <https://html.spec.whatwg.org/multipage/#attr-meta-http-equiv-content-security-policy>
+@@ -397,6 +414,40 @@
+     }
+ }
+ 
++/// BifrOSt: the bits of `ColorSchemeFlags` (1 light, 2 dark, 4 only) for a meta `content` that is
++/// a valid CSS `color-scheme` value (`normal | [ light | dark | <custom-ident> ]+ && only?`), or
++/// `None` when it is not one. `normal` and values with unknown schemes only give 0.
++fn page_color_scheme_bits(content: &str) -> Option<u8> {
++    let (mut bits, mut schemes, mut normal) = (0u8, 0usize, 0usize);
++    for word in content.split_ascii_whitespace() {
++        let identifier = !word.starts_with(|c: char| c.is_ascii_digit()) &&
++            word.chars()
++                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || !c.is_ascii());
++        if !identifier {
++            return None;
++        }
++        if word.eq_ignore_ascii_case("normal") {
++            normal += 1;
++        } else if word.eq_ignore_ascii_case("only") {
++            if bits & 4 != 0 {
++                return None;
++            }
++            bits |= 4;
++        } else {
++            schemes += 1;
++            if word.eq_ignore_ascii_case("light") {
++                bits |= 1;
++            } else if word.eq_ignore_ascii_case("dark") {
++                bits |= 2;
++            }
++        }
++    }
++    if normal != 0 {
++        return (normal == 1 && schemes == 0 && bits == 0).then_some(0);
++    }
++    (schemes != 0).then_some(bits)
++}
++
+ /// Trait to make it easier to make sure all callers lowercase to ASCII
+ /// before comparing to the `color-scheme` value.
+ /// Otherwise it is easy to miss one usage and compare case-sensitively.

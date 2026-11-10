@@ -102,7 +102,7 @@ fn disclosure(s: &mut Surface, x: f32, y: f32, size: f32, folded: bool, color: u
         }
     }
 }
-use bifrost_app::kit::ui::{SPACE_XS};
+use bifrost_app::kit::ui::{SPACE_XS, SPACE_XXS};
 use bifrost_app::controls::sheet::{Hit, Sheet};
 
 /// Picker sheet header height and thumbnail decode size (pt).
@@ -4421,7 +4421,7 @@ impl Notes {
             let is_open = open.as_deref() == Some(note.id.as_str());
             if is_open || selected == Some(i) {
                 content.fill_rrect(x, ry, w, h, radius, YELLOW);
-                content.fill_rrect(x + ui.pt(2.0), ry + ui.pt(2.0), w - ui.pt(4.0), h - ui.pt(4.0), radius, CARD_BG.now());
+                content.fill_rrect(x + ui.pt(SPACE_XXS), ry + ui.pt(SPACE_XXS), w - ui.pt(SPACE_XS), h - ui.pt(SPACE_XS), radius, CARD_BG.now());
             } else {
                 content.fill_rrect(x, ry, w, h, radius, CARD_BG.now());
             }

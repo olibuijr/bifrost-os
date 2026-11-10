@@ -865,7 +865,7 @@ impl Settings {
             PageId::Passwords => {
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
                 let revealed = self.pw_revealed.as_ref().map(|(site, account, password)| super::passwords_page::Shown { site: site.as_str(), account: account.as_str(), password: password.as_str() });
-                super::passwords_page::spec(&super::passwords_page::PageState { logins: &self.loads.logins.value, revealed, offset: crate::bare::sys::wall_time().1, passcode_on })
+                super::passwords_page::spec(&super::passwords_page::PageState { logins: &self.loads.logins.value, revealed, offset: crate::bare::sys::wall_time().1, clock_24h: self.opts.clock_24h, passcode_on })
             }
             PageId::InternetAccounts => super::internet_accounts_page::spec(&super::internet_accounts_page::PageState { accounts: &self.loads.accounts.value.0, store: &self.loads.accounts.value.1, note: &self.ia_note }),
             PageId::Account => super::account_page::spec(&super::account_page::PageState {
@@ -873,7 +873,7 @@ impl Settings {
                 note: &self.account_note,
                 busy: self.loads.account_done.busy(),
             }),
-            PageId::Diagnostics => diagnostics_page::spec(&diagnostics_page::PageState { crashes: &self.loads.crashes.value, installs: &self.loads.install_failures.value, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() }),
+            PageId::Diagnostics => diagnostics_page::spec(&diagnostics_page::PageState { crashes: &self.loads.crashes.value, installs: &self.loads.install_failures.value, offset: crate::bare::sys::wall_time().1, clock_24h: self.opts.clock_24h, note: &self.diag_note, sharing: self.diag_rx.is_some() }),
             PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &self.loads.users.value, &self.detail, &self.users_note, &self.opts),
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
             PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),

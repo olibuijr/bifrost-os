@@ -84,6 +84,8 @@ const GRID_TOP: f32 = 170.0;
 const CELL_LINE: f32 = 16.0;
 /// Where a cell's event lines start below its top (under the day number).
 const CELL_HEAD: f32 = 28.0;
+/// The width kept free in an invitee row, in points: the leading inset plus the Invite or Remove link at the trailing edge.
+const INVITEE_ROOM_PT: f32 = 130.0;
 /// How long the Undo bar stays after a delete.
 const UNDO_MS: f64 = 5000.0;
 /// How long Cmd+Z and Edit > Undo still bring a deleted event back: the bar is only a hint, not the Undo command, so a
@@ -1934,13 +1936,13 @@ impl Calendar {
                 },
                 Target::InviteeSuggest(i) => {
                     let who = self.invitee_suggestions().get(i).map_or_else(String::new, |e| inviting::row_label(&extras::Invitee { address: e.email.clone(), name: e.name.clone() }));
-                    let fit = ui.fit(&who, MAC_BODY_PT, w - ui.pt(130.0));
+                    let fit = ui.fit(&who, MAC_BODY_PT, w - ui.pt(INVITEE_ROOM_PT));
                     self.text(s, ui, &fit, MAC_BODY_PT, LABEL.now(), ui.pt(36.0), mid);
                     self.right(s, ui, "Invite", colors::LINK.now(), w - ui.pt(36.0), mid);
                 }
                 Target::InviteeDrop(i) => {
                     let who = draft.extra.invitees.get(i).map_or_else(String::new, inviting::row_label);
-                    let fit = ui.fit(&who, MAC_BODY_PT, w - ui.pt(130.0));
+                    let fit = ui.fit(&who, MAC_BODY_PT, w - ui.pt(INVITEE_ROOM_PT));
                     self.text(s, ui, &fit, MAC_BODY_PT, LABEL.now(), ui.pt(36.0), mid);
                     self.right(s, ui, "Remove", colors::SYSTEM_RED.now(), w - ui.pt(36.0), mid);
                 }

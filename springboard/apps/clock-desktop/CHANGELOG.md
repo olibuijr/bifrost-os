@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.10
+
+- Compliance: the selected alarm's ring uses the spacing token; no change in behaviour.
+
 ## 1.6.9
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

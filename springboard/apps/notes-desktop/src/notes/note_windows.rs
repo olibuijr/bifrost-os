@@ -27,6 +27,7 @@ use springboard::shell::ui::Ui;
 
 /// The size of a note window, in points.
 pub const WINDOW_W: f32 = 520.0;
+// compliance-allow: LAY-03 the size a note window opens at, in points; the shell clamps it to the screen and the text lays out from the size it is given
 pub const WINDOW_H: f32 = 600.0;
 /// The inset of the text from the window edges, in points.
 const INSET_PT: f32 = 20.0;

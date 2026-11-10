@@ -2084,12 +2084,53 @@ impl Shell {
     /// Show in Files: opens the installed app `id` at `folder`. The request is written to the app's
     /// data folder first, so the app reads it on its next tick; a failed open removes it again.
     pub fn desktop_open_folder(&mut self,id:&str,folder:&str,t:f64)->Result<(),String> {
+        self.desktop_hand_off(id,t,|data|crate::files::handoff::write_request(data,std::path::Path::new(folder)))
+    }
+    /// Show in Files for one item: opens the installed app `id` at the folder that holds `path` (an absolute path to
+    /// an existing file or folder) and asks it to select that item. The request travels as `desktop_open_folder`'s does.
+    pub fn desktop_reveal_file(&mut self,id:&str,path:&str,t:f64)->Result<(),String> {
+        self.desktop_hand_off(id,t,|data|crate::files::handoff::write_reveal(data,std::path::Path::new(path)))
+    }
+    /// Show in Files as the shell's own menus and services ask for it: a folder is shown itself, a file is shown
+    /// selected in the folder that holds it.
+    pub fn desktop_show_in_files(&mut self,path:&std::path::Path,t:f64)->Result<(),String> {
+        let text=path.to_string_lossy();
+        if path.is_dir(){self.desktop_open_folder(FILES_APP,&text,t)}else{self.desktop_reveal_file(FILES_APP,&text,t)}
+    }
+    /// `open-file`: opens the file at `path` in the app `id` (an installed app's ID or a built-in app's key), which
+    /// receives it as a document, the way the Dock's stack and Files' Open With hand a file to an app
+    /// (`open_path_with`). The path is checked first (`workspace::check_open_file`), the app must be one a person
+    /// launches, and the file must pass the malware check, which has no card to ask on here.
+    pub fn desktop_open_file(&mut self,id:&str,path:&str,t:f64)->Result<(),String> {
+        if !self.desk_active(){return Err("The desktop is not active".into());}
+        let path=std::path::Path::new(path);
+        super::workspace::check_open_file(id,path)?;
+        let known=match apps().iter().find(|a|a.icon==id).map(|a|a.id){
+            Some(AppId::External(_))=>super::workspace::application_to_open(&apphost::installed(),id).is_some(),
+            Some(_)=>true,
+            None=>false,
+        };
+        if !known{return Err("App not installed".into());}
+        #[cfg(feature="desktop-wayland")]
+        {
+            use super::malware_gate::{check,rules_dir,Gate};
+            if !matches!(check(&rules_dir(),&[path.to_path_buf()]),Gate::Open){return Err("The file did not pass the malware check; open it from Files".into());}
+            if self.open_path_with(id,path,t){Ok(())}else{Err("The app could not open the file (it must be a file in the home folder that the app can take)".into())}
+        }
+        #[cfg(not(feature="desktop-wayland"))]
+        {
+            let _=t;
+            Err("Opening a file in an app needs the desktop session".into())
+        }
+    }
+    /// Checks the app `id`, writes its hand-off request with `write` (given the app's data folder) and opens the app.
+    fn desktop_hand_off(&mut self,id:&str,t:f64,write:impl FnOnce(&std::path::Path)->std::io::Result<()>)->Result<(),String> {
         if !self.desk_active(){return Err("The desktop is not active".into());}
         if id.is_empty()||!id.bytes().all(|c|c.is_ascii_alphanumeric()||b"._-".contains(&c)){return Err("Invalid app ID".into());}
         if !apphost::installed().iter().any(|p|p.manifest.id==id){return Err("App not installed".into());}
         let data=apphost::root().join("appdata").join(id);
-        crate::files::handoff::write_request(&data,std::path::Path::new(folder)).map_err(|e|e.to_string())?;
-        if self.desktop_open_app(id,t){Ok(())}else{let _=std::fs::remove_file(data.join(crate::files::handoff::REQUEST));Err("App not running on the desktop".into())}
+        write(&data).map_err(|e|e.to_string())?;
+        if self.desktop_open_app(id,t){Ok(())}else{crate::files::handoff::clear_request(&data);Err("App not running on the desktop".into())}
     }
     pub fn desktop_export_apps(&self){if !self.desk_active(){return;}let root=std::path::Path::new("/run/bifrost/user/share/applications");if std::fs::create_dir_all(root).is_err(){return;}for app in apps(){if app.icon=="is.olibuijr.browser.desktop"{continue;}if !app.icon.bytes().all(|c|c.is_ascii_alphanumeric()||b"._-".contains(&c)){continue;}let text=format!("[Desktop Entry]\nType=Application\nName={}\nExec=/usr/bin/bifrost-open-url --app {}\nIcon=application-x-executable\nTerminal=false\nCategories=Utility;\n",app.name.replace('\n'," "),app.icon);let _=std::fs::write(root.join(format!("{}.desktop",app.icon)),text);}}
     pub fn desktop_open_url(&mut self,url:&str,t:f64)->std::io::Result<()> {

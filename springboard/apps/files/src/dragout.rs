@@ -32,6 +32,12 @@ pub(crate) fn session_refused(heard: bool, dragging: bool) -> bool {
     !heard && dragging
 }
 
+/// How long a finger rests on an item before it lifts it: the system's long press, or the Touch Accommodations hold
+/// when that is longer.
+pub(crate) fn hold_ms() -> f64 {
+    bifrost_app::kit::appearance::long_press_ms(springboard::files::LONG_PRESS_MS)
+}
+
 /// The cross-window drag state of one window.
 #[derive(Default)]
 pub(crate) struct DragOut {
@@ -68,6 +74,42 @@ impl Files {
         self.fx.drag_paths.clear();
         self.fx.copy_drag = false;
         self.revision += 1;
+    }
+
+    /// Lifts the item pressed at (`sx`, `sy`): it joins the selection and the drag of the selection begins. Nothing
+    /// happens where no item is, in the sidebar, in select mode or while a job runs.
+    pub(crate) fn lift_item(&mut self, ctx: &Ctx, sx: f32, sy: f32) -> bool {
+        self.fx.hold = None;
+        if self.dragging || sx < self.side() || self.select_mode || self.work.is_some() {
+            return false;
+        }
+        let Some(i) = self.item_at(sx, sy) else { return false };
+        if !self.selection.contains(&i) {
+            self.select_only(i);
+        }
+        self.dragging = true;
+        self.fx.drag_paths = self.selected_paths();
+        self.fx.copy_drag = false;
+        self.revision += 1;
+        self.drag_out_ask(ctx);
+        true
+    }
+
+    /// When the finger resting on an item lifts it (ms, the touch clock), for the loop's wake.
+    pub(crate) fn hold_due(&self) -> Option<f64> {
+        self.fx.hold.filter(|_| self.down.is_some() && !self.dragging).map(|t0| t0 + hold_ms())
+    }
+
+    /// The loop's tick at `t`: a finger that has rested on an item for the hold time lifts it, so the item shows as
+    /// picked up before the finger moves. True when it did.
+    pub(crate) fn hold_tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        if !self.hold_due().is_some_and(|due| t >= due) {
+            return false;
+        }
+        match self.down {
+            Some((sx, sy, _)) => self.lift_item(ctx, sx, sy),
+            None => false,
+        }
     }
 
     /// The drag just started on items: ask the shell for a read grant for each one. The session begins when they are all in.

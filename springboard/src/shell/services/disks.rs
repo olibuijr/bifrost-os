@@ -17,7 +17,11 @@
 //! - `attach_image` `{path, read_only?}` / `detach_image` `{target}` -> `{started}`: mounts a disk image of the account
 //!   or releases one (`shell::disk_image`). These two also answer an app with the `storage` permission (Files). The
 //!   work runs on a thread; the outcome comes to the calling app as `image_attached` / `image_detached`
-//!   `{ok, path|target, device, mount_point, error}`.
+//!   `{ok, path|target, device, mount_point, error}`. A partitioned image gives one volume per partition that can be
+//!   mounted (`mount_point` is the first); detaching any of them releases the whole image.
+//! - `eject_volume` `{target}` -> `{started}`: unmounts a removable volume's partition (`/dev/sdb1`) and powers its
+//!   disk off (`shell::volume_eject`), for the same callers and on the same thread pool; the outcome is the event
+//!   `volume_ejected` `{ok, target, device, powered_off, error}`. A sandboxed app cannot do this itself.
 //!
 //! Events (to every app, from `bifrost_core::disk_wire`): `disk_appeared`, `disk_disappeared`,
 //! `disk_description_changed`.

@@ -410,7 +410,9 @@ mod tests {
         let p = NotifyPrefs { schedule: Schedule { enabled: true, start: 22 * 60, end: 7 * 60 }, clock_24h: true, ..Default::default() };
         let g = schedule_group(&p);
         assert_eq!(g.items[0].accessory, super::super::list::Accessory::Switch(true));
-        assert_eq!((g.items[1].value.as_str(), g.items[2].value.as_str()), ("22:00", "7:00"));
+        assert_eq!((g.items[1].value.as_str(), g.items[2].value.as_str()), ("22:00", "07:00"));
+        let g = schedule_group(&NotifyPrefs { clock_24h: false, ..p.clone() });
+        assert_eq!((g.items[1].value.as_str(), g.items[2].value.as_str()), ("10:00 PM", "7:00 AM"));
         assert_eq!(g.items[1].action, Action::Notify(NotifyEdit::From));
     }
 

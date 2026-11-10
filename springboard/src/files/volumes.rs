@@ -1,16 +1,14 @@
-//! Removable volumes for the Files sidebar: the disks mounted under the media folders, and the storage tool's commands
-//! that unmount one and power its disk off (the Eject text on a Locations row). The commands are planned as data so the
-//! tests check them without a disk; `run_eject` runs them in order and stops at the first failure.
+//! Removable volumes for the Files sidebar: the disks mounted under the media folders, and the words for an eject
+//! that failed. Files does not eject a volume itself: its sandbox has no system bus and no device nodes, so it asks
+//! the shell's `disks` service (`shell::volume_eject`, and `shell::disk_image` for a disk image's volume).
 //!
-//! When an eject fails because a program still has a file or folder of the volume open, `blockers` finds those programs
-//! (the unmount assistant) and `eject_notice` writes the one line the Files status bar shows: which programs hold the
-//! volume, so the person can close them and try again. `eject_with_notice` is the whole flow.
+//! When an unmount fails because a program still has a file or folder of the volume open, `blockers` finds those
+//! programs (the shell runs it, it sees every process) and `in_use_line` names them, so the person can close them and
+//! try again. `eject_notice` writes the one line the Files status bar shows.
 use std::path::{Path, PathBuf};
 
 /// The folders a removable volume is mounted under (`/run/media/<user>/<name>`, or `/media/<name>`).
 const MEDIA_ROOTS: [&str; 2] = ["/run/media/", "/media/"];
-/// The storage tool that unmounts a partition and powers its disk off (the tool the shell's disk image attach uses).
-const STORAGE_TOOL: &str = "udisksctl";
 
 /// A removable volume: its name (the folder it is mounted in), where it is mounted, and its partition (`/dev/sdb1`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -61,41 +59,6 @@ pub fn mounted() -> Vec<Volume> {
     std::fs::read_to_string("/proc/mounts").map(|text| parse_mounts(&text)).unwrap_or_default()
 }
 
-/// The whole disk a partition belongs to: `/dev/sdb1` gives `/dev/sdb`, `/dev/nvme0n1p2` gives `/dev/nvme0n1`.
-/// A whole disk comes back as it is.
-pub fn disk_of(device: &str) -> String {
-    let name = device.rsplit('/').next().unwrap_or(device);
-    let base = if name.starts_with("nvme") || name.starts_with("mmcblk") {
-        // these disks number their partitions after a "p" that follows a digit
-        match name.rfind('p') {
-            Some(p) if p > 0 && name[..p].ends_with(|c: char| c.is_ascii_digit()) && name[p + 1..].bytes().all(|c| c.is_ascii_digit()) && p + 1 < name.len() => &name[..p],
-            _ => name,
-        }
-    } else {
-        name.trim_end_matches(|c: char| c.is_ascii_digit())
-    };
-    format!("/dev/{base}")
-}
-
-/// The commands that eject a volume's partition: unmount it, then power its disk off. Each is (program, arguments).
-pub fn eject_commands(device: &str) -> Vec<(String, Vec<String>)> {
-    vec![
-        (STORAGE_TOOL.into(), vec!["unmount".into(), "-b".into(), device.into()]),
-        (STORAGE_TOOL.into(), vec!["power-off".into(), "-b".into(), disk_of(device)]),
-    ]
-}
-
-/// Runs the eject commands in order. Returns the first failure's message (the tool's error text, or why it did not run).
-pub fn run_eject(device: &str) -> Result<(), String> {
-    for (program, args) in eject_commands(device) {
-        let out = std::process::Command::new(&program).args(&args).output().map_err(|e| format!("{program}: {e}"))?;
-        if !out.status.success() {
-            return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
-        }
-    }
-    Ok(())
-}
-
 /// A program that holds a file or folder of a volume open.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Blocker {
@@ -141,34 +104,37 @@ pub fn blockers(mount: &Path) -> Vec<Blocker> {
 /// The most program names the notice lists before it counts the rest.
 const NOTICE_NAMES: usize = 3;
 
-/// The line shown when `volume` could not be ejected. With `blockers` it names the programs to close; without any it
-/// gives the first line of the tool's `error`, or just the failure when the tool said nothing.
-pub fn eject_notice(volume: &str, error: &str, blockers: &[Blocker]) -> String {
+/// The sentences that name the programs holding a volume (`In use by a, b. Close them and try again.`), each program
+/// once; `None` without any.
+pub fn in_use_line(blockers: &[Blocker]) -> Option<String> {
     let mut names: Vec<&str> = Vec::new();
     for b in blockers {
         if !names.contains(&b.name.as_str()) {
             names.push(&b.name);
         }
     }
-    if !names.is_empty() {
-        let shown: Vec<&str> = names.iter().take(NOTICE_NAMES).copied().collect();
-        let mut list = shown.join(", ");
-        if names.len() > shown.len() {
-            list.push_str(&format!(" and {} more", names.len() - shown.len()));
-        }
-        let them = if names.len() == 1 { "it" } else { "them" };
-        return format!("\u{201c}{volume}\u{201d} could not be ejected. In use by {list}. Close {them} and try again.");
+    if names.is_empty() {
+        return None;
+    }
+    let shown: Vec<&str> = names.iter().take(NOTICE_NAMES).copied().collect();
+    let mut list = shown.join(", ");
+    if names.len() > shown.len() {
+        list.push_str(&format!(" and {} more", names.len() - shown.len()));
+    }
+    let them = if names.len() == 1 { "it" } else { "them" };
+    Some(format!("In use by {list}. Close {them} and try again."))
+}
+
+/// The line shown when `volume` could not be ejected. With `blockers` it names the programs to close; without any it
+/// gives the first line of the tool's `error`, or just the failure when the tool said nothing.
+pub fn eject_notice(volume: &str, error: &str, blockers: &[Blocker]) -> String {
+    if let Some(line) = in_use_line(blockers) {
+        return format!("\u{201c}{volume}\u{201d} could not be ejected. {line}");
     }
     match error.lines().map(str::trim).find(|l| !l.is_empty()) {
         Some(line) => format!("\u{201c}{volume}\u{201d} could not be ejected: {line}"),
         None => format!("\u{201c}{volume}\u{201d} could not be ejected."),
     }
-}
-
-/// Ejects the volume at `mount` (partition `device`). `None` when it went; otherwise the notice for the status bar,
-/// naming the programs that hold the volume when there are any.
-pub fn eject_with_notice(name: &str, device: &str, mount: &Path) -> Option<String> {
-    run_eject(device).err().map(|e| eject_notice(name, &e, &blockers(mount)))
 }
 
 #[cfg(test)]
@@ -199,15 +165,6 @@ mod tests {
         assert_eq!(unescape("Åsa"), "Åsa");
     }
 
-    #[test]
-    fn a_partition_maps_to_its_disk() {
-        assert_eq!(disk_of("/dev/sdb1"), "/dev/sdb");
-        assert_eq!(disk_of("/dev/sdb"), "/dev/sdb");
-        assert_eq!(disk_of("/dev/nvme0n1p2"), "/dev/nvme0n1");
-        assert_eq!(disk_of("/dev/nvme0n1"), "/dev/nvme0n1");
-        assert_eq!(disk_of("/dev/mmcblk0p1"), "/dev/mmcblk0");
-    }
-
     fn blocker(pid: u32, name: &str) -> Blocker {
         Blocker { pid, name: name.into() }
     }
@@ -220,6 +177,8 @@ mod tests {
         let text = eject_notice("Stick", "", &many);
         assert!(text.contains("In use by a, b, c and 2 more."), "{text}");
         assert!(text.contains("Close them"), "{text}");
+        assert_eq!(in_use_line(&[blocker(1, "vlc"), blocker(2, "vlc")]).as_deref(), Some("In use by vlc. Close it and try again."));
+        assert_eq!(in_use_line(&[]), None);
     }
 
     #[test]
@@ -257,16 +216,5 @@ mod tests {
         let without_self = blockers_in(&root, Path::new("/media/Stick"), 100);
         assert!(without_self.iter().all(|b| b.pid != 100));
         std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    #[test]
-    fn eject_unmounts_the_partition_then_powers_the_disk_off() {
-        assert_eq!(
-            eject_commands("/dev/sdb1"),
-            vec![
-                ("udisksctl".to_string(), vec!["unmount".to_string(), "-b".to_string(), "/dev/sdb1".to_string()]),
-                ("udisksctl".to_string(), vec!["power-off".to_string(), "-b".to_string(), "/dev/sdb".to_string()]),
-            ]
-        );
     }
 }

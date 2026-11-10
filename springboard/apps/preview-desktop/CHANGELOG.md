@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.22
+
+- Save writes the file the picture or PDF was opened from, not only Viewer's own copy of it; when that file cannot be written, an alert says why and offers Save As.
+
 ## 0.11.21
 
 - SVG, TIFF, BMP and icon pictures open; the Open panel offers every type the app opens; a document that does not open is named with a plain reason; old working copies are removed.

@@ -99,6 +99,11 @@ pub enum Request {
     Appearance(String),
     /// Opens an installed app at a folder: `open-folder <app id> <absolute folder>`.
     OpenFolder(String, String),
+    /// Opens an installed app at the folder that holds an item, with the item selected:
+    /// `reveal-file <app id> <absolute file or folder>`.
+    RevealFile(String, String),
+    /// Opens a file in an installed app, which receives it as a document: `open-file <app id> <absolute file>`.
+    OpenFile(String, String),
     Swipe { from: (f32, f32), to: (f32, f32), ms: f32 },
     /// One finger event now: phase 0 down, 1 move, 2 up (see `path`).
     Touch(u8, f32, f32),
@@ -224,6 +229,15 @@ pub fn parse(line: &str) -> Result<Request, String> {
     if let Some(rest) = line.trim_end().strip_prefix("open-folder ") {
         let (id, folder) = rest.split_once(' ').ok_or("Expected an app ID and a folder")?;
         return Ok(Request::OpenFolder(id.into(), folder.into()));
+    }
+    // the same shape: an app ID, then a path that takes the rest of the line
+    if let Some(rest) = line.trim_end().strip_prefix("reveal-file ") {
+        let (id, path) = rest.split_once(' ').ok_or("Expected an app ID and a file")?;
+        return Ok(Request::RevealFile(id.into(), path.into()));
+    }
+    if let Some(rest) = line.trim_end().strip_prefix("open-file ") {
+        let (id, path) = rest.split_once(' ').ok_or("Expected an app ID and a file")?;
+        return Ok(Request::OpenFile(id.into(), path.into()));
     }
     // the image path may contain spaces, so it takes the rest of the line
     if let Some(rest) = line.trim_end().strip_prefix("image-attach ") {
@@ -809,6 +823,26 @@ mod tests {
             Ok(Request::OpenFolder("is.olibuijr.files.desktop".into(), "/home/me/My Files".into()))
         );
         assert!(parse("open-folder is.olibuijr.files.desktop").is_err());
+    }
+    #[test]
+    fn reveal_file_and_open_file_take_an_app_and_the_rest_of_the_line_as_the_path() {
+        assert_eq!(
+            parse("reveal-file is.olibuijr.files.desktop /home/me/My Files/Q1 report.pdf\n"),
+            Ok(Request::RevealFile("is.olibuijr.files.desktop".into(), "/home/me/My Files/Q1 report.pdf".into()))
+        );
+        assert_eq!(
+            parse("open-file is.olibuijr.textedit.desktop /home/me/My Files/to do.txt\n"),
+            Ok(Request::OpenFile("is.olibuijr.textedit.desktop".into(), "/home/me/My Files/to do.txt".into()))
+        );
+        assert!(parse("reveal-file is.olibuijr.files.desktop").is_err());
+        assert!(parse("open-file is.olibuijr.textedit.desktop").is_err());
+        assert!(parse("reveal-file").is_err() && parse("open-file").is_err());
+        // like the other requests that open something, both wait for a login and stay open to the account
+        for line in ["reveal-file a.b /home/me/a.txt", "open-file a.b /home/me/a.txt"] {
+            let request = parse(line).unwrap();
+            assert!(!allowed_while_locked(&request), "{line} waits for a login");
+            assert!(!privileged_only(&request), "{line} stays open to the account");
+        }
     }
     #[test]
     fn image_lines_take_the_mode_and_the_rest_of_the_path() {

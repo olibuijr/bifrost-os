@@ -85,6 +85,7 @@ impl Link {
         let (wake, pipe_tx) = UnixStream::pair()?;
         wake.set_nonblocking(true)?;
         pipe_tx.set_nonblocking(true)?;
+        // compliance-allow: RES-01 the worker long-polls for as long as the window is open; a pool worker held that long would take a slot from every other queue job
         thread::Builder::new().name("locate-cloud".into()).spawn(move || run(&token, &name, job_rx, event_tx, pipe_tx))?;
         Ok(Link { jobs, events, wake })
     }

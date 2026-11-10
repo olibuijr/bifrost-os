@@ -12,6 +12,8 @@ pub struct PageState<'a> {
     pub installs: &'a [Failure],
     /// zone offset in seconds east of UTC, for the dates
     pub offset: i32,
+    /// Date & Time > 24-Hour Time, for the times
+    pub clock_24h: bool,
     /// "Shared with the developer.", the last error, or empty
     pub note: &'a str,
     /// an upload is running
@@ -25,12 +27,12 @@ pub fn spec(st: &PageState) -> Spec {
     let rows: Vec<Item> = if st.crashes.is_empty() {
         vec![Item::new("No Crash Logs").tint(Tint::Dim)]
     } else {
-        st.crashes.iter().take(MAX_ROWS).map(|c| Item::new(diag::date_text(c.unix, st.offset)).value(c.signature.clone()).action(Action::OpenFile(c.file.clone()))).collect()
+        st.crashes.iter().take(MAX_ROWS).map(|c| Item::new(diag::date_text(c.unix, st.offset, st.clock_24h)).value(c.signature.clone()).action(Action::OpenFile(c.file.clone()))).collect()
     };
     let install_rows: Vec<Item> = if st.installs.is_empty() {
         vec![Item::new("No Install Failures").tint(Tint::Dim)]
     } else {
-        st.installs.iter().take(MAX_ROWS).map(|f| Item::new(diag::date_text(f.unix, st.offset)).value(f.message.clone())).collect()
+        st.installs.iter().take(MAX_ROWS).map(|f| Item::new(diag::date_text(f.unix, st.offset, st.clock_24h)).value(f.message.clone())).collect()
     };
     let have = !st.crashes.is_empty();
     let share = if st.sharing { Item::new("Sharing…").tint(Tint::Dim) } else { Item::new("Share with Developer").tint(Tint::Blue).action(Action::Run(Command::ShareDiagnostics)) };
@@ -62,7 +64,7 @@ mod tests {
 
     #[test]
     fn empty_page_has_nothing_to_delete() {
-        let s = spec(&PageState { crashes: &[], installs: &[], offset: 0, note: "", sharing: false });
+        let s = spec(&PageState { crashes: &[], installs: &[], offset: 0, clock_24h: true, note: "", sharing: false });
         assert_eq!(s.groups[0].items[0].tint, Tint::Dim);
         assert_eq!(s.groups[1].items[0].tint, Tint::Dim);
         assert_eq!(s.groups[3].items[0].tint, Tint::Dim);
@@ -71,7 +73,7 @@ mod tests {
     #[test]
     fn crashes_open_their_log_and_share_is_offered() {
         let cs = [crash(100), crash(50)];
-        let s = spec(&PageState { crashes: &cs, installs: &[], offset: 0, note: "Shared.", sharing: false });
+        let s = spec(&PageState { crashes: &cs, installs: &[], offset: 0, clock_24h: true, note: "Shared.", sharing: false });
         assert_eq!(s.groups[0].items.len(), 2);
         assert_eq!(s.groups[0].items[0].action, Action::OpenFile(PathBuf::from("/d/crash.log")));
         assert_eq!(s.groups[2].items[0].action, Action::Run(Command::ShareDiagnostics));
@@ -82,7 +84,7 @@ mod tests {
     #[test]
     fn install_failures_are_listed_with_their_message() {
         let is = [install(200, "pkg checksum mismatch"), install(100, "disk full")];
-        let s = spec(&PageState { crashes: &[], installs: &is, offset: 0, note: "", sharing: false });
+        let s = spec(&PageState { crashes: &[], installs: &is, offset: 0, clock_24h: true, note: "", sharing: false });
         assert_eq!(s.groups[1].header.as_deref(), Some("INSTALL FAILURES"));
         assert_eq!(s.groups[1].items.len(), 2);
         assert_eq!(s.groups[1].items[0].value, "pkg checksum mismatch");
@@ -91,7 +93,7 @@ mod tests {
 
     #[test]
     fn sharing_disables_the_row() {
-        let s = spec(&PageState { crashes: &[], installs: &[], offset: 0, note: "", sharing: true });
+        let s = spec(&PageState { crashes: &[], installs: &[], offset: 0, clock_24h: true, note: "", sharing: true });
         assert_eq!(s.groups[2].items[0].action, Action::None);
     }
 }

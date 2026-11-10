@@ -2,26 +2,11 @@
 
 use crate::gfx::{pack, rgba, scale, Surface};
 
-pub fn clock_text(hour: i32, min: i32) -> String {
-    format!("{hour}:{min:02}")
-}
-
-/// "2:05 PM" style, as bifrost shows with 24-Hour Time off.
-pub fn clock_12h(hour: i32, min: i32) -> String {
-    let h = match hour % 12 {
-        0 => 12,
-        h => h,
-    };
-    format!("{h}:{min:02} {}", if hour < 12 { "AM" } else { "PM" })
-}
-
-/// The clock in the user's chosen style.
+/// A time of day in the user's chosen style, for a caller that holds only the 24-Hour Time switch (the Settings pages,
+/// the widgets): "09:13" with it on, "9:13 AM" with it off. It is `ClockStyle::time_text`, the one formatter of the menu
+/// bar, the lock screen and the screen saver, so the same instant reads the same everywhere.
 pub fn clock_in(hour: i32, min: i32, h24: bool) -> String {
-    if h24 {
-        clock_text(hour, min)
-    } else {
-        clock_12h(hour, min)
-    }
+    bifrost_ui::menu_extras::ClockStyle { use_24h: h24, ..Default::default() }.time_text(hour, min)
 }
 
 /// The short date of the menu bar, lock screen and screen saver, in the region Settings > Language & Region chose.
@@ -175,14 +160,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn clock_pads_minutes_not_hours() {
-        assert_eq!(clock_text(9, 5), "9:05");
-        assert_eq!(clock_text(21, 44), "21:44");
-        assert_eq!(clock_12h(0, 5), "12:05 AM");
-        assert_eq!(clock_12h(12, 0), "12:00 PM");
-        assert_eq!(clock_12h(21, 44), "9:44 PM");
+    fn clock_is_the_menu_bar_formatter() {
+        // 24-hour time pads the hour, so "09:05" cannot be read as 12-hour time; 12-hour time does not
+        assert_eq!(clock_in(9, 5, true), "09:05");
+        assert_eq!(clock_in(0, 0, true), "00:00");
         assert_eq!(clock_in(21, 44, true), "21:44");
+        assert_eq!(clock_in(9, 5, false), "9:05 AM");
+        assert_eq!(clock_in(0, 5, false), "12:05 AM");
+        assert_eq!(clock_in(12, 0, false), "12:00 PM");
         assert_eq!(clock_in(21, 44, false), "9:44 PM");
+        for h24 in [true, false] {
+            let style = bifrost_ui::menu_extras::ClockStyle { use_24h: h24, ..Default::default() };
+            for (hour, min) in [(0, 0), (1, 55), (9, 13), (12, 0), (23, 59)] {
+                assert_eq!(clock_in(hour, min, h24), style.time_text(hour, min), "{hour}:{min} 24h={h24}");
+            }
+        }
     }
 
     #[test]

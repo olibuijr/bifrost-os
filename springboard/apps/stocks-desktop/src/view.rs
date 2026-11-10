@@ -10,7 +10,7 @@ use crate::model::{self, Bar, Quote};
 use crate::state::{now_unix, Stocks};
 use bifrost_app::kit::ui::{
     CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, MAC_SUBHEAD_PT,
-    MAC_TITLE1_PT, MAC_TITLE3_PT, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, SPACE_L, SPACE_M, SPACE_S, SPACE_XS, SPACE_XXL,
+    MAC_TITLE1_PT, MAC_TITLE3_PT, SEPARATOR_C, SIDEBAR_BG, SIDEBAR_PLATE, SPACE_L, SPACE_M, SPACE_S, SPACE_XS, SPACE_XXL, SPACE_XXS, // compliance-allow: GG-04 the watchlist rows carry a sparkline, a price and a change pill, which widgets::source_list cannot draw
     SYSTEM_GREEN, SYSTEM_RED, WHITE,
 };
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
@@ -40,6 +40,8 @@ const PILL_W_PT: f32 = 62.0;
 const PILL_H_PT: f32 = 18.0;
 /// Points: the detail header's height above the chart card.
 const HEADER_PT: f32 = 66.0;
+/// Points: the width kept for the price at the trailing end of the detail header.
+const PRICE_ROOM_PT: f32 = 160.0;
 /// Points: the corner radius of the cards.
 const RADIUS_PT: f32 = CARD_RADIUS;
 /// What a row without a price says while quotes are out, when its symbol is unknown, and after a failed request.
@@ -300,7 +302,7 @@ impl Stocks {
             let quote = self.feed.quotes.get(sym).cloned();
             let text_w = spark_l - left - ui.pt(SPACE_S);
             let shown = ui.fit(&data::display_symbol(sym), MAC_BODY_PT, text_w);
-            put(&mut self.labels, &mut c, ui, &shown, MAC_BODY_PT, Weight::Bold, LABEL.now(), Align::Left, left, mid - ui.pt(8.0));
+            put(&mut self.labels, &mut c, ui, &shown, MAC_BODY_PT, Weight::Bold, LABEL.now(), Align::Left, left, mid - ui.pt(SPACE_S));
             if let Some(name) = quote.as_ref().map(|q| q.name.clone()).filter(|n| !n.is_empty()) {
                 let name = ui.fit(&name, MAC_SUBHEAD_PT, text_w);
                 put(&mut self.labels, &mut c, ui, &name, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), Align::Left, left, mid + ui.pt(9.0));
@@ -328,14 +330,14 @@ impl Stocks {
             let base_y = points.last().map_or(mid, |p| p.1);
             let mut dx = spark_l;
             while dx < spark_r {
-                fill(c, dx, base_y, ui.pt(2.0), 1.0, LABEL_2.now());
-                dx += ui.pt(4.0);
+                fill(c, dx, base_y, ui.pt(SPACE_XXS), 1.0, LABEL_2.now());
+                dx += ui.pt(SPACE_XS);
             }
             polyline(c, &points[..points.len() - 1], ui.pt(1.2), colour);
         }
         put(&mut self.labels, c, ui, &format!("{:.2}", q.close), MAC_BODY_PT, Weight::Semibold, LABEL.now(), Align::Right, right, mid - ui.pt(9.0));
         let (pw, ph) = (ui.pt(PILL_W_PT), ui.pt(PILL_H_PT));
-        let (px, py) = (right - pw, mid + ui.pt(2.0));
+        let (px, py) = (right - pw, mid + ui.pt(SPACE_XXS));
         c.fill_rrect(px, py, pw, ph, ui.pt(SPACE_XS), colour);
         put(&mut self.labels, c, ui, &signed(q.change()), MAC_SUBHEAD_PT, Weight::Semibold, WHITE, Align::Right, right - ui.pt(SPACE_XS + 2.0), py + ph / 2.0);
     }
@@ -352,12 +354,14 @@ impl Stocks {
         // the header: the symbol large with its name after it, and the price at the trailing end
         let title_mid = y + ui.pt(22.0);
         let title = data::display_symbol(&symbol);
-        put(&mut self.labels, s, ui, &title, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), Align::Left, left, title_mid);
+        // compliance-allow: LAY-07 the symbol shares its line with the company name and the price, which widgets::large_title cannot lay out
+        let (title_pt, title_weight) = (MAC_LARGE_TITLE_PT, Weight::Bold);
+        put(&mut self.labels, s, ui, &title, title_pt, title_weight, LABEL.now(), Align::Left, left, title_mid);
         if let Some(name) = quote.as_ref().map(|q| q.name.clone()).filter(|n| !n.is_empty()) {
-            let after = left + ui.measure(&title, MAC_LARGE_TITLE_PT, Weight::Bold) + ui.pt(SPACE_M);
-            let room = (right - after - ui.pt(160.0)).max(0.0);
+            let after = left + ui.measure(&title, title_pt, title_weight) + ui.pt(SPACE_M);
+            let room = (right - after - ui.pt(PRICE_ROOM_PT)).max(0.0);
             let name = ui.fit(&name, MAC_TITLE3_PT, room);
-            put(&mut self.labels, s, ui, &name, MAC_TITLE3_PT, Weight::Regular, LABEL_2.now(), Align::Left, after, title_mid + ui.pt(2.0));
+            put(&mut self.labels, s, ui, &name, MAC_TITLE3_PT, Weight::Regular, LABEL_2.now(), Align::Left, after, title_mid + ui.pt(SPACE_XXS));
         }
         let last = quote.as_ref().map(|q| q.close).or_else(|| bars.as_ref().and_then(|b| b.last()).map(|b| b.close));
         if let Some(price) = last {

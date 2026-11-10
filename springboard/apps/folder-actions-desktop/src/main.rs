@@ -270,8 +270,9 @@ fn main() {
         path: String::new(),
         message: "Type a folder, choose an action, then Attach.".to_string(),
         pending: HashMap::new(),
-        window: (1200.0, 780.0),
-        col: (32.0, 600.0),
+        // both are measured by the first draw; nothing is hit before it
+        window: (0.0, 0.0),
+        col: (0.0, 0.0),
     });
 }
 

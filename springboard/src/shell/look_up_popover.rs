@@ -198,11 +198,12 @@ fn suggestions_for(text: &str) -> Vec<suggested_actions::Offer> {
 /// The dictionaries are the library Search holds (`quicksearch_dict`), read once per run on a worker thread: this
 /// starts that read when it has not run yet, and until it is in the popover says it is looking the word up
 /// (`look_up_tick` fills the definition in), so a large dictionary never stalls the shell.
-fn content(term: &str) -> LookUp {
+fn content(term: &str, search: &quicksearch::QuickSearch) -> LookUp {
     dict::preload(apphost::root().join("appdata").join(DICTIONARY_APP));
     let definition = dict::definition(term);
     let loading = definition.is_none();
-    let hits: Vec<String> = quicksearch::results(term, &[])
+    let hits: Vec<String> = search
+        .results_for(term)
         .iter()
         .flat_map(|g| g.hits.iter())
         .filter_map(title_of)
@@ -252,7 +253,7 @@ impl Shell {
     pub(super) fn open_look_up(&mut self, term: String, selection: Option<Selection>) {
         let anchor = self.look_up_anchor();
         let source = suggestion_source(&term, selection);
-        let look = content(&term).with_suggestions(suggestions_for(&source));
+        let look = content(&term, &self.quicksearch).with_suggestions(suggestions_for(&source));
         self.look_up = Some(Popover::new(look, anchor));
         self.drawn = Drawn::Nothing;
         self.dirty = true;

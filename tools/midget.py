@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Machine-level control of "midget" (Lenovo ThinkCentre M900 on titan's eno2, 10.99.0.0/24) from titan.
 
-usage: tools/midget.py idle LABEL [--seconds N] | kbench LABEL [--seconds N] | kab [--seconds N] | amt-info | amt-activate | power state|on|off|cycle|reset | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME [--in SCOPE] [--role ROLE] | key enter|cmd+o|cmd+shift+4|cmd+[|cmd+comma|down*3 | keydown SPEC | keyup SPEC | type TEXT | click X Y [--right] [--double] [--mods cmd+shift] [--relative] [--expect-unchanged [--from FULL.png]] | move X Y [--relative] | drag X0 Y0 X1 Y1 [MS] [--relative] | down X Y [--right] [--relative] | up [--right] | scroll X Y DY [DX] | shot [OUT.png] [--max W] | zoom X Y W H [OUT.png] [--up N] | session start|stop|status | seq FILE | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | qa-install [--disk DEV] [--shots DIR] [--timeout S] | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
+usage: tools/midget.py idle LABEL [--seconds N] | kbench LABEL [--seconds N] | kab [--seconds N] | amt-info | amt-activate | power state|on|off|cycle|reset | mem | apps | recovery | unlock | login-bypass on|off | status | bios [list|get N|set N V|find WORD|dump] | me | labboot on|off | wake | reboot [--netboot|--disk] | poweroff | bootnext pxe|disk|NNNN | efi | hw | screen OUT.png | state | ota | wait NAME --value V | ax [PREFIX] | press NAME [--in SCOPE] [--role ROLE] | key enter|cmd+o|cmd+shift+4|cmd+[|cmd+comma|down*3 | keydown SPEC | keyup SPEC | type TEXT | click X Y [--right] [--double] [--mods cmd+shift] [--relative] [--expect-unchanged [--from FULL.png]] | move X Y [--relative] | drag X0 Y0 X1 Y1 [MS] [--relative] | down X Y [--right] [--relative] | up [--right] | scroll X Y DY [DX] | shot [OUT.png] [--max W] | zoom X Y W H [OUT.png] [--up N] | session start|stop|status | seq FILE | tap-window APP X Y | tap X Y | context X Y | hover X Y | open-url URL | open-app ID | open-folder ID PATH | open-file ID PATH | show-in-files PATH | swipe X0 Y0 X1 Y1 [MS] | trace on|off | update [--restart] | appearance light|dark|auto | wallpaper ID | logs [N] | amt | ssh CMD... | qa-install [--disk DEV] [--shots DIR] [--timeout S] | reinstall --confirm \"REINSTALL midget\" [--timeout S] [--shots S] [--loop N] | follow [--timeout S] [--shots S] | wipe --disk DEV --confirm "WIPE 10.99.0.200 DEV" [--dry-run]
 Computer use (uinput keyboard, absolute pointer and relative mouse; coordinates are `screen`/`shot` pixels, `--scale F` takes
 small-image pixels; docs/bifrost-pc-workflow.md "Computer use"): `shot` (prints the open windows in small-image pixels) then
 `press NAME --in APP` by preference, else `click`/`type`/`drag`/`scroll`, or a `seq` script; `zoom X Y W H` crops a region at
@@ -296,34 +296,47 @@ def cmd_screen(out):
     return 1
 
 
-# Remote side of show-in-files (argv[1] = the path): finds the folder to show and asks the shell for it on the control
-# socket. A folder is shown itself, anything else by the folder that holds it.
+# Remote side of show-in-files (argv[1] = the path): asks the shell on the control socket. A folder is shown itself
+# (`open-folder`); anything else is shown selected in the folder that holds it (`reveal-file`). A shell from before
+# `reveal-file` answers "unknown command": the folder is then shown without a selection, as it was before.
 SHOW_IN_FILES_SCRIPT = r"""import os,socket,sys
 p=os.path.normpath(sys.argv[1])
 if not os.path.lexists(p): sys.exit('error: no such file or folder: '+p)
-folder=p if os.path.isdir(p) else os.path.dirname(p)
-line=('open-folder %s '+folder+'\n').encode()
-if len(line)>511 or '\n' in folder: sys.exit('error: the folder path is too long or has a line break')
-s=socket.socket(socket.AF_UNIX); s.settimeout(10); s.connect(%r); s.sendall(line); d=b''
-while True:
- c=s.recv(65536)
- if not c: break
- d+=c
-d=d.decode(errors='replace').strip()
+def ask(line):
+ line=(line+'\n').encode()
+ if len(line)>511 or b'\n' in line[:-1]: sys.exit('error: the path is too long or has a line break')
+ s=socket.socket(socket.AF_UNIX); s.settimeout(10); s.connect(%r); s.sendall(line); d=b''
+ while True:
+  c=s.recv(65536)
+  if not c: break
+  d+=c
+ return d.decode(errors='replace').strip()
+app=%r
+name=os.path.basename(p)
+if os.path.isdir(p):
+ folder=p; d=ask('open-folder '+app+' '+p); note=''
+else:
+ folder=os.path.dirname(p); d=ask('reveal-file '+app+' '+p); note=' with '+name+' selected'
+ if 'unknown command' in d:
+  d=ask('open-folder '+app+' '+folder); note=' (the folder of '+name+'; this shell has no reveal-file request, so the file is not selected)'
 if not d.startswith('ok'): sys.exit(d or 'error: no answer from the shell')
-print('ok: Files shows '+folder+('' if folder==p else ' (the folder of '+os.path.basename(p)+'; the file is not selected)'))
+print('ok: Files shows '+folder+note)
 """
 
 
+def show_in_files_script(socket_path=None):
+    """The remote script of show-in-files for the shell's control socket (or `socket_path`, for a test)."""
+    return SHOW_IN_FILES_SCRIPT % (socket_path or CONTROL_SOCKET, FILES_APP_ID)
+
+
 def cmd_show_in_files(args):
-    """Show in Files: the Files app opens at the folder, or at the folder that holds the file. The request is the
-    shell's `open-folder` control line, so no default-application lookup is involved and every file type works. Files
-    has no request that selects an item, so a file is shown by its folder only."""
+    """Show in Files: the Files app opens at the folder, or at the folder that holds the file with the file selected
+    and scrolled into view. The requests are the shell's `open-folder` and `reveal-file` control lines, so no
+    default-application lookup is involved and every file type works."""
     if len(args) != 1 or not args[0].startswith("/"):
         print("usage: show-in-files /absolute/file-or-folder")
         return 2
-    script = SHOW_IN_FILES_SCRIPT % (FILES_APP_ID, CONTROL_SOCKET)
-    r = run(SSH + ["python3 -c " + shlex.quote(script) + " " + shlex.quote(args[0])], 20)
+    r = run(SSH + ["python3 -c " + shlex.quote(show_in_files_script()) + " " + shlex.quote(args[0])], 20)
     print(r.stdout, end="")
     if r.stderr:
         print(r.stderr, end="", file=sys.stderr)
@@ -3377,6 +3390,8 @@ def main():
         "open-app":lambda:cmd_control(["open-app"]+rest),
         # the shell opens the app (default Files) at a folder through the control socket
         "open-folder":lambda:cmd_control(["open-folder"]+rest),
+        # the shell opens a file in the named app, which receives it as a document
+        "open-file":lambda:cmd_control(["open-file"]+rest),
         "show-in-files":lambda:cmd_show_in_files(rest),
         "tap": lambda: cmd_control(["tap"] + rest),
         "tap-window": lambda: cmd_window_tap(rest),

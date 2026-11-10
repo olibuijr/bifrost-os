@@ -17,14 +17,15 @@ Matrix entries (not edited here, the lead closes them): `path:/usr/bin/open` (cl
 
 | Man page option | Here | Path |
 |---|---|---|
-| `-a application`, `-b bundle_identifier` | done, no operands only: `open-app <id>` | shell control socket, `src/bin/shell.rs` `OpenApp` |
-| `-e`, `-t` (text editor) | done, no operands: `open-app is.olibuijr.textedit.desktop` | same |
-| `-R` (reveal in Files) | done for files and folders: `open-folder is.olibuijr.files.desktop <folder>` (the holding folder for a file) | `OpenFolder`, `desk.rs` `desktop_open_folder` |
+| `-a application`, `-b bundle_identifier` | done: `open-app <id>` with no operands, `open-file <id> <file>` for each file operand | shell control socket, `src/bin/shell.rs` `OpenApp`, `OpenFile`, `desk.rs` `desktop_open_file` |
+| `-e`, `-t` (text editor) | done: `open-app is.olibuijr.textedit.desktop`, or `open-file` with that app for each file operand | same |
+| `-R` (reveal in Files) | done: a file is shown selected in its folder (`reveal-file is.olibuijr.files.desktop <file>`), a folder is shown itself (`open-folder`) | `RevealFile`, `OpenFolder`, `desk.rs` `desktop_reveal_file`, `desktop_open_folder` |
 | `-u URL` | done: `open-url <url>` | `OpenUrl`, `defaultapps.rs` `desktop_open_link` |
 | URL operand, `file://` URL | done (`file://` becomes a path) | as above |
 | folder operand | done: shown in Files | `OpenFolder` |
 | `-W -n -g -j -F -f -h -s --arch --env --stdin --stdout --stderr --args` | refused with "option X is not supported yet" | |
-| file operand opened with its default app, or any file passed to `-a`/`-e` | refused with a message | needs a shell open-file request |
+| file operand opened with its default app | refused with a message | needs a shell request that picks the default app |
+| folder or URL passed to `-a`/`-e` | refused with a message (a folder with `-a is.olibuijr.files.desktop` is shown in Files) | |
 
 Protocol: one line per connection to the Unix socket `/run/bifrost/shell-control.sock` (`SPRINGBOARD_CONTROL_SOCKET` overrides it), answer `ok` or
 `error: <why>`. Same channel as `packaging/arch/wayland/open-url`. Request lines are capped at 510 bytes and refuse line breaks.
@@ -53,9 +54,9 @@ Still needs Midget checking: `echo hi | pbcopy` then paste in a BifrOSt app, and
 
 ## Shell-side gaps the lead should know about
 
-- A file-open request on the control socket (`open-file <path>` routed by `route_file`, with the app's document grant)
-  would close the file cases of `open`. It is a shared-file change (`src/bare/control.rs`, `src/bin/shell.rs`), so it was
-  not made here.
+- `open-file <app id> <path>` on the control socket opens a file in a named app with the app's document grant
+  (`-a`, `-e`, `-t` with file operands). A request without an app, routed by `route_file`, would close the last file
+  case of `open` (a file operand opened with its default app).
 - `open-app` and `open-folder` need the desktop to be active, as they already are.
 
 ## Tests

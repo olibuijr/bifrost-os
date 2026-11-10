@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.8
+
+- Compliance: the watchlist and the detail header use the spacing tokens and named constants; no change in behaviour.
+
 ## 0.2.7
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
