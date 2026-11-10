@@ -40,6 +40,9 @@ impl Files {
         let Ok(id) = ctx.open_window(WindowSpec::new("Files", w, h)) else { return false };
         let mut files = Box::new(Files::new());
         files.data_dir = Some(ctx.data_dir.clone());
+        // its folder is watched by the main window's stream, and the main window's `tick` runs its share
+        files.fx.extra_window = true;
+        files.fx.watch_stale = true;
         files.w = w;
         files.h = h;
         files.update_controls();
@@ -51,6 +54,8 @@ impl Files {
     pub(crate) fn close_extra(&mut self, window: WindowId) -> bool {
         let before = self.windows.len();
         self.windows.retain(|e| e.id != window);
+        // its folder needs no watching any more
+        self.fx.watch_stale = true;
         self.windows.len() != before
     }
 }

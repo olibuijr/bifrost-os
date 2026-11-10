@@ -195,17 +195,32 @@ impl Files {
             _ => self.navigate(place.path, true),
         }
     }
-    /// Ejects a volume. A folder open inside it moves home first. The shell does the work (`system::eject_effect`
-    /// picks the request: a disk image's volume, or a removable disk's); its event brings a failure, which the status
-    /// bar shows. The row goes away on the next sidebar build once the volume is gone, and the event of an eject that
-    /// worked takes the volume's folders out of every tab, window and history (`leave_lost_volumes`).
+    /// Ejects a volume. A folder open inside it is left first (`leave_volume`). The shell does the work
+    /// (`system::eject_effect` picks the request: a disk image's volume, or a removable disk's); its event brings a
+    /// failure, which the status bar shows. The row goes away on the next sidebar build once the volume is gone, and
+    /// the event of an eject that worked takes the volume's folders out of every tab, window and history
+    /// (`leave_lost_volumes`).
     fn eject_volume(&mut self, name: &str, device: &str, mount: &Path) {
-        if self.path.starts_with(mount) {
-            let home = self.home.clone();
-            self.navigate(home, true);
-        }
+        self.leave_volume(mount);
         self.sys.effects.push(system::eject_effect(device, name));
         self.revision += 1;
+    }
+    /// Leaves the volume mounted at `mount` before it is ejected, when the window shows a folder of it: the window
+    /// opens the last folder shown before the volume, by the rule `leave_lost_volumes` uses once the volume is gone,
+    /// and the volume's folders leave the history. Only a window that never showed another folder goes home.
+    pub(crate) fn leave_volume(&mut self, mount: &Path) {
+        if !self.path.starts_with(mount) {
+            return;
+        }
+        self.at = forget_lost(&mut self.history, self.at, &|p: &Path| p.starts_with(mount));
+        match self.history.get(self.at).cloned() {
+            // the entry is in the history already
+            Some(before) => self.navigate(before, false),
+            None => {
+                let home = self.home.clone();
+                self.navigate(home, true);
+            }
+        }
     }
     /// How far the source list can scroll: its rows past the bottom of the column (`SIDEBAR_SCROLL` is the header band).
     pub(crate) fn side_scroll_max(&self) -> f32 {
@@ -252,6 +267,34 @@ mod tests {
         let mut h = paths(&["/home/me", "/home/me", "/tmp"]);
         assert_eq!(forget_lost(&mut h, 2, &lost), 2);
         assert_eq!(h.len(), 3);
+    }
+
+    #[test]
+    fn an_eject_goes_back_to_the_folder_shown_before_the_volume() {
+        let root = std::env::temp_dir().join(format!("files-eject-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for d in ["home", "home/Docs", "vol/a"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        let (home, docs, vol) = (root.join("home"), root.join("home/Docs"), root.join("vol"));
+        let mut files = fixture(vec![]);
+        files.home = home.clone();
+        for p in [docs.clone(), vol.clone(), vol.join("a")] {
+            files.navigate(p, true);
+        }
+        files.leave_volume(&vol);
+        assert_eq!(files.path, docs, "the last folder shown before the volume, not the home folder");
+        assert_eq!((files.history.clone(), files.at), (vec![docs.clone()], 0), "no entry of the volume, none added");
+        // a window on another folder is left alone
+        files.leave_volume(&vol);
+        assert_eq!((files.path.clone(), files.history.len()), (docs.clone(), 1));
+        // a window that only ever showed the volume goes home
+        let mut files = fixture(vec![]);
+        files.home = home.clone();
+        files.navigate(vol.clone(), true);
+        files.leave_volume(&vol);
+        assert_eq!((files.path.clone(), files.history.clone(), files.at), (home.clone(), vec![home.clone()], 0));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

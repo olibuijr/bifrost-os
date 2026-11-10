@@ -4,6 +4,9 @@ use crate::*;
 /// The status bar's height when shown (View > Show Status Bar, ⌘/): one row with the path and the item count.
 pub(crate) const FOOTER_H: f32 = 28.;
 
+/// The status bar's text: the subheadline style, one step under the window's body text.
+const STATUS_TEXT_PT: f32 = bifrost_app::kit::ui::MAC_SUBHEAD_PT;
+
 /// "1 item", "3 items".
 pub(crate) fn items_text(n: usize) -> String {
     if n == 1 { "1 item".into() } else { format!("{n} items") }
@@ -34,7 +37,7 @@ impl Files {
         // one row: the path on the left, the status on the right (the path takes what the status leaves)
         // a notice wider than the usual status takes its room from the path bar (measured in pixels, plus a point of slack)
         let shown_notice = self.notice.as_deref().filter(|_| !self.dragging && self.work.is_none());
-        let notice_w = shown_notice.map(|n| ui.measure(n, 11., Weight::Regular) / ui.pt(1.).max(0.01) + 2.);
+        let notice_w = shown_notice.map(|n| ui.measure(n, STATUS_TEXT_PT, Weight::Regular) / ui.pt(1.).max(0.01) + 2.);
         let status_w = status_width(w - self.side(), notice_w);
         let line_y = top + (FOOTER_H - 14.) / 2.;
         let items = self.path_items();
@@ -43,12 +46,14 @@ impl Files {
         // The status:  a running job, else a failed action, else the item count and selection.
         if self.dragging {
             // a drag from another app copies its items; a drag of this window's items moves them unless Option copies
-            let (n, copying) = if self.dnd.foreign.is_some() { (self.dnd.foreign_items, true) } else { (self.selection.len(), self.fx.copy_drag) };
+            // the dragged items, not the selection: a folder that sprang open under the drag has none selected
+            let own = if self.fx.drag_paths.is_empty() { self.selection.len() } else { self.fx.drag_paths.len() };
+            let (n, copying) = if self.dnd.foreign.is_some() { (self.dnd.foreign_items, true) } else { (own, self.fx.copy_drag) };
             let line = match &self.drop_target {
                 Some(target) => format!("{} {} to {}", if copying { "Copy" } else { "Move" }, if n == 1 { "1 item".to_string() } else { format!("{n} items") }, target.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Computer".into())),
                 None => "Drag onto a folder or a sidebar place to move; Option copies".into(),
             };
-            text(s, ui, &line, 11., LABEL.now(), w - 12. - status_w, line_y, status_w);
+            text(s, ui, &line, STATUS_TEXT_PT, LABEL.now(), w - 12. - status_w, line_y, status_w);
         } else if let Some(work) = &self.work {
             let pct = (work.progress.fraction() * 100.).round() as u32;
             let line = if work.progress.current.is_empty() {
@@ -56,10 +61,10 @@ impl Files {
             } else {
                 format!("{} {} · {}% · Esc to cancel", work.title, work.progress.current, pct)
             };
-            text(s, ui, &line, 11., LABEL.now(), w - 12. - status_w, line_y, status_w);
+            text(s, ui, &line, STATUS_TEXT_PT, LABEL.now(), w - 12. - status_w, line_y, status_w);
             rect(s, ui, self.side(), h - 2., (w - self.side()) * work.progress.fraction(), 2., accent_now());
         } else if let Some(notice) = &self.notice {
-            text(s, ui, notice, 11., LABEL.now(), w - 12. - status_w, line_y, status_w);
+            text(s, ui, notice, STATUS_TEXT_PT, LABEL.now(), w - 12. - status_w, line_y, status_w);
         } else {
             let mut status = match (&self.hits, self.search.is_some()) {
                 (Some(_), true) => format!("{} found so far, searching…", visible.len()),
@@ -78,7 +83,7 @@ impl Files {
                     status.push_str(&format!(" · {}", fs::size_text(e.size)));
                 }
             }
-            text(s, ui, &status, 11., LABEL_2.now(), w - 12. - status_w, line_y, status_w);
+            text(s, ui, &status, STATUS_TEXT_PT, LABEL_2.now(), w - 12. - status_w, line_y, status_w);
         }
     }
 }
