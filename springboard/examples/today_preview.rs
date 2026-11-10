@@ -63,7 +63,7 @@ fn main() {
     prefs.set("deildu.last", "1|https://www.deildu.net/details.php?id=1|The.Film.2024.1080p.WEB-DL").unwrap();
     today.load_prefs(prefs);
     let lines = Some(vec!["$ uname -a".to_string(), "Linux localhost 4.19.191 aarch64".to_string(), "$ ".to_string()]);
-    today.refresh(&ui, &Sources { info: &info, term: lines, unix }, 0.0);
+    today.refresh(&ui, &Sources { info: &info, term: lines, unix, clock_24h: true }, 0.0);
 
     let mut pager = Pager::new(1, W as f32);
     pager.set_leading(true);
