@@ -65,6 +65,14 @@ The connection reconnects by itself after a shell or compositor restart.
 `term` and `files` (their schemas are appended in `tools.rs` `list()`). Section markers `BROWSER HOOK` in `tools.rs` dispatch and `list()` are where the `browser` tool plugs in. Descriptions in `springboard/mcp/src/tools.rs` (`list()`) are written for the
 model; the evals below decide changes to them.
 
+### `open`
+
+`app` launches an app, `url` opens a link, `folder` shows a folder in Files. `file` opens a file: in the app whose
+bundle id `app` names (`open-file`), or with no `app` in the default app for its type (`open-document`). `reveal`
+shows a file or folder selected in Files (`reveal-file`). The tool only keeps the control line well formed
+(`file_line` in `tools.rs`); the shell does the checks, as for the same requests from anywhere else: a file in the
+account's home folder, an installed or built-in app, the malware check.
+
 ### `files` (Files app)
 
 Drives and inspects the Files app over its control socket (`files.*` methods, `springboard/apps/files/src/control.rs`; the
