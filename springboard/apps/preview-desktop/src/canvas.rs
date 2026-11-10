@@ -504,9 +504,36 @@ impl Layout {
     }
 }
 
-/// The shared Golden Gate toolbar model and the exact layout used to draw it and publish its controls.
-pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, tool: Tool, side: Side) -> (Toolbar, ToolbarLayout) {
+/// The toolbar slot that holds the window title. It is no `Action`, so a press on it does nothing.
+pub const TITLE_ID: u32 = 0x4000;
+/// The most room the window title takes on the toolbar; a longer one is cut with an ellipsis.
+const TITLE_MAX_PT: f32 = ui::SPACE_XXXL * 6.0;
+
+/// The width of the title's slot in points: the title's own width, up to `TITLE_MAX_PT`, and a gap after it.
+fn title_width(ui: &Ui, title: &str) -> f32 {
+    let scale = ui.pt(1.0).max(0.001);
+    (ui.measure(title, ui::MAC_BODY_PT, Weight::Semibold) / scale).ceil().min(TITLE_MAX_PT) + ui::SPACE_S
+}
+
+/// `title` cut with an ellipsis to fit `max_px` in the semibold face it is drawn in.
+fn fit_title(ui: &Ui, title: &str, max_px: f32) -> String {
+    let semibold = ui.measure(title, ui::MAC_BODY_PT, Weight::Semibold);
+    if semibold <= max_px {
+        return title.to_string();
+    }
+    // `Ui::fit` measures the regular face, which runs narrower: it gets the share of the room the regular text needs
+    let regular = ui.measure(title, ui::MAC_BODY_PT, Weight::Regular);
+    ui.fit(title, ui::MAC_BODY_PT, max_px * regular / semibold.max(1.0))
+}
+
+/// The shared Golden Gate toolbar model and the exact layout used to draw it and publish its controls. `title` is the
+/// window title (the document's name, with "Edited" while it has unsaved changes), empty with no document: the window
+/// is full-size, so the shell draws no title row and the title leads the toolbar, where the document apps show theirs.
+pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, side: Side) -> (Toolbar, ToolbarLayout) {
     let mut items = toolbar_items(open, tool, side);
+    if !title.is_empty() {
+        items.insert(0, ToolbarItem::custom(TITLE_ID, "Title", title_width(ui, title)));
+    }
     let scale = ui.pt(1.0).max(0.001);
     let bounds = bifrost_app::controls::Rect {
         x: lay.side as f32 / scale,
@@ -742,8 +769,8 @@ pub fn sidebar_hit(lay: &Layout, rows: &[(i32, i32)], scroll: f32, x: f32, y: f3
 }
 
 /// The toolbar action under a point, if any.
-pub fn button_hit(ui: &Ui, lay: &Layout, open: bool, tool: Tool, side: Side, x: f32, y: f32) -> Option<Action> {
-    let (bar, layout) = toolbar(ui, lay, open, tool, side);
+pub fn button_hit(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, side: Side, x: f32, y: f32) -> Option<Action> {
+    let (bar, layout) = toolbar(ui, lay, open, title, tool, side);
     let scale = ui.pt(1.0).max(0.001);
     let id = layout.hit(x / scale, y / scale)?;
     bar.items.iter().find(|item| item.id == id && item.enabled).and_then(|item| Action::from_id(item.id))
@@ -845,6 +872,8 @@ pub struct Scene<'a> {
     pub form_focus: Option<usize>,
     /// A message to show in the middle of the canvas (an open error, an export result).
     pub status: &'a str,
+    /// The window title, drawn at the head of the toolbar; empty with no document.
+    pub title: &'a str,
     pub mode: Mode,
     /// The rectangle selected on the shown page, in source-page coordinates.
     pub selection: Option<Norm>,
@@ -1382,8 +1411,8 @@ fn draw_toolbar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
         ui,
         bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: lay.w as f32 / scale, h: lay.bar as f32 / scale },
     );
-    let (bar, _) = toolbar(ui, lay, scene.doc.is_some(), scene.tool, scene.side);
-    widgets::toolbar(
+    let (bar, _) = toolbar(ui, lay, scene.doc.is_some(), scene.title, scene.tool, scene.side);
+    let layout = widgets::toolbar(
         s,
         ui,
         bifrost_app::controls::Rect {
@@ -1395,6 +1424,13 @@ fn draw_toolbar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
         &bar,
         None,
     );
+    // the title's slot is laid out by the kit and drawn here
+    if let Some((_, slot)) = layout.visible.iter().find(|(id, _)| *id == TITLE_ID) {
+        let shown = fit_title(ui, scene.title, (slot.w - ui::SPACE_S).max(0.0) * scale);
+        let img = ui.text(&shown, ui::MAC_BODY_PT, Weight::Semibold, ui::WHITE);
+        let y = ((slot.y + slot.h / 2.0) * scale) as i32 - img.h as i32 / 2;
+        s.blit_colored(&img, (slot.x * scale) as i32, y, ui::LABEL.now(), 255);
+    }
 }
 
 fn centred_text(s: &mut Surface, ui: &Ui, text: &str, lay: &Layout, color: u32) {
