@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.19.0
+
+- Upstream cadcraft v0.19.0.
+  ## What's Changed
+  * Stage 1 stack 3: land #2403, #1105, #1002, #1908, #1907, #2134, #2371 by @tanish2k09 in https://github.com/storytold/cadcraft/pull/2874
+  * TEXTEDIT on an MTEXT opens it in the in-place editor (part of #842) by @aldozar in https://github.com/storytold/cadcraft/pull/1002
+  * Let multileader text be edited (double-click, TEXTEDIT, Properties) by @aldozar in https://github.com/storytold/cadcraft/pull/1105
+  * Alias Editor: import an existing .pgp file by @nicholasgower in https://github.com/storytold/cadcraft/pull/1907
+
 ## 0.18.0
 
 - Upstream cadcraft v0.18.0.
