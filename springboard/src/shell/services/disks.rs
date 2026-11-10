@@ -23,8 +23,15 @@
 //!   disk off (`shell::volume_eject`), for the same callers and on the same thread pool; the outcome is the event
 //!   `volume_ejected` `{ok, target, device, powered_off, error}`. A sandboxed app cannot do this itself.
 //!
-//! Events (to every app, from `bifrost_core::disk_wire`): `disk_appeared`, `disk_disappeared`,
+//! Events (to system apps, from `bifrost_core::disk_wire`): `disk_appeared`, `disk_disappeared`,
 //! `disk_description_changed`.
+//!
+//! Removable volumes are mounted without anyone asking (`shell::volume_mount`): a moment after a device arrives,
+//! and for the ones already plugged in once the screen is unlocked. Each mount is the event `volume_mounted`
+//! `{ok, device, mount_point, name}`; when a mounted disk is pulled out its mount is taken away and the event is
+//! `volume_unmounted` `{ok, device, mount_point}`. These two go to system apps and to apps with the `storage`
+//! permission (`services::hears_volumes`), so the Files sidebar can follow them. A volume that does not mount is one
+//! "Disk Could Not Be Opened" notice. An ejected volume is not mounted again until it is unplugged.
 //!
 //! When a removable whole disk (not a partition) appears, the shell also posts a "USB Disk Connected" notice in
 //! Settings. The notice is for the arrival only: the disk's partitions and the eject that follows get no notice.
@@ -65,6 +72,8 @@ pub struct Disks {
     probes: Vec<Receiver<(String, Vec<(String, Verdict)>)>>,
     /// the disk image attach and detach requests still running
     images: crate::shell::disk_image::Jobs,
+    /// the mounting of removable volumes as they arrive
+    auto: crate::shell::volume_mount::Auto,
 }
 
 impl Default for Disks {
@@ -87,6 +96,7 @@ impl Disks {
             dev: PathBuf::from("/dev"),
             probes: Vec::new(),
             images: Default::default(),
+            auto: Default::default(),
         }
     }
 
@@ -125,6 +135,7 @@ impl Disks {
         let text = std::fs::read_to_string(&self.mounts).unwrap_or_default();
         let snapshot = disk_scan::scan(&self.sys_block, &text).into_iter().map(|e| e.disk).collect();
         let events = self.session.observe(snapshot);
+        self.auto.observe(&events, self.session.disks());
         if !std::mem::replace(&mut self.primed, true) {
             return Vec::new();
         }
@@ -201,7 +212,12 @@ impl SystemService for Disks {
             if !super::app_has_permission(app_id, "storage") {
                 super::require_system_app(app_id, disk_wire::SERVICE)?;
             }
-            return self.images.start(app_id, method, params);
+            let started = self.images.start(app_id, method, params)?;
+            // an ejected volume stays ejected: it is not mounted again while it is still plugged in
+            if method == crate::shell::volume_eject::M_EJECT {
+                self.auto.ejecting(&params.str_field("target").unwrap_or_default());
+            }
+            return Ok(started);
         }
         // volumes, labels and mount points are information the sandbox hides, and a claim locks a disk against Disk
         // Utility: the service answers system apps only
@@ -216,6 +232,18 @@ impl SystemService for Disks {
         // a finished disk image request goes to the app that asked, on the tick it ends
         let ended = self.images.finished();
         let mut events: Vec<Event> = ended.into_iter().map(|(app, event, body)| Event { app: Some(app), event: event.to_string(), body }).collect();
+        // a finished pass over the removable volumes: its mounts and unmounts go to the apps that show volumes, and
+        // what did not mount is one notice
+        if let Some(report) = self.auto.tick(t, shell.is_locked()) {
+            let sent = crate::shell::volume_mount::events(&report);
+            if !sent.is_empty() {
+                let listeners = super::volume_listeners();
+                events.extend(sent.iter().flat_map(|(event, body)| listeners.iter().map(move |app| Event { app: Some(app.clone()), event: event.to_string(), body: body.clone() })));
+            }
+            if let Some(body) = crate::shell::volume_mount::failure_notice(&report) {
+                shell.notify(Notification::new(AppId::Settings, "Disk Could Not Be Opened", body, crate::bare::sys::wall_time().0));
+            }
+        }
         if t < self.next_scan {
             return events;
         }
@@ -391,6 +419,26 @@ mod tests {
         assert_eq!(notices.len(), 1);
         assert!(notices[0].contains("Flash Disk (sdb1)"), "{notices:?}");
         assert!(s.probes.is_empty());
+    }
+
+    #[test]
+    fn the_scan_feeds_the_mounting_of_removable_volumes() {
+        let (sys, mounts) = fixture("automount");
+        fs::write(&mounts, "/dev/sda /media/data ext4 rw 0 0\n").unwrap();
+        let mut s = Disks::at(&sys, &mounts);
+        s.rescan();
+        assert!(s.auto.is_handled("sda"), "a device found mounted is left alone");
+        // the first scan asks for a pass over what is plugged in, which waits while the screen is locked
+        assert_eq!(s.auto.next_pass(0.0, true, false).map(|p| (p.mount, p.sweep)), Some((false, true)));
+        assert_eq!(s.auto.next_pass(60_000.0, false, false).map(|p| (p.mount, p.sweep)), Some((true, false)));
+        // a stick arrives: a pass is due a moment later; it leaves: its mounts are swept
+        add_disk(&sys, "sdb", "1", "2000");
+        s.rescan();
+        assert_eq!(s.auto.next_pass(70_000.0, false, false), None);
+        assert!(s.auto.next_pass(70_000.0 + crate::shell::volume_mount::SETTLE_MS, false, false).is_some_and(|p| p.mount));
+        fs::remove_dir_all(sys.join("sdb")).unwrap();
+        s.rescan();
+        assert!(s.auto.next_pass(80_000.0, true, false).is_some_and(|p| p.sweep && !p.mount));
     }
 
     #[test]

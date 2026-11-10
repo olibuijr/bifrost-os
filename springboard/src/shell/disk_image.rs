@@ -102,19 +102,21 @@ pub struct Probe {
     pub label: String,
 }
 
-/// Reads `TYPE` and `LABEL` from the `KEY=value` lines of `blkid -p -o export`. That format puts a backslash before
-/// spaces, quotes and a few other characters of a value; they are taken off again.
+/// The value of `key` in the `KEY=value` lines of `blkid -p -o export`, empty when the key is absent. That format
+/// puts a backslash before spaces, quotes and a few other characters of a value; they are taken off again.
+pub fn export_value(export: &str, key: &str) -> String {
+    let found = export.lines().find_map(|line| line.split_once('=').filter(|(k, _)| *k == key).map(|(_, v)| v));
+    let mut out = String::new();
+    let mut chars = found.unwrap_or_default().chars();
+    while let Some(c) = chars.next() {
+        out.push(if c == '\\' { chars.next().unwrap_or(c) } else { c });
+    }
+    out
+}
+
+/// Reads `TYPE` and `LABEL` from the lines of `blkid -p -o export` ([`export_value`]).
 pub fn parse_probe(device: &str, partition: Option<u32>, export: &str) -> Probe {
-    let value = |key: &str| {
-        let found = export.lines().find_map(|line| line.split_once('=').filter(|(k, _)| *k == key).map(|(_, v)| v));
-        let mut out = String::new();
-        let mut chars = found.unwrap_or_default().chars();
-        while let Some(c) = chars.next() {
-            out.push(if c == '\\' { chars.next().unwrap_or(c) } else { c });
-        }
-        out
-    };
-    Probe { device: device.to_string(), partition, fs: value("TYPE"), label: value("LABEL") }
+    Probe { device: device.to_string(), partition, fs: export_value(export, "TYPE"), label: export_value(export, "LABEL") }
 }
 
 /// Whether the system mounts the file system type `fs` for a person. Swap, encrypted containers, volume-manager
@@ -319,7 +321,7 @@ fn mount_volume(volume: &PlannedVolume, root: &Path, read_only: bool, account: &
 
 /// The account's media folder: root's, readable by the account's group only (the storage service makes it the same
 /// way). One that exists is left as it is.
-fn make_media_root(root: &Path, gid: u32) -> Result<(), String> {
+pub(crate) fn make_media_root(root: &Path, gid: u32) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     if root.is_dir() {
         return Ok(());
@@ -332,7 +334,7 @@ fn make_media_root(root: &Path, gid: u32) -> Result<(), String> {
 
 /// A new empty folder for the volume: `name`, or `name 2`, `name 3`… while the name is taken. An empty folder left
 /// behind by an earlier mount is used again (removing a folder something is mounted on fails, so that one is kept).
-fn fresh_folder(root: &Path, name: &str) -> Result<PathBuf, String> {
+pub(crate) fn fresh_folder(root: &Path, name: &str) -> Result<PathBuf, String> {
     for n in 1..=32 {
         let point = root.join(if n == 1 { name.to_string() } else { format!("{name} {n}") });
         match std::fs::create_dir(&point) {
@@ -356,7 +358,7 @@ pub fn volume_name(label: &str, image: &str) -> String {
 }
 
 /// `text` as a folder name: without `/`, control characters or leading dots, at most 64 characters. May be empty.
-fn clean_name(text: &str) -> String {
+pub(crate) fn clean_name(text: &str) -> String {
     let kept: String = text.chars().filter(|c| !c.is_control() && *c != '/').collect();
     kept.trim().trim_start_matches('.').trim().chars().take(64).collect()
 }

@@ -172,6 +172,19 @@ pub fn may_hear(service: &str, app_id: &str, kind: &str) -> bool {
     !matches!(service, "disks" | "wifi" | "bluetooth" | "app_firewall") || system_app_held(app_id, kind)
 }
 
+/// Whether an app with this `kind` and these manifest `permissions` is told when a removable volume is mounted or its
+/// mount is taken away (`volume_mounted`, `volume_unmounted`): a system app, which hears every `disks` event, and an
+/// app with the `storage` permission (Files), which already sees the volumes under the media folders and may eject
+/// them. Every other `disks` event stays with the system apps ([`may_hear`]).
+pub fn hears_volumes(app_id: &str, kind: &str, permissions: &[String]) -> bool {
+    system_app_held(app_id, kind) || permissions.iter().any(|p| p == "storage")
+}
+
+/// The installed apps that hear the volume events ([`hears_volumes`]), by id.
+pub fn volume_listeners() -> Vec<String> {
+    super::apphost::installed().iter().filter(|a| hears_volumes(&a.manifest.id, &a.manifest.kind, &a.manifest.permissions)).map(|a| a.manifest.id.clone()).collect()
+}
+
 /// The process id of the running installed app `app_id`, when it runs as a child of the shell.
 pub fn app_pid(shell: &Shell, app_id: &str) -> Option<u32> {
     let slot = super::apphost::slot_of(app_id)?;
@@ -367,5 +380,17 @@ mod gate_tests {
             assert!(!may_hear(service, "is.example.evil", "app"), "{service}");
         }
         assert!(may_hear("network", "is.example.evil", "app"), "other services still broadcast to everyone");
+    }
+
+    #[test]
+    fn volume_events_reach_storage_apps_without_opening_the_disks_service() {
+        let storage = ["storage".to_string(), "documents".to_string()];
+        assert!(hears_volumes("is.olibuijr.files.desktop", "app", &storage), "Files follows the volumes it shows");
+        assert!(hears_volumes("is.olibuijr.diskutil.desktop", "system-app", &[]));
+        assert!(!hears_volumes("is.olibuijr.notes.desktop", "app", &["documents".to_string()]));
+        assert!(!hears_volumes("is.example.evil", "system-app", &[]), "a third-party package cannot declare itself a system app");
+        assert!(!hears_volumes("is.example.evil", "app", &["storages".to_string()]));
+        // the broadcast events of the service (every disk, its size and model) still go to system apps only
+        assert!(!may_hear("disks", "is.olibuijr.files.desktop", "app"));
     }
 }
