@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.20.0
+
+- Upstream lightcraft v0.20.0.
+  ## What's Changed
+  * Honor inverted Lightroom masks when importing catalog edits by @eliets2 in https://github.com/storytold/lightcraft/pull/3862
+  * LR-IMP-FORMATS: withdraw compressed ORF decoding pending provenance review by @FredApps in https://github.com/storytold/lightcraft/pull/3916
+  * Cover DxO demosaiced Fujifilm DNGs for Kelvin white balance by @eliets2 in https://github.com/storytold/lightcraft/pull/3887
+  * Release: refresh contributor credits for each release (#2254) by @Luis-0508 in https://github.com/storytold/lightcraft/pull/3898
+
 ## 0.19.0
 
 - Upstream lightcraft v0.19.0.
