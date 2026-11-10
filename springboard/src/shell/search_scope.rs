@@ -8,7 +8,6 @@
 
 use super::prefs::{escape_field, unescape_field, Prefs};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 pub const OFF_PREF: &str = "spotlight_off";
 pub const EXCLUDED_PREF: &str = "spotlight_excluded";
@@ -151,16 +150,33 @@ impl Scope {
     }
 }
 
-static CURRENT: Mutex<Option<Scope>> = Mutex::new(None);
+#[cfg(not(test))]
+static CURRENT: std::sync::Mutex<Option<Scope>> = std::sync::Mutex::new(None);
+
+// A test has its own scope (each test runs on its own thread, and Search applies the scope on the thread that asks):
+// the settings a test reads or switches (`Options::load`, the Settings > Search switches) never hide another test's
+// results. The running shell has one scope, as it has one Settings.
+#[cfg(test)]
+thread_local! {
+    static CURRENT: std::cell::RefCell<Option<Scope>> = const { std::cell::RefCell::new(None) };
+}
 
 /// The scope Search applies now (the default when none was installed).
 pub fn current() -> Scope {
-    CURRENT.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default()
+    #[cfg(not(test))]
+    return CURRENT.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default();
+    #[cfg(test)]
+    return CURRENT.with(|c| c.borrow().clone().unwrap_or_default());
 }
 
 /// Makes `scope` the one Search applies.
 pub fn install(scope: Scope) {
-    *CURRENT.lock().unwrap_or_else(|e| e.into_inner()) = Some(scope);
+    #[cfg(not(test))]
+    {
+        *CURRENT.lock().unwrap_or_else(|e| e.into_inner()) = Some(scope);
+    }
+    #[cfg(test)]
+    CURRENT.with(|c| *c.borrow_mut() = Some(scope));
 }
 
 #[cfg(test)]

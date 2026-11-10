@@ -2,27 +2,29 @@
 #[test]
 fn a_panicking_shortcut_run_is_no_longer_counted() {
     let (tx, rx) = std::sync::mpsc::channel::<()>();
-    let before = super::shortcut_runs().0;
-    assert!(super::spawn_shortcut_run(move || {
+    // the panel's own run list: the runs of other shells in the process are not in it
+    let runs = super::ShortcutRuns::default();
+    let before = super::shortcut_runs(&runs).0;
+    assert!(super::spawn_shortcut_run(&runs, move || {
         rx.recv().ok();
         panic!("the intent call panicked");
     }));
-    assert!(super::shortcut_runs().0 > before, "counted while it is out");
+    assert!(super::shortcut_runs(&runs).0 > before, "counted while it is out");
     tx.send(()).unwrap();
     let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while super::shortcut_runs().0 > before && std::time::Instant::now() < until {
+    while super::shortcut_runs(&runs).0 > before && std::time::Instant::now() < until {
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
-    assert_eq!(super::shortcut_runs().0, before, "the panic unwound through the guard");
+    assert_eq!(super::shortcut_runs(&runs).0, before, "the panic unwound through the guard");
     // a run that finishes normally is uncounted the same way
     let (tx, rx) = std::sync::mpsc::channel::<()>();
-    assert!(super::spawn_shortcut_run(move || tx.send(()).unwrap()));
+    assert!(super::spawn_shortcut_run(&runs, move || tx.send(()).unwrap()));
     rx.recv().unwrap();
     let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while super::shortcut_runs().0 > before && std::time::Instant::now() < until {
+    while super::shortcut_runs(&runs).0 > before && std::time::Instant::now() < until {
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
-    assert_eq!(super::shortcut_runs().0, before);
+    assert_eq!(super::shortcut_runs(&runs).0, before);
 }
 
 use super::super::tests::{settle, shell, swipe, unlock};
@@ -150,10 +152,11 @@ fn wifi_action_intents_are_found_and_run_their_effect_without_a_window() {
     assert!(groups.iter().flat_map(|g| g.hits.iter()).any(|h| *h == wanted), "{groups:?}");
     let scan = Hit::SettingsAction { intent: SettingsIntent::WifiScan, title: "Scan for Wi-Fi Networks".into() };
     assert!(results("scan for wi-fi", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == scan));
-    set_wallpaper_catalogue(vec![("kirkjufell_dusk".into(), "Kirkjufell Dusk".into())]);
+    // the catalogue is the panel's (`QuickSearch::set_wallpapers`), handed to the query: no other search sees it
+    let catalogue = vec![("kirkjufell_dusk".to_string(), "Kirkjufell Dusk".to_string())];
     let picture = Hit::SettingsAction { intent: SettingsIntent::SetWallpaper("kirkjufell_dusk".into()), title: "Set Wallpaper to Kirkjufell Dusk".into() };
-    assert!(results("kirkjufell", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == picture));
-    set_wallpaper_catalogue(Vec::new());
+    assert!(results_folded("kirkjufell", &[], &[], &[], &[], &catalogue).iter().flat_map(|g| g.hits.iter()).any(|h| *h == picture));
+    assert!(!results("kirkjufell", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == picture), "a search without the catalogue has no such row");
     let lock = Hit::SettingsAction { intent: SettingsIntent::LockScreen, title: "Lock Screen".into() };
     assert!(results("lock screen", &[]).iter().flat_map(|g| g.hits.iter()).any(|h| *h == lock));
     let next = Hit::MediaTransport { command: bifrost_ui::media_session::RemoteCommand::Next, title: "Next Track".into() };

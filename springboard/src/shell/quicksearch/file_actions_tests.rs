@@ -12,7 +12,7 @@ fn entry(dir: &str, name: &str) -> Entry {
 /// The Files and Show in Folder groups of `query` over `files`, merged the way the panel merges them.
 fn file_groups(query: &str, files: &[crate::files::fs::Entry]) -> Vec<Group> {
     let folded: Vec<String> = files.iter().map(|e| fuzzy::fold(&e.name)).collect();
-    let corpus = Corpus { deildu: &[], deildu_folded: &[], contacts: &[], contacts_folded: &[], files, files_folded: &folded, events: &[] };
+    let corpus = Corpus { deildu: &[], deildu_folded: &[], contacts: &[], contacts_folded: &[], files, files_folded: &folded, events: &[], wallpapers: &[] };
     let (tables, hits) = build_tables(&corpus);
     let mut run = search_rank::Query::start(query, &sources_of(tables), SYNC_DEADLINE);
     run.wait();
@@ -118,7 +118,7 @@ fn a_settings_pane_needs_a_contiguous_or_word_start_match() {
 /// Up's Search section. Every section but Applications (and Deildu) is strict; an app's name stays fuzzy.
 #[test]
 fn only_app_names_match_by_scattered_letters() {
-    let corpus = Corpus { deildu: &[], deildu_folded: &[], contacts: &[], contacts_folded: &[], files: &[], files_folded: &[], events: &[] };
+    let corpus = Corpus { deildu: &[], deildu_folded: &[], contacts: &[], contacts_folded: &[], files: &[], files_folded: &[], events: &[], wallpapers: &[] };
     let (tables, _) = build_tables(&corpus);
     for t in &tables {
         assert_eq!(t.strict, !matches!(t.name, "Applications" | "Deildu"), "{} strictness", t.name);
