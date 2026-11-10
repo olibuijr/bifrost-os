@@ -173,12 +173,10 @@ impl ClockStyle {
             (true, false) => Some("d MMM"),
         }
     }
-    /// The menu bar clock text for a broken-down local time: `wday` 0 = Sunday, `mon` 0 = January. Date and time are
-    /// separated by two spaces, as the bar has always drawn them; the date is left out when hidden.
-    pub fn text(&self, wday: i32, mday: i32, mon: i32, hour: i32, min: i32) -> String {
-        const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        let time = if self.use_24h {
+    /// The time alone, as every clock of the shell writes it (menu bar, lock screen, screen saver): `02:08` with 24-hour
+    /// time on, hours zero-padded so an early hour cannot be read as 12-hour time, and `2:08 AM` with it off.
+    pub fn time_text(&self, hour: i32, min: i32) -> String {
+        if self.use_24h {
             format!("{hour:02}:{min:02}")
         } else {
             let h = match hour % 12 {
@@ -186,7 +184,15 @@ impl ClockStyle {
                 h => h,
             };
             format!("{h}:{min:02} {}", if hour < 12 { "AM" } else { "PM" })
-        };
+        }
+    }
+
+    /// The menu bar clock text for a broken-down local time: `wday` 0 = Sunday, `mon` 0 = January. Date and time are
+    /// separated by two spaces, as the bar has always drawn them; the date is left out when hidden.
+    pub fn text(&self, wday: i32, mday: i32, mon: i32, hour: i32, min: i32) -> String {
+        const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        let time = self.time_text(hour, min);
         let month = MONTHS[mon.rem_euclid(12) as usize];
         match (self.show_date, self.show_day) {
             (false, _) => time,
@@ -261,5 +267,30 @@ mod tests {
         assert_eq!(twelve.text(1, 13, 9, 0, 30), "Mon 13 Oct  12:30 AM");
         let time_only = ClockStyle { show_date: false, ..d };
         assert_eq!(time_only.text(1, 13, 9, 9, 7), "09:07");
+    }
+
+    /// The lock screen showed "1:55" and "2:08" beside a menu bar reading "01:55" and "02:08": 24-hour time with the
+    /// hour unpadded reads as 12-hour time before 10:00. The time alone is the menu bar's time part, at every minute.
+    #[test]
+    fn time_text_is_the_menu_bar_time_part() {
+        let d = ClockStyle::default();
+        assert_eq!(d.time_text(1, 55), "01:55");
+        assert_eq!(d.time_text(2, 8), "02:08");
+        assert_eq!(d.time_text(23, 7), "23:07");
+        assert_eq!(d.time_text(0, 0), "00:00");
+        let twelve = ClockStyle { use_24h: false, ..d };
+        assert_eq!(twelve.time_text(1, 55), "1:55 AM");
+        assert_eq!(twelve.time_text(23, 7), "11:07 PM");
+        assert_eq!(twelve.time_text(12, 0), "12:00 PM");
+        assert_eq!(twelve.time_text(0, 5), "12:05 AM");
+        for style in [d, twelve] {
+            for hour in 0..24 {
+                for min in [0, 7, 59] {
+                    let time = style.time_text(hour, min);
+                    assert!(style.text(1, 13, 9, hour, min).ends_with(&format!("  {time}")), "{hour}:{min}");
+                    assert_eq!(ClockStyle { show_date: false, ..style }.text(1, 13, 9, hour, min), time);
+                }
+            }
+        }
     }
 }

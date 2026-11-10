@@ -1739,6 +1739,45 @@ mod tests {
         assert_eq!(sheet_key(&mut sheet, &crate::KeyInput::Code(40)), AlertKey::Ignored, "a key with no combo does nothing");
     }
 
+    /// The whole key table of a sheet with a Cancel and a default button, as the keys arrive from the shell: Escape as
+    /// key code 1 (what the shell sends) and as 27 (the ASCII reading), Cmd+. as a chord, Return as 13. An end-to-end run reported Escape doing
+    /// nothing on the quit sheet; the key never left the test tool, and this holds the app side of it.
+    #[test]
+    fn escape_and_cmd_period_press_cancel_and_return_the_default_button() {
+        use crate::proto::CHORD_META;
+        use bifrost_ui::keys::Key;
+        use bifrost_ui::sheet::{ButtonRole, Sheet, SheetButton};
+        assert_eq!(key_combo(&crate::KeyInput::Code(27)).map(|c| c.key), Some(Key::Escape));
+        assert_eq!(key_combo(&crate::KeyInput::Code(1)).map(|c| c.key), Some(Key::Escape));
+        assert_eq!(key_combo(&crate::KeyInput::Code(13)).map(|c| c.key), Some(Key::Return));
+        let cmd_period = crate::KeyInput::chord(52, CHORD_META);
+        let combo = key_combo(&cmd_period).expect("Cmd+. is a combo");
+        assert!(combo.cmd && combo.key == Key::Char('.'));
+        let buttons = || vec![SheetButton::new(1, "Cancel", ButtonRole::Cancel), SheetButton::new(2, "Don't Save", ButtonRole::Destructive), SheetButton::new(3, "Save", ButtonRole::Default)];
+        for mut sheet in [Sheet::alert("Save the changes?", "", buttons()), Sheet::new("Save the changes?", (420.0, 160.0), buttons())] {
+            for cancel in [crate::KeyInput::Code(27), crate::KeyInput::Code(1), cmd_period.clone()] {
+                assert_eq!(sheet_key(&mut sheet, &cancel), AlertKey::Answer(1), "{cancel:?} presses Cancel");
+            }
+            assert_eq!(sheet_key(&mut sheet, &crate::KeyInput::Code(13)), AlertKey::Answer(3), "Return presses the default button");
+            assert_eq!(sheet.focus, None, "none of these moves the focus ring");
+        }
+        // a sheet without a Cancel button ignores Escape and Cmd+. instead of pressing something else
+        let mut only = Sheet::alert("Done", "", vec![SheetButton::new(3, "OK", ButtonRole::Default)]);
+        assert_eq!(sheet_key(&mut only, &crate::KeyInput::Code(27)), AlertKey::Ignored);
+        assert_eq!(sheet_key(&mut only, &cmd_period), AlertKey::Ignored);
+        assert_eq!(sheet_key(&mut only, &crate::KeyInput::Code(13)), AlertKey::Answer(3));
+        // the document close confirmation takes the same keys
+        let m = Mock::new("cancelkeys");
+        let mut c = DocumentController::<Text>::new();
+        let id = c.new_document();
+        c.mark_edited(id);
+        c.close(&m, id);
+        for cancel in [crate::KeyInput::Code(27), crate::KeyInput::Code(1), cmd_period] {
+            assert_eq!(c.alert_key(&cancel), Some(AlertKey::Answer(alert::CANCEL)));
+        }
+        assert_eq!(c.alert_key(&crate::KeyInput::Code(13)), Some(AlertKey::Answer(alert::SAVE)));
+    }
+
     #[test]
     fn save_in_the_close_alert_saves_then_closes() {
         let m = Mock::new("closesave");
