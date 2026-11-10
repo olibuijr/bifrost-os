@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.17
+
+- The device list works inside the app sandbox: the app declares the new `audio-devices` permission, which gives it the audio server's control socket (needs shell 0.10.47).
+- A failed connection says what failed: the server is not running, its socket cannot be reached, or the app is not allowed to use it.
+
 ## 0.1.16
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

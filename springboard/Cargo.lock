@@ -444,7 +444,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-audio-setup"
-version = "0.1.16"
+version = "0.1.17"
 dependencies = [
  "bifrost-app",
  "bifrost-audio-hal",
@@ -601,7 +601,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-colormeter"
-version = "0.5.13"
+version = "0.5.14"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-setup-assistant"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bifrost-app",
  "springboard",

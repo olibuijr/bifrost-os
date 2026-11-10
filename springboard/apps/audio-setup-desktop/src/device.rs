@@ -3,7 +3,8 @@
 
 use crate::draft::{composition_address, remove_address, Draft};
 use crate::model::{DeviceInfo, Kind};
-use bifrost_audio_hal::{Device, System};
+use bifrost_audio_hal::{ConnectError, Device, System};
+use bifrost_audio_types::control::CONTROL_SOCKET;
 use bifrost_audio_types::props::{
     BUFFER_FRAMES, BUFFER_FRAMES_RANGE, DEVICE_UID, IS_ALIVE, LATENCY, MANUFACTURER, NAME,
     NOMINAL_RATE, SAFETY_OFFSET, TRANSPORT, VIRTUAL_FORMAT, VOLUME_SCALAR,
@@ -30,14 +31,14 @@ impl Session {
         if self.system.is_some() {
             return Ok(());
         }
-        match System::connect("is.olibuijr.audiosetup.desktop") {
+        match System::connect_detailed(CONTROL_SOCKET, "is.olibuijr.audiosetup.desktop") {
             Ok(system) => {
                 self.system = Some(system);
                 Ok(())
             }
             Err(e) => {
                 self.system = None;
-                Err(describe(e))
+                Err(describe_connect(&e))
             }
         }
     }
@@ -140,6 +141,23 @@ fn format(dev: &Device, scope: Scope) -> Option<StreamFormat> {
     }
 }
 
+/// The sentence for a connection that failed, from the step that failed and the system's error: a socket that is
+/// there with nobody listening is a stopped server, a socket this app cannot see or open is not.
+pub fn describe_connect(e: &ConnectError) -> String {
+    use std::io::ErrorKind;
+    match (e.stage, e.os.as_ref().map(std::io::Error::kind)) {
+        ("connect", Some(ErrorKind::ConnectionRefused)) => describe(AudioError::NoServer),
+        ("connect", Some(ErrorKind::NotFound)) => {
+            "The audio server cannot be reached: its control socket is missing. The server has not started, or this app is not allowed to use it.".to_string()
+        }
+        ("connect", Some(ErrorKind::PermissionDenied)) => "This app is not allowed to connect to the audio server.".to_string(),
+        ("connect", Some(_)) => format!("The audio server cannot be reached ({}).", e.os.as_ref().map(ToString::to_string).unwrap_or_default()),
+        ("hello", _) if e.error == AudioError::Protocol => "The audio server speaks another protocol version than this app.".to_string(),
+        ("hello", _) if e.error == AudioError::Io => "The audio server did not answer.".to_string(),
+        _ => describe(e.error),
+    }
+}
+
 /// The sentence the window shows for a failed request.
 pub fn describe(e: AudioError) -> String {
     match e {
@@ -164,6 +182,21 @@ mod tests {
         assert_eq!(describe(AudioError::NoServer), "The audio server is not running.");
         assert_eq!(describe(AudioError::Hogged), "Another app has this device.");
         assert_eq!(describe(AudioError::Io), "The audio device failed.");
+    }
+
+    #[test]
+    fn a_failed_connection_says_what_failed() {
+        use std::io::{Error, ErrorKind};
+        let at = |stage: &'static str, error: AudioError, kind: Option<ErrorKind>| ConnectError { path: CONTROL_SOCKET.into(), stage, error, os: kind.map(Error::from) };
+        // the socket is there and nobody listens: the server stopped
+        assert_eq!(describe_connect(&at("connect", AudioError::NoServer, Some(ErrorKind::ConnectionRefused))), "The audio server is not running.");
+        // no socket where this app looks (a sandbox without the control socket): not "the server is not running"
+        let missing = describe_connect(&at("connect", AudioError::NoServer, Some(ErrorKind::NotFound)));
+        assert!(missing.starts_with("The audio server cannot be reached: its control socket is missing."), "{missing}");
+        assert!(!missing.contains("is not running"));
+        assert_eq!(describe_connect(&at("connect", AudioError::NoServer, Some(ErrorKind::PermissionDenied))), "This app is not allowed to connect to the audio server.");
+        assert_eq!(describe_connect(&at("hello", AudioError::Protocol, None)), "The audio server speaks another protocol version than this app.");
+        assert_eq!(describe_connect(&at("hello", AudioError::NoServer, None)), "The audio server is not running.");
     }
 
     #[test]

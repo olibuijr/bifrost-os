@@ -27,3 +27,9 @@ fn a_refused_permission_is_named_in_the_alert() {
     assert!(shown.contains("\"teleport\"") && !shown.contains("Try opening it again"));
     assert!(crate::shell::apphost::launch_failure_text_for("Notes", Some("  ")).1.contains("Try opening it again"));
 }
+
+#[test]
+fn a_start_that_fails_on_the_lock_screen_is_logged_and_not_shown() {
+    assert!(!crate::shell::apphost::launch_failure_is_shown(true), "nobody asked for a start behind the lock");
+    assert!(crate::shell::apphost::launch_failure_is_shown(false));
+}

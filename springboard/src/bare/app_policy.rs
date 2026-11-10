@@ -89,10 +89,11 @@ impl From<PolicyError> for io::Error {
 
 /// Every name an entitlement query accepts: the manifest permissions and the first-party entitlements, in the order
 /// [`Policy::held`] lists them.
-pub const ENTITLEMENT_NAMES: [&str; 20] = [
+pub const ENTITLEMENT_NAMES: [&str; 21] = [
     "network",
     "storage",
     "audio",
+    AUDIO_DEVICES_PERMISSION,
     "camera",
     "screen",
     "notifications",
@@ -124,11 +125,21 @@ pub const HARDWARE_INFO_ENTITLEMENT: &str = "hardware-info";
 pub const CAMERA_APP_ID: &str = "is.olibuijr.photobooth.desktop";
 pub const SCREEN_APP_ID: &str = crate::shell::services::display_services::SCREEN_CAPTURE_APP_ID;
 
+/// `permissions = ["audio-devices"]`: the audio server's control socket, for the one first-party app that configures
+/// the machine's audio devices (Audio Setup). It is not part of `audio`: a control client can change the format, rate
+/// and buffer size of a device for every app, create and remove aggregate devices, and open an input stream without
+/// going through the media service that enforces the microphone permission.
+pub const AUDIO_DEVICES_PERMISSION: &str = "audio-devices";
+/// The only app identity allowed to declare [`AUDIO_DEVICES_PERMISSION`].
+pub const AUDIO_DEVICES_APP_ID: &str = "is.olibuijr.audiosetup.desktop";
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Policy {
     pub network: bool,
     pub storage: bool,
     pub audio: bool,
+    /// `audio-devices`: binds the audio server's control socket for Audio Setup (see [`AUDIO_DEVICES_PERMISSION`]).
+    pub audio_devices: bool,
     /// `camera`: binds detected V4L2 capture nodes for Photo Booth.
     pub camera: bool,
     /// `screen`: declaration for Color Meter; use remains consent-gated by shell services.
@@ -195,6 +206,7 @@ impl Policy {
             "network" => self.network,
             "storage" => self.storage,
             "audio" => self.audio,
+            AUDIO_DEVICES_PERMISSION => self.audio_devices,
             "camera" => self.camera,
             "screen" => self.screen,
             "notifications" => self.notifications,
@@ -227,6 +239,7 @@ impl Policy {
                 "network" => p.network = true,
                 "storage" => p.storage = true,
                 "audio" => p.audio = true,
+                AUDIO_DEVICES_PERMISSION if id == AUDIO_DEVICES_APP_ID => p.audio_devices = true,
                 "camera" if id == CAMERA_APP_ID => p.camera = true,
                 "screen" if id == SCREEN_APP_ID => p.screen = true,
                 // Older store packages (the Viewer before 0.11.10) still declare `screen` to use the screenshot
@@ -372,6 +385,20 @@ fn sysfs_args(policy: Policy) -> Vec<&'static str> {
     }
 }
 
+/// The sandbox arguments for `audio-devices`: the audio server's control socket, and nothing for any other app.
+///
+/// Only the socket file is bound, not its directory, which also holds the MIDI server's socket. The bind is read-only:
+/// connecting to a socket needs no writable mount, and the app must not be able to replace or remove the socket. `-try`:
+/// with the server stopped there is no socket, and the app still starts and says it cannot reach the server.
+fn audio_devices_args(policy: Policy) -> Vec<&'static str> {
+    let socket = bifrost_audio_types::control::CONTROL_SOCKET;
+    if policy.audio_devices {
+        vec!["--ro-bind-try", socket, socket]
+    } else {
+        Vec::new()
+    }
+}
+
 /// Construct a fail-closed sandbox. Only the selected package, app data and
 /// declared resources are mounted; no system/session bus is exposed to apps.
 pub fn command(
@@ -384,7 +411,8 @@ pub fn command(
     let form = bifrost_ui::form_factor::FormFactor::current();
     let account = Account::installed()?;
     prepare_container(data, &account)?;
-    let exec = fs::canonicalize(exec)?;
+    // the step is named: a bare "No such file or directory" in the log does not say which file a launch missed
+    let exec = fs::canonicalize(exec).map_err(|e| io::Error::new(e.kind(), format!("app executable {}: {e}", exec.display())))?;
     let package = exec
         .parent()
         .ok_or_else(|| io::Error::from(PolicyError::MissingPackageDirectory))?;
@@ -485,6 +513,7 @@ pub fn command(
             }
         }
     }
+    c.args(audio_devices_args(policy));
     // Unified Logging: every app may write to the journald native socket (world-writable datagram socket).
     c.args(["--ro-bind-try", "/run/systemd/journal/socket", "/run/systemd/journal/socket"]);
     if policy.log_store {
@@ -764,6 +793,22 @@ mod tests {
         assert!(!p.network && !p.storage && !p.contacts && !p.remote);
         assert!(p.held().contains(&"calendars"));
         assert!(!Policy::default().holds("calendars"));
+    }
+
+    #[test]
+    fn the_audio_control_socket_is_bound_only_for_audio_setup() {
+        let declared = [AUDIO_DEVICES_PERMISSION.to_string()];
+        let setup = Policy::from_permissions(AUDIO_DEVICES_APP_ID, &["audio".into(), declared[0].clone()]).unwrap();
+        assert!(setup.audio && setup.audio_devices && setup.holds("audio-devices"));
+        assert_eq!(audio_devices_args(setup), ["--ro-bind-try", "/run/bifrost/audio/control", "/run/bifrost/audio/control"]);
+        // the plain `audio` permission never reaches the control socket, for Audio Setup or anyone else
+        let plain = Policy::from_permissions("is.example.player", &["audio".into()]).unwrap();
+        assert!(plain.audio && !plain.audio_devices && !plain.holds("audio-devices"));
+        assert!(audio_devices_args(plain).is_empty());
+        assert!(audio_devices_args(Policy::from_permissions(AUDIO_DEVICES_APP_ID, &["audio".into()]).unwrap()).is_empty());
+        // another app that declares it is refused by name, like `camera`
+        let err = Policy::from_permissions("is.example.player", &declared).unwrap_err();
+        assert_eq!(err.to_string(), "Unsupported app permission: audio-devices");
     }
 
     #[test]

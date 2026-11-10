@@ -74,7 +74,8 @@ fn paint_loupe(w: &mut ColorMeter, s: &mut Surface, ui: &Ui) {
         }
         None => {
             let mid = l.y + l.h / 2.0;
-            text_mid(&mut w.labels, s, ui, "Screen capture is not available", MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), l.x + 12.0, mid, l.w - 24.0);
+            let note = w.capture_note();
+            text_mid(&mut w.labels, s, ui, &note, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), l.x + 12.0, mid, l.w - 24.0);
         }
     }
 }
