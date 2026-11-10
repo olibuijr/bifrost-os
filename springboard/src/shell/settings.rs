@@ -3208,7 +3208,7 @@ impl Settings {
             Action::None | Action::Slider(_) => vec![],
             Action::Push(id) => {
                 if matches!(id, PageId::WifiDetail | PageId::BluetoothDetail | PageId::NotificationApp | PageId::UserDetail | PageId::GroupDetail) {
-                    self.detail = item.label.clone();
+                    self.detail = item.detail().to_string();
                 }
                 self.push(ui, id, t);
                 match id {
