@@ -6,6 +6,7 @@ pub(crate) mod gallery;
 pub(crate) mod icon;
 pub(crate) mod list;
 pub(crate) mod options;
+pub(crate) mod scrolling;
 
 /// What a row says its kind is, in every view: the description of the type its name maps to ("TIFF image",
 /// "HTML Document", "Disk Image"), "Folder", or the coarse kind when the name has no known type. The coarse kind alone
@@ -58,7 +59,7 @@ impl Files {
             if col != self.ancestor_shown() {
                 return None;
             }
-            let row = ((y - self.rows_top()) / ROW_H).floor() as usize;
+            let row = ((y - self.rows_top() + self.scroll) / ROW_H).floor() as usize;
             return self.visible().get(row).copied();
         }
         if x < self.side() || y < self.rows_top() || y > self.bottom() {

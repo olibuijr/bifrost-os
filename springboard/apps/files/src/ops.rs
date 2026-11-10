@@ -656,7 +656,8 @@ impl Files {
             return;
         }
         self.select_only(i);
-        self.reveal(i);
+        // in the middle of the view when it was out of it, not on the last row under the bottom edge
+        self.reveal_comfortably(i);
         if pending.rename {
             self.begin_rename(i);
         }
@@ -676,28 +677,10 @@ impl Files {
             self.open(i);
         }
     }
-    /// Scrolls the icon or list view just far enough that row `i` (an index into `rows`) is fully on screen. The
-    /// columns and gallery views do not scroll.
+    /// Scrolls the icon, list or columns view just far enough that row `i` (an index into `rows`) is fully on screen.
+    /// The gallery does not scroll: its strip follows the focused item.
     pub(crate) fn reveal(&mut self, i: usize) {
-        if self.columns || self.vo.gallery {
-            return;
-        }
-        let Some(n) = self.visible().iter().position(|&j| j == i) else {
-            return;
-        };
-        // the line's top at scroll 0, its height, and the gap the icon view leaves above its first line
-        let (top, height, gap) = if self.grid {
-            let cols = ((self.w - (self.side() + 16.)) / self.grid_w()).floor().max(1.) as usize;
-            (self.rows_top() + 16. + (n / cols) as f32 * self.grid_h(), self.grid_h(), 16.)
-        } else {
-            (self.rows_top() + n as f32 * 32., 32., 0.)
-        };
-        let (view_top, view_bottom) = (self.rows_top(), self.bottom());
-        if top - gap - self.scroll < view_top {
-            self.scroll = (top - gap - view_top).max(0.);
-        } else if top + height - self.scroll > view_bottom {
-            self.scroll = (top + height - view_bottom).max(0.);
-        }
+        self.reveal_nearest(i);
     }
     /// Draws the rename field for the open folder's column row of `e` (columns view) and returns true, or returns
     /// false when `e` is not the item being renamed so the caller draws the row as usual.
@@ -1072,9 +1055,9 @@ mod rename_tests {
             files.listing_arrives();
             assert_eq!(files.selected_paths(), vec![target.clone()], "the file is selected (grid {grid}, columns {columns}, gallery {gallery})");
             assert!(files.naming.is_none() && files.fx.pending.is_none(), "selected, not renamed, and used once");
-            // the icon and list views scroll the item into view; the columns and gallery views have no scroll
-            if !columns && !gallery {
-                assert!(files.scroll > 0., "the view scrolled to the item (grid {grid})");
+            // the icon, list and columns views scroll the item into view; the gallery's strip follows the focus
+            if !gallery {
+                assert!(files.scroll > 0., "the view scrolled to the item (grid {grid}, columns {columns})");
                 let before = files.scroll;
                 files.reveal(files.selection[0]);
                 assert_eq!(files.scroll, before, "it is fully in view");
@@ -1128,13 +1111,18 @@ mod rename_tests {
         assert_eq!(files.scroll, seen, "a row already in view does not move it");
         files.reveal(0);
         assert_eq!(files.scroll, 0., "a row above the view scrolls back up");
-        // the icon view scrolls too; the columns view does not
+        // the icon view scrolls too, and so does the open folder's column; the gallery does not
         files.grid = true;
         files.reveal(99);
         assert!(files.scroll > 0.);
         files.scroll = 0.;
         files.grid = false;
         files.columns = true;
+        files.reveal(99);
+        assert_eq!(files.rows_top() + 100. * ROW_H - files.scroll, files.bottom(), "the last column row lands on the bottom edge");
+        files.scroll = 0.;
+        files.columns = false;
+        files.vo.gallery = true;
         files.reveal(99);
         assert_eq!(files.scroll, 0.);
     }

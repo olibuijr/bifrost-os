@@ -80,52 +80,80 @@ impl Files {
         if col >= n {
             return None;
         }
-        let row = ((y - self.rows_top()) / ROW_H).floor() as usize;
         let index = self.ancestors.len() - n + col;
+        let row = ((y - self.rows_top() + self.ancestor_scroll(index)) / ROW_H).floor() as usize;
         self.ancestor_rows(index).get(row).filter(|e| e.is_dir).map(|e| e.path.clone())
     }
-    /// The columns view: the folders above the open one, then the open folder's rows.
+    /// How far the `index`th ancestor column is scrolled: not at all while the row that leads to the next column fits
+    /// in the view, else far enough to put that row in the middle (a folder far down a long parent would otherwise
+    /// show a column without its highlighted row).
+    pub(crate) fn ancestor_scroll(&self, index: usize) -> f32 {
+        let view_h = self.bottom() - self.rows_top();
+        let rows = self.ancestor_rows(index);
+        let next = self.ancestors.get(index + 1).map_or(&self.path, |a| &a.0);
+        let Some(k) = rows.iter().position(|e| e.path == *next) else { return 0. };
+        let top = k as f32 * ROW_H;
+        if top + ROW_H <= view_h {
+            return 0.;
+        }
+        (top + ROW_H / 2. - view_h / 2.).clamp(0., (rows.len() as f32 * ROW_H - view_h).max(0.))
+    }
+    /// The columns view: the folders above the open one, then the open folder's rows. The open folder's column scrolls
+    /// by `scroll`; the rows are drawn into their own area, so one that only partly fits is cut at its edge.
     pub(crate) fn paint_columns(&self, ui: &Ui, s: &mut Surface, visible: &[usize]) {
         let w = self.w;
         let n = self.ancestor_shown();
         let first = self.ancestors.len() - n;
         let bottom = self.bottom();
+        // the rows' own area, in the surface's rows
+        let area = (ui.pt(self.rows_top()).ceil() as usize, ui.pt(bottom).floor() as usize);
         for c in 0..n {
             let x0 = (self.side() + 16.) + c as f32 * self.vo.col_w;
             rect(s, ui, x0, self.body_top(), 1., bottom - self.body_top(), SEPARATOR_C.now());
             // the row leading to the next column is highlighted
             let next = if c + 1 < n { &self.ancestors[first + c + 1].0 } else { &self.path };
+            let offset = self.ancestor_scroll(first + c);
+            let mut view = s.rows(area.0, area.1);
             for (k, e) in self.ancestor_rows(first + c).into_iter().enumerate() {
-                let y = self.rows_top() + k as f32 * ROW_H;
-                if y + ROW_H > bottom {
+                let y = self.rows_top() + k as f32 * ROW_H - offset;
+                if y + ROW_H <= self.rows_top() {
+                    continue;
+                }
+                if y >= bottom {
                     break;
                 }
                 // a folder above the open one has no keyboard focus: its row toward the next column is the inactive plate
                 let state = RowState::of(e.path == *next, false);
                 if let Some(plate) = state.plate() {
-                    rect(s, ui, x0, y, self.vo.col_w, ROW_H, plate);
+                    rect(&mut view, ui, x0, y, self.vo.col_w, ROW_H, plate);
                 }
-                column_row(s, ui, e, x0, y, self.vo.col_w, state);
+                column_row(&mut view, ui, e, x0, y, self.vo.col_w, state);
             }
         }
         let x0 = (self.side() + 16.) + n as f32 * self.vo.col_w;
         rect(s, ui, x0, self.body_top(), 1., bottom - self.body_top(), SEPARATOR_C.now());
-        for (k, &i) in visible.iter().enumerate() {
-            let y = self.rows_top() + k as f32 * ROW_H;
-            if y + ROW_H > bottom {
-                break;
+        {
+            let mut view = s.rows(area.0, area.1);
+            for (k, &i) in visible.iter().enumerate() {
+                let y = self.rows_top() + k as f32 * ROW_H - self.scroll;
+                if y + ROW_H <= self.rows_top() {
+                    continue;
+                }
+                if y >= bottom {
+                    break;
+                }
+                let e = &self.rows[i];
+                // the open folder's column has the keyboard focus: its selection is the accent plate
+                let state = RowState::of(self.selection.contains(&i), true);
+                if let Some(plate) = state.plate() {
+                    rect(&mut view, ui, x0, y, w - x0, ROW_H, plate);
+                }
+                // the item being renamed shows its name field in place of the name
+                if !self.paint_column_name_field(ui, &mut view, e, x0, y) {
+                    column_row(&mut view, ui, e, x0, y, self.vo.col_w, state);
+                }
+                self.paint_badges(ui, &mut view, &e.path, x0 + 8. + SPACE_XL - 2., y + 13.);
             }
-            let e = &self.rows[i];
-            // the open folder's column has the keyboard focus: its selection is the accent plate
-            let state = RowState::of(self.selection.contains(&i), true);
-            if let Some(plate) = state.plate() {
-                rect(s, ui, x0, y, w - x0, ROW_H, plate);
-            }
-            // the item being renamed shows its name field in place of the name
-            if !self.paint_column_name_field(ui, s, e, x0, y) {
-                column_row(s, ui, e, x0, y, self.vo.col_w, state);
-            }
-            self.paint_badges(ui, s, &e.path, x0 + 8. + SPACE_XL - 2., y + 13.);
         }
         self.paint_column_preview(ui, s, x0 + self.vo.col_w);
     }
@@ -185,5 +213,53 @@ mod tests {
         assert_eq!(at(0., 1), 0, "the other folder above has no plate");
         assert_eq!(at(1., 1), SELECTION.now(), "the selected row of the focused column: accent plate");
         assert_eq!(at(1., 0), 0, "an unselected row has no plate");
+    }
+
+    #[test]
+    fn the_open_column_scrolls_and_a_click_follows_the_scroll() {
+        let ui = font_ui();
+        let mut files = crate::tests::fixture((0..100).map(|i| crate::tests::folder(&format!("f{i:03}"))).collect());
+        files.columns = true;
+        files.grid = false;
+        let x = files.side() + 16. + 120.;
+        assert_eq!(files.item_at(x, files.rows_top() + 2.), Some(0));
+        files.select_only(90);
+        files.reveal(90);
+        assert!(files.scroll > 0., "row 90 is below the view at scroll 0");
+        let y = files.rows_top() + 90. * ROW_H - files.scroll;
+        assert!(y >= files.rows_top() && y + ROW_H <= files.bottom(), "it is in view after the reveal");
+        assert_eq!(files.item_at(x, y + 3.), Some(90), "a click lands on the row drawn there");
+        // the selected row is painted where the scroll puts it
+        let (w, h) = (1200usize, 800usize);
+        let mut px = vec![0u32; w * h];
+        let visible = files.visible();
+        files.paint_columns(&ui, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &visible);
+        assert_eq!(px[ui.pt(y + 3.) as usize * w + ui.pt(x) as usize], SELECTION.now());
+        // a row cut by the top of the rows' area is drawn below that edge only
+        files.selection.clear();
+        files.select_only(0);
+        files.scroll = ROW_H / 2.;
+        px.fill(0);
+        files.paint_columns(&ui, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &visible);
+        let top = ui.pt(files.rows_top());
+        assert_eq!(px[(top + 3.) as usize * w + ui.pt(x) as usize], SELECTION.now(), "the half row that shows is drawn");
+        assert_eq!(px[(top - 3.) as usize * w + ui.pt(x) as usize], 0, "nothing of it above the rows' area");
+    }
+
+    #[test]
+    fn a_folder_above_scrolls_to_the_row_the_path_goes_through() {
+        let mut files = crate::tests::fixture(vec![crate::tests::folder("inside")]);
+        files.columns = true;
+        files.grid = false;
+        files.path = PathBuf::from("/fixture/f090");
+        let parent: Vec<Entry> = (0..100).map(|i| crate::tests::folder(&format!("f{i:03}"))).collect();
+        files.ancestors = vec![(PathBuf::from("/fixture"), parent)];
+        let offset = files.ancestor_scroll(0);
+        let y = files.rows_top() + 90. * ROW_H - offset;
+        assert!(offset > 0. && y >= files.rows_top() && y + ROW_H <= files.bottom(), "the path's row is in view: {y}");
+        assert_eq!(files.ancestor_hit(files.side() + 16. + 20., y + 3.), Some(PathBuf::from("/fixture/f090")), "and a click on it hits it");
+        // a path row that fits without scrolling leaves the column at its top
+        files.path = PathBuf::from("/fixture/f003");
+        assert_eq!(files.ancestor_scroll(0), 0.);
     }
 }

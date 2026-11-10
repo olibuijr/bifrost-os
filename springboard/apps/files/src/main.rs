@@ -767,17 +767,8 @@ impl Files {
                         // a drag that began in the sidebar scrolls the source list, not the listing
                         self.side_scroll = (self.side_scroll + old - new).clamp(0., self.side_scroll_max());
                     } else {
-                        let visible = self.visible().len();
-                        let columns = ((self.w - (self.side() + 16.)) / self.grid_w()).floor().max(1.) as usize;
-                        let total = if self.vo.gallery {
-                            0.
-                        } else if self.grid {
-                            visible.div_ceil(columns) as f32 * self.grid_h()
-                        } else {
-                            visible as f32 * 32.
-                        };
-                        self.scroll =
-                            (self.scroll + old - new).clamp(0., (total - (self.h - self.rows_top() - 70.)).max(0.));
+                        // every view's own lines: the columns view scrolls its open folder's column by its row pitch
+                        self.scroll = (self.scroll + old - new).clamp(0., self.scroll_max());
                     }
                     // the press point stays where it was: a drag that has not begun yet is measured from it, and the
                     // release is a click only if it ends near it

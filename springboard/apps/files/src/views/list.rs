@@ -28,14 +28,15 @@ impl Files {
             }
         }
     }
-    /// One row of the list view: disclosure triangle, icon, name, date, size and kind.
+    /// One row of the list view: disclosure triangle, icon, name, date, size and kind. A row that reaches past the rows'
+    /// area (under the header, below `bottom`) is still drawn: `paint` hands in that area as the surface, which cuts it.
     pub(crate) fn paint_list_row(&self, ui: &Ui, s: &mut Surface, n: usize, i: usize, prev: Option<usize>, bottom: f32) {
         let w = self.w;
         let e = &self.rows[i];
         let name_field = self.naming.as_ref().filter(|(p, _)| *p == e.path).map(|(_, f)| f);
         let selected = self.selection.contains(&i);
         let y = self.rows_top() + n as f32 * 32. - self.scroll;
-        if y < self.rows_top() || y + 32. > bottom || ui.pt(y+32.) <= s.y0 as f32 || ui.pt(y) >= s.h as f32 {
+        if y + 32. <= self.rows_top() || y >= bottom || ui.pt(y+32.) <= s.y0 as f32 || ui.pt(y) >= s.h as f32 {
             return;
         }
         let indent = self.depth_of(i) as f32 * INDENT;
@@ -81,5 +82,43 @@ impl Files {
         cached_text(s, ui, row_text, &date_text(e.mtime), small, secondary, w - 430., y + 8., 135.);
         cached_text(s, ui, row_text, &if e.is_dir { "—".into() } else { fs::size_text(e.size) }, small, secondary, w - 290., y + 8., 105.);
         cached_text(s, ui, row_text, kind_text(e), small, secondary, w - 165., y + 8., 145.);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rows_that_only_partly_fit_are_drawn_cut_at_the_header_and_at_the_bottom() {
+        let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let ui = Ui::new(font, 1.0);
+        let mut files = crate::tests::fixture((0..40).map(|i| crate::tests::folder(&format!("f{i:02}"))).collect());
+        files.grid = false;
+        // ten rows high and scrolled by half a row: row 0 is half under the header, row 10 half below the view
+        files.h = files.rows_top() + 10. * 32.;
+        files.scroll = 16.;
+        let (top, bottom) = (files.rows_top(), files.bottom());
+        assert_eq!(bottom, files.h, "no footer: the view ends with the window");
+        let (w, h) = (1200usize, 800usize);
+        let mut px = vec![0u32; w * h];
+        // a column of pixels right of the Kind text and left of the scroll knob
+        let x = (files.w - 12.) as usize;
+        let mut painted = |files: &mut Files, row: usize| {
+            files.select_only(row);
+            px.fill(0);
+            files.paint(&ui, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 });
+            (HEADER_H as usize..h).filter(|y| px[y * w + x] == SELECTION.now()).collect::<Vec<usize>>()
+        };
+        let first = painted(&mut files, 0);
+        assert!(!first.is_empty(), "the row cut by the header is drawn: no empty band under the header");
+        assert_eq!(*first.first().unwrap() as f32, top, "from the header's bottom edge");
+        assert_eq!(*first.last().unwrap() as f32, top + 15., "its lower half");
+        let last = painted(&mut files, 10);
+        assert!(!last.is_empty(), "the row that partly fits at the bottom is drawn, not left out");
+        assert_eq!(*last.first().unwrap() as f32, bottom - 16.);
+        assert!((*last.last().unwrap() as f32) < bottom, "and it is cut at the bottom of the view");
+        // a row wholly below the view is not drawn
+        assert!(painted(&mut files, 11).is_empty());
     }
 }

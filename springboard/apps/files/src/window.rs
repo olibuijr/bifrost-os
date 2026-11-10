@@ -293,12 +293,8 @@ impl Files {
         self.scroll = 0.;
     }
     pub(crate) fn set_view(&mut self, grid: bool, columns: bool) {
-        self.grid = grid;
-        self.columns = columns;
-        self.vo.gallery = false;
-        self.scroll = 0.;
-        self.refresh_rows(); // inline folders only exist in the list view
-        self.revision += 1;
+        // keeps the selection and the place (views/scrolling.rs)
+        self.switch_view(grid, columns, false);
     }
     pub(crate) fn update_controls(&mut self) {
         let make=|id,role,label:&str,bounds,enabled|Node{id,role,label:label.into(),value:if id==BAR_SEARCH as u64{self.query.to_string()}else{String::new()},bounds,enabled};
@@ -577,10 +573,14 @@ impl Files {
                     self.paint_icon_cell(ui, &mut view, n, visible[n], cols, bottom);
                 }
             } else {
+                // the rows are drawn into their own area under the header, as the icon lines are: a row that only
+                // partly fits (under the header after a scroll, or at the bottom) is cut at the edge, not left out
+                let mut view = s.rows(ui.pt(first).ceil() as usize, ui.pt(bottom).floor() as usize);
                 for n in cells {
-                    self.paint_list_row(ui, s, n, visible[n], n.checked_sub(1).map(|p| visible[p]), bottom);
+                    self.paint_list_row(ui, &mut view, n, visible[n], n.checked_sub(1).map(|p| visible[p]), bottom);
                 }
             }
+            self.paint_scroll_knob(ui, s, visible.len());
         }
         if self.loading || self.error.is_some() || visible.is_empty() {
             let msg = if self.loading {
