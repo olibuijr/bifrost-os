@@ -45,7 +45,12 @@ impl App for Browser {
     }
 
     fn document(&mut self, ctx: &Ctx, event: bifrost_app::DocumentEvent) -> bool {
-        self.uploads.document(ctx, event, &mut self.pool)
+        let handled = self.uploads.document(ctx, event, &mut self.pool);
+        // a file the browser was handed (a double click in Files, Open With) opens in a tab of its own
+        for url in self.uploads.take_handed() {
+            self.open_in_tab(ctx, url);
+        }
+        handled
     }
 
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {

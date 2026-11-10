@@ -32,13 +32,7 @@ impl Browser {
         }
         match ev {
             Input::Open(url) => {
-                if self.pool.is_some() {
-                    self.new_tab(&url);
-                } else {
-                    self.initial_url = Some(url);
-                    self.start();
-                }
-                self.place_web(ctx);
+                self.open_in_tab(ctx, url);
                 true
             }
             Input::Activate(id) if self.pageui.active() => {

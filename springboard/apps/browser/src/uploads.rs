@@ -43,6 +43,11 @@ pub(super) struct Uploads {
     pending: Option<Request>,
     copying: Option<Copying>,
     retained: HashMap<WebViewId, Vec<Staged>>,
+    /// Private copies of the files the browser was handed to open (a double click in Files, Open With). A tab may load
+    /// its file again at any time, so they stay until the window closes.
+    opened: Vec<Staged>,
+    /// `file:` URLs of handed files that no tab shows yet (`take_handed`).
+    handed: Vec<String>,
     pub(super) error: Option<String>,
 }
 
@@ -78,7 +83,8 @@ impl Uploads {
                 if self.copying.as_ref().is_some_and(|copy| copy.request.view == *view && copy.request.token == *token) { self.copying = None; }
             }
             WebViewEvent::LoadCommitted(view) | WebViewEvent::Closed(view) | WebViewEvent::ContentProcessTerminated(view, _) => self.forget(*view, pool),
-            WebViewEvent::EngineExited => *self = Self::default(),
+            // the picker requests die with the engine; the handed files are still on disk for the tabs that come back
+            WebViewEvent::EngineExited => *self = Self { opened: std::mem::take(&mut self.opened), handed: std::mem::take(&mut self.handed), ..Self::default() },
             _ => {}
         }
     }
@@ -120,7 +126,12 @@ impl Uploads {
         };
         // The open descriptors remain valid after releasing their reusable grants.
         for doc in &docs { ctx.release_document(doc.grant); }
-        if !self.pending.as_ref().is_some_and(|request| request.document == document) { return false; }
+        if !self.pending.as_ref().is_some_and(|request| request.document == document) {
+            // not an answer to a file chooser: a file somebody handed the browser is opened in a tab
+            if !bifrost_app::share::is_inbound(document) || docs.is_empty() { return false; }
+            self.hand_over(&ctx.data_dir.join("opened-files"), docs);
+            return true;
+        }
         let request = self.pending.take().unwrap();
         if docs.is_empty() || docs.len() > MAX_FILES || (!request.multiple && docs.len() != 1) {
             Self::cancel(pool, &request);
@@ -132,6 +143,21 @@ impl Uploads {
         self.copying = Some(Copying { request, result: inbox::spawn(move || stage(&base, docs, budget).map_err(|_| "Could not prepare the selected files (limit: 1 GiB per selection, 2 GiB per window).".into())) });
         true
     }
+
+    /// Copies handed files into a private folder under `base` and queues a `file:` URL for each. The engine loads
+    /// paths, not descriptors, and the browser holds the file only as an open descriptor.
+    fn hand_over(&mut self, base: &Path, docs: Vec<Document>) {
+        match stage(base, docs, MAX_BATCH_BYTES) {
+            Ok(batch) => {
+                self.handed.extend(batch.paths.iter().filter_map(|path| url::Url::from_file_path(path).ok()).map(String::from));
+                self.opened.push(batch);
+            }
+            Err(_) => self.error = Some("The file could not be opened.".into()),
+        }
+    }
+
+    /// The URLs of the handed files that are ready, each to be shown in a new tab.
+    pub(super) fn take_handed(&mut self) -> Vec<String> { std::mem::take(&mut self.handed) }
 
     pub(super) fn tick(&mut self, pool: &mut Option<WebProcessPool>) -> bool {
         let Some(result) = self.copying.as_ref().and_then(|copy| inbox::take(&copy.result)) else { return false };
@@ -183,4 +209,37 @@ fn stage(base: &Path, docs: Vec<Document>, budget: u64) -> io::Result<Staged> {
         batch.paths.push(path);
     }
     Ok(batch)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn handed(dir: &Path, name: &str, bytes: &[u8]) -> Document {
+        let source = dir.join(name);
+        fs::write(&source, bytes).unwrap();
+        Document { request: bifrost_app::share::INBOUND | 1, grant: [7; 16], name: name.into(), size: bytes.len() as u64, mode: bifrost_app::proto::DocMode::Read, file: fs::File::open(&source).unwrap() }
+    }
+
+    #[test]
+    fn a_handed_file_becomes_a_file_url_for_a_new_tab() {
+        let dir = std::env::temp_dir().join(format!("browser-handed-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let mut uploads = Uploads::default();
+        uploads.hand_over(&dir.join("opened-files"), vec![handed(&dir, "ok.svg", b"<svg/>"), handed(&dir, "page one.html", b"<p>")]);
+        let urls = uploads.take_handed();
+        assert_eq!(urls.len(), 2, "one tab per file: {urls:?}");
+        assert!(urls[0].starts_with("file:///") && urls[0].ends_with("/ok.svg"), "{urls:?}");
+        assert!(urls[1].ends_with("/page%20one.html"), "{urls:?}");
+        let copy = url::Url::parse(&urls[0]).unwrap().to_file_path().unwrap();
+        assert!(copy.starts_with(dir.join("opened-files")), "the engine reads a private copy: {copy:?}");
+        assert_eq!(fs::read(&copy).unwrap(), b"<svg/>");
+        assert!(uploads.take_handed().is_empty(), "a file opens once");
+        assert!(uploads.error.is_none());
+        // the copies go with the window
+        drop(uploads);
+        assert!(!copy.exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
