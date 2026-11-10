@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.17
+
+- Text typed into a new document is 13 pt, the system body size the window's own labels use; it was 12 pt and looked small beside them. Plain text documents, and Make Plain Text, use the same size.
+- The size pop-up and the Fonts panel have a row for 13, so they mark the size of new text. An empty document's caret is as tall as the text typed into it.
+
 ## 1.13.16
 
 - Compliance: the font panel and the find highlight use the named radius and spacing tokens; no change in behaviour.

@@ -2114,6 +2114,9 @@ impl Shell {
         #[cfg(feature="desktop-wayland")]
         {
             use super::malware_gate::{check,rules_dir,Gate};
+            // a built-in app reads the file as the shell, so the home folder limit that a document grant gives an
+            // installed app is checked here for every app (links followed)
+            if !self.doc_broker().is_some_and(|b|super::workspace::in_home(b.opener.home(),path)){return Err("The file is not in the home folder".into());}
             if !matches!(check(&rules_dir(),&[path.to_path_buf()]),Gate::Open){return Err("The file did not pass the malware check; open it from Files".into());}
             if self.open_path_with(id,path,t){Ok(())}else{Err("The app could not open the file (it must be a file in the home folder that the app can take)".into())}
         }
@@ -2122,6 +2125,17 @@ impl Shell {
             let _=t;
             Err("Opening a file in an app needs the desktop session".into())
         }
+    }
+    /// `open-document`: opens the file at `path` in the default app for its type, the one a double-click in Files
+    /// and the Dock's stack use (`default_app_for_file`). The path is checked first, then everything goes through
+    /// `desktop_open_file` with that app, so the limits are the same: a file in the home folder, an app a person
+    /// launches, the malware check. A type no app opens is an error; nothing else is tried.
+    pub fn desktop_open_document(&mut self,path:&str,t:f64)->Result<(),String> {
+        if !self.desk_active(){return Err("The desktop is not active".into());}
+        super::workspace::check_open_path(std::path::Path::new(path))?;
+        let name=std::path::Path::new(path).file_name().map_or_else(String::new,|n|n.to_string_lossy().into_owned());
+        let Some(app)=self.default_app_for_file(&name) else{return Err("No app opens this kind of file".into());};
+        self.desktop_open_file(&app,path,t)
     }
     /// Checks the app `id`, writes its hand-off request with `write` (given the app's data folder) and opens the app.
     fn desktop_hand_off(&mut self,id:&str,t:f64,write:impl FnOnce(&std::path::Path)->std::io::Result<()>)->Result<(),String> {

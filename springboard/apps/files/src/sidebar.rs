@@ -52,7 +52,66 @@ fn place_row(id: u32, place: &Place, header: Option<&str>) -> SidebarItem {
     }
 }
 
+/// Whether `path` is a folder of a volume that is not mounted any more (ejected here or elsewhere, or pulled out).
+/// Only a path under the media folders reads the mount table.
+pub(crate) fn lost_volume(path: &Path) -> bool {
+    use springboard::files::volumes;
+    if !volumes::under_media(path) {
+        return false;
+    }
+    let mounts: Vec<PathBuf> = volumes::mounted().into_iter().map(|v| v.mount).collect();
+    volumes::on_lost_volume(path, path.is_dir(), &mounts)
+}
+
+/// Drops the entries `lost` names from a navigation history and returns the position that replaces `at`: the nearest
+/// kept entry before it, else the first kept one. Equal neighbours the removal leaves become one entry. A history
+/// with no such entry is left as it is.
+pub(crate) fn forget_lost(history: &mut Vec<PathBuf>, at: usize, lost: &dyn Fn(&Path) -> bool) -> usize {
+    if !history.iter().any(|p| lost(p)) {
+        return at;
+    }
+    let mut kept: Vec<PathBuf> = Vec::with_capacity(history.len());
+    let mut new_at = 0;
+    for (i, p) in std::mem::take(history).into_iter().enumerate() {
+        if !lost(&p) && kept.last() != Some(&p) {
+            kept.push(p);
+        }
+        if i <= at {
+            new_at = kept.len().saturating_sub(1);
+        }
+    }
+    *history = kept;
+    new_at
+}
+
 impl Files {
+    /// A volume went away (this app ejected it, or the shell says the disks changed): every tab of this window and of
+    /// the New Window ones leaves its folders, and they leave every history, so Back and Forward never open a folder
+    /// that is gone. The window showing one opens the history entry that replaces it, or the home folder
+    /// (`navigate`). True when anything changed.
+    pub(crate) fn leave_lost_volumes(&mut self) -> bool {
+        let home = self.home.clone();
+        let mut changed = false;
+        for tab in self.tabs.items_mut() {
+            changed |= tab.leave_lost(&home, &lost_volume);
+        }
+        if lost_volume(&self.path) {
+            let gone = self.path.clone();
+            self.navigate(gone, false);
+            changed = true;
+        } else {
+            let before = self.history.len();
+            self.at = forget_lost(&mut self.history, self.at, &lost_volume);
+            changed |= self.history.len() != before;
+        }
+        for e in &mut self.windows {
+            changed |= e.files.leave_lost_volumes();
+        }
+        if changed {
+            self.revision += 1;
+        }
+        changed
+    }
     pub(crate) fn sidebar_bounds(&self) -> Rect {
         Rect { x: 0., y: 0., w: self.side(), h: self.h }
     }
@@ -138,7 +197,8 @@ impl Files {
     }
     /// Ejects a volume. A folder open inside it moves home first. The shell does the work (`system::eject_effect`
     /// picks the request: a disk image's volume, or a removable disk's); its event brings a failure, which the status
-    /// bar shows. The row goes away on the next sidebar build once the volume is gone.
+    /// bar shows. The row goes away on the next sidebar build once the volume is gone, and the event of an eject that
+    /// worked takes the volume's folders out of every tab, window and history (`leave_lost_volumes`).
     fn eject_volume(&mut self, name: &str, device: &str, mount: &Path) {
         if self.path.starts_with(mount) {
             let home = self.home.clone();
@@ -167,6 +227,43 @@ impl Files {
 mod tests {
     use super::*;
     use crate::tests::fixture;
+
+    #[test]
+    fn a_history_forgets_an_ejected_volume_and_keeps_its_place() {
+        let lost = |p: &Path| p.starts_with("/run/media/me/V");
+        let paths = |list: &[&str]| list.iter().map(PathBuf::from).collect::<Vec<_>>();
+        // on the volume, with a folder before it and one after: the place is the folder before it
+        let mut h = paths(&["/home/me", "/run/media/me/V", "/run/media/me/V/a", "/tmp"]);
+        assert_eq!(forget_lost(&mut h, 2, &lost), 0);
+        assert_eq!(h, paths(&["/home/me", "/tmp"]));
+        // nothing before the volume: the first folder that is kept
+        let mut h = paths(&["/run/media/me/V", "/tmp"]);
+        assert_eq!(forget_lost(&mut h, 0, &lost), 0);
+        assert_eq!(h, paths(&["/tmp"]));
+        // home, the volume, home again (Eject moved the window home): one entry, not two of the same
+        let mut h = paths(&["/home/me", "/run/media/me/V", "/home/me", "/tmp"]);
+        assert_eq!(forget_lost(&mut h, 3, &lost), 1);
+        assert_eq!(h, paths(&["/home/me", "/tmp"]));
+        // only the volume: nothing is left, and the caller opens the home folder
+        let mut h = paths(&["/run/media/me/V"]);
+        assert_eq!(forget_lost(&mut h, 0, &lost), 0);
+        assert!(h.is_empty());
+        // a history that never saw the volume is not touched, repeats included
+        let mut h = paths(&["/home/me", "/home/me", "/tmp"]);
+        assert_eq!(forget_lost(&mut h, 2, &lost), 2);
+        assert_eq!(h.len(), 3);
+    }
+
+    #[test]
+    fn folders_outside_the_media_folders_are_never_a_lost_volume() {
+        assert!(!lost_volume(Path::new("/fixture/gone")));
+        assert!(!lost_volume(Path::new("/home/me/removed")));
+        // a window with no volume in sight changes nothing
+        let mut files = fixture(vec![]);
+        let before = (files.path.clone(), files.history.clone(), files.at, files.revision);
+        assert!(!files.leave_lost_volumes());
+        assert_eq!((files.path.clone(), files.history.clone(), files.at, files.revision), before);
+    }
 
     #[test]
     fn locations_glyphs_are_grey_while_favorites_recents_and_tags_keep_their_look() {

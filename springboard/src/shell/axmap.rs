@@ -159,7 +159,7 @@ impl Shell {
             map.add("os/apps", "app", a.name, state, true, None, &format!("open:{}", a.icon));
         }
         // every running app process: the elements it declared, else the ones the kit's draw helpers recorded
-        for host in self.ext.iter().flatten() {
+        for host in self.ext.iter().flatten().filter(|h| h.running()) {
             let scope = format!("app/{}", host.id);
             add_app_tree(&mut map, &scope, &host.controls, &host.controls_tree, &mut st);
             add_app_actions(&mut map, &scope, &host.ax_actions);

@@ -161,10 +161,16 @@ impl Files {
             }
             MENU_SELECT_MODE => self.select_mode = !self.select_mode,
             // the view pop-up: the same switches as the four buttons and Cmd+1 to Cmd+4
-            MENU_VIEW_ICONS => self.set_view(true, false),
-            MENU_VIEW_LIST => self.set_view(false, false),
-            MENU_VIEW_COLUMNS => self.set_view(false, true),
-            MENU_VIEW_GALLERY => self.set_gallery(),
+            // a view switch keeps the place: it does not go back to the top as a new sort does
+            MENU_VIEW_ICONS | MENU_VIEW_LIST | MENU_VIEW_COLUMNS | MENU_VIEW_GALLERY => {
+                match id {
+                    MENU_VIEW_ICONS => self.set_view(true, false),
+                    MENU_VIEW_LIST => self.set_view(false, false),
+                    MENU_VIEW_COLUMNS => self.set_view(false, true),
+                    _ => self.set_gallery(),
+                }
+                return true;
+            }
             _ => return false,
         }
         self.scroll = 0.;

@@ -529,12 +529,23 @@ impl super::Shell {
         map_files(items, &mapping)
     }
 
-    /// Draws the drag image at the pointer while a session is live.
+    /// Draws the drag image at the pointer while a session is live. On the desktop under the window server this frame
+    /// sits under every window, so the image is a surface of its own there instead (`dnd_overlay`).
     pub(super) fn dnd_draw(&self, s: &mut bifrost_render::gfx::Surface) {
         let Some(sess) = &self.dnd.session else { return };
         let (Some((x, y)), Some(img)) = (sess.pos, preview_image(&sess.preview)) else { return };
         let (ix, iy) = drag_image_origin(&sess.preview, (x, y), self.layout.s);
-        s.blit(&img, ix, iy, 255, 200);
+        s.blit(&img, ix, iy, 255, DRAG_IMAGE_ALPHA as u32);
+    }
+
+    /// The drag image as a surface of its own above the windows (`desktop_chrome_frames`, id `chrome_ids::DRAG_IMAGE`):
+    /// its position, size and pixels. Drawn into the shell's frame it was under the windows, so a drag showed no image
+    /// over the window it began in or over any other. None without a live session whose pointer has moved.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(super) fn dnd_overlay(&self) -> Option<(i32, i32, usize, usize, Vec<u32>)> {
+        let sess = self.dnd.session.as_ref()?;
+        let origin = drag_image_origin(&sess.preview, sess.pos?, self.layout.s);
+        drag_overlay(&sess.preview, origin, self.layout.s, (self.w.max(0) as usize, self.h.max(0) as usize))
     }
 
     /// Where the drag image sits (with a margin), for the desktop's cleared regions: the GPU path owns the wallpaper, so
@@ -555,6 +566,37 @@ impl super::Shell {
 fn drag_image_origin(p: &DragPreview, (x, y): (f32, f32), k: f32) -> (i32, i32) {
     let k = k.max(1.0);
     ((x - p.w as f32 * k / 2.0) as i32, (y - p.h as f32 * k / 2.0) as i32)
+}
+
+/// How opaque the drag image is, of 255: the lifted item lets what is under it show.
+const DRAG_IMAGE_ALPHA: u8 = 200;
+
+/// The drag image as the pixels of a surface of its own: the preview at UI scale `k` (never below 1, sampled
+/// nearest), premultiplied at the drag opacity, its top left at `origin` and clipped to the `screen` (w, h). Returns
+/// the surface's position, size and pixels; None when the preview is empty or not valid, or nothing of it is on the
+/// screen.
+pub fn drag_overlay(p: &DragPreview, origin: (i32, i32), k: f32, screen: (usize, usize)) -> Option<(i32, i32, usize, usize, Vec<u32>)> {
+    if !p.valid() || p.w == 0 || p.h == 0 {
+        return None;
+    }
+    let k = k.max(1.0);
+    let (w, h) = ((p.w as f32 * k).round() as i32, (p.h as f32 * k).round() as i32);
+    let (x0, y0) = (origin.0.max(0), origin.1.max(0));
+    let (x1, y1) = ((origin.0 + w).min(screen.0 as i32), (origin.1 + h).min(screen.1 as i32));
+    if x1 <= x0 || y1 <= y0 {
+        return None;
+    }
+    let (pw, ph) = (p.w as usize, p.h as usize);
+    let mut px = Vec::with_capacity(((x1 - x0) * (y1 - y0)) as usize);
+    for y in y0..y1 {
+        let sy = (((y - origin.1) as f32 / k) as usize).min(ph - 1);
+        for x in x0..x1 {
+            let sx = (((x - origin.0) as f32 / k) as usize).min(pw - 1);
+            let c = &p.rgba[(sy * pw + sx) * 4..(sy * pw + sx) * 4 + 4];
+            px.push(bifrost_render::gfx::rgba(c[0], c[1], c[2], (c[3] as u32 * DRAG_IMAGE_ALPHA as u32 / 255) as u8));
+        }
+    }
+    Some((x0, y0, (x1 - x0) as usize, (y1 - y0) as usize, px))
 }
 
 /// Replaces each file's grant by the one made for the destination; a file that could not be handed over is dropped (and an
@@ -751,6 +793,25 @@ mod tests {
         assert_eq!(drag_image_origin(&p, (100.0, 50.0), 1.0), (84, 40));
         assert_eq!(drag_image_origin(&p, (100.0, 50.0), 0.5), (84, 40), "the scale never shrinks below 1");
         assert_eq!(drag_image_origin(&p, (100.0, 50.0), 2.0), (68, 30));
+    }
+
+    #[test]
+    fn the_drag_image_overlay_is_scaled_translucent_and_clipped_to_the_screen() {
+        // 2 by 1: an opaque red pixel and a clear one
+        let p = DragPreview { w: 2, h: 1, rgba: vec![255, 0, 0, 255, 0, 0, 0, 0] };
+        let red = bifrost_render::gfx::rgba(255, 0, 0, DRAG_IMAGE_ALPHA);
+        // at scale 1 the surface is the preview, at the drag opacity
+        assert_eq!(drag_overlay(&p, (10, 20), 1.0, (100, 100)), Some((10, 20, 2, 1, vec![red, 0])));
+        // at scale 2 each pixel covers two by two, so the surface matches the origin `drag_image_origin` centres
+        assert_eq!(drag_overlay(&p, (10, 20), 2.0, (100, 100)), Some((10, 20, 4, 2, vec![red, red, 0, 0, red, red, 0, 0])));
+        // half off the left edge: only the part on the screen is a surface
+        assert_eq!(drag_overlay(&p, (-2, 0), 2.0, (100, 100)), Some((0, 0, 2, 2, vec![0, 0, 0, 0])));
+        // past the right and bottom edges, off the screen, or without an image: no surface
+        assert_eq!(drag_overlay(&p, (99, 99), 2.0, (100, 100)), Some((99, 99, 1, 1, vec![red])));
+        assert_eq!(drag_overlay(&p, (100, 0), 1.0, (100, 100)), None);
+        assert_eq!(drag_overlay(&p, (-4, 0), 2.0, (100, 100)), None);
+        assert_eq!(drag_overlay(&DragPreview::default(), (0, 0), 1.0, (100, 100)), None);
+        assert_eq!(drag_overlay(&DragPreview { w: 4, h: 4, rgba: vec![0; 3] }, (0, 0), 1.0, (100, 100)), None);
     }
 
     #[test]

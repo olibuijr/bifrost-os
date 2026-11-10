@@ -296,8 +296,7 @@ impl Files {
         self.vo.depth.get(i).copied().unwrap_or(0)
     }
     pub(crate) fn set_gallery(&mut self) {
-        self.set_view(false, false);
-        self.vo.gallery = true;
+        self.switch_view(false, false, true);
     }
     /// Sorts a listing the way the view settings say: by `sort` (reversed when not ascending), grouped if asked.
     pub(crate) fn order(&self, v: &mut Vec<Entry>) {
@@ -396,7 +395,7 @@ impl Files {
     // ---- gallery ----
 
     /// The strip's top edge, how many thumbnails fit, and the first one shown (the focus is kept in view).
-    fn strip_geom(&self, visible: &[usize]) -> (f32, usize, usize) {
+    pub(crate) fn strip_geom(&self, visible: &[usize]) -> (f32, usize, usize) {
         let cols = (((self.w - (self.side() + 16.) - 8.) / STRIP_CELL).floor().max(1.)) as usize;
         let at = self.focus().and_then(|f| visible.iter().position(|&j| j == f)).unwrap_or(0);
         let first = at.saturating_sub(cols / 2).min(visible.len().saturating_sub(cols));

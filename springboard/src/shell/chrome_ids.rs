@@ -58,9 +58,12 @@ pub const LOOK_UP: u32 = 43;
 /// The title bar or toolbar a full-screen window reveals under the menu bar while the bar is shown over it
 /// (`Shell::desk_reveal`).
 pub const REVEAL: u32 = 44;
+/// The image of a drag between windows (`Shell::dnd_overlay`): it follows the pointer above every window and takes
+/// neither the pointer nor the keyboard.
+pub const DRAG_IMAGE: u32 = 45;
 
 /// Every single-surface id; none may repeat or fall in the submenu range.
-pub const SINGLES: [u32; 22] = [
+pub const SINGLES: [u32; 23] = [
     BAR,
     POPUP,
     DOCK,
@@ -83,6 +86,7 @@ pub const SINGLES: [u32; 22] = [
     FOCUS_RING,
     LOOK_UP,
     REVEAL,
+    DRAG_IMAGE,
 ];
 
 /// Whether `id` is one of the cascading submenus' surfaces.

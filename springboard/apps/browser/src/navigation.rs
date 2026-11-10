@@ -182,9 +182,24 @@ impl Browser {
         true
     }
 
+    /// The address shown for the page at `url`: its own, except for a private copy of a file the browser was handed,
+    /// which is shown as the file it was made from (`Uploads::shown`).
+    pub(super) fn shown_url(&self, url: &str) -> String {
+        self.uploads.shown(url).unwrap_or_else(|| url.to_string())
+    }
+
+    /// Whether `url` is a private copy of a handed file. It lasts as long as the window, so it is kept out of the
+    /// history, the bookmarks and the saved session.
+    pub(super) fn private_copy(&self, url: &str) -> bool {
+        self.uploads.shown(url).is_some()
+    }
+
     /// Clicking the address field's star: bookmarks the open page, or removes its bookmark when it has one.
     pub(super) fn toggle_bookmark(&mut self) {
         let Some((url, title)) = self.view().and_then(|v| self.pool.as_ref()?.state(v)).map(|st| (st.url.clone(), st.title.clone())) else { return };
+        if self.private_copy(&url) {
+            return;
+        }
         self.store.toggle_bookmark(&url, &title, store::now());
     }
 
@@ -203,6 +218,7 @@ impl Browser {
         if let Some(o) = self.view().and_then(|v| self.reader.original(v)) {
             url = o.to_string();
         }
+        let url = self.shown_url(&url);
         self.address.clear();
         if url != START {
             self.address.push_str(&url);
@@ -239,6 +255,16 @@ impl Browser {
             return;
         }
         let url = self.prefs.url_for_input(&text);
+        // the address shown for a private copy of a handed file loads that copy again
+        if let Some(copy) = self.uploads.copy_for(&text).or_else(|| self.uploads.copy_for(&url)) {
+            if let (Some(v), Some(p)) = (self.view(), self.pool.as_mut()) {
+                self.net.forget(v);
+                p.load(v, &copy);
+            }
+            self.address.clear();
+            self.address.push_str(text.trim());
+            return;
+        }
         if let Some(v) = self.view() {
             self.load_chosen(v, &url);
         }

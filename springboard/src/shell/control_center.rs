@@ -650,6 +650,8 @@ impl Shell {
         self.ext
             .iter()
             .flatten()
+            // a host whose app exited keeps its slot until the app is opened again: it is not running
+            .filter(|h| h.running())
             .flat_map(|h| {
                 // the controls the app's manifest declares (`[[control]]`); the host's `controls` is its UI tree
                 let declared = super::apphost::installed()

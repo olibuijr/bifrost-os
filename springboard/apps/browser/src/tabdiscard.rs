@@ -337,7 +337,8 @@ impl Browser {
     pub(crate) fn history_pages(&self) -> (Vec<(usize, String)>, Vec<(usize, String)>) {
         let none: &[String] = &[];
         let (list, index) = self.view().and_then(|v| self.discard.entries(v)).unwrap_or((none, 0));
-        menu_entries(list, index, MENU_LIMIT)
+        let shown: Vec<String> = list.iter().map(|url| self.shown_url(url)).collect();
+        menu_entries(&shown, index, MENU_LIMIT)
     }
 
     /// Called from `tick`: discards tabs whose probe answered or timed out, and every `SWEEP_S` picks new ones.

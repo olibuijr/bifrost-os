@@ -3863,7 +3863,13 @@ impl Settings {
             Toggle::KeyboardClicks => flip(&mut self.opts.keyboard_clicks),
             Toggle::KeyboardHaptics => flip(&mut self.opts.keyboard_haptics),
             Toggle::LockSound => flip(&mut self.opts.lock_sound),
-            Toggle::Clock24 => flip(&mut self.opts.clock_24h),
+            Toggle::Clock24 => {
+                let on = flip(&mut self.opts.clock_24h);
+                // the rows that write a time (Date & Time's own Time row first) are text built with the page: build
+                // the page again, or the row keeps the old style until the next minute's info arrives
+                self.rebuild_visible(ui);
+                on
+            }
             Toggle::ClockDate => flip(&mut self.opts.clock_date),
             Toggle::ClockDay => flip(&mut self.opts.clock_day),
             Toggle::Layout(i) => super::kb_layouts::toggle(super::kb_layouts::Layout::ALL[i.min(super::kb_layouts::Layout::ALL.len() - 1)]),
@@ -3933,6 +3939,9 @@ impl Settings {
                 if let Err(e) = prefs.set("time_auto", if auto { "1" } else { "0" }) {
                     eprintln!("springboard: settings.ini: {e}");
                 }
+                // the Time row opens the clock sheet only while the time is set by hand: build the page again, since
+                // the shell's next info already agrees with this flag and so would not
+                self.rebuild_visible(ui);
                 auto
             }
             Toggle::LowPower => flip(&mut self.opts.low_power),

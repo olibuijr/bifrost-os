@@ -43,9 +43,13 @@ pub(super) struct Uploads {
     pending: Option<Request>,
     copying: Option<Copying>,
     retained: HashMap<WebViewId, Vec<Staged>>,
-    /// Private copies of the files the browser was handed to open (a double click in Files, Open With). A tab may load
-    /// its file again at any time, so they stay until the window closes.
+    /// Private copies of the handed files (a double click in Files, Open With) the browser cannot read where they are.
+    /// A tab may load its file again at any time, so they stay until the window closes.
     opened: Vec<Staged>,
+    /// What each private copy is shown as: the copy's `file:` URL and the address of the file it was made from.
+    copies: Vec<(String, String)>,
+    /// The `file:` URL of the folder the private copies are under, ending in a slash.
+    private: Option<String>,
     /// `file:` URLs of handed files that no tab shows yet (`take_handed`).
     handed: Vec<String>,
     pub(super) error: Option<String>,
@@ -84,9 +88,21 @@ impl Uploads {
             }
             WebViewEvent::LoadCommitted(view) | WebViewEvent::Closed(view) | WebViewEvent::ContentProcessTerminated(view, _) => self.forget(*view, pool),
             // the picker requests die with the engine; the handed files are still on disk for the tabs that come back
-            WebViewEvent::EngineExited => *self = Self { opened: std::mem::take(&mut self.opened), handed: std::mem::take(&mut self.handed), ..Self::default() },
+            WebViewEvent::EngineExited => self.reset(),
             _ => {}
         }
+    }
+
+    /// Forgets the file choosers of an engine that is gone. The handed files stay: their tabs come back and load them
+    /// again, and the private copies keep the address they are shown under.
+    pub(super) fn reset(&mut self) {
+        *self = Self {
+            opened: std::mem::take(&mut self.opened),
+            copies: std::mem::take(&mut self.copies),
+            private: self.private.take(),
+            handed: std::mem::take(&mut self.handed),
+            ..Self::default()
+        };
     }
 
     pub(super) fn cancel_pending(&mut self, pool: &mut Option<WebProcessPool>) {
@@ -144,16 +160,54 @@ impl Uploads {
         true
     }
 
-    /// Copies handed files into a private folder under `base` and queues a `file:` URL for each. The engine loads
-    /// paths, not descriptors, and the browser holds the file only as an open descriptor.
+    /// Queues a `file:` URL for each handed file. A file the browser can read where it is (the account's home is part
+    /// of its sandbox) is loaded from there, so the address is the file's own and the pictures and style sheets beside
+    /// it load. Any other file reaches the browser only as an open descriptor, and the engine loads paths: it is
+    /// copied into a private folder under `base` and shown under the address it came from (`shown`).
     fn hand_over(&mut self, base: &Path, docs: Vec<Document>) {
-        match stage(base, docs, MAX_BATCH_BYTES) {
+        let mut apart = Vec::new();
+        for doc in docs {
+            match readable_in_place(&doc.file).and_then(|path| url::Url::from_file_path(path).ok()) {
+                Some(url) => self.handed.push(url.into()),
+                None => apart.push(doc),
+            }
+        }
+        if apart.is_empty() { return; }
+        let shown: Vec<String> = apart.iter().map(|doc| shown_address(opened_from(&doc.file).as_deref(), &doc.name)).collect();
+        match stage(base, apart, MAX_BATCH_BYTES) {
             Ok(batch) => {
-                self.handed.extend(batch.paths.iter().filter_map(|path| url::Url::from_file_path(path).ok()).map(String::from));
+                self.private = url::Url::from_directory_path(base).ok().map(String::from);
+                for (path, shown) in batch.paths.iter().zip(shown) {
+                    let Some(url) = url::Url::from_file_path(path).ok().map(String::from) else { continue };
+                    self.copies.push((url.clone(), shown));
+                    self.handed.push(url);
+                }
                 self.opened.push(batch);
             }
             Err(_) => self.error = Some("The file could not be opened.".into()),
         }
+    }
+
+    /// The address to show for the page at `url` when it is one of the private copies: the place the file was opened
+    /// from, or its name when that is not known. Only the exact URL of a copy this window made is mapped (a query or
+    /// fragment is carried over). Anything else in the private folder (a link to a file that was beside the original)
+    /// is shown by its name alone, never as the folder. `None` for every other page.
+    pub(super) fn shown(&self, url: &str) -> Option<String> {
+        let (page, rest) = split_suffix(url);
+        if let Some((_, shown)) = self.copies.iter().rev().find(|(copy, _)| copy == page) {
+            return Some(format!("{shown}{rest}"));
+        }
+        let private = self.private.as_deref()?;
+        if !page.starts_with(private) { return None; }
+        let name = url::Url::parse(page).ok().and_then(|u| u.to_file_path().ok()).and_then(|p| Some(p.file_name()?.to_string_lossy().into_owned()));
+        Some(name.unwrap_or_default())
+    }
+
+    /// The private copy an address typed or pasted into the address field names: the reverse of `shown`, by exact
+    /// match, so Return on the shown address loads the same document again.
+    pub(super) fn copy_for(&self, address: &str) -> Option<String> {
+        let (page, rest) = split_suffix(address.trim());
+        self.copies.iter().rev().find(|(_, shown)| shown == page).map(|(copy, _)| format!("{copy}{rest}"))
     }
 
     /// The URLs of the handed files that are ready, each to be shown in a new tab.
@@ -172,6 +226,37 @@ impl Uploads {
         }
         true
     }
+}
+
+/// `url` without its query and fragment, and that rest.
+fn split_suffix(url: &str) -> (&str, &str) {
+    url.split_at(url.find(['?', '#']).unwrap_or(url.len()))
+}
+
+/// The path a handed descriptor was opened from, as the kernel reports it (`/proc/self/fd`). It follows a rename; a
+/// removed file has none that names it.
+fn opened_from(file: &fs::File) -> Option<PathBuf> {
+    use std::os::unix::io::AsRawFd;
+    fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd())).ok().filter(|path| path.is_absolute())
+}
+
+/// The path of a handed file when the browser can read that very file there: the path opens and gives the same device
+/// and inode as the descriptor. In a sandbox that shows something else at the path, or nothing, this is `None`.
+fn readable_in_place(file: &fs::File) -> Option<PathBuf> {
+    use std::os::unix::fs::MetadataExt;
+    let path = opened_from(file)?;
+    path.to_str()?;
+    let (handed, there) = (file.metadata().ok()?, fs::File::open(&path).ok()?.metadata().ok()?);
+    (there.is_file() && handed.dev() == there.dev() && handed.ino() == there.ino()).then_some(path)
+}
+
+/// The address a private copy is shown under: the `file:` URL of the place it was opened from when the kernel's path
+/// ends in the name the shell gave the file, else that name alone.
+fn shown_address(from: Option<&Path>, name: &str) -> String {
+    let name = Path::new(name).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    from.filter(|path| path.is_absolute() && path.to_str().is_some() && path.file_name().is_some_and(|n| n.to_string_lossy() == name))
+        .and_then(|path| url::Url::from_file_path(path).ok())
+        .map_or(name, String::from)
 }
 
 fn stage(base: &Path, docs: Vec<Document>, budget: u64) -> io::Result<Staged> {
@@ -221,25 +306,84 @@ mod tests {
         Document { request: bifrost_app::share::INBOUND | 1, grant: [7; 16], name: name.into(), size: bytes.len() as u64, mode: bifrost_app::proto::DocMode::Read, file: fs::File::open(&source).unwrap() }
     }
 
-    #[test]
-    fn a_handed_file_becomes_a_file_url_for_a_new_tab() {
-        let dir = std::env::temp_dir().join(format!("browser-handed-{}", std::process::id()));
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("browser-handed-{tag}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_handed_file_the_browser_can_read_loads_from_its_own_place() {
+        let dir = scratch("place");
         let mut uploads = Uploads::default();
         uploads.hand_over(&dir.join("opened-files"), vec![handed(&dir, "ok.svg", b"<svg/>"), handed(&dir, "page one.html", b"<p>")]);
         let urls = uploads.take_handed();
-        assert_eq!(urls.len(), 2, "one tab per file: {urls:?}");
-        assert!(urls[0].starts_with("file:///") && urls[0].ends_with("/ok.svg"), "{urls:?}");
+        let own = |name: &str| String::from(url::Url::from_file_path(fs::canonicalize(&dir).unwrap().join(name)).unwrap());
+        assert_eq!(urls, [own("ok.svg"), own("page one.html")], "one tab per file, at the file's own address");
         assert!(urls[1].ends_with("/page%20one.html"), "{urls:?}");
-        let copy = url::Url::parse(&urls[0]).unwrap().to_file_path().unwrap();
-        assert!(copy.starts_with(dir.join("opened-files")), "the engine reads a private copy: {copy:?}");
-        assert_eq!(fs::read(&copy).unwrap(), b"<svg/>");
+        assert!(!dir.join("opened-files").exists(), "nothing is copied");
+        assert_eq!(uploads.shown(&urls[0]), None, "the address is shown as it is");
         assert!(uploads.take_handed().is_empty(), "a file opens once");
         assert!(uploads.error.is_none());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_handed_file_out_of_reach_is_copied_and_shown_by_its_name_not_the_private_path() {
+        let dir = scratch("copy");
+        let doc = handed(&dir, "page one.html", b"<p>");
+        // no path names the file any more: only the descriptor reads it
+        fs::remove_file(dir.join("page one.html")).unwrap();
+        let mut uploads = Uploads::default();
+        uploads.hand_over(&dir.join("opened-files"), vec![doc]);
+        let urls = uploads.take_handed();
+        assert_eq!(urls.len(), 1);
+        let copy = url::Url::parse(&urls[0]).unwrap().to_file_path().unwrap();
+        assert!(copy.starts_with(dir.join("opened-files")), "the engine reads a private copy: {copy:?}");
+        assert_eq!(fs::read(&copy).unwrap(), b"<p>");
+        assert_eq!(uploads.shown(&urls[0]).as_deref(), Some("page one.html"));
+        assert_eq!(uploads.shown(&format!("{}#top", urls[0])).as_deref(), Some("page one.html#top"));
+        // Return on the shown address loads the same copy
+        assert_eq!(uploads.copy_for(" page one.html ").as_deref(), Some(urls[0].as_str()));
+        assert_eq!(uploads.copy_for("page one.html#top"), Some(format!("{}#top", urls[0])));
+        assert_eq!(uploads.copy_for("other.html"), None);
+        // the engine going away keeps the copy and its address
+        uploads.reset();
+        assert!(copy.exists());
+        assert_eq!(uploads.shown(&urls[0]).as_deref(), Some("page one.html"));
         // the copies go with the window
         drop(uploads);
         assert!(!copy.exists());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn only_the_exact_copy_is_shown_under_the_original_address() {
+        let private = "file:///data/opened-files/";
+        let copy = format!("{private}7-1/0/page.html");
+        let uploads = Uploads { copies: vec![(copy.clone(), "file:///home/u/page.html".into())], private: Some(private.into()), ..Uploads::default() };
+        assert_eq!(uploads.shown(&copy).as_deref(), Some("file:///home/u/page.html"));
+        assert_eq!(uploads.shown(&format!("{copy}?a=1#b")).as_deref(), Some("file:///home/u/page.html?a=1#b"));
+        assert_eq!(uploads.copy_for("file:///home/u/page.html").as_deref(), Some(copy.as_str()));
+        // a file beside the copy (a relative link) is not the original: its name alone, never the private folder
+        assert_eq!(uploads.shown(&format!("{private}7-1/0/other.html")).as_deref(), Some("other.html"));
+        assert_eq!(uploads.shown(&format!("{private}7-1/0/")).as_deref(), Some("0"));
+        // longer, shorter and look-alike addresses are not the copy
+        for other in [format!("{copy}/x"), format!("{copy}x"), "file:///data/opened-files-2/page.html".to_string(), "file:///home/u/page.html".to_string(), "https://a.test/file:///data/opened-files/7-1/0/page.html".to_string()] {
+            assert!(uploads.shown(&other).map_or(true, |shown| !shown.contains("/home/u/")), "{other}");
+        }
+        assert_eq!(uploads.shown("file:///home/u/page.html"), None);
+        assert_eq!(uploads.shown("https://a.test/"), None);
+        assert_eq!(uploads.copy_for("file:///home/u/../u/page.html"), None, "the shown address is matched as text");
+    }
+
+    #[test]
+    fn a_copy_is_shown_under_the_place_it_came_from_only_when_the_names_agree() {
+        assert_eq!(shown_address(Some(Path::new("/home/u/My Files/page one.html")), "page one.html"), "file:///home/u/My%20Files/page%20one.html");
+        assert_eq!(shown_address(Some(Path::new("/home/u/page.html (deleted)")), "page.html"), "page.html");
+        assert_eq!(shown_address(Some(Path::new("u/page.html")), "page.html"), "page.html");
+        assert_eq!(shown_address(None, "page.html"), "page.html");
+        assert_eq!(shown_address(None, "../../etc/page.html"), "page.html", "a name is never a path");
     }
 }

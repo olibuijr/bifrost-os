@@ -541,7 +541,8 @@ impl Files {
 
     /// The shell finished opening or ejecting a disk image, or ejecting a removable volume (`disks` events
     /// `image_attached`, `image_detached`, `volume_ejected`). An opened image's volume is shown in this window; every
-    /// failure becomes a notice naming the image or the volume.
+    /// failure becomes a notice naming the image or the volume. After an eject that worked, and on any other `disks`
+    /// event, the windows leave the folders of volumes that are gone (`leave_lost_volumes`).
     pub(crate) fn image_event(&mut self, event: &str, body: &bifrost_core::json::Json) -> bool {
         let ok = body.get("ok") == Some(&bifrost_core::json::Json::Bool(true));
         let error = body.str_field("error").unwrap_or_default();
@@ -554,13 +555,18 @@ impl Files {
                     None => self.notice = Some(image_notice(&name, &error)),
                 }
             }
-            disk_image::E_DETACHED | volume_eject::E_EJECTED if ok => {}
+            // the volume is gone: no tab, window or history keeps a folder of it
+            disk_image::E_DETACHED | volume_eject::E_EJECTED if ok => {
+                self.leave_lost_volumes();
+            }
             disk_image::E_DETACHED | volume_eject::E_EJECTED => {
                 let target = body.str_field("target").unwrap_or_default();
                 let name = self.places().into_iter().find(|p| p.eject.as_deref() == Some(target.as_str())).map(|p| p.label).unwrap_or(target);
                 self.notice = Some(springboard::files::volumes::eject_notice(&name, &error, &[]));
             }
-            _ => return false,
+            // a disk appeared, went away or changed (`disk_appeared`, `disk_disappeared`, `disk_description_changed`,
+            // sent to the apps that may hear the `disks` service): a volume may have been unmounted elsewhere
+            _ => return self.leave_lost_volumes(),
         }
         // the sidebar lists the volumes mounted now
         self.revision += 1;

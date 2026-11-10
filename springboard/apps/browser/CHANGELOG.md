@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.15
+
+- A file opened with the browser (a double click in Files, Open With) is shown at its own address, `file:///home/…/page.html`, and loads from there, so the pictures and style sheets beside it load too. Before, the address field showed the path of a private copy in the app's data folder.
+- A file the browser cannot read where it is still opens from a private copy, now shown under the address it came from (or its name alone), never the copy's path. Return on that address loads the same document; such a page stays out of the history, the bookmarks and the saved tabs, and survives a change of renderer.
+
 ## 0.17.14
 
 - A page that declares a dark colour scheme and sets no background has a dark page behind its light text, whether the scheme comes from its CSS or only from a `color-scheme` meta element. A page that supports both light and dark follows the system appearance. A page that declares nothing stays light. Engine 0.7.0-bifrost.17.

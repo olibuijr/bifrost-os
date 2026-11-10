@@ -912,11 +912,14 @@ impl Shell {
         let prev = &self.info;
         let low = |b: u8| if b <= 10 { 2 } else if b <= 20 { 1 } else { 0 };
         let mut posts = Vec::new();
-        if !next.charging && low(next.battery) > low(prev.battery) {
+        // only a system battery read on both sides makes a transition: a machine without one carries a stand-in
+        // level (`power::battery`, 100% on mains) that is no reading and must never be announced
+        let battery = prev.battery_present && next.battery_present;
+        if battery && !next.charging && low(next.battery) > low(prev.battery) {
             posts.push(Notification::new(AppId::Settings, "Low Battery", format!("{}% battery remaining.", next.battery), now));
         }
         let full = |i: &Info| i.charging && i.battery >= 100;
-        if full(next) && !full(prev) {
+        if battery && full(next) && !full(prev) {
             posts.push(Notification::new(AppId::Settings, "Battery Charged", "Your battery is fully charged.", now));
         }
         if next.online != prev.online {
@@ -1738,6 +1741,7 @@ mod tests {
         unlock(&mut sh);
         sh.tick(1000.0);
         let mut next = sh.info.clone();
+        next.battery_present = true;
         next.battery = 21;
         sh.set_info(next.clone());
         assert_eq!(sh.notify.store().len(), 0);
@@ -1778,6 +1782,49 @@ mod tests {
         next.wired = true;
         sh.set_info(next.clone());
         assert_eq!(sh.notify.store().len(), 5, "wired links post no Wi-Fi notice");
+    }
+
+    #[test]
+    fn a_machine_without_a_battery_posts_no_battery_notice() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.tick(1000.0);
+        // what the shell carries on a desktop: no system battery, and the power policy's stand-in of 100% on mains
+        let mut next = Info { battery_present: false, battery: 50, charging: false, ..sh.info.clone() };
+        sh.set_info(next.clone());
+        next.battery = 100;
+        next.charging = true;
+        sh.set_info(next.clone());
+        assert_eq!(sh.notify.store().len(), 0, "no battery, no Battery Charged");
+        next.battery = 5;
+        next.charging = false;
+        sh.set_info(next.clone());
+        assert_eq!(sh.notify.store().len(), 0, "no battery, no Low Battery");
+    }
+
+    #[test]
+    fn redrawing_the_clock_in_another_style_posts_no_notice() {
+        let mut sh = shell();
+        unlock(&mut sh);
+        sh.tick(1000.0);
+        // a full battery on the charger and a joined network, both already shown
+        let mut next = Info { battery_present: true, battery: 100, charging: false, ..sh.info.clone() };
+        sh.set_info(next.clone());
+        next.charging = true;
+        next.online = true;
+        next.current_ssid = Some("Home".into());
+        sh.set_info(next.clone());
+        assert_eq!(sh.notify.store().len(), 1, "the transition seen while running posts once");
+        // Settings > Date & Time > 24-Hour Time: the same information is drawn again
+        for on in ["0", "1", "0"] {
+            sh.prefs.set("clock_24h", on).unwrap();
+            sh.apply_options();
+            assert_eq!(sh.notify.store().len(), 1, "a style change is not a charge or a join");
+            assert_eq!(sh.info, next, "the shown information is kept");
+        }
+        next.min += 1;
+        sh.set_info(next.clone());
+        assert_eq!(sh.notify.store().len(), 1, "and the next reading compares against the real one");
     }
 
     #[test]

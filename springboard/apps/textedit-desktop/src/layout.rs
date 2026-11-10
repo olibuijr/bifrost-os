@@ -2,7 +2,7 @@
 //! tab stops, and the mapping between a text position and a point (the caret, a click). Pure: the widths come from a
 //! `Measure` the caller supplies, so the rules are tested with fixed widths and the window draws with the real font.
 
-use crate::text::{is_break, Align, Cell, ListKind, Style, DEFAULT_SIZE, DEFAULT_TAB, SPACINGS};
+use crate::text::{is_break, Align, Cell, ListKind, Style, BODY_SIZE, DEFAULT_SIZE, DEFAULT_TAB, SPACINGS};
 
 /// Line height as a multiple of the largest size on the line.
 pub const LINE_FACTOR: f32 = 1.25;
@@ -179,12 +179,15 @@ fn push_line(out: &mut Vec<Line>, cells: &[Cell], start: usize, end: usize, widt
     *top += height;
 }
 
-/// The height of a line: the largest size on it. An empty line takes the size of the newline that ends it.
+/// The height of a line: the largest size on it. An empty line takes the size of the newline that ends it; the empty
+/// line after the last newline takes that newline's size, and the one line of an empty document the size of new text
+/// (`BODY_SIZE`): the sizes typing there gets (`Text::sync_typing`), so the caret does not change height at the first
+/// character.
 fn line_height(cells: &[Cell], start: usize, end: usize) -> f32 {
     let size = if start < end {
         cells[start..end].iter().map(|c| c.style.size).fold(0.0, f32::max)
     } else {
-        cells.get(end).map_or(DEFAULT_SIZE, |c| c.style.size)
+        cells.get(end).or(cells.last()).map_or(BODY_SIZE, |c| c.style.size)
     };
     size * LINE_FACTOR
 }
@@ -385,6 +388,13 @@ mod tests {
     fn an_empty_document_has_one_line_and_a_trailing_break_adds_one() {
         let empty = layout(&[], 100.0, &one);
         assert_eq!(empty.lines.len(), 1);
+        assert_eq!(empty.lines[0].height, BODY_SIZE * LINE_FACTOR, "as tall as the text typed into it will be");
+        // the empty line after the last break is as tall as text typed there: the size of that break
+        let mut big = cells("ab\n");
+        for cell in &mut big {
+            cell.style.size = 24.0;
+        }
+        assert_eq!(layout(&big, 100.0, &one).lines[1].height, 24.0 * LINE_FACTOR);
         let c = cells("ab\n");
         let l = layout(&c, 100.0, &one);
         assert_eq!(l.lines.len(), 2);

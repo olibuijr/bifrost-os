@@ -42,6 +42,24 @@ pub(crate) struct TabState {
     pub(crate) at: usize,
 }
 
+impl TabState {
+    /// Takes a parked tab out of the folders `lost` names (a volume that was ejected): they leave its history, and a
+    /// tab that showed one shows the history entry that replaces it, or `home` when none is left. True when it changed.
+    pub(crate) fn leave_lost(&mut self, home: &Path, lost: &dyn Fn(&Path) -> bool) -> bool {
+        let moved = lost(&self.path);
+        let before = self.history.len();
+        self.at = sidebar::forget_lost(&mut self.history, self.at, lost);
+        if moved {
+            if self.history.is_empty() {
+                self.history.push(home.to_path_buf());
+                self.at = 0;
+            }
+            self.path = self.history[self.at].clone();
+        }
+        moved || self.history.len() != before
+    }
+}
+
 /// The tab strip model: the tabs in order and which one is open. Holds the open tab too, kept current by `park`.
 #[derive(Debug)]
 pub(crate) struct TabStrip<T> {
@@ -66,6 +84,10 @@ impl<T> TabStrip<T> {
     /// Replaces the open tab's stored state with `item` (called before the open tab is left).
     pub(crate) fn park(&mut self, item: T) {
         self.items[self.active] = item;
+    }
+    /// Every tab, to change in place (a volume went away under the parked ones).
+    pub(crate) fn items_mut(&mut self) -> &mut [T] {
+        &mut self.items
     }
     /// Adds a tab right after the open one and makes it the open tab. Returns its index.
     pub(crate) fn insert_after_active(&mut self, item: T) -> usize {
@@ -280,6 +302,28 @@ mod tests {
         assert_eq!(hit(&c, 150.), Some(TabHit::Select(1)));
         assert_eq!(hit(&c, 200.), None);
         assert_eq!(hit(&c, -1.), None);
+    }
+
+    #[test]
+    fn a_parked_tab_leaves_an_ejected_volume_for_its_last_folder_that_is_still_there() {
+        let lost = |p: &Path| p.starts_with("/run/media/me/V");
+        let home = Path::new("/home/me");
+        // it showed a folder of the volume: back to the folder it came from, and no way forward into the volume
+        let mut tab = TabState { path: "/run/media/me/V/a".into(), history: vec!["/home/me/Docs".into(), "/run/media/me/V".into(), "/run/media/me/V/a".into()], at: 2 };
+        assert!(tab.leave_lost(home, &lost));
+        assert_eq!(tab, TabState { path: "/home/me/Docs".into(), history: vec!["/home/me/Docs".into()], at: 0 });
+        // it was opened on the volume and has nowhere else to go: the home folder
+        let mut tab = TabState { path: "/run/media/me/V".into(), history: vec!["/run/media/me/V".into()], at: 0 };
+        assert!(tab.leave_lost(home, &lost));
+        assert_eq!(tab, TabState { path: "/home/me".into(), history: vec!["/home/me".into()], at: 0 });
+        // it shows another folder and only passed through the volume: it stays, without the volume in its history
+        let mut tab = TabState { path: "/tmp".into(), history: vec!["/run/media/me/V".into(), "/tmp".into()], at: 1 };
+        assert!(tab.leave_lost(home, &lost));
+        assert_eq!(tab, TabState { path: "/tmp".into(), history: vec!["/tmp".into()], at: 0 });
+        // a tab that never saw the volume is left alone
+        let mut tab = TabState { path: "/tmp".into(), history: vec!["/tmp".into(), "/tmp".into()], at: 1 };
+        assert!(!tab.leave_lost(home, &lost));
+        assert_eq!(tab.history.len(), 2);
     }
 
     #[test]

@@ -162,3 +162,20 @@ fn an_exact_headword_ranks_above_a_loosely_matched_top_hit() {
     // a run inside a word of the title is weak since 0.10.38 (strict matches start at a word start)
     assert!(headword_beats_top("isco", &def("isco", "WordNet"), Some(&top(Hit::City("San Francisco")))));
 }
+
+/// "Show in Folder" names the file itself, so Files selects it; a file that is gone, or a name that is not one plain
+/// file name, leaves the folder.
+#[test]
+fn show_in_folder_hands_files_the_file_so_it_is_selected() {
+    let dir = std::env::temp_dir().join(format!("bifrost-reveal-target-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("Q1 report.pdf"), b"x").unwrap();
+    std::fs::write(dir.join("sub/inner.txt"), b"x").unwrap();
+    assert_eq!(reveal_target(&dir, "Q1 report.pdf"), dir.join("Q1 report.pdf"));
+    assert_eq!(reveal_target(&dir, "gone.pdf"), dir, "the file was removed after the search");
+    for name in ["", "..", "sub/inner.txt", "../x"] {
+        assert_eq!(reveal_target(&dir, name), dir, "{name:?}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

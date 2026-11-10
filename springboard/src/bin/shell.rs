@@ -299,7 +299,8 @@ fn run() -> std::io::Result<()> {
     let motion_sensor_supported = bifrost_core::inertial_sensors::Sensors::scan_default().accelerometer.is_some();
     let battery_present=power::find_battery(std::path::Path::new("/sys/class/power_supply")).is_some();
     // timedatectl spawns (NTP state, timezone) and the uptime read: at most every 15 s, not on every info tick
-    let clock_info: std::cell::RefCell<(f64, String, i64)> = std::cell::RefCell::new((f64::NEG_INFINITY, String::new(), 0));
+    // (a change of the Set Automatically switch reads again at once: `ntp_epoch`)
+    let clock_info: std::cell::RefCell<(f64, String, i64, u32)> = std::cell::RefCell::new((f64::NEG_INFINITY, String::new(), 0, 0));
     let gather = |level: f32, wallpaper: &str, history: &std::sync::Arc<Vec<battery::Sample>>| {
         use springboard::net::wifi::State;
         let (hour, min, _, wday, mday, mon) = sys::local_time();
@@ -314,8 +315,9 @@ fn run() -> std::io::Result<()> {
         };
         let (time_sync, uptime_min) = {
             let mut c = clock_info.borrow_mut();
-            if sys::now_ms() - c.0 >= 15_000.0 {
-                *c = (sys::now_ms(), springboard::net::ntp::status_text(), uptime_minutes());
+            let epoch = springboard::bare::timezone::ntp_epoch();
+            if sys::now_ms() - c.0 >= 15_000.0 || c.3 != epoch {
+                *c = (sys::now_ms(), springboard::net::ntp::status_text(), uptime_minutes(), epoch);
             }
             (c.1.clone(), c.2)
         };
@@ -864,6 +866,7 @@ fn run() -> std::io::Result<()> {
                     Ok(Request::OpenFolder(id,folder))=>{match shell.desktop_open_folder(&id,&folder,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
                     Ok(Request::RevealFile(id,path))=>{match shell.desktop_reveal_file(&id,&path,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
                     Ok(Request::OpenFile(id,path))=>{match shell.desktop_open_file(&id,&path,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
+                    Ok(Request::OpenDocument(path))=>{match shell.desktop_open_document(&path,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
                     Ok(Request::OpenUrl(url))=>{match shell.desktop_open_link(&url,t){Ok(())=>b"ok\n".to_vec(),Err(e)=>format!("error: {e}\n").into_bytes()}},
                     Ok(Request::Tap(x, y)) => {
                         path((x, y), (x, y), 40.0);

@@ -78,6 +78,12 @@ pub fn check_open_file(id: &str, path: &Path) -> Result<(), String> {
     if id.is_empty() || !id.bytes().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c)) {
         return Err("Invalid app ID".into());
     }
+    check_open_path(path)
+}
+
+/// The path half of `check_open_file`, which the `open-document <path>` request (no app named) checks before the
+/// shell looks up the default app: an absolute path, with no `..` step or control character, to an existing file.
+pub fn check_open_path(path: &Path) -> Result<(), String> {
     let plain = path.is_absolute()
         && !path.components().any(|c| matches!(c, std::path::Component::ParentDir))
         && path.to_str().is_some_and(|s| !s.chars().any(char::is_control));
@@ -91,6 +97,16 @@ pub fn check_open_file(id: &str, path: &Path) -> Result<(), String> {
         return Err("File not found".into());
     }
     Ok(())
+}
+
+/// Whether `path`, with every symbolic link followed, is inside `home`. The `open-file` and `open-document` control
+/// requests open nothing else: an installed app gets its file through a document grant, which only names files in
+/// the home folder, and a built-in app reads the file as the shell, so the same limit is checked here for it.
+pub fn in_home(home: &Path, path: &Path) -> bool {
+    match (std::fs::canonicalize(home), std::fs::canonicalize(path)) {
+        (Ok(home), Ok(path)) => path.starts_with(&home) && path != home,
+        _ => false,
+    }
 }
 
 /// The folder Reveal opens for `path`: the folder itself, or the folder that holds the file.
@@ -529,7 +545,34 @@ mod tests {
         }
         assert_eq!(check_open_file("a.b", &home), Err("Expected a file, not a folder".into()));
         assert_eq!(check_open_file("a.b", &home.join("missing.txt")), Err("File not found".into()));
+        // the request with no app named checks the path the same way
+        assert_eq!(check_open_path(&f), Ok(()));
+        assert_eq!(check_open_path(Path::new("to do.txt")), Err("Expected an absolute file path".into()));
+        assert_eq!(check_open_path(&home), Err("Expected a file, not a folder".into()));
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn only_a_file_inside_the_home_folder_is_in_home_and_a_link_out_of_it_is_not() {
+        let root = scratch("inhome");
+        let (home, other) = (root.join("home"), root.join("other"));
+        std::fs::create_dir_all(home.join("Documents")).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(home.join("Documents/a.txt"), "x").unwrap();
+        std::fs::write(other.join("secret.txt"), "x").unwrap();
+        assert!(in_home(&home, &home.join("Documents/a.txt")));
+        assert!(!in_home(&home, &other.join("secret.txt")), "a file outside the home folder");
+        assert!(!in_home(&home, &home), "the home folder itself is not a file in it");
+        assert!(!in_home(&home, &home.join("missing.txt")));
+        // a link inside the home folder that leads out of it is followed first
+        std::os::unix::fs::symlink(other.join("secret.txt"), home.join("link.txt")).unwrap();
+        assert!(!in_home(&home, &home.join("link.txt")));
+        // a sibling folder whose name starts like the home folder's is not inside it
+        let twin = root.join("home2");
+        std::fs::create_dir_all(&twin).unwrap();
+        std::fs::write(twin.join("b.txt"), "x").unwrap();
+        assert!(!in_home(&home, &twin.join("b.txt")));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
