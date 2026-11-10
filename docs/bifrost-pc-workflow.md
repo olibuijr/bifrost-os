@@ -506,9 +506,14 @@ Show in Files: another app or a script asks for a folder to open in Files.
 - Files reads and removes the request every 200 ms, so an open window also moves to the folder.
 - Limits: the control line is 512 bytes, so the folder path must be shorter than about 470
   bytes; a folder path with a newline is refused.
-- CLI: `python3 tools/midget.py show-in-files /home/tester/Documents` (runs the helper as the
-  local account) or `python3 tools/midget.py open-folder is.olibuijr.files.desktop <folder>`
-  (control socket directly).
+- The helper shows folders only: given a file, `bifrost-apps --open <file>` opens the file with its
+  default application (`gio open`), which fails for a type that has none. It is not a reveal.
+- CLI: `python3 tools/midget.py show-in-files <absolute file or folder>` sends the `open-folder`
+  line itself (as root over ssh, no helper and no default-application lookup): a folder opens in
+  Files, a file of any type opens the folder that holds it. The file is not selected, because the
+  request (`open-request`) carries a folder only and Files has no request that selects an item.
+  `python3 tools/midget.py open-folder is.olibuijr.files.desktop <folder>` is the same line for a
+  folder that is known to exist.
 
 ## Releases and the test machine (2026-10-08)
 

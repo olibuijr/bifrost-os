@@ -617,7 +617,7 @@ fn source_list_rows(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList
                 glyph(s, ui, name, Rect { x: r.right() - inset - SPACE_S - c, y: r.y + r.h - SPACE_XS - c - 2.0, w: c, h: c }, LABEL_2.now());
             }
             SidebarItem::Row { .. } if r.h <= 0.0 => {}
-            SidebarItem::Row { id, label, count, enabled, symbol, dot, subtitle, trailing, avatar, neutral } => {
+            SidebarItem::Row { id, label, count, enabled, symbol, dot, subtitle, trailing, avatar, neutral, trailing_symbol } => {
                 let selected = list.selected() == Some(*id);
                 bifrost_ui::ax::record(bifrost_ui::Role::Row, label, if selected { "selected" } else { "" }, r, *enabled);
                 let plate = Rect { x: r.x + inset, y: r.y + 1.0, w: r.w - 2.0 * inset, h: r.h - 2.0 };
@@ -652,15 +652,28 @@ fn source_list_rows(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, list: &SourceList
                     text_x += g + SPACE_S;
                 }
                 let mid = ui.pt(plate.y + plate.h / 2.0) as i32;
-                // trailing accessories right to left: the count, then the trailing text before it
-                let mut right = ui.pt(plate.x + plate.w - SPACE_S) as i32;
+                // trailing accessories right to left: the trailing glyph, the count, then the trailing text before it
+                let edge = ui.pt(plate.x + plate.w - SPACE_S) as i32;
+                let gap = ui.pt(SPACE_S) as i32;
+                let mut right = edge;
+                let mut accessories: Vec<f32> = Vec::new();
+                if let Some(name) = trailing_symbol {
+                    let g = bifrost_ui::sidebar::TRAILING_GLYPH_PT;
+                    let tint = if *enabled { LABEL_2.now() } else { LABEL_3.now() };
+                    glyph(s, ui, name, Rect { x: plate.x + plate.w - SPACE_S - g, y: plate.y + (plate.h - g) / 2.0, w: g, h: g }, tint);
+                    let w = ui.pt(g).ceil() as i32;
+                    accessories.push(w as f32);
+                    right -= w + gap;
+                }
                 for t in count.map(|n| n.to_string()).into_iter().chain(trailing.as_ref().map(|t| ui.fit(t, MAC_BODY_PT, ui.pt(plate.w / 3.0)))) {
                     // right-aligned: measure, then draw
                     let w = ui.text(&t, MAC_BODY_PT, Weight::Regular, WHITE).w as i32;
                     label_text(s, ui, &t, MAC_BODY_PT, Weight::Regular, right - w, |h| mid - h / 2, vib(Vibrant::Secondary), LABEL_2.now());
-                    right -= w + ui.pt(SPACE_S) as i32;
+                    right -= w + gap;
+                    accessories.push(w as f32);
                 }
-                let room = (right as f32 - ui.pt(text_x)).max(0.0);
+                // the label has the row up to the first accessory
+                let room = bifrost_ui::sidebar::label_room(ui.pt(text_x), edge as f32, &accessories, gap as f32);
                 let weight = if selected { Weight::Bold } else { Weight::Regular };
                 let text = ui.fit(label, MAC_BODY_PT, room);
                 let level = if *enabled { Vibrant::Label } else { Vibrant::Tertiary };

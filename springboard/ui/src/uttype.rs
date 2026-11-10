@@ -132,6 +132,7 @@ const TYPES: &[Entry] = &[
     Entry { id: "com.rarlab.rar-archive", parent: &["public.archive"], ext: &["rar"], mime: "application/vnd.rar", desc: "RAR archive" },
     Entry { id: "com.sun.java-archive", parent: &["public.zip-archive"], ext: &["jar"], mime: "application/java-archive", desc: "Java archive" },
     Entry { id: "com.android.package-archive", parent: &["public.zip-archive"], ext: &["apk"], mime: "application/vnd.android.package-archive", desc: "Android package" },
+    Entry { id: "public.disk-image", parent: &["public.data"], ext: &["iso", "img"], mime: "", desc: "Disk Image" },
     Entry { id: "public.font", parent: &["public.data"], ext: &[], mime: "font/*", desc: "Font" },
     Entry { id: "public.truetype-ttf-font", parent: &["public.font"], ext: &["ttf"], mime: "font/ttf", desc: "TrueType font" },
     Entry { id: "public.opentype-font", parent: &["public.font"], ext: &["otf"], mime: "font/otf", desc: "OpenType font" },
@@ -360,6 +361,15 @@ mod tests {
         }
         assert_eq!(type_for_mime("image/tiff"), Some("public.tiff"));
         assert_eq!(description("public.tiff"), "TIFF image");
+    }
+    #[test]
+    fn a_disk_image_has_its_own_type_and_is_not_an_archive() {
+        for name in ["backup.img", "install.ISO"] {
+            assert_eq!(type_for_extension(name), Some("public.disk-image"), "{name}");
+        }
+        assert_eq!(description("public.disk-image"), "Disk Image");
+        assert!(conforms("public.disk-image", "public.data"));
+        assert!(!conforms("public.disk-image", "public.archive"), "opening one mounts it, it is not expanded");
     }
     #[test]
     fn mesh_files_resolve_to_3d_model_types() {

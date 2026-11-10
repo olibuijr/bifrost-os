@@ -9,6 +9,21 @@ pub(crate) fn items_text(n: usize) -> String {
     if n == 1 { "1 item".into() } else { format!("{n} items") }
 }
 
+/// The least width the path bar keeps while a notice is shown (points).
+const NOTICE_PATH_MIN: f32 = 120.;
+
+/// The width of the status at the right end of a status bar `bar_w` points wide. It is two fifths of the bar, 320 at
+/// most; a notice `notice_w` points wide that does not fit there takes what it needs from the path bar, down to
+/// `NOTICE_PATH_MIN` of path, so the reason at its end can be read.
+pub(crate) fn status_width(bar_w: f32, notice_w: Option<f32>) -> f32 {
+    let usual = (bar_w * 0.4).min(320.);
+    match notice_w {
+        // 36 is the bar's margins: 12 before the path, 12 between the two, 12 after the status
+        Some(n) => n.max(usual).min((bar_w - 36. - NOTICE_PATH_MIN).max(usual)),
+        None => usual,
+    }
+}
+
 impl Files {
     /// The status bar: path bar and, on the same row, a running job, else a failed action, else the item count.
     pub(crate) fn paint_footer(&mut self, ui: &Ui, s: &mut Surface, visible: &[usize]) {
@@ -17,7 +32,10 @@ impl Files {
         rect(s, ui, self.side(), top, w - self.side(), FOOTER_H, CARD_BG.now());
         rect(s, ui, self.side(), top, w - self.side(), 1., SEPARATOR_C.now());
         // one row: the path on the left, the status on the right (the path takes what the status leaves)
-        let status_w = ((w - self.side()) * 0.4).min(320.);
+        // a notice wider than the usual status takes its room from the path bar (measured in pixels, plus a point of slack)
+        let shown_notice = self.notice.as_deref().filter(|_| !self.dragging && self.work.is_none());
+        let notice_w = shown_notice.map(|n| ui.measure(n, 11., Weight::Regular) / ui.pt(1.).max(0.01) + 2.);
+        let status_w = status_width(w - self.side(), notice_w);
         let line_y = top + (FOOTER_H - 14.) / 2.;
         let items = self.path_items();
         let refs: Vec<(&str, &str)> = items.iter().map(|(l, g, _)| (l.as_str(), *g)).collect();
@@ -62,5 +80,27 @@ impl Files {
             }
             text(s, ui, &status, 11., LABEL_2.now(), w - 12. - status_w, line_y, status_w);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_status_is_two_fifths_of_the_bar_and_320_at_most() {
+        assert_eq!(status_width(500., None), 200.);
+        assert_eq!(status_width(800., None), 320.);
+        assert_eq!(status_width(2000., None), 320.);
+        assert_eq!(status_width(800., Some(100.)), 320., "a short notice leaves the status where it is");
+    }
+
+    #[test]
+    fn a_long_notice_takes_its_width_from_the_path_bar_but_leaves_some_path() {
+        assert_eq!(status_width(800., Some(450.)), 450., "the whole notice fits");
+        assert_eq!(status_width(800., Some(5000.)), 800. - 36. - NOTICE_PATH_MIN, "the path keeps its least width");
+        assert_eq!(status_width(300., Some(5000.)), 144.);
+        // a bar too narrow for the notice and the least path keeps the usual split
+        assert_eq!(status_width(200., Some(5000.)), 80.);
     }
 }

@@ -409,11 +409,12 @@ pub(crate) fn move_plan(plan: Option<(Op, Vec<PathBuf>)>) -> Option<(Op, Vec<Pat
     plan.map(|(_, paths)| (Op::Move, paths))
 }
 
-/// The line shown when the disk image `name` could not be opened: the first line of `error` says why.
+/// The line shown when the disk image `name` could not be opened: the first line of `error` says why. It is kept
+/// short, the name first and the reason right after it, because the status bar shows one line.
 pub(crate) fn image_notice(name: &str, error: &str) -> String {
     match error.lines().map(str::trim).find(|l| !l.is_empty()) {
-        Some(why) => format!("The disk image \u{201C}{name}\u{201D} could not be opened: {why}"),
-        None => format!("The disk image \u{201C}{name}\u{201D} could not be opened."),
+        Some(why) => format!("\u{201C}{name}\u{201D} can\u{2019}t be opened: {why}"),
+        None => format!("The disk image \u{201C}{name}\u{201D} can\u{2019}t be opened."),
     }
 }
 
@@ -917,18 +918,29 @@ mod tests {
     }
 
     #[test]
+    fn the_disk_image_notice_puts_the_reason_within_the_first_line_of_the_status_bar() {
+        let notice = image_notice("e2e-bad.img", "it holds no file system that can be opened\ndetail");
+        assert_eq!(notice, "\u{201C}e2e-bad.img\u{201D} can\u{2019}t be opened: it holds no file system that can be opened");
+        // the reason starts sooner than it did after "The disk image ... could not be opened: "
+        let reason_at = notice.chars().count() - "it holds no file system that can be opened".chars().count();
+        assert!(reason_at <= "\u{201C}e2e-bad.img\u{201D}".chars().count() + 18, "{reason_at}");
+        assert!(!notice.contains("detail"), "only the first line of the reason");
+        assert_eq!(image_notice("a.iso", " \n"), "The disk image \u{201C}a.iso\u{201D} can\u{2019}t be opened.", "no reason given");
+    }
+
+    #[test]
     fn a_disk_image_that_fails_to_open_is_never_silent() {
         use bifrost_core::json::{parse, Json};
         let mut f = crate::tests::fixture(vec![]);
         // the shell refuses the call outright
         f.sys.wait(7, Waiting::ImageAttach(PathBuf::from("/fixture/t.img")));
         assert!(f.service_answer(7, &Err("disks: only system apps may use this service".into())));
-        assert_eq!(f.notice.as_deref(), Some("The disk image \u{201C}t.img\u{201D} could not be opened: disks: only system apps may use this service"));
+        assert_eq!(f.notice.as_deref(), Some("\u{201C}t.img\u{201D} can\u{2019}t be opened: disks: only system apps may use this service"));
         // the mount fails
         f.notice = None;
         let failed = parse(r#"{"path":"/fixture/t.img","ok":false,"error":"\n wrong fs type\nmore"}"#).unwrap();
         assert!(f.image_event(disk_image::E_ATTACHED, &failed));
-        assert_eq!(f.notice.as_deref(), Some("The disk image \u{201C}t.img\u{201D} could not be opened: wrong fs type"));
+        assert_eq!(f.notice.as_deref(), Some("\u{201C}t.img\u{201D} can\u{2019}t be opened: wrong fs type"));
         // it mounts where this app cannot look
         let hidden = parse(r#"{"path":"/fixture/t.img","ok":true,"device":"/dev/loop0","mount_point":"/nowhere/T"}"#).unwrap();
         assert!(f.image_event(disk_image::E_ATTACHED, &hidden));

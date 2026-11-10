@@ -447,7 +447,7 @@ impl Files {
         let detail = if e.is_dir {
             format!("Folder · {}", date_text(e.mtime))
         } else {
-            format!("{} · {} · {}", e.kind.label(), fs::size_text(e.size), date_text(e.mtime))
+            format!("{} · {} · {}", kind_text(e), fs::size_text(e.size), date_text(e.mtime))
         };
         self.centred(s, ui, &detail, 12., LABEL_2.now(), cx, ty + 24., x1 - x0 - 32.);
         // the thumbnail strip
@@ -501,7 +501,7 @@ impl Files {
         }
         let y = self.rows_top() + side + 20.;
         text(s, ui, &e.name, 13., LABEL.now(), x + 12., y, w - 24.);
-        text(s, ui, &format!("{} · {}", e.kind.label(), fs::size_text(e.size)), 11., LABEL_2.now(), x + 12., y + 20., w - 24.);
+        text(s, ui, &format!("{} · {}", kind_text(e), fs::size_text(e.size)), 11., LABEL_2.now(), x + 12., y + 20., w - 24.);
         text(s, ui, &format!("Modified {}", date_text(e.mtime)), 11., LABEL_2.now(), x + 12., y + 38., w - 24.);
     }
 
