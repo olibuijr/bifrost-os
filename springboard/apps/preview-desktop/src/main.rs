@@ -361,12 +361,21 @@ impl Viewer {
             let (jobs, inbox) = pdfjob::spawn(path.to_path_buf(), password.clone());
             self.loading = Some(Loading { path: path.to_path_buf(), password, jobs, inbox });
             self.status = format!("Opening {}", name_of(path));
+            self.sweep_copies();
             return;
         }
         match document::open_picture(path, &self.data_dir) {
             Ok(doc) => self.doc = Some(doc),
             Err(e) => self.status = document::open_failure(&name_of(path), &e),
         }
+        self.sweep_copies();
+    }
+
+    /// Removes the working copies of files that are no longer open and no longer in Open Recent (see
+    /// `recents::sweep_copies`). Runs at start, when another document opens and when Open Recent is cleared.
+    fn sweep_copies(&self) {
+        let open = self.doc.as_ref().map(|d| d.path.as_path()).or(self.loading.as_ref().map(|l| l.path.as_path()));
+        recents::sweep_copies(&self.data_dir, &self.recents, open);
     }
 
     /// Puts `path` first in Open Recent and saves the list.
@@ -680,6 +689,7 @@ impl Viewer {
             MENU_CLEAR_RECENTS => {
                 self.recents.clear();
                 let _ = recents::save(&self.data_dir, &self.recents);
+                self.sweep_copies();
             }
             _ if (MENU_RECENT..MENU_RECENT + recents::MAX_RECENTS as u32).contains(&id) => {
                 let Some(path) = self.recents.get((id - MENU_RECENT) as usize).map(Path::to_path_buf) else { return true };
@@ -2398,6 +2408,8 @@ impl App for Viewer {
         if self.data_dir.as_os_str().is_empty() {
             self.data_dir = ctx.data_dir.clone();
             self.recents = recents::load(&self.data_dir);
+            // copies left by earlier runs that Open Recent no longer lists
+            self.sweep_copies();
             self.prefs = prefs::load(&self.data_dir);
             self.signatures = signature::load(&self.data_dir);
         }
