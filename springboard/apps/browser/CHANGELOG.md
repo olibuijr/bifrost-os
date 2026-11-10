@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.13
+
+- A page that sets no colours of its own is readable in the dark appearance: its text is dark on the white page. A page that declares a dark colour scheme still gets light text. Takes effect with the next engine build.
+
 ## 0.17.12
 
 - A file handed to the browser opens in a new tab.

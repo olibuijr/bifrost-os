@@ -29,6 +29,7 @@ use std::rc::Rc;
 
 use super::{Engine, MAX_DIM, say};
 use dpi::PhysicalSize;
+use servo::user_contents::UserStyleSheet;
 use servo::{CSSPixel, JSValue, JavaScriptEvaluationError, Servo, UserContentManager, UserScript, WebViewBuilder, WebViewRect};
 
 /// Longest reply the engine sends, bytes.
@@ -157,11 +158,16 @@ fn eval_reply(token: &str, r: &Result<JSValue, JavaScriptEvaluationError>) -> St
     }
 }
 
-/// The user content manager that runs the network collector in every web view (None until the app sent `dev collector`).
+/// The user content manager shared by every web view: the default page style, the network collector (once the app
+/// sent `dev collector`) and the app's script slots.
 fn manager(servo: &Servo) -> Option<Rc<UserContentManager>> {
     MANAGER.with(|m| {
         if m.borrow().is_none() {
             let mgr = Rc::new(UserContentManager::new(servo));
+            // Default colour scheme for pages that declare none (see `configuration::DEFAULT_PAGE_STYLE`).
+            if let Ok(url) = url::Url::parse("about:blank") {
+                mgr.add_stylesheet(Rc::new(UserStyleSheet::new(super::configuration::DEFAULT_PAGE_STYLE.to_string(), url)));
+            }
             if let Some(js) = COLLECTOR.with(|c| c.borrow().clone()) {
                 mgr.add_script(Rc::new(UserScript::new(js, None)));
             }
