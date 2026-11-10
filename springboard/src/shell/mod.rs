@@ -2221,8 +2221,12 @@ impl Shell {
         if self.clock_style != o.clock_style() {
             self.clock_style = o.clock_style();
             self.chrome.time = None;
+            // the same information drawn again in the new style: nothing was observed, so no battery or Wi-Fi notice
+            // may come of it (the emptied `self.info` is not a previous reading)
             let info = std::mem::take(&mut self.info);
-            self.set_info(info);
+            if info != self.info {
+                self.show_info(info, false);
+            }
         }
         let a = self.settings.as_ref().map_or_else(|| accessibility::AccessibilitySettings::load(&self.prefs), |st| st.accessibility().clone());
         a.publish();
@@ -2720,6 +2724,12 @@ impl Shell {
         if info == self.info {
             return;
         }
+        self.show_info(info, true);
+    }
+
+    /// Renders `info` and makes it the shown information. `observed` is false when `info` is not a new reading of the
+    /// machine (the clock style changed and the same information is drawn again): then no transition is noted.
+    fn show_info(&mut self, info: Info, observed: bool) {
         let ui = &self.ui;
         // the status bar's time and the lock screen's large clock are the same text
         let lock_clock = lock_clock_text(&self.clock_style, &info);
@@ -2747,7 +2757,9 @@ impl Shell {
         self.chrome.no_battery = info.desktop_network.is_some() && !info.battery_present;
         self.chrome.wifi_bars = info.wifi_bars;
         self.storage_check(info.storage_free);
-        self.notify_info(&info);
+        if observed {
+            self.notify_info(&info);
+        }
         if let Some(st) = &mut self.settings {
             st.refresh(&self.ui, &info);
         }
