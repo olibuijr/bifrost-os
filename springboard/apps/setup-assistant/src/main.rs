@@ -105,15 +105,11 @@ impl Setup {
         true
     }
 
-    /// Applies what the user chose and records that the run is done. The zone changes through the system service
-    /// only when the user picked a different one; the account page opens only for Sign In. A failure stays on the
-    /// Done screen with a message, so the user can try again.
+    /// Records what the user chose and that the run is done. The shell reads the file when this app exits, copies the
+    /// choices and sets the chosen time zone: this app runs in the sandbox, where the system service cannot be reached,
+    /// so it never sets the zone itself. The account page opens only for Sign In. A failure stays on the Done screen
+    /// with a message, so the user can try again.
     fn finish(&mut self, ctx: &Ctx) -> bool {
-        let picked_new_zone = !self.choices.timezone.is_empty() && self.zone_now.as_deref() != Some(self.choices.timezone.as_str());
-        if picked_new_zone && springboard::privd_client::connect().set_timezone(&self.choices.timezone).is_err() {
-            self.error = Some("The time zone could not be changed. Try again.".into());
-            return true;
-        }
         // in the app's own data directory: the sandbox shows this app no other part of the shell's tree
         let path = setup::own_state_path();
         let state = State { done: true, applied: false, choices: self.choices.clone() };
@@ -124,7 +120,7 @@ impl Setup {
         if self.choices.cloud == Cloud::SignIn {
             ctx.open_url(setup::ACCOUNT_URL);
         }
-        // the state file is written: the shell opens the desktop next time and copies the choices on its own
+        // the state file is written: the shell copies the choices and sets the zone when this app is gone
         std::process::exit(0)
     }
 }

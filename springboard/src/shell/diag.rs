@@ -63,11 +63,12 @@ pub fn delete_all(dir: &Path) -> usize {
     ["crash.log", "crash.log.old"].iter().filter(|n| std::fs::remove_file(dir.join(n)).is_ok()).count()
 }
 
-/// "Oct 4, 14:05" for a Unix time in the zone `offset` seconds east of UTC.
-pub fn date_text(unix: i64, offset: i32) -> String {
+/// "Oct 4, 14:05" (or "Oct 4, 2:05 PM" with 24-Hour Time off) for a Unix time in the zone `offset` seconds east of
+/// UTC. The time is written as the menu bar writes it (`status::clock_in`).
+pub fn date_text(unix: i64, offset: i32, clock_24h: bool) -> String {
     const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     let (_, mon, day, h, m) = crate::files::fs::civil(unix + offset as i64);
-    format!("{} {day}, {h:02}:{m:02}", MONTHS[(mon as usize).saturating_sub(1).min(11)])
+    format!("{} {day}, {}", MONTHS[(mon as usize).saturating_sub(1).min(11)], crate::status::clock_in(h as i32, m as i32, clock_24h))
 }
 
 /// The text shared with the developer: build stamp, then each diagnostic file.
@@ -285,6 +286,10 @@ mod tests {
 
     #[test]
     fn date_reads_like_the_bifrost() {
-        assert_eq!(date_text(0, 0), "Jan 1, 00:00");
+        assert_eq!(date_text(0, 0, true), "Jan 1, 00:00");
+        assert_eq!(date_text(0, 0, false), "Jan 1, 12:00 AM");
+        // 09:13 on Jan 1: the padded hour of the menu bar, and its 12-hour form
+        assert_eq!(date_text(9 * 3600 + 13 * 60, 0, true), "Jan 1, 09:13");
+        assert_eq!(date_text(9 * 3600 + 13 * 60, 0, false), "Jan 1, 9:13 AM");
     }
 }

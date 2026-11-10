@@ -315,9 +315,10 @@ fn headless_a_crash_log_keeps_its_valid_lines_oldest_first() {
 
 #[test]
 fn headless_a_crash_date_is_shown_in_the_chosen_zone() {
-    assert_eq!(date_text(0, 0), "Jan 1, 00:00");
-    assert_eq!(date_text(0, 3600), "Jan 1, 01:00");
-    assert_eq!(date_text(31 * 86_400 + 14 * 3600 + 5 * 60, 0), "Feb 1, 14:05");
+    assert_eq!(date_text(0, 0, true), "Jan 1, 00:00");
+    assert_eq!(date_text(0, 3600, true), "Jan 1, 01:00");
+    assert_eq!(date_text(31 * 86_400 + 14 * 3600 + 5 * 60, 0, true), "Feb 1, 14:05");
+    assert_eq!(date_text(31 * 86_400 + 14 * 3600 + 5 * 60, 0, false), "Feb 1, 2:05 PM", "24-Hour Time off");
 }
 
 #[test]

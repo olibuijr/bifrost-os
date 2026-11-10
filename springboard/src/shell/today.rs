@@ -141,6 +141,8 @@ pub struct Sources<'a> {
     /// the terminal's last lines, None while it is not running
     pub term: Option<Vec<String>>,
     pub unix: i64,
+    /// Date & Time > 24-Hour Time, for the Clock tile's times
+    pub clock_24h: bool,
 }
 
 pub struct Today {
@@ -397,7 +399,7 @@ impl Today {
             changed = true;
         };
         let (tiles, keys) = (&mut self.tiles, &mut self.keys);
-        update(Kind::Clock, clock::key(src.unix), tiles, keys, &mut || Some(clock::render(ui, src.unix)));
+        update(Kind::Clock, clock::key(src.unix, src.clock_24h), tiles, keys, &mut || Some(clock::render(ui, src.unix, src.clock_24h)));
         update(Kind::Battery, battery::key(src.info.battery, src.info.charging), tiles, keys, &mut || (src.info.desktop_network.is_none() || src.info.battery_present).then(|| battery::render(ui, src.info.battery, src.info.charging)));
         update(Kind::Wifi, wifi::key(src.info), tiles, keys, &mut || Some(wifi::render(ui, src.info)));
         update(Kind::Calendar, calendar::key(src.info), tiles, keys, &mut || Some(calendar::render(ui, src.info)));
@@ -816,7 +818,7 @@ pub(crate) mod tests {
     }
 
     fn refresh(ui: &Ui, t: &mut Today, info: &Info, unix: i64, at: f64) -> bool {
-        t.refresh(ui, &Sources { info, term: None, unix }, at)
+        t.refresh(ui, &Sources { info, term: None, unix, clock_24h: true }, at)
     }
 
     #[test]
@@ -879,8 +881,8 @@ pub(crate) mod tests {
         assert!(t.tiles.contains_key(&Kind::Battery) && t.tiles.contains_key(&Kind::Clock));
         assert!(!t.tiles.contains_key(&Kind::Photos));
         let lines = Some(vec!["$ ls".to_string()]);
-        assert!(t.refresh(&ui, &Sources { info: &low, term: lines.clone(), unix: 1_000_080 }, 62_000.0), "terminal output re-renders");
-        assert!(!t.refresh(&ui, &Sources { info: &low, term: lines, unix: 1_000_080 }, 63_000.0));
+        assert!(t.refresh(&ui, &Sources { info: &low, term: lines.clone(), unix: 1_000_080, clock_24h: true }, 62_000.0), "terminal output re-renders");
+        assert!(!t.refresh(&ui, &Sources { info: &low, term: lines, unix: 1_000_080, clock_24h: true }, 63_000.0));
     }
 
     #[test]

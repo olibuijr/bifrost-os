@@ -156,7 +156,7 @@ pub fn spec(id: PageId, v: &View) -> Spec {
     }
 }
 
-/// "Off" or "10 PM to 7 AM".
+/// "Off", "22:00 to 07:00" or "10:00 PM to 7:00 AM".
 pub fn downtime_text(d: Downtime, h24: bool) -> String {
     if d.on {
         format!("{} to {}", clock(d.start, h24), clock(d.end, h24))
@@ -268,8 +268,9 @@ mod tests {
         let d = days(Day::default());
         let s = spec(PageId::StDowntime, &view(&d, &cfg, false, false));
         assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(true));
-        assert_eq!((s.groups[1].items[0].value.as_str(), s.groups[1].items[1].value.as_str()), ("22:00", "7:00"));
-        assert_eq!(downtime_text(cfg.downtime(), true), "22:00 to 7:00");
+        assert_eq!((s.groups[1].items[0].value.as_str(), s.groups[1].items[1].value.as_str()), ("22:00", "07:00"));
+        assert_eq!(downtime_text(cfg.downtime(), true), "22:00 to 07:00");
+        assert_eq!(downtime_text(cfg.downtime(), false), "10:00 PM to 7:00 AM");
         assert_eq!(downtime_text(Downtime { on: false, ..cfg.downtime() }, true), "Off");
     }
 

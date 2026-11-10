@@ -824,6 +824,8 @@ pub struct Shell {
     photo_dirs: Vec<PathBuf>,
     /// where settings and caches live (`set_data_dir`)
     data_dir: PathBuf,
+    /// the zone the Setup Assistant's user chose, until the shell has set it (`apply_setup_zone`)
+    setup_zone: Option<String>,
     /// the screenshot animation over the screen
     shot: Option<Overlay>,
     /// the Markup editor opened from the screenshot thumbnail
@@ -1350,6 +1352,7 @@ impl Shell {
             photos: None,
             photo_dirs: photos::library::dirs(),
             data_dir: deildu::data_dir().parent().map(Path::to_path_buf).unwrap_or_default(),
+            setup_zone: None,
             shot: None,
             markup: None,
             markup_load: None,
@@ -1630,10 +1633,9 @@ impl Shell {
         self.recent_dir = Some(PathBuf::from(dir));
         self.st_load();
         self.prefs = Prefs::load(format!("{dir}/settings.ini"));
-        // the Setup Assistant's choices reach settings.ini once, before the look is read below
-        if let Err(e) = crate::setup::apply_pending(Path::new(dir), &mut self.prefs) {
-            eprintln!("springboard: setup choices: {e}");
-        }
+        // the Setup Assistant's choices reach settings.ini once, before the look is read below (a run the shell did not
+        // see end: it normally copies them when the assistant exits, `setup_assistant_exited`)
+        self.copy_setup_choices();
         if let Some(v) = self.prefs.get_parsed::<f32>(settings::LIQUID_GLASS_PREF) { bifrost_render::glass::set_clarity(v); }
         // start in the saved scheme with no fade
         {
@@ -1663,6 +1665,7 @@ impl Shell {
         clock::adopt_old_dir(&PathBuf::from(dir).join("appdata").join(clock::APP_ID), &data);
         // first run: the Setup Assistant opens once the session is unlocked (no app starts on the login window)
         self.open_setup_assistant_if_due(t);
+        self.apply_setup_zone();
         let mut fx = self.clock.load(&data.join("clock.ini").to_string_lossy(), t);
         fx.push(Effect::AutoLock(self.idle_off_ms as u32));
         fx
@@ -2717,12 +2720,13 @@ impl Shell {
             return;
         }
         let ui = &self.ui;
-        let clock = status::clock_in(info.hour, info.min, self.clock_style.use_24h);
+        // the status bar's time and the lock screen's large clock are the same text
         let lock_clock = lock_clock_text(&self.clock_style, &info);
+        let clock = &lock_clock;
         let short_date = status::date_text(info.wday, info.mday, info.mon);
         let minute_changed = (info.hour, info.min, info.mday) != (self.info.hour, self.info.min, self.info.mday) || self.chrome.time.is_none();
         if minute_changed {
-            self.chrome.time = Some(ui.chrome(&clock, 12.0, Weight::Semibold, WHITE));
+            self.chrome.time = Some(ui.chrome(clock, 12.0, Weight::Semibold, WHITE));
             self.chrome.date = Some(ui.chrome(&short_date, 12.0, Weight::Semibold, WHITE));
             self.lock_time = Some(ui.chrome(&lock_clock, 110.0, Weight::Semibold, WHITE));
             self.lock_date = Some(ui.chrome(&lock_date_text(&info), 22.0, Weight::Semibold, WHITE));
@@ -2766,7 +2770,7 @@ impl Shell {
     fn refresh_today(&mut self, t: f64) {
         self.today_stale = false;
         let term = self.term.as_ref().filter(|t| t.alive()).map(|t| t.tail(widgets::terminal::LINES));
-        let src = today::Sources { info: &self.info, term, unix: self.wall.now(t) };
+        let src = today::Sources { info: &self.info, term, unix: self.wall.now(t), clock_24h: self.clock_style.use_24h };
         let changed = self.today.refresh(&self.ui, &src, t);
         if changed && !self.home_widgets.is_empty() {
             self.rebuild_widgets();
@@ -4468,6 +4472,7 @@ impl Shell {
                         // the lock took the windows' toplevels down: they map again in the shell's order (E2E13 2)
                         self.desk_restack_after_unlock();
                         self.open_setup_assistant_if_due(t);
+                        self.apply_setup_zone();
                         // the lock screen's buffers are gone: hand their pages back to the system
                         #[cfg(target_env = "gnu")]
                         {

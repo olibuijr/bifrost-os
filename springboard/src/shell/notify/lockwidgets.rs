@@ -65,8 +65,9 @@ pub fn next_event(events: &[CalendarEvent], today: Date, minute: u16) -> Option<
         .min_by_key(|e| (e.date, !e.all_day, e.minute))
 }
 
-/// "Today 14:30", "Tomorrow, all day" or "Mon 5 Oct 09:00".
-pub fn when_label(e: &CalendarEvent, today: Date) -> String {
+/// "Today 14:30", "Tomorrow, all day" or "Mon 5 Oct 09:00"; with 24-Hour Time off "Today 2:30 PM". The time is written as
+/// the lock screen's clock above it writes it (`status::clock_in`).
+pub fn when_label(e: &CalendarEvent, today: Date, clock_24h: bool) -> String {
     let day = if e.date == today {
         "Today".to_string()
     } else if e.date == today.shift_days(1) {
@@ -77,7 +78,7 @@ pub fn when_label(e: &CalendarEvent, today: Date) -> String {
     if e.all_day {
         format!("{day}, all day")
     } else {
-        format!("{day} {:02}:{:02}", e.minute / 60, e.minute % 60)
+        format!("{day} {}", crate::status::clock_in((e.minute / 60) as i32, (e.minute % 60) as i32, clock_24h))
     }
 }
 
@@ -193,10 +194,12 @@ mod tests {
     #[test]
     fn labels_name_today_tomorrow_or_the_date() {
         let today = d(2026, 10, 4);
-        assert_eq!(when_label(&ev(1, today, 14 * 60 + 30, 30, false, "x"), today), "Today 14:30");
-        assert_eq!(when_label(&ev(1, d(2026, 10, 5), 0, 1440, true, "x"), today), "Tomorrow, all day");
-        assert_eq!(when_label(&ev(1, d(2026, 10, 12), 9 * 60, 30, false, "x"), today), "Mon 12 Oct 09:00");
-        assert_eq!(when_label(&ev(1, d(2026, 11, 1), 9 * 60 + 5, 30, false, "x"), d(2026, 10, 31)), "Tomorrow 09:05", "month ends roll over");
+        assert_eq!(when_label(&ev(1, today, 14 * 60 + 30, 30, false, "x"), today, true), "Today 14:30");
+        assert_eq!(when_label(&ev(1, d(2026, 10, 5), 0, 1440, true, "x"), today, true), "Tomorrow, all day");
+        assert_eq!(when_label(&ev(1, d(2026, 10, 12), 9 * 60, 30, false, "x"), today, true), "Mon 12 Oct 09:00");
+        assert_eq!(when_label(&ev(1, d(2026, 11, 1), 9 * 60 + 5, 30, false, "x"), d(2026, 10, 31), true), "Tomorrow 09:05", "month ends roll over");
+        assert_eq!(when_label(&ev(1, today, 14 * 60 + 30, 30, false, "x"), today, false), "Today 2:30 PM", "24-Hour Time off");
+        assert_eq!(when_label(&ev(1, d(2026, 10, 12), 9 * 60, 30, false, "x"), today, false), "Mon 12 Oct 9:00 AM");
     }
 
     #[test]

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- A time zone picked on the Region page is set. The assistant tried to set it itself, which its sandbox does not allow, so Get Started stopped with "The time zone could not be changed". It now records the zone and the system sets it when the assistant closes.
+
 ## 0.1.9
 
 - Get Started is remembered: the result is saved in the app's own data folder, where the shell reads it. It was saved in a folder the shell never read, so the assistant came back at every start.

@@ -923,3 +923,21 @@ fn keyboard_links_to_text_replacements_and_the_empty_list_says_so() {
     assert_eq!(page.groups[0].items[0].label, "No Text Replacements", "the list is empty in a fresh shell");
     assert_eq!(page.groups[0].items[0].action, Action::None);
 }
+
+/// Date & Time shows the time as the menu bar writes it: a zero-padded hour with 24-Hour Time on ("09:13", which read
+/// "9:13" here while the bar read "09:13"), and "9:13 AM" with it off.
+#[test]
+fn the_date_and_time_page_writes_the_time_as_the_menu_bar_does() {
+    let info = Info { hour: 9, min: 13, ..info() };
+    let time = |opts: &Options| {
+        let s = spec(PageId::DateTime, &model(&info, opts));
+        s.groups.iter().flat_map(|g| g.items.iter()).find(|i| i.label == "Time").map(|i| i.value.clone()).expect("the Time row")
+    };
+    let h24 = Options { clock_24h: true, ..Options::default() };
+    let h12 = Options { clock_24h: false, ..Options::default() };
+    assert_eq!(time(&h24), "09:13");
+    assert_eq!(time(&h12), "9:13 AM");
+    for o in [&h24, &h12] {
+        assert_eq!(time(o), o.clock_style().time_text(info.hour, info.min), "the menu bar's time part");
+    }
+}
