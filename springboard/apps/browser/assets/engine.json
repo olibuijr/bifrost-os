@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-bifrost.15",
+  "version": "0.7.0-bifrost.16",
   "upstream_version": "0.7.0",
-  "url": "https://bifrost.olibuijr.com/store/is.olibuijr.browser.desktop/servo-0.7.0-bifrost.15.tar.gz",
-  "sha256": "5e041ae3e32a43676f59ca49829c53c4759150be85c67676cb0a5fcc3d31cd3a",
+  "url": "https://bifrost.olibuijr.com/store/is.olibuijr.browser.desktop/servo-0.7.0-bifrost.16.tar.gz",
+  "sha256": "6de49021c91b5def8ddea72bd8ca7941908096bbc4c962ebfd5f403f747281d6",
   "source": "https://github.com/servo/servo/tree/v0.7.0",
   "engine": "engine/",
   "build": "tools/build-webview-engine.sh",
