@@ -16,6 +16,7 @@ mod find;
 mod forms;
 mod inspector;
 mod model;
+mod origin;
 mod password;
 mod pdfjob;
 mod pdfmarks;
@@ -26,10 +27,11 @@ mod printjob;
 mod recents;
 mod signature;
 
-use bifrost_app::controls::{Node, Role};
+use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
+use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
-use bifrost_app::proto::{DocErrorCode, DocMode};
+use bifrost_app::proto::{DocErrorCode, DocMode, GrantId};
 use bifrost_app::services::{is_viewable_path, ServiceCall};
 use bifrost_app::pasteboard::{NativePasteboard, PNG};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
@@ -42,6 +44,7 @@ use model::{Adjust, History, Mark, MarkKind, Norm, Pixels, Snapshot, Trail, View
 use password::Ask;
 use pdfjob::{Inbox, Job, Jobs, Reply};
 use prefs::Prefs;
+use origin::Origins;
 use recents::Recents;
 use signature::Signature;
 use springboard::shell::books::engine;
@@ -100,6 +103,29 @@ struct PendingExport {
     request: Option<u32>,
     what: Export,
 }
+
+/// A File > Save on its way into the file the document was opened from. The saved document is already written to
+/// `written` in the data folder; the shell is asked for a temporary file beside the original (`request`), `written` goes
+/// into it, and the commit renames it into place. Only then is the working copy `copy` replaced.
+struct OriginalSave {
+    grant: GrantId,
+    /// The save-in-place request, once it is sent (on the next frame).
+    request: Option<u32>,
+    copy: PathBuf,
+    written: PathBuf,
+}
+
+/// The alert shown when the original could not be written.
+struct SaveAlert {
+    title: String,
+    message: String,
+    /// The button Tab moved the focus ring to.
+    focus: Option<u32>,
+}
+
+/// The buttons of the save alert.
+const ALERT_SAVE_AS: u32 = 1;
+const ALERT_CANCEL: u32 = 2;
 
 /// What an export writes into the chosen file.
 enum Export {
@@ -175,6 +201,14 @@ struct Viewer {
     pending_save: Option<PathBuf>,
     /// The export waiting for the save panel's file (Export As, File > Export), until it is written or cancelled.
     pending_export: Option<PendingExport>,
+    /// The original file of each working copy, for File > Save.
+    origins: Origins,
+    /// The grants of working copies that are gone, released on the next frame.
+    released: Vec<GrantId>,
+    /// The save that is being written into the original file.
+    pending_original: Option<OriginalSave>,
+    /// The alert shown while the original could not be written.
+    save_alert: Option<SaveAlert>,
     /// The source page to show once the document is open, from the last time it was shown.
     restore_page: Option<usize>,
     /// The author's name being typed after Settings > Annotation Author.
@@ -240,6 +274,10 @@ impl Viewer {
             signatures: Vec::new(),
             pending_save: None,
             pending_export: None,
+            origins: Origins::default(),
+            released: Vec::new(),
+            pending_original: None,
+            save_alert: None,
             restore_page: None,
             authoring: None,
             after_open: None,
@@ -336,6 +374,8 @@ impl Viewer {
         self.pending_save = None;
         // an export's job belongs to the document it was asked for; the panel's answer then finds nothing to write
         self.pending_export = None;
+        // a save alert is about the document that is being replaced
+        self.save_alert = None;
         self.after_open = None;
         self.doc = None;
         self.loading = None;
@@ -373,9 +413,32 @@ impl Viewer {
 
     /// Removes the working copies of files that are no longer open and no longer in Open Recent (see
     /// `recents::sweep_copies`). Runs at start, when another document opens and when Open Recent is cleared.
-    fn sweep_copies(&self) {
+    /// The originals of the removed copies are forgotten and their grants are given back on the next frame.
+    fn sweep_copies(&mut self) {
         let open = self.doc.as_ref().map(|d| d.path.as_path()).or(self.loading.as_ref().map(|l| l.path.as_path()));
-        recents::sweep_copies(&self.data_dir, &self.recents, open);
+        if recents::sweep_copies(&self.data_dir, &self.recents, open) > 0 {
+            let gone = self.origins.prune(&self.data_dir);
+            if !gone.is_empty() {
+                self.released.extend(gone);
+                let _ = origin::save(&self.data_dir, &self.origins);
+            }
+        }
+    }
+
+    /// Notes that the working copy named `name` was made from the file `grant` names, so File > Save reaches that file.
+    /// `None` is a copy with no original (a clipboard picture, a file merged into a PDF): the name's old original, if
+    /// any, is forgotten, so a save never goes to a file the copy did not come from.
+    fn set_origin(&mut self, name: &str, grant: Option<GrantId>) {
+        let name = recents::copy_name(name);
+        let old = match grant {
+            Some(grant) => self.origins.set(&name, grant),
+            None => self.origins.forget(&name),
+        };
+        if grant.is_none() && old.is_none() {
+            return;
+        }
+        self.released.extend(old);
+        let _ = origin::save(&self.data_dir, &self.origins);
     }
 
     /// Puts `path` first in Open Recent and saves the list.
@@ -417,9 +480,9 @@ impl Viewer {
         dir.join(format!("{stem}.{ext}"))
     }
 
-    /// File > Save: the markup, page order and turns are written into the document's file, and the file is opened again.
-    /// A picture is written as a picture in the format of its file. A PDF is written by its worker and then copied over.
-    /// The copy is the one the window opened, for a file chosen in the open panel.
+    /// File > Save: the markup, page order and turns are written into the file the document was opened from, and the
+    /// file is opened again. A picture is written as a picture in the format of its file; a PDF is written by its
+    /// worker. Either way the saved document is first written into the data folder, and `save_written` takes it on.
     fn save_document(&mut self) {
         self.stop_editing();
         let Some(doc) = &self.doc else {
@@ -441,31 +504,132 @@ impl Viewer {
         let page = self.view.page;
         let Some(src) = doc.source_of(page) else { return };
         let Some(img) = doc.picture(page) else { return };
-        let raster = match path.extension().and_then(|e| e.to_str()) {
-            Some(ext) if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") => Raster::Jpeg(self.jpeg_quality),
-            _ => Raster::Png,
-        };
+        let raster = raster_of(&path, self.jpeg_quality);
         let out = export::finish(&img, &doc.marks, src, doc.turn_of(page), &self.adjust, 1.0);
         let temp = self.saving_file(&path, raster.ext());
-        let written = export::write_image(&out, raster, &temp).and_then(|()| std::fs::copy(&temp, &path).map(|_| ()).map_err(|e| e.to_string()));
-        match written {
-            Ok(()) => {
-                let message = format!("Saved {}", name_of(&path));
-                self.reopen(&path, message);
-            }
+        match export::write_image(&out, raster, &temp) {
+            Ok(()) => self.save_written(path, temp),
             Err(e) => self.status = format!("Save failed: {e}"),
         }
     }
 
-    /// The PDF worker wrote the saved copy: it replaces the file the document was opened from.
-    fn finish_save(&mut self, original: PathBuf, result: Result<PathBuf, String>) {
-        let copied = result.and_then(|temp| std::fs::copy(&temp, &original).map(|_| ()).map_err(|e| e.to_string()));
-        match copied {
-            Ok(()) => {
-                let message = format!("Saved {}", name_of(&original));
-                self.reopen(&original, message);
-            }
+    /// The PDF worker wrote the saved document.
+    fn finish_save(&mut self, copy: PathBuf, result: Result<PathBuf, String>) {
+        match result {
+            Ok(written) => self.save_written(copy, written),
             Err(e) => self.status = format!("Save failed: {e}"),
+        }
+    }
+
+    /// The saved document is in `written`. For a working copy whose original is known it goes into the original first
+    /// (`pump` asks the shell for the file, `document` fills and commits it) and into the copy once that is done. A
+    /// document with no original (a clipboard picture, a screenshot) is its own file, and is written at once.
+    fn save_written(&mut self, copy: PathBuf, written: PathBuf) {
+        match self.origins.grant_of(&self.data_dir, &copy) {
+            Some(grant) => {
+                self.pending_original = Some(OriginalSave { grant, request: None, copy, written });
+                self.status = "Saving".into();
+            }
+            None => self.finish_copy_save(&copy, &written),
+        }
+    }
+
+    /// Whether `request` is the save into the original that is under way.
+    fn saving_original(&self, request: u32) -> bool {
+        self.pending_original.as_ref().is_some_and(|p| p.request == Some(request))
+    }
+
+    /// The shell committed the save: the original holds the document, so the working copy is brought in step and the
+    /// document is opened again without its markup (which is in the file now).
+    fn original_saved(&mut self) {
+        let Some(OriginalSave { copy, written, .. }) = self.pending_original.take() else { return };
+        self.finish_copy_save(&copy, &written);
+    }
+
+    /// Replaces the working copy with the saved document and opens it again, when it is still the open document.
+    fn finish_copy_save(&mut self, copy: &Path, written: &Path) {
+        let name = name_of(copy);
+        match origin::update_copy(written, copy) {
+            Ok(()) if self.doc.as_ref().is_some_and(|d| d.path == copy) => self.reopen(copy, format!("Saved {name}")),
+            Ok(()) => {}
+            Err(e) => self.status = format!("Saved {name}, but Viewer could not update its own copy: {e}"),
+        }
+    }
+
+    /// The original could not be written (`code` is the shell's refusal; None is a failure while writing). The working
+    /// copy and the document's unsaved changes stay as they are, and an alert offers Save As.
+    fn original_failed(&mut self, code: Option<DocErrorCode>) {
+        let Some(OriginalSave { copy, .. }) = self.pending_original.take() else { return };
+        let name = name_of(&copy);
+        if !self.doc.as_ref().is_some_and(|d| d.path == copy) {
+            self.status = format!("{name} could not be saved.");
+            return;
+        }
+        self.status = "Save failed".into();
+        self.save_alert = Some(SaveAlert {
+            title: format!("\u{201c}{name}\u{201d} could not be saved."),
+            message: format!("{} Choose Save As to keep your changes in another file.", origin::failure_reason(code)),
+            focus: None,
+        });
+    }
+
+    /// The save alert while it is up.
+    fn save_sheet(&self) -> Option<Sheet> {
+        let alert = self.save_alert.as_ref()?;
+        let buttons = vec![SheetButton::new(ALERT_SAVE_AS, "Save As\u{2026}", ButtonRole::Default), SheetButton::new(ALERT_CANCEL, "Cancel", ButtonRole::Cancel)];
+        Some(Sheet::alert(&alert.title, &alert.message, buttons).with_focus(alert.focus))
+    }
+
+    /// A button of the save alert was pressed: the alert goes, and Save As asks where to save.
+    fn answer_save_alert(&mut self, choice: u32) {
+        self.save_alert = None;
+        if choice == ALERT_SAVE_AS {
+            self.save_as();
+        }
+    }
+
+    /// Save As: the document as it is, in the format of its file and at its own size, goes into a file chosen in the
+    /// save panel (the export path).
+    fn save_as(&mut self) {
+        let Some(doc) = &self.doc else { return };
+        if doc.is_pdf {
+            self.export_pdf();
+            return;
+        }
+        let raster = raster_of(&doc.path, self.jpeg_quality);
+        let scale = std::mem::replace(&mut self.export_scale, 1.0);
+        self.export_raster(raster);
+        self.export_scale = scale;
+    }
+
+    /// A key while the save alert is up, through the kit's sheet keys: Return is Save As, Escape and Cmd+. cancel, Tab
+    /// moves the focus ring and Space presses the focused button. The alert takes every key.
+    fn key_save_alert(&mut self, key: &KeyInput) -> bool {
+        use bifrost_app::document::{sheet_key, AlertKey};
+        let Some(mut sheet) = self.save_sheet() else { return false };
+        match sheet_key(&mut sheet, key) {
+            AlertKey::Answer(choice) => self.answer_save_alert(choice),
+            AlertKey::Focus => {
+                if let Some(alert) = &mut self.save_alert {
+                    alert.focus = sheet.focus;
+                }
+            }
+            AlertKey::Ignored => return false,
+        }
+        true
+    }
+
+    /// A press at window pixel `(x, y)` while the save alert is up: its buttons answer, the rest is blocked.
+    fn press_save_alert(&mut self, ui: &Ui, lay: &Layout, x: f32, y: f32) -> bool {
+        let Some(sheet) = self.save_sheet() else { return false };
+        let (parent, bar) = sheet_parent(ui, lay);
+        let k = ui.pt(1.0);
+        match sheet.hit(parent, bar, 1.0, x / k, y / k) {
+            Hit::Button(choice) => {
+                self.answer_save_alert(choice);
+                true
+            }
+            _ => false,
         }
     }
 
@@ -663,10 +827,11 @@ impl Viewer {
         }
     }
 
-    /// Shows the open panel for PDFs and pictures.
+    /// Shows the open panel for PDFs and pictures. The file is asked for read-write, so File > Save can write it back
+    /// (a file the person may not write still opens, read-only).
     fn show_open_panel(&self, ctx: &Ctx) {
         let options = OpenOptions {
-            mode: DocMode::Read,
+            mode: DocMode::Write,
             title: "Open".into(),
             filters: document::open_types(),
             ..Default::default()
@@ -845,6 +1010,15 @@ impl Viewer {
                     changed = true;
                     self.status = document::open_failure(&name_of(&loading.path), &e);
                 }
+            }
+        }
+        for grant in self.released.drain(..) {
+            ctx.release_document(grant);
+        }
+        // a save asks for the file beside the original once: the shell answers with `DocumentEvent::SaveTo`
+        if let Some(pending) = self.pending_original.as_mut() {
+            if pending.request.is_none() {
+                pending.request = Some(ctx.save_document_in_place(pending.grant));
             }
         }
         // an export asks for its file once: the save panel answers with `DocumentEvent::SaveTo`
@@ -1525,7 +1699,10 @@ impl Viewer {
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let name = document::clipboard_file_name(&bytes, stamp);
         match recents::keep_copy(&self.data_dir, &name, &bytes) {
-            Ok(path) => self.open_path(&path),
+            Ok(path) => {
+                self.set_origin(&name, None);
+                self.open_path(&path)
+            }
             Err(e) => self.status = format!("Could not keep the clipboard picture: {e}"),
         }
     }
@@ -1898,6 +2075,9 @@ impl Viewer {
 
     fn touch(&mut self, ui: &Ui, width: i32, height: i32, kind: TouchKind, x: f32, y: f32) -> bool {
         let lay = self.layout(ui, width, height);
+        if self.save_alert.is_some() {
+            return kind == TouchKind::Down && self.press_save_alert(ui, &lay, x, y);
+        }
         let (cx, cy, cw, ch) = lay.canvas();
         let over_canvas = x >= cx as f32 && x < (cx + cw) as f32 && y >= cy as f32 && y < (cy + ch) as f32;
         if self.loupe_on && over_canvas {
@@ -2230,6 +2410,9 @@ impl Viewer {
     }
 
     fn key(&mut self, ctx: &Ctx, key: KeyInput) -> bool {
+        if self.save_alert.is_some() {
+            return self.key_save_alert(&key);
+        }
         if self.asking.is_some() {
             return self.key_password(&key);
         }
@@ -2295,6 +2478,20 @@ impl Viewer {
     fn size(&self, ctx: &Ctx) -> (i32, i32) {
         (ctx.cfg.w as i32, ctx.cfg.h as i32)
     }
+}
+
+/// The format File > Save and Save As write a picture in: the format of its file for a JPEG, PNG for every other.
+fn raster_of(path: &Path, jpeg_quality: u8) -> Raster {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some(ext) if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") => Raster::Jpeg(jpeg_quality),
+        _ => Raster::Png,
+    }
+}
+
+/// The window in points (the parent of the save alert) and the height of its toolbar, which the alert hangs from.
+fn sheet_parent(ui: &Ui, lay: &Layout) -> (Rect, f32) {
+    let k = ui.pt(1.0);
+    (Rect { x: 0.0, y: 0.0, w: lay.w as f32 / k, h: lay.h as f32 / k }, lay.bar as f32 / k)
 }
 
 /// A stroke on source page `page`, with its bounding box as its rectangle.
@@ -2408,6 +2605,7 @@ impl App for Viewer {
         if self.data_dir.as_os_str().is_empty() {
             self.data_dir = ctx.data_dir.clone();
             self.recents = recents::load(&self.data_dir);
+            self.origins = origin::load(&self.data_dir);
             // copies left by earlier runs that Open Recent no longer lists
             self.sweep_copies();
             self.prefs = prefs::load(&self.data_dir);
@@ -2685,9 +2883,30 @@ impl App for Viewer {
             .collect()
     }
 
-    /// The answer to the open panel: the chosen file is copied into the app's data folder and opened from there.
+    /// The answer to the open panel: the chosen file is copied into the app's data folder and opened from there, and
+    /// its grant is kept so File > Save writes the chosen file. The answers to that save arrive here too.
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
         let doc = match ev {
+            DocumentEvent::SaveTo(mut doc) if self.saving_original(doc.request) => {
+                let written = self.pending_original.as_ref().map(|p| p.written.clone()).unwrap_or_default();
+                match origin::fill(&written, &mut doc.file) {
+                    Ok(()) => ctx.commit_document(doc.request),
+                    Err(_) => {
+                        ctx.abort_document(doc.request);
+                        self.original_failed(None);
+                    }
+                }
+                return true;
+            }
+            // the grant is the original's own, which the next save needs: it is kept
+            DocumentEvent::Saved(doc) if self.saving_original(doc.request) => {
+                self.original_saved();
+                return true;
+            }
+            DocumentEvent::Failed { request, code } if self.saving_original(request) => {
+                self.original_failed(Some(code));
+                return true;
+            }
             DocumentEvent::Opened(doc) => doc,
             DocumentEvent::OpenedMany { docs, .. } => match docs.into_iter().next() {
                 Some(doc) => doc,
@@ -2712,20 +2931,32 @@ impl App for Viewer {
         };
         let mut bytes = Vec::new();
         if let Err(e) = (&doc.file).read_to_end(&mut bytes) {
+            ctx.release_document(doc.grant);
             self.status = document::open_failure(&doc.name, document::read_error(&e));
             return true;
         }
         // a file chosen by Pages > Insert > Page from File is merged into the document instead of opened
         if let Some(at) = self.insert_at.take() {
+            // the merged file is only read: its grant is not needed, and its copy has no original to save to
+            ctx.release_document(doc.grant);
             match recents::keep_copy(&self.data_dir, &doc.name, &bytes) {
-                Ok(path) => self.insert_pages(pdfmarks::Insertion::File { path, at }),
+                Ok(path) => {
+                    self.set_origin(&doc.name, None);
+                    self.insert_pages(pdfmarks::Insertion::File { path, at })
+                }
                 Err(e) => self.status = format!("Could not insert {}: {e}", doc.name),
             }
             return true;
         }
         match recents::keep_copy(&self.data_dir, &doc.name, &bytes) {
-            Ok(path) => self.open_path(&path),
-            Err(e) => self.status = document::open_failure(&doc.name, &format!("Viewer could not keep its working copy ({})", e.kind())),
+            Ok(path) => {
+                self.set_origin(&doc.name, Some(doc.grant));
+                self.open_path(&path)
+            }
+            Err(e) => {
+                ctx.release_document(doc.grant);
+                self.status = document::open_failure(&doc.name, &format!("Viewer could not keep its working copy ({})", e.kind()))
+            }
         }
         true
     }
@@ -2791,6 +3022,10 @@ impl App for Viewer {
             signatures,
         };
         canvas::draw(s, &ctx.ui, &lay, &scene, &mut self.cache);
+        if let Some(sheet) = self.save_sheet() {
+            let (parent, bar) = sheet_parent(&ctx.ui, &lay);
+            bifrost_app::widgets::sheet(s, &ctx.ui, parent, bar, &sheet, 1.0, None);
+        }
         let mut d = Damage::new(s.w, s.h);
         d.all();
         d
@@ -3120,5 +3355,109 @@ mod tests {
         let edit: Vec<&str> = menus.iter().filter(|m| m.title == "Edit").flat_map(|m| m.items.iter().map(|i| i.title.as_str())).collect();
         assert!(edit.contains(&"Find\u{2026}") && edit.contains(&"Find Next") && edit.contains(&"Find Previous"));
         assert!(!edit.iter().any(|t| matches!(*t, "Undo" | "Redo" | "Copy" | "Select All")), "the shell's Edit has these already");
+    }
+
+    /// A viewer whose picture is the working copy `opened/b.png` in a data folder of its own, as after the open panel.
+    fn viewer_on_copy(name: &str) -> (Viewer, PathBuf) {
+        let mut v = viewer_with(Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] });
+        v.data_dir = std::env::temp_dir().join(format!("viewer-save-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&v.data_dir);
+        let copy = recents::keep_copy(&v.data_dir, "b.png", b"as opened").unwrap();
+        v.doc.as_mut().unwrap().path = copy.clone();
+        (v, copy)
+    }
+
+    #[test]
+    fn save_goes_to_the_original_first_and_the_copy_follows_the_commit() {
+        let (mut v, copy) = viewer_on_copy("commit");
+        v.set_origin("b.png", Some([9; 16]));
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
+        v.save_document();
+        let pending = v.pending_original.as_ref().expect("the save waits for the file beside the original");
+        assert_eq!((pending.grant, pending.request, &pending.copy), ([9; 16], None, &copy));
+        assert!(std::fs::read(&pending.written).unwrap().starts_with(b"\x89PNG"));
+        assert_eq!(std::fs::read(&copy).unwrap(), b"as opened", "the copy is not written before the original");
+        assert_eq!(v.doc.as_ref().unwrap().marks.len(), 1, "the changes stay unsaved until the original is written");
+        // the next frame asks the shell to save in place through the original's grant
+        let ctx = menu_ctx();
+        v.pump(&ctx);
+        let request = v.pending_original.as_ref().unwrap().request.expect("the request is sent");
+        assert!(matches!(ctx.take_sent()[..], [bifrost_app::proto::ToShell::DocSaveGrant { grant: [9, ..], .. }]));
+        assert!(v.saving_original(request) && !v.saving_original(request + 1));
+        v.pump(&ctx);
+        assert!(ctx.take_sent().is_empty(), "it is asked for once");
+        // the shell committed: the copy takes the saved picture and the document opens again from it, clean
+        v.original_saved();
+        assert!(v.pending_original.is_none());
+        assert!(std::fs::read(&copy).unwrap().starts_with(b"\x89PNG"));
+        assert_eq!(v.status, "Saved b.png");
+        let doc = v.doc.as_ref().expect("the saved picture is open");
+        assert!(doc.path == copy && doc.marks.is_empty());
+        assert_eq!(v.origins.grant_of(&v.data_dir, &copy), Some([9; 16]), "the next save reaches the original too");
+        cleanup(&v);
+    }
+
+    #[test]
+    fn a_refused_save_keeps_the_changes_and_the_alert_offers_save_as() {
+        let (mut v, copy) = viewer_on_copy("refused");
+        v.set_origin("b.png", Some([9; 16]));
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
+        v.save_document();
+        let ctx = menu_ctx();
+        v.pump(&ctx);
+        // a read-only file or volume: the shell refuses the save in place
+        v.original_failed(Some(DocErrorCode::Denied));
+        assert!(v.pending_original.is_none());
+        assert_eq!(std::fs::read(&copy).unwrap(), b"as opened", "the copy stays in step with the original");
+        assert_eq!(v.doc.as_ref().unwrap().marks.len(), 1, "the document is still edited");
+        let sheet = v.save_sheet().expect("the alert is up");
+        assert!(sheet.title.contains("b.png") && sheet.message.contains("read-only") && sheet.message.contains("Save As"));
+        assert_eq!(sheet.default_button(), Some(ALERT_SAVE_AS));
+        // Tab moves the ring, Escape cancels and leaves everything as it is
+        assert!(v.key(&ctx, KeyInput::Code(9)) && v.save_sheet().unwrap().focus.is_some());
+        assert!(v.key(&ctx, KeyInput::Code(27)));
+        assert!(v.save_alert.is_none() && v.pending_export.is_none());
+        // Return is Save As: the picture in its own format waits for the save panel
+        v.original_failed(None);
+        assert!(v.save_alert.is_none(), "no save is under way, so nothing failed");
+        v.save_document();
+        v.original_failed(Some(DocErrorCode::NotFound));
+        assert!(v.save_sheet().unwrap().message.contains("no longer there"));
+        assert!(v.key(&ctx, KeyInput::Code(13)));
+        assert!(v.save_alert.is_none());
+        let export = v.pending_export.as_ref().expect("Save As asks where to save");
+        assert_eq!((export.name.as_str(), export.ext), ("b-markup.png", "png"));
+        assert_eq!(v.doc.as_ref().unwrap().marks.len(), 1);
+        cleanup(&v);
+    }
+
+    #[test]
+    fn a_document_with_no_original_is_saved_into_its_own_file() {
+        let (mut v, copy) = viewer_on_copy("own");
+        // the copy was made from a chosen file once, then replaced by a clipboard picture of the same name
+        v.set_origin("b.png", Some([9; 16]));
+        v.set_origin("b.png", None);
+        assert_eq!(v.released, [[9; 16]], "the grant is given back");
+        v.save_document();
+        assert!(v.pending_original.is_none() && v.save_alert.is_none());
+        assert!(std::fs::read(&copy).unwrap().starts_with(b"\x89PNG"));
+        assert_eq!(v.status, "Saved b.png");
+        let ctx = menu_ctx();
+        v.pump(&ctx);
+        assert!(matches!(ctx.take_sent()[..], [bifrost_app::proto::ToShell::DocRelease { grant: [9, ..] }]));
+        cleanup(&v);
+    }
+
+    #[test]
+    fn a_save_that_ends_after_another_document_opened_does_not_touch_that_document() {
+        let (mut v, copy) = viewer_on_copy("moved-on");
+        v.set_origin("b.png", Some([9; 16]));
+        v.save_document();
+        v.doc.as_mut().unwrap().path = PathBuf::from("/a/other.png");
+        v.original_failed(Some(DocErrorCode::Denied));
+        assert!(v.save_alert.is_none(), "no alert about a document that is not open");
+        assert_eq!(v.status, "b.png could not be saved.");
+        assert_eq!(std::fs::read(&copy).unwrap(), b"as opened");
+        cleanup(&v);
     }
 }
