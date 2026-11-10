@@ -1426,6 +1426,12 @@ fn send_message(chan: &Channel, m: &ToShell) {
     match m {
         ToShell::PasteboardSet { items } if !crate::proto::pbblob::fits_inline(items) => send_blob(chan, items),
         ToShell::SetClipboard { text } if text.len() > crate::proto::MAX_INLINE_TEXT => send_blob(chan, &[(crate::pasteboard::STRING.to_string(), text.clone().into_bytes())]),
+        // a drag image's pixels do not fit a packet: they go in a descriptor, and without one nothing is sent
+        ToShell::DragImage { w, h, rgba, .. } => {
+            if let Ok(fd) = crate::proto::rich::drag_image_fd(*w, *h, rgba) {
+                let _ = chan.send(&m.encode(), &[fd.0]);
+            }
+        }
         _ => {
             let _ = chan.send(&m.encode(), &[]);
         }

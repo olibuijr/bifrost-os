@@ -414,7 +414,8 @@ impl App for Files {
         handled
     }
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
-        self.service_answer(request, result)
+        // the reply is for the window that made the call: a New Window window's paste, eject or preview is its own
+        self.service_answer(request, result) || self.windows.iter_mut().any(|e| e.files.service_answer(request, result))
     }
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &bifrost_core::json::Json) -> bool {
         if service == bifrost_core::disk_wire::SERVICE {
@@ -423,22 +424,42 @@ impl App for Files {
         if !bifrost_app::quick_look::is_quick_look(service) {
             return false;
         }
-        match bifrost_app::quick_look::event(event, body) {
-            Some(e) => self.preview_event(e),
-            None => false,
+        let Some(e) = bifrost_app::quick_look::event(event, body) else { return false };
+        // the panel shows the items of the window that opened it
+        if self.sys.preview.is_none() {
+            if let Some(w) = self.windows.iter_mut().find(|w| w.files.sys.preview.is_some()) {
+                return w.files.preview_event(e);
+            }
         }
+        self.preview_event(e)
     }
     fn drag(&mut self, ctx: &Ctx, ev: bifrost_app::dnd::Event) -> bool {
+        // a session belongs to the window that began it (or that another app's drag is over): a drag out of a New
+        // Window window is that window's, to its end
         match ev {
-            bifrost_app::dnd::Event::Dest { session, phase, x, y, allowed, items } => self.drag_out_dest(ctx, session, phase, x / ctx.ui.s, y / ctx.ui.s, allowed, items),
-            bifrost_app::dnd::Event::Ended { session, .. } => self.drag_out_ended(ctx, session),
+            bifrost_app::dnd::Event::Dest { session, phase, x, y, allowed, items } => {
+                let (x, y) = (x / ctx.ui.s, y / ctx.ui.s);
+                match self.drag_window(session) {
+                    Some(i) => self.windows[i].files.drag_out_dest(ctx, session, phase, x, y, allowed, items),
+                    None => self.drag_out_dest(ctx, session, phase, x, y, allowed, items),
+                }
+            }
+            bifrost_app::dnd::Event::Ended { session, .. } => match self.drag_window(session) {
+                Some(i) => self.windows[i].files.drag_out_ended(ctx, session),
+                None => self.drag_out_ended(ctx, session),
+            },
         }
     }
     fn document(&mut self, ctx: &Ctx, ev: bifrost_app::DocumentEvent) -> bool {
         // a grant for an Open goes to the workspace; the rest belong to drag and drop
         match system::open_answer(ctx, ev) {
             Ok(changed) => changed,
-            Err(ev) => self.drag_out_document(ctx, ev),
+            // the grant a drag asked for goes to the window whose drag it is: answered to the main window, a New
+            // Window window's grants were handed back and its drag never became a session
+            Err(ev) => match self.document_window(&ev) {
+                Some(i) => self.windows[i].files.drag_out_document(ctx, ev),
+                None => self.drag_out_document(ctx, ev),
+            },
         }
     }
     fn window_event(&mut self, ctx: &Ctx, window: WindowId, ev: Input) -> bool {
@@ -472,24 +493,22 @@ impl App for Files {
         self.close_extra(window)
     }
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
-        // the pictures the thumbnail workers finished, for this window and the New Window ones
-        let mut changed = self.vo.poll_thumbs();
-        // a finger that has rested on an item long enough lifts it
-        changed |= self.hold_tick(ctx, t);
+        // the one watch stream: the data folder (Show in Files), every window's open folder and the media folders
+        self.sync_watch();
+        let now = Instant::now();
+        let events = self.poll_watch(now);
+        self.spread_events(events);
+        // a volume mounted or unmounted while the app runs: every sidebar follows the mount table
+        let mut changed = self.follow_mounts(now, false);
+        // this window, then the New Window ones: each has its own listing, search, job and folder events
+        changed |= self.tick_view(ctx, t);
+        let mut opened = Vec::new();
         for e in &mut self.windows {
-            changed |= e.files.hold_tick(ctx, t);
-            if e.files.vo.poll_thumbs() {
-                e.files.revision += 1;
-                changed = true;
-            }
+            changed |= e.files.tick_view(ctx, t);
+            // a window that window opened (Get Info) is drawn and closed from here, with the others
+            opened.append(&mut e.files.windows);
         }
-        changed |= self.poll_search();
-        // the shell would not open an app from the Applications place (not installed any more, or not an app)
-        if let Some(name) = self.sys.take_app_open_failure() {
-            self.notice = Some(format!("\u{201C}{name}\u{201D} can\u{2019}t be opened."));
-            self.revision += 1;
-            changed = true;
-        }
+        self.windows.extend(opened);
         // a file the shell would not open (no app declares its type, or the grant was refused)
         if let Some(name) = system::take_open_failure() {
             self.notice = Some(format!("The document \u{201C}{name}\u{201D} could not be opened."));
@@ -503,24 +522,103 @@ impl App for Files {
             }
             changed = true;
         }
-        if self.poll_server() {
-            changed = true;
-        }
-        if self.spring_tick() {
-            changed = true;
-        }
         // Show in Files: the shell or the helper leaves a request (a folder, perhaps an item to select) in our data folder
-        let events = self.watch.as_mut().map(|w| w.poll(std::time::Instant::now())).unwrap_or_default();
-        self.record_events(events);
-        if self.catch_up() {
-            changed = true;
-        }
         if let Some(request) = handoff::take_request(&ctx.data_dir) {
             self.show_request(request);
             changed = true;
         }
         // a provider thread left a footer message (a download failed, or the file is on its way to its app)
         if self.take_provider_notice() {
+            changed = true;
+        }
+        self.ctl_tick();
+        // a badge an extension answered with is drawn on this frame
+        if self.poll_extensions() {
+            changed = true;
+        }
+        self.flush_services(ctx);
+        if changed {
+            self.revision += 1;
+        }
+        changed
+    }
+    /// No timer: jobs and searches wake the loop through their `Feed`, and Show in Files through the data-folder watch.
+    fn next_wake(&self, t: f64) -> Option<f64> {
+        // a drag hovering over a folder opens it; a batch of folder events matures; otherwise the loop sleeps
+        let events = self.watch_deadline(Instant::now());
+        let hovering = self.fx.spring.is_some() || self.windows.iter().any(|e| e.files.fx.spring.is_some());
+        let wake = wake_at(t, hovering, events);
+        // a disk or a media folder just changed: its mount follows, and the mount table is read until it has
+        let mounts = self.fx.mounts_until.map(|_| t + MOUNT_POLL_MS);
+        let wake = match (wake, mounts) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+        // a finger resting on an item lifts it when its hold time is up
+        let hold = self.hold_due().into_iter().chain(self.windows.iter().filter_map(|e| e.files.hold_due())).reduce(f64::min);
+        let wake = match (wake, hold) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+        // a thumbnail being drawn is taken by the next tick
+        if self.vo.thumbs_pending() || self.windows.iter().any(|e| e.files.vo.thumbs_pending()) {
+            let soon = t + THUMB_POLL_MS;
+            return Some(wake.map_or(soon, |w| w.min(soon)));
+        }
+        wake
+    }
+    fn wake_fd(&self) -> Option<i32> {
+        self.watch.as_ref().and_then(|w| w.fd())
+    }
+    /// A background Files window stays on screen: it follows the open folder (files added, removed or renamed by
+    /// another app or a shell) instead of showing the listing it had when it lost focus.
+    fn ticks_in_background(&self) -> bool {
+        true
+    }
+    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _: f64) -> Damage {
+        self.render(&ctx.ui,s)
+    }
+}
+/// How often a drag hovering over a folder is checked for its spring-loaded open (ms).
+const SPRING_POLL_MS: f64 = 100.0;
+/// How often the mount table is read for a few seconds after a disk or a media folder changed (ms).
+const MOUNT_POLL_MS: f64 = 1000.0;
+/// How soon the loop wakes to take a thumbnail the workers are drawing.
+const THUMB_POLL_MS: f64 = 50.0;
+
+/// When the loop wakes, in ms like `t`: soon while a drag hovers (spring-loading), when the next batch of folder events
+/// matures (`events` from now), else never.
+fn wake_at(t: f64, spring: bool, events: Option<Duration>) -> Option<f64> {
+    let spring = spring.then_some(t + SPRING_POLL_MS);
+    let events = events.map(|d| t + d.as_secs_f64() * 1000.0);
+    match (spring, events) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    }
+}
+impl Files {
+    /// One window's share of `tick`: what its own workers and its folder's events brought. The main window runs it
+    /// for itself and for every New Window window, so each window's listing lands, its search streams in, its job
+    /// makes progress and its folder follows changes made elsewhere. True when the window needs a frame.
+    pub(crate) fn tick_view(&mut self, ctx: &Ctx, t: f64) -> bool {
+        // the pictures the thumbnail workers finished
+        let mut changed = self.vo.poll_thumbs();
+        // a finger that has rested on an item long enough lifts it
+        changed |= self.hold_tick(ctx, t);
+        changed |= self.poll_search();
+        // the shell would not open an app from the Applications place (not installed any more, or not an app)
+        if let Some(name) = self.sys.take_app_open_failure() {
+            self.notice = Some(format!("\u{201C}{name}\u{201D} can\u{2019}t be opened."));
+            changed = true;
+        }
+        if self.poll_server() {
+            changed = true;
+        }
+        if self.spring_tick() {
+            changed = true;
+        }
+        // the folder events the journal took since the last look
+        if self.catch_up() {
             changed = true;
         }
         // a folder's batches land as the worker reads them; the final listing replaces them and ends the load
@@ -548,6 +646,8 @@ impl App for Files {
                         self.listing = rows;
                         self.refresh_rows();
                         self.reselect(&keep);
+                        // a folder read again in place is where it was: its scroll and its selection
+                        self.restore_place();
                         // a renamed item stays selected, and a new folder opens its name for editing
                         self.apply_pending();
                     }
@@ -558,6 +658,7 @@ impl App for Files {
                         self.refresh_rows();
                         self.error = Some(e);
                         self.fx.pending = None;
+                        self.fx.relist = None;
                     }
                 }
             }
@@ -599,63 +700,15 @@ impl App for Files {
             }
             changed = true;
         }
-        self.ctl_tick();
-        // a badge an extension answered with is drawn on this frame
-        if self.poll_extensions() {
-            changed = true;
-        }
-        self.flush_services(ctx);
-        if changed {
-            self.revision += 1;
+        // the service calls this window's handlers queued; the main window's `tick` sends its own at its end
+        if self.fx.extra_window {
+            self.flush_services(ctx);
+            if changed {
+                self.revision += 1;
+            }
         }
         changed
     }
-    /// No timer: jobs and searches wake the loop through their `Feed`, and Show in Files through the data-folder watch.
-    fn next_wake(&self, t: f64) -> Option<f64> {
-        // a drag hovering over a folder opens it; a batch of folder events matures; otherwise the loop sleeps
-        let events = self.watch.as_ref().and_then(|w| w.next_deadline(Instant::now()));
-        let wake = wake_at(t, self.fx.spring.is_some(), events);
-        // a finger resting on an item lifts it when its hold time is up
-        let hold = self.hold_due().into_iter().chain(self.windows.iter().filter_map(|e| e.files.hold_due())).reduce(f64::min);
-        let wake = match (wake, hold) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        };
-        // a thumbnail being drawn is taken by the next tick
-        if self.vo.thumbs_pending() || self.windows.iter().any(|e| e.files.vo.thumbs_pending()) {
-            let soon = t + THUMB_POLL_MS;
-            return Some(wake.map_or(soon, |w| w.min(soon)));
-        }
-        wake
-    }
-    fn wake_fd(&self) -> Option<i32> {
-        self.watch.as_ref().and_then(|w| w.fd())
-    }
-    /// A background Files window stays on screen: it follows the open folder (files added, removed or renamed by
-    /// another app or a shell) instead of showing the listing it had when it lost focus.
-    fn ticks_in_background(&self) -> bool {
-        true
-    }
-    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _: f64) -> Damage {
-        self.render(&ctx.ui,s)
-    }
-}
-/// How often a drag hovering over a folder is checked for its spring-loaded open (ms).
-const SPRING_POLL_MS: f64 = 100.0;
-/// How soon the loop wakes to take a thumbnail the workers are drawing.
-const THUMB_POLL_MS: f64 = 50.0;
-
-/// When the loop wakes, in ms like `t`: soon while a drag hovers (spring-loading), when the next batch of folder events
-/// matures (`events` from now), else never.
-fn wake_at(t: f64, spring: bool, events: Option<Duration>) -> Option<f64> {
-    let spring = spring.then_some(t + SPRING_POLL_MS);
-    let events = events.map(|d| t + d.as_secs_f64() * 1000.0);
-    match (spring, events) {
-        (Some(a), Some(b)) => Some(a.min(b)),
-        (a, b) => a.or(b),
-    }
-}
-impl Files {
     /// Routes one input to its handler. `event` sends the service calls the handler queued.
     fn route_input(&mut self, ctx: &Ctx, input: Input) -> bool {
         if self.goto_input(&input) {
@@ -789,14 +842,24 @@ impl Files {
                     self.down = None;
                     self.revision += 1;
                     self.fx.spring = None;
+                    // the target of the last move, else what is under the release: after a folder sprang open under
+                    // a finger that then did not move, that is the folder's own background
+                    let dest = self.drop_target.take().or_else(|| self.drop_target_at(x / ctx.ui.s, y / ctx.ui.s));
                     let paths = std::mem::take(&mut self.fx.drag_paths);
                     let copy = std::mem::take(&mut self.fx.copy_drag);
-                    if let Some(dest) = self.drop_target.take() {
-                        // Option held during the drag copies, as in Files
-                        if copy {
-                            self.start_job("Copying", JobKind::Transfer(Op::Copy), paths, dest);
-                        } else {
-                            self.start_job("Moving", JobKind::Transfer(Op::Move), paths, dest);
+                    match dest {
+                        Some(dest) => {
+                            self.spring_keep();
+                            // Option held during the drag copies, as in Files
+                            if copy {
+                                self.start_job("Copying", JobKind::Transfer(Op::Copy), paths, dest);
+                            } else {
+                                self.start_job("Moving", JobKind::Transfer(Op::Move), paths, dest);
+                            }
+                        }
+                        // released over nothing that takes the items: a folder the drag sprang open is left again
+                        None => {
+                            self.spring_return();
                         }
                     }
                 } else if let Some((sx, sy, _)) = self.down.take() {
@@ -859,6 +922,14 @@ impl Files {
                         46 if self.searching => {
                             self.query.delete();
                             self.query_changed();
+                        }
+                        // Escape gives a drag up: the shell ends the session it owns, and a folder the drag sprang
+                        // open is left again
+                        KEY_ESCAPE | KEY_ESCAPE_ASCII if self.dragging && self.dnd.foreign.is_none() => {
+                            match self.dnd.session {
+                                Some(session) => bifrost_app::dnd::cancel(ctx, session),
+                                None => self.cancel_drag(),
+                            }
                         }
                         KEY_ESCAPE | KEY_ESCAPE_ASCII => {
                             if self.work.is_some() {

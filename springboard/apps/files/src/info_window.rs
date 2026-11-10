@@ -51,6 +51,7 @@ impl Files {
         let mut files = Files::new();
         files.data_dir = Some(data_dir.to_path_buf());
         files.info_window = true;
+        files.fx.extra_window = true;
         files.sidebar_hidden = true;
         files.info = Some(info);
         files.w = w;

@@ -4,7 +4,7 @@
 //! other apps drop on it: the files arrive as grants, are held until the drop is performed, then are copied into the folder.
 //! Until the grants arrive the drag is this window's own and ends in the in-window drop, as before.
 use crate::*;
-use crate::dragpreview::drag_preview;
+use crate::dragpreview::{drag_image, drag_preview, image_side};
 use bifrost_app::dnd::{self, DragItem, DragPhase, DragPreview, Payload};
 use bifrost_app::proto::GrantId;
 use bifrost_app::{Document, DocumentEvent};
@@ -61,7 +61,51 @@ pub(crate) struct DragOut {
     preview: DragPreview,
 }
 
+impl DragOut {
+    /// Whether this window asked for the grant `request` answers (a drag of its items waits for it).
+    pub(crate) fn asks(&self, request: u32) -> bool {
+        self.asking.contains(&request)
+    }
+}
+
+/// The window a document answer is for: the New Window window (its place in the list) whose drag asked for the grant
+/// `request` answers, or None for the main window. `asking` says whether the window at a place did.
+pub(crate) fn asking_window(windows: usize, request: Option<u32>, asking: impl Fn(usize, u32) -> bool) -> Option<usize> {
+    let request = request?;
+    (0..windows).find(|&i| asking(i, request))
+}
+
 impl Files {
+    /// The New Window window a document answer goes to (`asking_window`), or None for this one.
+    pub(crate) fn document_window(&self, ev: &DocumentEvent) -> Option<usize> {
+        let request = match ev {
+            DocumentEvent::Opened(doc) => Some(doc.request),
+            DocumentEvent::Failed { request, .. } => Some(*request),
+            _ => None,
+        };
+        asking_window(self.windows.len(), request, |i, r| self.windows[i].files.dnd.asks(r))
+    }
+    /// The New Window window a drag event of `session` goes to: the one that began the session, or that another
+    /// app's drag is over. None for this window.
+    pub(crate) fn drag_window(&self, session: u32) -> Option<usize> {
+        if self.dnd.session == Some(session) {
+            return None;
+        }
+        self.windows.iter().position(|e| e.files.dnd.session == Some(session)).or_else(|| self.windows.iter().position(|e| e.files.dnd.foreign == Some(session)))
+    }
+    /// The icon of the first dragged item as the view draws it, at device pixels, with the count badge for several
+    /// items: its side and straight RGBA. The icon view lifts the icon at its size; the other views' small row icons
+    /// are lifted at the least size (`image_side`). None when the item is not among the rows.
+    fn lifted_image(&self, ctx: &Ctx) -> Option<(u32, Vec<u8>)> {
+        let first = self.fx.drag_paths.first()?;
+        let entry = self.rows.iter().find(|e| &e.path == first)?;
+        let icons = self.grid && !self.vo.gallery;
+        let side = image_side(if icons { self.grid_icon() } else { 0. }, ctx.ui.s);
+        let n = side as usize;
+        let mut px = vec![0u32; n * n];
+        self.paint_entry_icon(&ctx.ui, &mut Surface { w: n, h: n, stride: n, px: &mut px, y0: 0 }, entry, 0., 0., side as f32 / ctx.ui.s.max(0.1), icons);
+        Some((side, drag_image(&px, n, self.fx.drag_paths.len())))
+    }
     /// Drops a drag that is still held when a new press arrives: the release that should have ended it never reached the
     /// window (the shell owned the pointer and ended the session without a drop here), so it must not drop on the next press.
     pub(crate) fn cancel_drag(&mut self) {
@@ -73,6 +117,9 @@ impl Files {
         self.spring_hover(None);
         self.fx.drag_paths.clear();
         self.fx.copy_drag = false;
+        self.fx.drag_image = None;
+        // a folder the drag sprang open is left again
+        self.spring_return();
         self.revision += 1;
     }
 
@@ -124,6 +171,7 @@ impl Files {
             }
             None => DragPreview::default(),
         };
+        self.fx.drag_image = self.lifted_image(ctx);
     }
 
     /// Begins the session once every item of the drag is granted, if the drag is still going.
@@ -133,6 +181,7 @@ impl Files {
         }
         let granted = std::mem::take(&mut self.dnd.granted);
         let failed = std::mem::take(&mut self.dnd.failed);
+        let image = self.fx.drag_image.take();
         if !self.dragging || failed || self.dnd.session.is_some() || granted.is_empty() {
             // the drag is over or cannot go out: the grants are not needed
             for (grant, _) in granted {
@@ -143,6 +192,10 @@ impl Files {
         let grants: Vec<GrantId> = granted.iter().map(|(g, _)| *g).collect();
         let items: Vec<DragItem> = granted.into_iter().map(|(grant, name)| DragItem::new(Payload::File { grant, name })).collect();
         let session = dnd::begin(ctx, dnd::dragop::COPY | dnd::dragop::MOVE, items, std::mem::take(&mut self.dnd.preview));
+        // the icon at the size it has in the view, at device pixels: the shell draws it instead of the small preview
+        if let Some((side, rgba)) = image {
+            dnd::set_image(ctx, session, side, side, rgba);
+        }
         self.dnd.session = Some(session);
         self.dnd.session_grants = grants;
         self.dnd.heard = false;
@@ -246,6 +299,9 @@ impl Files {
                     self.fx.copy_drag = false;
                     let accepted = dest.is_some();
                     if let Some(dest) = dest {
+                        // the window stays in a folder the drag sprang open; without a drop the session's end
+                        // takes it back (`drag_out_ended`)
+                        self.spring_keep();
                         let (title, op) = if copy { ("Copying", Op::Copy) } else { ("Moving", Op::Move) };
                         self.start_job(title, JobKind::Transfer(op), paths, dest);
                     }
@@ -260,6 +316,9 @@ impl Files {
                         None => false,
                     };
                     dnd::performed(ctx, session, accepted);
+                    if accepted {
+                        self.spring_keep();
+                    }
                     self.drag_out_foreign_over(session);
                 }
                 self.revision += 1;
@@ -275,6 +334,8 @@ impl Files {
             self.dnd.foreign_items = 0;
             self.dnd.held.retain(|(r, ..)| *r != session);
             self.dragging = false;
+            // a folder the drag sprang open without dropping there is left again
+            self.spring_return();
         }
     }
 
@@ -296,6 +357,8 @@ impl Files {
             self.spring_hover(None);
             self.fx.drag_paths.clear();
             self.fx.copy_drag = false;
+            // dropped nowhere, on another app or given up: a folder the drag sprang open is left again
+            self.spring_return();
             self.revision += 1;
             return true;
         }
@@ -326,6 +389,36 @@ mod tests {
         assert_eq!(drop_reply(true, false, false), dragop::COPY, "another app's files are copied");
         assert_eq!(drop_reply(false, true, false), 0, "not over a folder");
         assert_eq!(drop_reply(false, false, true), 0);
+    }
+
+    #[test]
+    fn a_grant_answer_goes_to_the_window_whose_drag_asked_for_it() {
+        // two New Window windows: the second one's drag waits for request 7
+        let asking = |i: usize, r: u32| i == 1 && r == 7;
+        assert_eq!(asking_window(2, Some(7), asking), Some(1));
+        assert_eq!(asking_window(2, Some(8), asking), None, "nobody's request: the main window takes the answer");
+        assert_eq!(asking_window(2, None, asking), None, "an answer without a request is the main window's");
+        assert_eq!(asking_window(0, Some(7), asking), None);
+        let mut dnd = DragOut::default();
+        dnd.asking = vec![3, 7];
+        assert!(dnd.asks(7) && !dnd.asks(8));
+    }
+
+    #[test]
+    fn a_drag_out_of_a_new_window_is_that_windows_from_the_grant_to_the_end() {
+        let mut main = crate::tests::fixture(vec![]);
+        let mut second = crate::tests::fixture(vec![]);
+        second.dnd.asking = vec![7];
+        main.windows.push(crate::windows::ExtraWindow::new(WindowId(4), Box::new(second)));
+        let failed = |request| DocumentEvent::Failed { request, code: bifrost_app::proto::DocErrorCode::Cancelled };
+        assert_eq!(main.document_window(&failed(7)), Some(0), "the window that asked");
+        assert_eq!(main.document_window(&failed(9)), None);
+        // the session it then begins, and its events
+        main.windows[0].files.dnd.session = Some(0x8000_0011);
+        assert_eq!(main.drag_window(0x8000_0011), Some(0));
+        assert_eq!(main.drag_window(0x8000_0012), None, "another app's drag over the app goes to the main window");
+        main.dnd.session = Some(0x8000_0013);
+        assert_eq!(main.drag_window(0x8000_0013), None);
     }
 
     #[test]
