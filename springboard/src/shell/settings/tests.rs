@@ -1002,3 +1002,39 @@ fn forget_network_from_the_detail_page() {
     settle(&mut st, &ui);
     assert_eq!(st.page(), PageId::Wifi, "back to the list");
 }
+
+/// E2E 0.10.46: the This Account card shows the full name, and its page was looked up by that instead of the account
+/// name, so it said the account no longer existed and Change Password could not be reached.
+#[test]
+fn the_this_account_card_opens_the_account_when_its_full_name_differs_from_its_account_name() {
+    use super::super::users_page::View;
+    let ui = super::super::tests::ui();
+    let (mut st, mut prefs) = settings(&ui, &wifi_info());
+    tap_row(&mut st, &ui, &mut prefs, "Users & Groups");
+    assert_eq!(st.page(), PageId::Users);
+    st.loads.users.set(View::from_text("olof:x:1000:1000:Ólöf Björk Dev:/home/olof:/bin/bash\nkid:x:1001:1001:Kid:/home/kid:/bin/bash\n", "wheel:x:998:olof\n", "olof"));
+    st.rebuild_visible(&ui);
+    let (x, y) = st.row_centre(&ui, "Ólöf Björk Dev").expect("the card shows the full name");
+    // the click builds the page from the view that landed; the read it starts has not landed yet
+    tap(&mut st, &ui, &mut prefs, x, y);
+    assert_eq!(st.page(), PageId::UserDetail);
+    assert_eq!(st.detail, "olof", "the page is opened for the account name");
+    assert!(st.row_centre(&ui, "Change Password…").is_some(), "the account's own page, not the missing-account one");
+    assert!(st.row_centre(&ui, "This account no longer exists").is_none());
+}
+
+/// E2E 0.10.46: About showed the host name because it never read the computer name Sharing sets.
+#[test]
+fn opening_about_reads_the_computer_name_and_shows_it() {
+    let ui = super::super::tests::ui();
+    let (mut st, mut prefs) = settings(&ui, &wifi_info());
+    tap_row(&mut st, &ui, &mut prefs, "General");
+    tap_row(&mut st, &ui, &mut prefs, "About");
+    assert_eq!(st.page(), PageId::About);
+    assert!(st.loads.sharing.get().is_some(), "About read the computer name");
+    st.loads.sharing.set(super::super::sharing_page::View { computer: "-=Lab=-".into(), ..Default::default() });
+    st.rebuild_visible(&ui);
+    let p = st.list().expect("list");
+    let (g, i) = p.find("Name").expect("the Name row");
+    assert_eq!(p.item(g, i).value, "-=Lab=-");
+}

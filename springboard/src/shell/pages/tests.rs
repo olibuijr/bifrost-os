@@ -200,15 +200,28 @@ fn about_values_are_formatted_like_mobile() {
     assert_eq!(uptime(7), "7m");
     assert_eq!(uptime(127), "2h 7m");
     assert_eq!(uptime(1_500), "1d 1h 0m");
-    let a = about(&info());
+    let a = about(&info(), None);
     assert_eq!(a[0][0], ("Name", "Midget".into()));
     assert_eq!(a[0][2], ("Model", "Midget".into()));
     assert_eq!(a[1][0], ("Capacity", "32.0 GB".into()));
     assert_eq!(a[2][0], ("Wi-Fi Address", "AC:E4:B5:35:20:F0".into()));
     assert_eq!(a[2][3], ("Uptime", "1d 1h 0m".into()));
-    let blank = about(&Info::default());
+    let blank = about(&Info::default(), None);
     assert_eq!(blank[0][0].1, "—", "missing values show a dash");
     assert_eq!(blank[2][1].1, "—");
+}
+
+/// E2E 0.10.46: About kept the host name while Sharing showed the computer name that had been set there.
+#[test]
+fn about_names_the_computer_as_sharing_does() {
+    let (i, o) = (info(), Options::default());
+    let name = |m: &Model| spec(PageId::About, m).groups[0].items.iter().find(|r| r.label == "Name").map(|r| r.value.clone());
+    let sharing = |computer: &str| crate::shell::sharing_page::View { computer: computer.into(), ..Default::default() };
+    let named = sharing("-=Lab=-");
+    assert_eq!(name(&Model { sharing: Some(&named), ..model(&i, &o) }).as_deref(), Some("-=Lab=-"), "the computer name set in Sharing");
+    assert_eq!(name(&model(&i, &o)).as_deref(), Some("Midget"), "the host name until the read lands");
+    let unnamed = sharing("");
+    assert_eq!(name(&Model { sharing: Some(&unnamed), ..model(&i, &o) }).as_deref(), Some("Midget"), "and when no name can be read");
 }
 
 #[test]
