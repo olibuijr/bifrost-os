@@ -1661,12 +1661,8 @@ impl Shell {
         apphost::migrate_legacy(Path::new(dir), clock::APP_ID, &data);
         let _ = std::fs::create_dir_all(&data);
         clock::adopt_old_dir(&PathBuf::from(dir).join("appdata").join(clock::APP_ID), &data);
-        // first run: the Setup Assistant opens over the desktop until its state file says the run finished
-        if crate::setup::needs_window(Path::new(dir)) {
-            if let Some(slot) = apphost::slot_of(crate::setup::APP_ID) {
-                self.open(AppId::External(slot as u8), t);
-            }
-        }
+        // first run: the Setup Assistant opens once the session is unlocked (no app starts on the login window)
+        self.open_setup_assistant_if_due(t);
         let mut fx = self.clock.load(&data.join("clock.ini").to_string_lossy(), t);
         fx.push(Effect::AutoLock(self.idle_off_ms as u32));
         fx
@@ -4470,6 +4466,7 @@ impl Shell {
                         self.wallpaper_owed();
                         // the lock took the windows' toplevels down: they map again in the shell's order (E2E13 2)
                         self.desk_restack_after_unlock();
+                        self.open_setup_assistant_if_due(t);
                         // the lock screen's buffers are gone: hand their pages back to the system
                         #[cfg(target_env = "gnu")]
                         {

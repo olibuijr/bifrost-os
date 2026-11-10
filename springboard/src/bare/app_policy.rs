@@ -125,6 +125,9 @@ pub const HARDWARE_INFO_ENTITLEMENT: &str = "hardware-info";
 pub const CAMERA_APP_ID: &str = "is.olibuijr.photobooth.desktop";
 pub const SCREEN_APP_ID: &str = crate::shell::services::display_services::SCREEN_CAPTURE_APP_ID;
 
+/// Where volumes are mounted for people; bound into a `storage` app's sandbox so Files can show them.
+pub const MEDIA_DIR: &str = "/run/media";
+
 /// `permissions = ["audio-devices"]`: the audio server's control socket, for the one first-party app that configures
 /// the machine's audio devices (Audio Setup). It is not part of `audio`: a control client can change the format, rate
 /// and buffer size of a device for every app, create and remove aggregate devices, and open an input stream without
@@ -484,6 +487,12 @@ pub fn command(
         .arg(data);
     if policy.storage {
         c.arg("--bind").arg(&account.home).arg(&account.home);
+        // removable volumes and disk images are mounted under /run/media/<account> (`shell::disk_image`). The bind is
+        // recursive and the sandbox is a slave of the host's mounts, so a volume mounted after launch appears too.
+        // The folder must exist before the app starts or the bind is skipped; each account's folder under it keeps
+        // its own owner and mode, so this shows the app nothing the account could not already read.
+        let _ = fs::create_dir_all(MEDIA_DIR);
+        c.args(["--bind-try", MEDIA_DIR, MEDIA_DIR]);
     } else {
         let private = data.join("home");
         fs::create_dir_all(&private)?;

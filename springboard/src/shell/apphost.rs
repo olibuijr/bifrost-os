@@ -2266,7 +2266,6 @@ impl Shell {
     /// First run: opens the Setup Assistant when it is due (`setup::due`: the run did not finish and the session is
     /// unlocked), at most once per shell run, so closing the window without finishing does not bring it back at the
     /// next unlock. Called at start-up, where it does nothing on the login window, and when the session unlocks.
-    #[allow(dead_code)] // the callers are in `mod.rs` (`set_data_dir` and the end of the unlock animation)
     pub(super) fn open_setup_assistant_if_due(&mut self, t: f64) {
         use std::sync::atomic::{AtomicBool, Ordering};
         static OFFERED: AtomicBool = AtomicBool::new(false);
