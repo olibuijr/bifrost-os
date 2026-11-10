@@ -589,14 +589,15 @@ impl super::Shell {
     /// Shows the file at `path` in a Files window, selected in the folder that holds it.
     fn stack_show_item(&mut self, path: &Path, t: f64) {
         if let Err(e) = self.desktop_show_in_files(path, t) {
-            eprintln!("BifrOSt Downloads: {e}");
+            // said, not only logged: the stack (or Search) has closed by now, so nothing else shows the failure
+            self.file_action_failed(path, "could not be shown in Files", &e);
         }
     }
 
     /// Opens a stack item the way Files opens it: a folder in Files; a file, after the malware gate, with the app its type
     /// opens with (a package archive on the install sheet). A suspicious file, or one no app opens, is shown selected in
     /// its folder in Files, whose open asks on the gate's card; a known threat gets the refusal card.
-    fn stack_open_item(&mut self, item: &Item, t: f64) {
+    pub(super) fn stack_open_item(&mut self, item: &Item, t: f64) {
         use super::malware_gate::{check, rules_dir, Gate, MalwareAlert};
         if item.dir {
             return self.stack_reveal(&item.path, t);
