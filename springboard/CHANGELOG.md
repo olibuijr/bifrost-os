@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.10.48 — 2026-11-10
+
+Fixes from the retest of 0.10.47 on the lab PC.
+
+- Files: the wheel scrolls the icon view when the pointer is over an item, so a last line below the window can be reached. A finger drag on an item scrolls too; only a mouse press drags an item out.
+- Files: Kind names the type (TIFF image, Disk Image, HTML Document); a mounted volume has its icon and an eject mark that leaves room for its name; a disk image that cannot be opened says why in a notice that fits.
+- Browser: a page that sets no colours of its own is dark text on white in the dark appearance too (engine 0.7.0-bifrost.16).
+- Lock screen and screen saver: the clock writes the hour as the menu bar does (02:08, not 2:08).
+- Lab tools: `midget.py key` accepts `escape` and other common key names and names an unknown key; `show-in-files` opens the folder of any file in Files.
+
 ## 0.10.47 — 2026-11-10
 
 Fixes from an end-to-end test of 0.10.46 on the lab PC.
