@@ -568,12 +568,17 @@ impl Files {
             let first = self.rows_top();
             let (top, step, per) = if self.grid { (first + 16., self.grid_h(), cols) } else { (first, 32., 1) };
             let span = row_span(self.scroll, top, step, self.body_top() + 4., bottom, visible.len().div_ceil(per));
-            for n in span.start * per..(span.end * per).min(visible.len()) {
-                let i = visible[n];
-                if self.grid {
-                    self.paint_icon_cell(ui, s, n, i, cols, bottom);
-                } else {
-                    self.paint_list_row(ui, s, n, i, n.checked_sub(1).map(|p| visible[p]), bottom);
+            let cells = span.start * per..(span.end * per).min(visible.len());
+            if self.grid {
+                // the icon lines are drawn into the view's own rows: a line that only partly fits is cut at the view's
+                // edge instead of left out, so a folder with more items below shows that it goes on
+                let mut view = s.rows(ui.pt(self.body_top()).ceil() as usize, ui.pt(bottom).floor() as usize);
+                for n in cells {
+                    self.paint_icon_cell(ui, &mut view, n, visible[n], cols, bottom);
+                }
+            } else {
+                for n in cells {
+                    self.paint_list_row(ui, s, n, visible[n], n.checked_sub(1).map(|p| visible[p]), bottom);
                 }
             }
         }
