@@ -120,6 +120,10 @@ impl Browser {
         let top = ctx.ui.pt(self.content_top()) as i32;
         let (w, h) = (ctx.cfg.w, ctx.cfg.h);
         let dark = ctx.cfg.dark;
+        if self.dark.is_some_and(|was| was != dark) {
+            // a page may follow the appearance: its background is read again from its next frame
+            self.backgrounds.clear();
+        }
         let reserved = self.inspector.reserved_px(&ctx.ui);
         if let Some(p) = &mut self.pool {
             let area = (0, top, w, h.saturating_sub(top as u32 + reserved));
@@ -184,6 +188,7 @@ impl Browser {
         ctx.wants_keyboard(true);
         self.inspector.load(ctx);
         self.prefs = prefs::Prefs::load(ctx);
+        self.uploads.set_data_dir(&ctx.data_dir);
         self.lib.load(ctx);
         // No unsaved state: the shell may stop the browser at once on quit (docs/bifrost-ui.md "Sudden termination").
         ctx.enable_sudden_termination();
@@ -221,7 +226,7 @@ impl Browser {
         }
         if self.strip_shown() {
             for (i, r) in self.tab_rects(ui, ctx.cfg.w).into_iter().enumerate() {
-                let title = self.pool.as_ref().and_then(|p| p.state(self.tabs.get(i)?.view)).map(|s| s.title.clone()).unwrap_or_default();
+                let title = self.pool.as_ref().and_then(|p| p.state(self.tabs.get(i)?.view)).map(|s| self.shown_title(&s.title, &s.url)).unwrap_or_default();
                 nodes.push(Node { id: TAB0 + i as u64, role: Role::Button, label: if title.is_empty() { "Untitled".into() } else { title }, value: if i == self.current { "selected".into() } else { String::new() }, bounds: r, enabled: true });
             }
         }

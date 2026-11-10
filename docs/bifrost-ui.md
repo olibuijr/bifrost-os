@@ -1627,7 +1627,8 @@ parity remains incomplete.
 
 - `WebProcessPool::set_zoom` is `WKWebView.pageZoom` (clamped 30% to 500%). The Browser steps 25% with Cmd+Plus, Cmd+Minus, Cmd+0 and remembers the factor per origin in `~/.local/share/bifrost-browser/session.txt`.
 - `WebProcessPool::find(id, query, FindDirection)` and `find_clear` follow `find(_:configuration:)`; the count is `WebViewState::find_matches`. Gap: Servo 0.7.0 has no find API, so the engine uses standard DOM traversal, Range and Selection APIs (case-insensitive, wrapping, bounded main-document search). No highlight-all, no match index, only the total; the case and whole-word options of `WKFindConfiguration` are not exposed.
-- Session restore (tabs, titles, selected tab) and Cmd+Shift+T (10-entry stack) are app-level; per-tab back/forward history is not restored (only the last URL).
+- Session restore (tabs, titles, selected tab) and Cmd+Shift+T (10-entry stack) are app-level; per-tab back/forward history is not restored (only the last URL). A file or link that arrives from outside (a double click in Files, Open With) does not replace the restored session: it opens in a new tab after the restored ones and that tab is selected (`Browser::open_in_tab`, `new_tab` selects). A private copy of a handed file is not written to the session file, and the saved selection counts only the tabs that are written (`session::kept`).
+- Before a tab's first frame the page area shows the background that tab's page had when it was last drawn (`apps/browser/src/placeholder.rs`, read from the frame's edges), else the window content colour of the current appearance (`CONTENT_BG`). A tab that was never drawn has no known background: in the dark appearance a light page still follows a dark area there, because the page's colours are not known before the engine paints it.
 
 ### Configuration, policy, data store, messages and panels (`web_config`, `web_nav`, `web_data`)
 
@@ -1680,7 +1681,7 @@ Where Servo 0.7.0 limits this, and Apple behaviour that is not matched yet:
 - Page rendering: CSS `backdrop-filter` is not implemented in Servo 0.7.0 (its style system parses it only under the
   off-by-default `layout.unimplemented` preference and layout never emits it), so a translucent sticky header shows the
   page behind it unblurred; `filter` works. The gap and what closing it needs are in `apps/browser/docs/servo-review.md`
-  ("Remaining gaps"); the engine is not patched (it is a workspace member of an unmodified Servo checkout; the fork of stylo, layout and paint it would need is described there). `@supports (backdrop-filter: blur(1px))` is false, so a site can fall back; bifrost.olibuijr.com does (`.nav` uses the solid page colour).
+  ("Remaining gaps"); the engine is not patched for it. The engine is a workspace member of a Servo checkout that carries one patch since 0.10.49, `apps/browser/engine/patches/0001-page-color-scheme.patch` (the page colour scheme, in Servo's layout and script); `backdrop-filter` would need a fork of stylo, layout and paint, described there. `@supports (backdrop-filter: blur(1px))` is false, so a site can fall back; bifrost.olibuijr.com does (`.nav` uses the solid page colour).
 - Fonts: the engine's fallback list is fixed in Servo, so CJK punctuation (U+3000 to U+303F and the other Common-script CJK
   blocks) relies on `packaging/arch/fontconfig/61-bifrost-cjk-fallback.conf`, which makes the installed Noto Sans CJK SC
   answer the list's last family name; the package scriptlet rebuilds the font cache for it (Browser README, "Web compatibility").

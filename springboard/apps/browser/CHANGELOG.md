@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.16
+
+- A tab that is waiting for its first frame (just selected, or coming back after its memory was freed) shows the background its page had, not the window colour: a light page in the dark appearance no longer flashes dark when its tab is selected. A tab that was never drawn still shows the window colour of the current appearance.
+- Bookmarking a file the browser opened from a private copy says "This file cannot be bookmarked from here." instead of doing nothing; `browser.bookmarks` `add` refuses such an address too, given or current.
+- A private copy without a title is shown by the address it came from in the tab strip, the tab overview, Recently Closed and the control socket, also when the engine reports the copy's path as its title.
+- A private copy leaves no line in the saved tabs, and the tab that was selected is selected again after a restore when tabs without a page came before it. Session files with such empty lines restore the same way.
+
 ## 0.17.15
 
 - A file opened with the browser (a double click in Files, Open With) is shown at its own address, `file:///home/…/page.html`, and loads from there, so the pictures and style sheets beside it load too. Before, the address field showed the path of a private copy in the app's data folder.

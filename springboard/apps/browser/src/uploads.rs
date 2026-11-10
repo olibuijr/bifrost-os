@@ -15,6 +15,10 @@ use crate::inbox;
 const MAX_FILES: usize = 64;
 const MAX_BATCH_BYTES: u64 = 1 << 30;
 const MAX_RETAINED_BYTES: u64 = 2 << 30;
+/// The folder in the app's data folder that holds the private copies of handed files.
+const OPENED_DIR: &str = "opened-files";
+/// Shown when the page of a private copy is to be bookmarked: the copy is gone when the window closes.
+pub(super) const NO_BOOKMARK: &str = "This file cannot be bookmarked from here.";
 
 struct Staged {
     directory: PathBuf,
@@ -145,7 +149,7 @@ impl Uploads {
         if !self.pending.as_ref().is_some_and(|request| request.document == document) {
             // not an answer to a file chooser: a file somebody handed the browser is opened in a tab
             if !bifrost_app::share::is_inbound(document) || docs.is_empty() { return false; }
-            self.hand_over(&ctx.data_dir.join("opened-files"), docs);
+            self.hand_over(&ctx.data_dir.join(OPENED_DIR), docs);
             return true;
         }
         let request = self.pending.take().unwrap();
@@ -201,6 +205,30 @@ impl Uploads {
         if !page.starts_with(private) { return None; }
         let name = url::Url::parse(page).ok().and_then(|u| u.to_file_path().ok()).and_then(|p| Some(p.file_name()?.to_string_lossy().into_owned()));
         Some(name.unwrap_or_default())
+    }
+
+    /// Names the folder of the private copies under the app's data folder, before any copy is made: an address in it
+    /// (a copy an earlier window left, a path given over the control socket) is a private one from the start.
+    pub(super) fn set_data_dir(&mut self, data_dir: &Path) {
+        if let Some(folder) = url::Url::from_directory_path(data_dir.join(OPENED_DIR)).ok().map(String::from) {
+            self.private = Some(folder);
+        }
+    }
+
+    /// What to show in place of `title` when it names a private copy rather than the page: the engine gives a page
+    /// without a title its address, or its path, as the title. The copy's own address is mapped like `shown`; a path
+    /// in the private folder becomes what the page at `url` is shown as. `None` for a real title.
+    pub(super) fn shown_title(&self, title: &str, url: &str) -> Option<String> {
+        let title = title.trim();
+        if let Some(shown) = self.shown(title) {
+            return Some(shown);
+        }
+        let folder = url::Url::parse(self.private.as_deref()?).ok()?.to_file_path().ok()?;
+        let folder = format!("{}/", folder.to_str()?.trim_end_matches('/'));
+        if !title.contains(&folder) {
+            return None;
+        }
+        Some(self.shown(url).unwrap_or_else(|| Path::new(title).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()))
     }
 
     /// The private copy an address typed or pasted into the address field names: the reverse of `shown`, by exact
@@ -376,6 +404,43 @@ mod tests {
         assert_eq!(uploads.shown("file:///home/u/page.html"), None);
         assert_eq!(uploads.shown("https://a.test/"), None);
         assert_eq!(uploads.copy_for("file:///home/u/../u/page.html"), None, "the shown address is matched as text");
+    }
+
+    #[test]
+    fn a_title_that_is_the_copy_s_address_or_path_is_shown_as_the_page_is() {
+        let private = "file:///data/opened-files/";
+        let copy = format!("{private}7-1/0/page%20one.html");
+        let uploads = Uploads { copies: vec![(copy.clone(), "file:///home/u/page%20one.html".into())], private: Some(private.into()), ..Uploads::default() };
+        // the engine reports the address of a page without a title as its title
+        assert_eq!(uploads.shown_title(&copy, &copy).as_deref(), Some("file:///home/u/page%20one.html"));
+        assert_eq!(uploads.shown_title(&format!(" {copy} "), &copy).as_deref(), Some("file:///home/u/page%20one.html"));
+        // or the path of the file
+        assert_eq!(uploads.shown_title("/data/opened-files/7-1/0/page one.html", &copy).as_deref(), Some("file:///home/u/page%20one.html"));
+        // a file beside the copy: its name, never the folder
+        let beside = format!("{private}7-1/0/other.html");
+        assert_eq!(uploads.shown_title(&beside, &beside).as_deref(), Some("other.html"));
+        assert_eq!(uploads.shown_title("/data/opened-files/7-1/0/other.html", "about:blank").as_deref(), Some("other.html"));
+        assert_eq!(uploads.shown_title("/data/opened-files-2/page.html", &copy), None, "a look-alike folder is not the private one");
+        // a real title stays, on the copy and on every other page
+        assert_eq!(uploads.shown_title("Page One", &copy), None);
+        assert_eq!(uploads.shown_title("", &copy), None);
+        assert_eq!(uploads.shown_title("https://a.test/", "https://a.test/"), None);
+        assert_eq!(uploads.shown_title("file:///home/u/page.html", "file:///home/u/page.html"), None);
+        // no private folder is known: nothing is mapped
+        assert_eq!(Uploads::default().shown_title(&copy, &copy), None);
+    }
+
+    #[test]
+    fn the_private_folder_is_known_before_any_copy_is_made() {
+        let mut uploads = Uploads::default();
+        assert_eq!(uploads.shown("file:///data/opened-files/7-1/0/page.html"), None);
+        uploads.set_data_dir(Path::new("/data"));
+        assert_eq!(uploads.shown("file:///data/opened-files/7-1/0/page.html").as_deref(), Some("page.html"));
+        assert_eq!(uploads.shown("file:///data/upload-staging/7-1/0/page.html"), None);
+        assert_eq!(uploads.shown("file:///home/u/page.html"), None);
+        // the engine going away keeps it
+        uploads.reset();
+        assert!(uploads.shown("file:///data/opened-files/x.html").is_some());
     }
 
     #[test]

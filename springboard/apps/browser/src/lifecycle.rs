@@ -74,6 +74,8 @@ impl Browser {
         }
         self.pageui.cancel_all(&mut self.pool);
         self.pool = None;
+        // the new engine numbers its views from the start
+        self.backgrounds.clear();
         // the handed files stay: their tabs are opened again below
         self.uploads.reset();
         self.tabs.clear();
@@ -133,6 +135,7 @@ impl Browser {
         let urls: Vec<String> = self.tabs.iter().filter_map(|tab| self.pool.as_ref()?.state(tab.view).map(|state| state.url.clone())).collect();
         let selected = self.current;
         self.pool = None;
+        self.backgrounds.clear();
         let result = profile_data::reset(&self.profile());
         self.pageui = pageui::PageUi::default();
         self.tabs.clear();

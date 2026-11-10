@@ -188,7 +188,8 @@ impl Browser {
             ("url", control::text(&url)),
             // what the address field shows for it (differs for a private copy of a handed file)
             ("address", control::text(&self.shown_url(&url))),
-            ("title", control::text(st.map_or("", |s| s.title.as_str()))),
+            // a private copy without a title is not named by its path
+            ("title", control::text(&st.map(|s| self.shown_title(&s.title, &s.url)).unwrap_or_default())),
             ("loading", Json::Bool(st.is_some_and(|s| s.loading))),
             ("can_back", Json::Bool(st.is_some_and(|s| s.can_go_back))),
             ("can_forward", Json::Bool(st.is_some_and(|s| s.can_go_forward))),
@@ -265,6 +266,10 @@ impl Browser {
                             (None, Some((u, t))) => (u, title.unwrap_or(t)),
                             (None, None) => return Err(control::invalid("no url and no current page")),
                         };
+                        // a private copy of a handed file is gone with the window: not a bookmark, whoever names it
+                        if self.private_copy(&u) {
+                            return Err(control::invalid(crate::uploads::NO_BOOKMARK));
+                        }
                         Some(self.store.add_bookmark(&u, &t, now))
                     }
                     "remove" => Some(self.store.remove_bookmark(&url.unwrap_or_default())),
@@ -554,7 +559,7 @@ impl Browser {
         control::obj(vec![
             ("id", control::num(view as f64)),
             ("url", control::text(st.map_or("", |s| s.url.as_str()))),
-            ("title", control::text(st.map_or("", |s| s.title.as_str()))),
+            ("title", control::text(&st.map(|s| self.shown_title(&s.title, &s.url)).unwrap_or_default())),
             ("status", control::text(status)),
         ])
     }

@@ -134,6 +134,7 @@ mod overview;
 mod themecolor;
 mod startpage;
 mod starttab;
+mod placeholder;
 
 const KEY_F: u32 = 33;
 const KEY_BACKSLASH: u32 = 43;
@@ -221,6 +222,8 @@ struct Browser {
     overview: overview::Overview,
     /// Each tab's page colour, which tints the toolbar (themecolor.rs).
     themes: themecolor::ThemeColors,
+    /// Each tab's page background as last drawn: what the page area shows until the tab's next frame (placeholder.rs).
+    backgrounds: placeholder::PageBackgrounds,
     /// Start Page of a blank tab: scroll and press (startpage.rs, starttab.rs).
     start_page: startpage::State,
 }
