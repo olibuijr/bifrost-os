@@ -24,6 +24,18 @@ impl Browser {
         self.sync_address();
     }
 
+    /// Opens `url` in a new tab; the engine is started with it when it is not running yet. This is how a link or a
+    /// file from outside the browser arrives.
+    pub(super) fn open_in_tab(&mut self, ctx: &Ctx, url: String) {
+        if self.pool.is_some() {
+            self.new_tab(&url);
+        } else {
+            self.initial_url = Some(url);
+            self.start();
+        }
+        self.place_web(ctx);
+    }
+
     pub(super) fn new_tab(&mut self, url: &str) {
         let Some(pool) = &mut self.pool else { return };
         let view = pool.create(url);

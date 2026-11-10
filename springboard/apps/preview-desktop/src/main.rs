@@ -69,8 +69,6 @@ const MENU_SHOT_SCREEN: u32 = 0x5009;
 const TEXT_BOX: (f32, f32) = (0.3, 0.06);
 /// The width an inserted signature takes, as a share of the page.
 const SIGNATURE_WIDTH: f32 = 0.3;
-/// The kinds of file the open panel offers.
-const OPEN_TYPES: [&str; 4] = ["pdf", "png", "jpg", "jpeg"];
 /// The type a JPEG has on the pasteboard (the PNG type is `bifrost_app::pasteboard::PNG`).
 const JPEG: &str = "public.jpeg";
 
@@ -363,12 +361,21 @@ impl Viewer {
             let (jobs, inbox) = pdfjob::spawn(path.to_path_buf(), password.clone());
             self.loading = Some(Loading { path: path.to_path_buf(), password, jobs, inbox });
             self.status = format!("Opening {}", name_of(path));
+            self.sweep_copies();
             return;
         }
         match document::open_picture(path, &self.data_dir) {
             Ok(doc) => self.doc = Some(doc),
-            Err(e) => self.status = format!("Could not open {}: {e}", path.display()),
+            Err(e) => self.status = document::open_failure(&name_of(path), &e),
         }
+        self.sweep_copies();
+    }
+
+    /// Removes the working copies of files that are no longer open and no longer in Open Recent (see
+    /// `recents::sweep_copies`). Runs at start, when another document opens and when Open Recent is cleared.
+    fn sweep_copies(&self) {
+        let open = self.doc.as_ref().map(|d| d.path.as_path()).or(self.loading.as_ref().map(|l| l.path.as_path()));
+        recents::sweep_copies(&self.data_dir, &self.recents, open);
     }
 
     /// Puts `path` first in Open Recent and saves the list.
@@ -661,7 +668,7 @@ impl Viewer {
         let options = OpenOptions {
             mode: DocMode::Read,
             title: "Open".into(),
-            filters: OPEN_TYPES.iter().map(|s| s.to_string()).collect(),
+            filters: document::open_types(),
             ..Default::default()
         };
         ctx.open_panel(&options);
@@ -682,6 +689,7 @@ impl Viewer {
             MENU_CLEAR_RECENTS => {
                 self.recents.clear();
                 let _ = recents::save(&self.data_dir, &self.recents);
+                self.sweep_copies();
             }
             _ if (MENU_RECENT..MENU_RECENT + recents::MAX_RECENTS as u32).contains(&id) => {
                 let Some(path) = self.recents.get((id - MENU_RECENT) as usize).map(Path::to_path_buf) else { return true };
@@ -835,7 +843,7 @@ impl Viewer {
                 }
                 Some(Err(e)) => {
                     changed = true;
-                    self.status = format!("Could not open {}: {e}", loading.path.display());
+                    self.status = document::open_failure(&name_of(&loading.path), &e);
                 }
             }
         }
@@ -1511,7 +1519,7 @@ impl Viewer {
             return;
         };
         if let Err(e) = document::decode_picture(&bytes) {
-            self.status = format!("The clipboard picture could not be read: {e}");
+            self.status = format!("The clipboard picture could not be read. {}", document::picture_error(e));
             return;
         }
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
@@ -2400,6 +2408,8 @@ impl App for Viewer {
         if self.data_dir.as_os_str().is_empty() {
             self.data_dir = ctx.data_dir.clone();
             self.recents = recents::load(&self.data_dir);
+            // copies left by earlier runs that Open Recent no longer lists
+            self.sweep_copies();
             self.prefs = prefs::load(&self.data_dir);
             self.signatures = signature::load(&self.data_dir);
         }
@@ -2702,7 +2712,7 @@ impl App for Viewer {
         };
         let mut bytes = Vec::new();
         if let Err(e) = (&doc.file).read_to_end(&mut bytes) {
-            self.status = format!("Could not read {}: {e}", doc.name);
+            self.status = document::open_failure(&doc.name, document::read_error(&e));
             return true;
         }
         // a file chosen by Pages > Insert > Page from File is merged into the document instead of opened
@@ -2715,7 +2725,7 @@ impl App for Viewer {
         }
         match recents::keep_copy(&self.data_dir, &doc.name, &bytes) {
             Ok(path) => self.open_path(&path),
-            Err(e) => self.status = format!("Could not open {}: {e}", doc.name),
+            Err(e) => self.status = document::open_failure(&doc.name, &format!("Viewer could not keep its working copy ({})", e.kind())),
         }
         true
     }

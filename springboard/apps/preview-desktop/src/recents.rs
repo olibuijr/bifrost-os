@@ -1,6 +1,7 @@
 //! The File > Open Recent list: the most recently opened files, newest first, kept as one path per line under the
 //! app's data directory. Files chosen in the open panel are copied into the data directory first (the app is handed an
-//! open file, not a path), so a recent entry is always a path the app can read again.
+//! open file, not a path), so a recent entry is always a path the app can read again. A copy is removed once it is
+//! neither a recent entry nor the open document (`sweep_copies`).
 
 use std::path::{Path, PathBuf};
 
@@ -103,6 +104,26 @@ pub fn keep_copy(data_dir: &Path, name: &str, bytes: &[u8]) -> std::io::Result<P
     Ok(target)
 }
 
+/// Removes the working copies that nothing refers to any more: every file under `opened/` that is neither an Open
+/// Recent entry (a recent file is opened again from its copy) nor `keep`, the document that is open. So the folder
+/// holds at most the recent files and the open one, instead of every file ever opened. Returns how many were removed.
+pub fn sweep_copies(data_dir: &Path, recents: &Recents, keep: Option<&Path>) -> usize {
+    if data_dir.as_os_str().is_empty() {
+        return 0;
+    }
+    let Ok(entries) = std::fs::read_dir(data_dir.join("opened")) else { return 0 };
+    let mut removed = 0;
+    for path in entries.flatten().map(|e| e.path()) {
+        if keep == Some(path.as_path()) || recents.paths().contains(&path) {
+            continue;
+        }
+        if std::fs::remove_file(&path).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,6 +169,26 @@ mod tests {
         assert_eq!(copy_name("pic.png"), "pic.png");
         assert_eq!(copy_name(".."), "Untitled");
         assert_eq!(copy_name(""), "Untitled");
+    }
+
+    #[test]
+    fn copies_go_once_they_are_neither_recent_nor_open() {
+        let dir = std::env::temp_dir().join(format!("viewer-sweep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let old = keep_copy(&dir, "weeks-old.png", b"x").unwrap();
+        let recent = keep_copy(&dir, "recent.pdf", b"x").unwrap();
+        let open = keep_copy(&dir, "open.svg", b"x").unwrap();
+        let mut r = Recents::default();
+        r.add(&recent);
+        // the copy that no recent entry names and that is not open goes
+        assert_eq!(sweep_copies(&dir, &r, Some(&open)), 1);
+        assert!(!old.exists() && recent.exists() && open.exists());
+        // the open document was replaced and Open Recent was cleared: its copy and the recent one go too
+        r.clear();
+        assert_eq!(sweep_copies(&dir, &r, None), 2);
+        assert!(!recent.exists() && !open.exists());
+        assert_eq!(sweep_copies(Path::new(""), &r, None), 0, "no data folder yet, so nothing is looked at");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

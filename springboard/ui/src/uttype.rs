@@ -102,9 +102,12 @@ const TYPES: &[Entry] = &[
     Entry { id: "public.m3u-playlist", parent: &["public.text"], ext: &["m3u"], mime: "audio/x-mpegurl", desc: "Playlist" },
     Entry { id: "public.image", parent: &["public.data"], ext: &[], mime: "image/*", desc: "Image" },
     Entry { id: "public.png", parent: &["public.image"], ext: &["png"], mime: "image/png", desc: "PNG image" },
-    Entry { id: "public.jpeg", parent: &["public.image"], ext: &["jpg", "jpeg"], mime: "image/jpeg", desc: "JPEG image" },
+    Entry { id: "public.jpeg", parent: &["public.image"], ext: &["jpg", "jpeg", "jpe"], mime: "image/jpeg", desc: "JPEG image" },
     Entry { id: "com.compuserve.gif", parent: &["public.image"], ext: &["gif"], mime: "image/gif", desc: "GIF image" },
     Entry { id: "public.webp", parent: &["public.image"], ext: &["webp"], mime: "image/webp", desc: "WebP image" },
+    Entry { id: "public.tiff", parent: &["public.image"], ext: &["tif", "tiff"], mime: "image/tiff", desc: "TIFF image" },
+    Entry { id: "com.microsoft.bmp", parent: &["public.image"], ext: &["bmp"], mime: "image/bmp", desc: "BMP image" },
+    Entry { id: "com.microsoft.ico", parent: &["public.image"], ext: &["ico", "cur"], mime: "image/vnd.microsoft.icon", desc: "Icon image" },
     Entry { id: "public.svg-image", parent: &["public.image", "public.xml"], ext: &["svg"], mime: "image/svg+xml", desc: "SVG image" },
     Entry { id: "public.audiovisual-content", parent: &["public.data", "public.content"], ext: &[], mime: "", desc: "Audiovisual Content" },
     Entry { id: "public.audio", parent: &["public.audiovisual-content"], ext: &[], mime: "audio/*", desc: "Audio" },
@@ -348,6 +351,15 @@ mod tests {
             }
         }
         assert!(TYPES.iter().all(|e| !e.desc.is_empty()), "every type has a description");
+    }
+    #[test]
+    fn every_picture_format_the_decoders_read_is_an_image_type() {
+        for (name, id) in [("scan.tif", "public.tiff"), ("scan.TIFF", "public.tiff"), ("old.bmp", "com.microsoft.bmp"), ("favicon.ico", "com.microsoft.ico"), ("arrow.cur", "com.microsoft.ico"), ("photo.jpe", "public.jpeg"), ("anim.gif", "com.compuserve.gif"), ("pic.webp", "public.webp")] {
+            assert_eq!(type_for_extension(name), Some(id), "{name}");
+            assert!(conforms(id, "public.image"), "{id} is a picture, so the app that opens pictures opens it");
+        }
+        assert_eq!(type_for_mime("image/tiff"), Some("public.tiff"));
+        assert_eq!(description("public.tiff"), "TIFF image");
     }
     #[test]
     fn mesh_files_resolve_to_3d_model_types() {
