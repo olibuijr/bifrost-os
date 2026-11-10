@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.19.0
+
+- Upstream designcraft v0.19.0.
+  ## What's Changed
+  * Fix [Bug Report] [DesignCraft] Image content and frame don't move together by @aiongg in https://github.com/storytold/designcraft/pull/2423
+  * Normalize marquee rect in hit::intersects_rect by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2437
+  * Keep Lab::hue within 0..360 for tiny negative b by @Silvertree2010 in https://github.com/storytold/designcraft/pull/2442
+  * Preflight: white or [Paper] set to overprint is reported (#2401) by @ZIDAN44 in https://github.com/storytold/designcraft/pull/2412
+
 ## 0.18.0
 
 - Upstream designcraft v0.18.0.
