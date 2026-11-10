@@ -15,7 +15,7 @@ mod window;
 
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::controls::{Node, Role};
-use bifrost_app::{App, Ctx, Input};
+use bifrost_app::{App, Commands, Ctx, Input};
 use window::{Grapher, Target, ROW_BASE};
 
 /// The window size in points, from the configured size in pixels and the display scale.
@@ -49,6 +49,15 @@ impl App for GrapherApp {
         match ev {
             Input::Touch { kind, x, y, .. } => self.grapher.touch(&ctx.ui, &ctx.data_dir, kind, x, y),
             Input::Key(key) => self.grapher.key(&ctx.data_dir, key),
+            // Edit > Cut, Copy, Paste and Select All, from the menu or Cmd+X, C, V, A
+            Input::Command(command) => {
+                let board = ctx.pasteboard_string();
+                let (changed, copied) = self.grapher.command(&ctx.data_dir, command, board.as_deref());
+                if let Some(text) = copied {
+                    ctx.set_pasteboard_string(&text);
+                }
+                changed
+            }
             Input::Activate(id) => {
                 let target = if id as u32 >= ROW_BASE {
                     Target::Row(id as u32 - ROW_BASE)
@@ -59,6 +68,11 @@ impl App for GrapherApp {
             }
             _ => false,
         }
+    }
+
+    /// The Edit commands of the equation field, enabled only when they have something to act on.
+    fn commands(&self, ctx: &Ctx) -> Commands {
+        self.grapher.commands(ctx.pasteboard_string().as_deref())
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
