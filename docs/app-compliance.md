@@ -61,7 +61,7 @@ Rule IDs are the gate's own and stable; the third column names the bifrost-hig r
 | RES-02 | warning | CTL-04 | polling next_wake with a worker thread | finish work on the main queue (DispatchQueue::main().async_) or wake_fd; return None from next_wake when idle |
 | RES-03 | warning | CTL-04 | no ctx.enable_sudden_termination() but no unsaved state | call ctx.enable_sudden_termination() once in configure (docs/bifrost-ui.md "Sudden termination") |
 | SDK-01 | error | CTL-01 | deprecated SDK API | use the replacement named at the item (#[deprecated] note) or in docs/bifrost-ui.md |
-| CHR-01 | error | CHR-07 | app menu repeats the shell Edit menu | an app menu titled File, View, Window or Help merges into the shell menu of that name (its items lead); the shell Edit already holds the standard items, so route them through the shell instead of a second Edit (`edit_menu()` next to the shell Edit is flagged too) |
+| CHR-01 | error | CHR-07 | app menu repeats the shell Edit menu | an app menu titled File, Edit, View, Window or Help merges into the shell menu of that name (in Edit the shell's Undo, Cut, Copy, Paste and Select All stay first and the app's items follow); `MenuEntry::edit_menu()` declares those standard items a second time, so declare an Edit menu with only the app's own items. An Edit menu of the app's own items is not a finding; standard items an app spells out itself are CHR-02 |
 | CHR-02 | warning | CHR-02 | hand-built standard Edit items | standard Cut/Copy/Paste/Undo come from the shell Edit menu and ctx commands; do not rebuild them |
 | TST-01 | error | APP-02 | tests/compliance.rs missing | python3 tools/check-app-compliance.py --gen-tests --write |
 | TST-02 | warning | APP-02 | tests/compliance.rs differs from the template | python3 tools/check-app-compliance.py --gen-tests --write (keep KNOWN_GAPS) |
@@ -76,10 +76,14 @@ It runs only when the icon file exists (APP-03 covers a missing one). Other form
 180 x 120, are reported with the measured size. The `*craft` apps are prebuilt upstream packages (`upstream.toml`): only
 the manifest, CHANGELOG and upstream rules (APP-*) apply to them.
 
-Permissions the gate knows (KNOWN_PERMS in the script): network, storage, audio, camera, screen, notifications,
-documents, keychain, and remote-desktop. Camera is restricted to Photo Booth and screen sampling to Color Meter, as
-described in [app-isolation.md](app-isolation.md). The shell also accepts accessibility and display-config; the gate
-reports those as unknown until the list is extended.
+Permissions the gate knows (KNOWN_PERMS in the script) are read at run time from the match arms of
+`Policy::from_permissions` in `springboard/src/bare/app_policy.rs`, the list the shell enforces at install and launch,
+so a permission added to the shell is known to the gate at once (calendars, audio-devices, gpu, accessibility,
+display-config, sensors, contacts, usb and hid among them). Entitlements are a separate manifest key and are not
+permissions. Camera is restricted to Photo Booth and screen sampling to Color Meter, as described in
+[app-isolation.md](app-isolation.md). "Requested but unused" is checked for the permissions that have a code pattern
+(PERM_USE); keychain counts as used through the SDK keychain modules, the passwords store (`passwords::`) and
+`exchange_notes::Sync`, which asks the passwords store for the account's password.
 
 Status (2026-10-14): the scan now separates runnable app packages from model-only workspace crates. Locate is an
 unpackaged model crate; Screenshot has a draft manifest but no executable. Files retains one baseline RES-02 watcher
