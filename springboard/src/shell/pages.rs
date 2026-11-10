@@ -734,12 +734,14 @@ fn battery_level(info: &Info) -> String {
     format!("{}%", info.battery)
 }
 
-/// The About page's rows: (label, value) in page order, grouped.
-pub fn about(info: &Info) -> Vec<Vec<(&'static str, String)>> {
+/// The About page's rows: (label, value) in page order, grouped. `computer` is the computer name Sharing shows (the
+/// pretty host name); until it is read, or when it is empty, Name is the host name.
+pub fn about(info: &Info, computer: Option<&str>) -> Vec<Vec<(&'static str, String)>> {
     let dash = |s: &str| if s.is_empty() { "—".to_string() } else { s.to_string() };
+    let name = computer.filter(|c| !c.is_empty()).unwrap_or(&info.name);
     vec![
         vec![
-            ("Name", dash(&info.name)),
+            ("Name", dash(name)),
             ("BifrOSt Version", BUILD.version.to_string()),
             ("Model", dash(&info.model)),
             ("Processor", dash(&info.cpu)),
@@ -1259,7 +1261,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             )
         }
         PageId::About => {
-            let mut groups: Vec<Group> = about(info).into_iter().map(rows).collect();
+            let mut groups: Vec<Group> = about(info, m.sharing.map(|v| v.computer.as_str())).into_iter().map(rows).collect();
             groups.push(Group::new(vec![Item::new("Legal & Regulatory").link(PageId::Legal)]));
             page("About", false, groups)
         }
