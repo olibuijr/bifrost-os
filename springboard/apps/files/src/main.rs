@@ -722,12 +722,17 @@ impl Files {
                 y,
                 t: _,
                 mods,
+                source,
                 ..
             } => {
                 let (x, y) = (x / ctx.ui.s, y / ctx.ui.s);
                 if let Some((sx, sy, _)) = self.down {
                     let moved = (x - sx).abs() > DRAG_SLOP || (y - sy).abs() > DRAG_SLOP;
-                    if !self.dragging && moved && sx >= self.side() && !self.select_mode && self.work.is_none() {
+                    // only a mouse press drags an item out. A finger's drag, and the drag the shell emulates for a wheel
+                    // notch, is a scroll even when it starts on an item: in a full icon view every press lands on one,
+                    // and the lines below the window could never be reached
+                    let lifts = source == bifrost_app::TouchSource::Pointer;
+                    if !self.dragging && lifts && moved && sx >= self.side() && !self.select_mode && self.work.is_none() {
                         if let Some(i) = self.item_at(sx, sy) {
                             if !self.selection.contains(&i) {
                                 self.select_only(i);
@@ -1297,6 +1302,40 @@ mod tests {
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
         let cfg = bifrost_app::proto::Configure { w: 960, h: 630, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: false, text_scale: 1.0, reduce_motion: false };
         Ctx::testing(Ui::new(springboard::font::Font::parse(data).unwrap(), 1.0), cfg)
+    }
+    fn finger(kind: TouchKind, x: f32, y: f32, t: f64) -> Input {
+        Input::Touch { kind, id: 0, x, y, t, source: bifrost_app::TouchSource::Finger, mods: bifrost_app::proto::ModifierFlags::EMPTY }
+    }
+    #[test]
+    fn a_scroll_that_starts_on_an_icon_reaches_the_short_last_line() {
+        // nine items, four a line: two full lines and a third with one item, which starts below the window
+        let ctx = test_ctx();
+        let mut files = fixture((0..9).map(|i| folder(&format!("item{i}"))).collect());
+        assert_eq!(files.grid_cols(), 4, "the fixture window holds four icons a line");
+        assert_eq!(files.visible().len().div_ceil(files.grid_cols()), 3, "the ninth item has a line of its own");
+        let (bottom, cell_h) = (files.bottom(), files.grid_h() - 6.);
+        let line_top = |files: &Files, line: f32| files.rows_top() + 16. + line * files.grid_h() - files.scroll;
+        assert!(line_top(&files, 2.) + cell_h > bottom, "the third line does not fit at scroll 0, so it is not drawn");
+        // the wheel over the first icon: the shell sends the notch as a finger's press, one move up and a release
+        let x = files.side() + 16. + 0.5 * files.grid_w();
+        let y = line_top(&files, 0.) + 0.5 * files.grid_h();
+        files.route_input(&ctx, finger(TouchKind::Down, x, y, 0.));
+        files.route_input(&ctx, finger(TouchKind::Move, x, y - 40., 16.));
+        assert!(!files.dragging, "a scroll over an icon does not drag the item out");
+        assert_eq!(files.scroll, 40., "it scrolls the view");
+        files.route_input(&ctx, finger(TouchKind::Move, x, y - 400., 32.));
+        files.route_input(&ctx, finger(TouchKind::Up, x, y - 400., 48.));
+        assert!(!files.dragging && files.selection.is_empty());
+        // the scroll range ends with the whole third line inside the view (what `paint_icon_cell` draws)
+        let top = line_top(&files, 2.);
+        assert!(top >= files.body_top() + 4. && top + cell_h <= bottom, "the third line is in view: {top}..{} of {bottom}", top + cell_h);
+        // a mouse press on an icon still drags it out, and leaves the view where it is
+        let seen = files.scroll;
+        let y = line_top(&files, 2.) + 0.5 * files.grid_h();
+        files.route_input(&ctx, pointer(TouchKind::Down, x, y, 100.));
+        files.route_input(&ctx, pointer(TouchKind::Move, x, y - 40., 116.));
+        assert!(files.dragging, "a mouse drag lifts the item");
+        assert_eq!(files.scroll, seen);
     }
     /// A one-column icon grid with the folder A above the folder B: the x of the column and the y of each cell's centre.
     fn stacked_folders() -> (Files, f32, f32, f32) {
