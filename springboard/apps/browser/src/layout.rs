@@ -120,6 +120,10 @@ impl Browser {
         let top = ctx.ui.pt(self.content_top()) as i32;
         let (w, h) = (ctx.cfg.w, ctx.cfg.h);
         let dark = ctx.cfg.dark;
+        if self.dark.is_some_and(|was| was != dark) {
+            // a page may follow the appearance: its background is read again from its next frame
+            self.backgrounds.clear();
+        }
         let reserved = self.inspector.reserved_px(&ctx.ui);
         if let Some(p) = &mut self.pool {
             let area = (0, top, w, h.saturating_sub(top as u32 + reserved));

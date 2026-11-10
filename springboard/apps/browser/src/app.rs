@@ -160,6 +160,7 @@ pub(super) fn run() {
         autofill: Default::default(),
         overview: Default::default(),
         themes: Default::default(),
+        backgrounds: Default::default(),
         start_page: Default::default(),
         pageui: pageui::PageUi::default(),
         prefs: prefs::Prefs::default(),
