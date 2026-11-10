@@ -471,10 +471,13 @@ impl App for Files {
     fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
         self.close_extra(window)
     }
-    fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
+    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         // the pictures the thumbnail workers finished, for this window and the New Window ones
         let mut changed = self.vo.poll_thumbs();
+        // a finger that has rested on an item long enough lifts it
+        changed |= self.hold_tick(ctx, t);
         for e in &mut self.windows {
+            changed |= e.files.hold_tick(ctx, t);
             if e.files.vo.poll_thumbs() {
                 e.files.revision += 1;
                 changed = true;
@@ -615,6 +618,12 @@ impl App for Files {
         // a drag hovering over a folder opens it; a batch of folder events matures; otherwise the loop sleeps
         let events = self.watch.as_ref().and_then(|w| w.next_deadline(Instant::now()));
         let wake = wake_at(t, self.fx.spring.is_some(), events);
+        // a finger resting on an item lifts it when its hold time is up
+        let hold = self.hold_due().into_iter().chain(self.windows.iter().filter_map(|e| e.files.hold_due())).reduce(f64::min);
+        let wake = match (wake, hold) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
         // a thumbnail being drawn is taken by the next tick
         if self.vo.thumbs_pending() || self.windows.iter().any(|e| e.files.vo.thumbs_pending()) {
             let soon = t + THUMB_POLL_MS;
@@ -707,6 +716,7 @@ impl Files {
                 x,
                 y,
                 t,
+                source,
                 ..
             } => {
                 self.notice = None;
@@ -715,12 +725,15 @@ impl Files {
                 self.cancel_drag();
                 self.down = Some((x / ctx.ui.s, y / ctx.ui.s, t));
                 self.pan_y = y / ctx.ui.s;
+                // a finger that rests on an item lifts it after the hold time (`hold_tick`, or its first move after it)
+                let on_item = x / ctx.ui.s >= self.side() && self.item_at(x / ctx.ui.s, y / ctx.ui.s).is_some();
+                self.fx.hold = (source == bifrost_app::TouchSource::Finger && on_item).then_some(t);
             }
             Input::Touch {
                 kind: TouchKind::Move,
                 x,
                 y,
-                t: _,
+                t,
                 mods,
                 source,
                 ..
@@ -728,21 +741,16 @@ impl Files {
                 let (x, y) = (x / ctx.ui.s, y / ctx.ui.s);
                 if let Some((sx, sy, _)) = self.down {
                     let moved = (x - sx).abs() > DRAG_SLOP || (y - sy).abs() > DRAG_SLOP;
-                    // only a mouse press drags an item out. A finger's drag, and the drag the shell emulates for a wheel
-                    // notch, is a scroll even when it starts on an item: in a full icon view every press lands on one,
-                    // and the lines below the window could never be reached
-                    let lifts = source == bifrost_app::TouchSource::Pointer;
-                    if !self.dragging && lifts && moved && sx >= self.side() && !self.select_mode && self.work.is_none() {
-                        if let Some(i) = self.item_at(sx, sy) {
-                            if !self.selection.contains(&i) {
-                                self.select_only(i);
-                            }
-                            self.dragging = true;
-                            self.fx.drag_paths = self.selected_paths();
-                            self.fx.copy_drag = false;
-                            self.revision += 1;
-                            self.drag_out_ask(ctx);
-                        }
+                    // a mouse press drags an item out as soon as it moves. A finger's drag, and the drag the shell emulates
+                    // for a wheel notch, is a scroll even when it starts on an item: in a full icon view every press lands
+                    // on one, and the lines below the window could never be reached. A finger lifts the item it has rested
+                    // on for the hold time; one that moved before that scrolls until it is raised
+                    let held = self.fx.hold.is_some_and(|t0| t - t0 >= dragout::hold_ms());
+                    if moved && !held {
+                        self.fx.hold = None;
+                    }
+                    if held || (source == bifrost_app::TouchSource::Pointer && moved) {
+                        self.lift_item(ctx, sx, sy);
                     }
                 }
                 if self.dragging {
@@ -786,6 +794,7 @@ impl Files {
                 t,
                 ..
             } => {
+                self.fx.hold = None;
                 if self.dragging {
                     // drop the selection on the target under the finger, if any
                     self.dragging = false;
@@ -1315,7 +1324,7 @@ mod tests {
         assert_eq!(files.visible().len().div_ceil(files.grid_cols()), 3, "the ninth item has a line of its own");
         let (bottom, cell_h) = (files.bottom(), files.grid_h() - 6.);
         let line_top = |files: &Files, line: f32| files.rows_top() + 16. + line * files.grid_h() - files.scroll;
-        assert!(line_top(&files, 2.) + cell_h > bottom, "the third line does not fit at scroll 0, so it is not drawn");
+        assert!(line_top(&files, 2.) + cell_h > bottom, "the third line does not fit at scroll 0: it is drawn cut at the bottom");
         // the wheel over the first icon: the shell sends the notch as a finger's press, one move up and a release
         let x = files.side() + 16. + 0.5 * files.grid_w();
         let y = line_top(&files, 0.) + 0.5 * files.grid_h();
@@ -1336,6 +1345,78 @@ mod tests {
         files.route_input(&ctx, pointer(TouchKind::Move, x, y - 40., 116.));
         assert!(files.dragging, "a mouse drag lifts the item");
         assert_eq!(files.scroll, seen);
+    }
+    /// Nine icons, four a line, and the centre of the first one.
+    fn nine_icons() -> (Files, f32, f32) {
+        let files = fixture((0..9).map(|i| folder(&format!("item{i}"))).collect());
+        let x = files.side() + 16. + 0.5 * files.grid_w();
+        let y = files.rows_top() + 16. + 0.5 * files.grid_h();
+        (files, x, y)
+    }
+    #[test]
+    fn a_finger_that_rests_on_an_icon_then_moves_drags_the_item() {
+        let ctx = test_ctx();
+        let hold = dragout::hold_ms();
+        // the first move comes after the hold time: it lifts the item and the view stays where it is
+        let (mut files, x, y) = nine_icons();
+        files.route_input(&ctx, finger(TouchKind::Down, x, y, 1000.));
+        assert_eq!(files.hold_due(), Some(1000. + hold), "the loop wakes when the hold time is up");
+        // a finger is never quite still: a small move during the rest does not end the hold
+        files.route_input(&ctx, finger(TouchKind::Move, x + 2., y, 1100.));
+        assert!(!files.dragging && files.hold_due().is_some());
+        files.route_input(&ctx, finger(TouchKind::Move, x + 2., y - 40., 1000. + hold + 50.));
+        assert!(files.dragging, "a move after the hold drags the item");
+        assert_eq!(files.selected_paths(), vec![PathBuf::from("/fixture/item0")]);
+        assert_eq!(files.fx.drag_paths, files.selected_paths());
+        assert_eq!(files.scroll, 0., "and does not scroll");
+        files.route_input(&ctx, finger(TouchKind::Up, x, y - 40., 1000. + hold + 100.));
+        assert!(!files.dragging && files.hold_due().is_none());
+        // the loop's tick lifts the item at the hold time, before the finger moves
+        let (mut files, x, y) = nine_icons();
+        files.route_input(&ctx, finger(TouchKind::Down, x, y, 1000.));
+        assert!(!files.hold_tick(&ctx, 1000. + hold - 1.) && !files.dragging, "a shorter rest is not a hold");
+        assert!(files.hold_tick(&ctx, 1000. + hold) && files.dragging);
+        assert_eq!(files.selection, vec![0], "the lifted item is selected");
+        assert!(files.hold_due().is_none() && !files.hold_tick(&ctx, 1000. + hold + 16.));
+        // a rest on the empty part of the view lifts nothing
+        let (mut files, x, _) = nine_icons();
+        files.route_input(&ctx, finger(TouchKind::Down, x + 3. * files.grid_w(), files.bottom() - 4., 0.));
+        assert!(files.hold_due().is_none());
+    }
+    #[test]
+    fn a_finger_that_moves_at_once_scrolls_and_never_drags() {
+        let ctx = test_ctx();
+        let hold = dragout::hold_ms();
+        let (mut files, x, y) = nine_icons();
+        files.route_input(&ctx, finger(TouchKind::Down, x, y, 0.));
+        files.route_input(&ctx, finger(TouchKind::Move, x, y - 40., 16.));
+        assert!(!files.dragging);
+        assert_eq!(files.scroll, 40.);
+        assert!(files.hold_due().is_none() && !files.hold_tick(&ctx, hold + 1.), "the move ended the hold");
+        // still down long after the hold time: it goes on scrolling
+        files.route_input(&ctx, finger(TouchKind::Move, x, y - 60., hold + 100.));
+        assert!(!files.dragging && files.selection.is_empty());
+        assert_eq!(files.scroll, 60.);
+        files.route_input(&ctx, finger(TouchKind::Up, x, y - 60., hold + 120.));
+        assert!(!files.dragging && files.selection.is_empty());
+    }
+    #[test]
+    fn a_mouse_drag_lifts_the_item_at_once_and_a_mouse_press_never_holds() {
+        let ctx = test_ctx();
+        let hold = dragout::hold_ms();
+        let (mut files, x, y) = nine_icons();
+        files.route_input(&ctx, pointer(TouchKind::Down, x, y, 0.));
+        assert!(files.hold_due().is_none(), "a mouse press arms no hold");
+        // held still past the hold time, then a move inside the slop: nothing is lifted
+        assert!(!files.hold_tick(&ctx, hold + 1.));
+        files.route_input(&ctx, pointer(TouchKind::Move, x + 3., y, hold + 10.));
+        assert!(!files.dragging);
+        files.route_input(&ctx, pointer(TouchKind::Up, x + 3., y, hold + 20.));
+        // a drag past the slop lifts it without a wait
+        files.route_input(&ctx, pointer(TouchKind::Down, x, y, 2000.));
+        files.route_input(&ctx, pointer(TouchKind::Move, x, y - 40., 2016.));
+        assert!(files.dragging, "a mouse drag lifts the item");
+        assert_eq!(files.scroll, 0.);
     }
     /// A one-column icon grid with the folder A above the folder B: the x of the column and the y of each cell's centre.
     fn stacked_folders() -> (Files, f32, f32, f32) {
