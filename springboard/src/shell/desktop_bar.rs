@@ -1952,6 +1952,12 @@ impl Shell {
                 if l.image.w>0&&l.image.h>0 {frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id,x:l.x,y:l.y,width:l.image.w,height:l.image.h,pixels:l.image.px.clone(),input:l.input});}
             }
         }
+        // the image of a drag between windows: a surface of its own that follows the pointer above every window, with an
+        // empty input region so the pointer stays with what is under it. Drawn into the desktop frame (`dnd_draw`) it sat
+        // under the windows and showed over the wallpaper only: a drag had no image over the window it began in
+        if let Some((x,y,w,h,px))=self.dnd_overlay() {
+            frames.push(crate::bare::wayland::ChromeFrame{shape:Vec::new(),dock:None,id:super::chrome_ids::DRAG_IMAGE,x,y,width:w,height:h,pixels:px,input:Some([0,0,0,0])});
+        }
         // a tablet's on-screen keyboard: id 16 (7 is Preview), an overlay surface above every window from its resting top to the bottom
         // edge (drawn only into the desktop frame, the windows covered it). It stays up for the whole slide: the frame
         // is clear above the sliding keyboard, so the surface keeps one size and the slide plays inside it.

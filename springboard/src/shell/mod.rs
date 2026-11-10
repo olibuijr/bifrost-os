@@ -5143,7 +5143,11 @@ impl Shell {
         self.draw_voice_overlay(s);
         if self.dnd.session.is_some() {
             damage.all();
-            self.dnd_draw(s);
+            // on the desktop the drag image is a surface of its own above the windows (`dnd_overlay`); this frame sits
+            // under them, and an image drawn here as well would show twice over the wallpaper
+            if !self.overlays_on_desk() {
+                self.dnd_draw(s);
+            }
         }
         if self.clock_takeover() {
             damage.all();
