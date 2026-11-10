@@ -2,7 +2,7 @@
 
 ## 0.17.13
 
-- A page that sets no colours of its own is readable in the dark appearance: its text is dark on the white page. A page that declares a dark colour scheme still gets light text. Takes effect with the next engine build.
+- A page that sets no colours of its own is readable in the dark appearance: its text is dark on the white page. A page that declares a dark colour scheme still gets light text. Engine 0.7.0-bifrost.16.
 
 ## 0.17.12
 
