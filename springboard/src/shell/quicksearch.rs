@@ -385,7 +385,7 @@ fn action_line(intent: &super::settings_actions::SettingsIntent) -> &'static str
 
 /// A result as the Golden Gate panel shows it: its title and its second line (what kind of thing it is, where it is, or
 /// what it does). The second line is empty when there is nothing more to say.
-fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String, (now, offset): (i64, i32)) -> (String, String) {
+fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String, (now, offset, h24): (i64, i32, bool)) -> (String, String) {
     let folder_of = |path: &Path| path.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     match hit {
         Hit::App(app) => (apps_name(*app), "Application".to_string()),
@@ -401,7 +401,7 @@ fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String, (now, offset): (i64,
             let mut parts = vec![crate::files::fs::kind_of(name, false).label().to_string()];
             parts.extend(Some(folder_of(path)).filter(|f| !f.is_empty()));
             if *modified > 0 {
-                parts.push(crate::files::fs::date_text(*modified, now, offset));
+                parts.push(crate::files::fs::date_text_in(*modified, now, offset, h24));
             }
             (name.clone(), parts.join(" \u{b7} "))
         }
@@ -787,6 +787,14 @@ fn calculator_group(query: &str) -> Option<Group> {
     quicksearch_math::answer(query).map(|a| Group { title: "Calculator", hits: vec![Hit::Answer(a)] })
 }
 
+/// What "Show in Folder" hands to Files for the file `name` in `folder`: the file, so it is shown selected, or the
+/// folder itself when the file is gone since the search listed it (or `name` is not a plain file name).
+fn reveal_target(folder: &Path, name: &str) -> PathBuf {
+    let plain = !name.is_empty() && Path::new(name).file_name().is_some_and(|n| n == name);
+    let file = folder.join(name);
+    if plain && file.exists() { file } else { folder.to_path_buf() }
+}
+
 /// Splits a merged query into the Top Hit group, the sections, and the files group (with "Show in Folder" after it).
 /// `top` is the hit shown as the top hit; it is taken out of the sections, so no row is listed twice.
 fn split_merged(merged: &search_rank::Merged, hits: &BTreeMap<String, Hit>, top: Option<Hit>) -> (Option<Group>, Vec<Group>, Vec<Group>) {
@@ -835,7 +843,7 @@ fn top_matched_well(q: &str, hit: &Hit) -> bool {
         return false;
     }
     let name_of = |app: AppId| apps().iter().find(|a| a.id == app).map_or(String::new(), |a| a.name.to_string());
-    let (title, _) = row_text(hit, name_of, (0, 0));
+    let (title, _) = row_text(hit, name_of, (0, 0, true));
     if strict_match(q, &fuzzy::fold(&title)) {
         return true;
     }
@@ -1280,6 +1288,8 @@ pub struct QuickSearch {
     /// the wall clock (Unix seconds, zone offset) the file rows' dates are written against, set when Search opens;
     /// (0, 0) until then, when the system clock is read
     wall: (i64, i32),
+    /// 24-Hour Time of Settings > Date & Time, for the file rows' dates (set when the panel opens)
+    clock_24h: bool,
     /// set by Space on a definition row: the next act shows the whole definition instead of opening Dictionary
     space_preview: bool,
     suggestions: Image,
@@ -1396,6 +1406,7 @@ impl QuickSearch {
             events: vec![],
             calendar_stamp: None,
             wall: (0, 0),
+            clock_24h: true,
             space_preview: false,
             suggestions: ui.text("Assistant Suggestions", 20.0, Weight::Semibold, WHITE),
             chevron: ui.text("›", 22.0, Weight::Semibold, SECONDARY),
@@ -1969,7 +1980,8 @@ impl QuickSearch {
                 let max_w = self.px(ui, m.card_w - m.row_text_x - m.inset);
                 let label_pt = self.m().label_pt * k;
                 if self.mac {
-                    let (title, sub) = row_text(&hit, name_of, self.wall_now());
+                    let (now, offset) = self.wall_now();
+                    let (title, sub) = row_text(&hit, name_of, (now, offset, self.clock_24h));
                     rows.push((hit, ui.text(&ui.fit(&title, label_pt, max_w), label_pt, Weight::Regular, WHITE)));
                     subs.push((!sub.is_empty()).then(|| ui.text(&ui.fit(&sub, MAC_BODY_PT * k, max_w), MAC_BODY_PT * k, Weight::Regular, WHITE)));
                     continue;
@@ -2673,6 +2685,7 @@ impl Shell {
         // the dictionaries load once, off the UI thread; the file rows' dates use the shell's wall clock
         dict::preload(super::apphost::root().join("appdata").join(bifrost_ui::services_menu::DICTIONARY_APP));
         self.quicksearch.wall = self.wall_now(t);
+        self.quicksearch.clock_24h = self.clock_style.use_24h;
         self.quicksearch.refresh_sources(&super::contactstore::store_path(&self.data_dir), &self.deildu_dir, &super::services::calendar::store_path(&self.data_dir), root);
         self.quicksearch.open(&self.ui, self.h, y0, y, t, range);
     }
@@ -2754,10 +2767,14 @@ impl Shell {
                     self.run_intent(bifrost_ui::services_menu::DICTIONARY_APP, "look-up", "word", &word, t);
                 }
             }
-            Hit::Reveal { folder, .. } => {
-                self.open(AppId::Files, t);
-                if let Some(f) = &mut self.files {
-                    f.show_folder(&self.ui, &folder, t);
+            Hit::Reveal { folder, name } => {
+                // on the desktop the Files app shows the folder with the file selected, as the Services menu and the
+                // Downloads stack do; elsewhere (or with no Files app) the built-in view opens at the folder
+                if self.desktop_show_in_files(&reveal_target(&folder, &name), t).is_err() {
+                    self.open(AppId::Files, t);
+                    if let Some(f) = &mut self.files {
+                        f.show_folder(&self.ui, &folder, t);
+                    }
                 }
             }
             Hit::SettingsAction { intent: super::settings_actions::SettingsIntent::LockScreen, .. } => {

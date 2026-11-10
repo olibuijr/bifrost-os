@@ -39,4 +39,36 @@ class AppLauncherTests(unittest.TestCase):
             with self.assertRaises(SystemExit): runpy.run_path(str(SCRIPT),run_name='__main__')
             execute.assert_not_called()
 
+    def open_file(self, answer):
+        """Runs `--open /home/tester/a.txt` against a shell that answers `answer` (an OSError: no shell). Returns
+        the exit code (None when the launcher went on to exec), the request sent and the exec arguments."""
+        def read(path, *a, **kw):
+            if path.name == 'account': return 'username=tester\n'
+            return json.dumps({'WAYLAND_DISPLAY':'wayland-0','XDG_RUNTIME_DIR':'/run/bifrost/user'})
+        with patch('sys.argv',['bifrost-apps','--open','/home/tester/a.txt']), patch.object(Path,'read_text',read), patch.object(Path,'is_file',return_value=True), patch.object(Path,'is_dir',return_value=False), patch.object(Path,'resolve',lambda self,*a,**kw:self), patch('os.geteuid',return_value=0), patch('os.execvp',side_effect=Executed) as execute, patch('socket.socket') as sock:
+            client = sock.return_value.__enter__.return_value
+            if isinstance(answer,Exception): client.connect.side_effect = answer
+            else: client.recv.return_value = answer
+            code = None
+            try: runpy.run_path(str(SCRIPT),run_name='__main__')
+            except Executed: pass
+            except SystemExit as e: code = e.code
+            sent = client.sendall.call_args.args[0] if client.sendall.called else None
+            return code, sent, (execute.call_args.args if execute.called else None)
+
+    def test_open_file_asks_the_shell_for_the_default_app(self):
+        code,sent,executed = self.open_file(b'ok\n')
+        self.assertEqual((code,sent,executed),(0,b'open-document /home/tester/a.txt\n',None))
+
+    def test_open_file_a_shell_refusal_is_final(self):
+        code,_,executed = self.open_file(b'error: The file is not in the home folder\n')
+        self.assertEqual(code,'error: The file is not in the home folder')
+        self.assertIsNone(executed)
+
+    def test_open_file_falls_back_when_no_shell_answers_or_it_is_an_old_one(self):
+        for answer in (ConnectionRefusedError(), FileNotFoundError(), b'error: unknown command Some("open-document")\n'):
+            code,_,executed = self.open_file(answer)
+            self.assertIsNone(code)
+            self.assertEqual(executed[1][-3:],['gio','open','/home/tester/a.txt'])
+
 if __name__ == '__main__': unittest.main()

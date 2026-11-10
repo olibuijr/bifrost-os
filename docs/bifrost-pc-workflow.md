@@ -532,8 +532,14 @@ Open a file in an app: `open-file <app id> <absolute file>` on the shell's contr
   installed app comes up and receives the file as a granted document, a built-in app opens it itself. The file must
   be in the account's home folder, where document grants live.
 - On the machine: `open -a <app id> <file>...` (and `open -e <file>`, `open -t <file>` for the text editor) sends one
-  `open-file` line per file. `open <file>` without an app is still refused: there is no request yet that picks the
-  default app.
+  `open-file` line per file.
+- With no app named: `open-document <absolute file>`. `desktop_open_document` checks the path, asks the default-app
+  registry (`default_app_for_file`, the lookup a double-click in Files and the Downloads stack use) and goes on
+  through `desktop_open_file` with that app, so every limit above holds. A type no app opens is an error.
+  `open <file>` sends it, and `bifrost-apps --open <file>` does too (the generic opener runs only when no shell
+  answers or the shell is from before the request; a refusal by the shell is final).
+- The file must be inside the home folder with every link followed (`workspace::in_home`). This is checked for
+  every app since 0.10.50: before, a built-in app (Photos) read a file outside the home folder as the shell.
 - From the lab: `python3 tools/midget.py open-file is.olibuijr.textedit.desktop /home/<account>/notes.txt`.
 
 ## Releases and the test machine (2026-10-08)

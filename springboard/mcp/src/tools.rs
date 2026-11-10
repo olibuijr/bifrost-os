@@ -467,7 +467,9 @@ impl Ctx {
     }
 
     fn open(&mut self, a: &Value) -> Result<Value, String> {
-        let line = if let Some(id) = s(a, "app") {
+        let line = if let Some(line) = file_line(s(a, "app"), s(a, "file"), s(a, "reveal"))? {
+            line
+        } else if let Some(id) = s(a, "app") {
             // a bundle id goes straight to the shell; a name ("calculator", "Voice Memos") resolves through
             // the shell's app map (os/apps/*), which also covers system apps
             if !id.contains('.') || sys::shell_text(&format!("open-app {id}")).is_err() {
@@ -489,7 +491,7 @@ impl Ctx {
         } else if let Some(p) = s(a, "folder") {
             format!("open-folder is.olibuijr.files.desktop {p}")
         } else {
-            return Err("give one of app (name or bundle id), url or folder".into());
+            return Err("give one of app (name or bundle id), url, folder, file or reveal".into());
         };
         let r = sys::shell_text(&line)?;
         if let Some(id) = s(a, "app") {
@@ -906,8 +908,8 @@ pub fn list() -> Value {
          "inputSchema":o(json!({"text":{"type":"string"},"submit":{"type":"boolean"},"delay_ms":{"type":"number","description":"per character, default 0"}}),&["text"])},
         {"name":"window","description":"Act on a window by title or app id (substring ok): activate (focus and raise), close, maximize, unmaximize, minimize, unminimize, fullscreen, unfullscreen. action=list shows windows (optionally filtered by window/app id: title, app_id, state). resize and move are not available (the foreign-toplevel protocol has no such request) and answer E_UNSUPPORTED.",
          "inputSchema":o(json!({"window":{"type":"string"},"app":{"type":"string","description":"app id, same as window"},"action":{"type":"string","enum":["activate","close","maximize","unmaximize","minimize","unminimize","fullscreen","unfullscreen","list","resize","move"]}}),&[])},
-        {"name":"open","description":"Launch an app by name (\"Calculator\", \"Voice Memos\") or bundle id and wait for its window, open a URL in the browser, or open a folder in Files.",
-         "inputSchema":o(json!({"app":{"type":"string"},"url":{"type":"string"},"folder":{"type":"string"},"wait":{"type":"boolean","description":"wait for the app window, default true"}}),&[])},
+        {"name":"open","description":"Launch an app by name (\"Calculator\", \"Voice Memos\") or bundle id and wait for its window, open a URL in the browser, open a folder in Files, open a file (file: in its default app, or in the app whose bundle id `app` names), or show a file selected in its folder (reveal). The shell opens files in the account's home folder only.",
+         "inputSchema":o(json!({"app":{"type":"string"},"url":{"type":"string"},"folder":{"type":"string"},"file":{"type":"string","description":"absolute path of a file to open; with app (a bundle id) it opens in that app, else in the default app for its type"},"reveal":{"type":"string","description":"absolute path of a file or folder to show selected in Files (app: another file manager's bundle id)"},"wait":{"type":"boolean","description":"wait for the app window, default true"}}),&[])},
         {"name":"ui","description":"The shell's accessibility map: list named elements (menu bar, dock, Settings rows, buttons) with their address and frame, or press one by address or name. Faster and steadier than clicking pixels. SDK apps appear under prefix app/<id> (their controls tree: buttons, fields, lists, rows, with hierarchy), e.g. prefix=app/ with the app open; press works by address or unique name.",
          "inputSchema":o(json!({"press":{"type":"string","description":"address or name to press"},"filter":{"type":"string","description":"substring filter on list rows"},"prefix":{"type":"string"},"limit":{"type":"integer"}}),&[])},
         {"name":"app","description":"Apps' JSON-RPC control sockets. No app: list apps with a socket. app only: its methods (app.methods). app+method(+params): call it, e.g. notes app.state, intent.<id>. Reads and edits app data without touching the screen. describe=true lists methods with parameter signatures (app.methods verbose; method filters by substring). A result shaped {encoding:\"base64\",format:\"png\",data,...} comes back as a real image block; file=<path> saves any result (decoded bytes for images) and is the way to get results larger than max_output (default 100000 bytes). Errors carry codes: E_NO_APP, E_NO_METHOD, E_BAD_PARAMS, E_TIMEOUT, E_NO_TAB, E_ENGINE_DOWN, E_APP_DOWN.",
@@ -941,9 +943,65 @@ pub fn list() -> Value {
     tools
 }
 
+/// The Files app, which `reveal` uses when no app is named.
+const FILES_APP: &str = "is.olibuijr.files.desktop";
+
+/// The shell control line for the `open` tool's `file` and `reveal` arguments (`None` when neither is given):
+/// `open-file <app> <path>`, `open-document <path>` when no app is named (the shell picks the default app), or
+/// `reveal-file <app> <path>` (Files unless an app is named). The shell does every check on what may be opened; here
+/// the line is only kept well formed, so an argument cannot carry a second request: an app ID of letters, digits,
+/// `.`, `_` and `-`, an absolute path with no control character, and at most the 510 bytes the shell reads.
+fn file_line(app: Option<&str>, file: Option<&str>, reveal: Option<&str>) -> Result<Option<String>, String> {
+    let (open, path) = match (file, reveal) {
+        (None, None) => return Ok(None),
+        (Some(_), Some(_)) => return Err("give file or reveal, not both".into()),
+        (Some(p), None) => (true, p),
+        (None, Some(p)) => (false, p),
+    };
+    if !path.starts_with('/') || path.chars().any(char::is_control) || path != path.trim() {
+        return Err(format!("{path:?}: expected an absolute path"));
+    }
+    if let Some(id) = app {
+        if id.is_empty() || !id.bytes().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c)) {
+            return Err(format!("{id:?}: with file or reveal, app is a bundle id such as is.olibuijr.textedit.desktop"));
+        }
+    }
+    let line = match (open, app) {
+        (true, Some(id)) => format!("open-file {id} {path}"),
+        (true, None) => format!("open-document {path}"),
+        (false, id) => format!("reveal-file {} {path}", id.unwrap_or(FILES_APP)),
+    };
+    if line.len() > 510 {
+        return Err("the path is too long for one request".into());
+    }
+    Ok(Some(line))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_and_reveal_become_one_well_formed_control_line() {
+        assert_eq!(file_line(Some("calculator"), None, None), Ok(None), "an app alone is a launch");
+        assert_eq!(file_line(None, Some("/home/me/to do.txt"), None), Ok(Some("open-document /home/me/to do.txt".into())));
+        assert_eq!(
+            file_line(Some("is.olibuijr.textedit.desktop"), Some("/home/me/to do.txt"), None),
+            Ok(Some("open-file is.olibuijr.textedit.desktop /home/me/to do.txt".into()))
+        );
+        assert_eq!(file_line(None, None, Some("/home/me/a.pdf")), Ok(Some("reveal-file is.olibuijr.files.desktop /home/me/a.pdf".into())));
+        assert_eq!(file_line(Some("a.b"), None, Some("/home/me/a.pdf")), Ok(Some("reveal-file a.b /home/me/a.pdf".into())));
+        // nothing that could end the line early, start a second request or shift the words
+        for path in ["a.txt", "", "/home/me/a\nopen-app x", "/home/me/a\r", " /home/me/a", "/home/me/a "] {
+            assert!(file_line(None, Some(path), None).is_err(), "{path:?}");
+            assert!(file_line(None, None, Some(path)).is_err(), "{path:?}");
+        }
+        for app in ["", "Text Edit", "a b", "a/b", "a\nb"] {
+            assert!(file_line(Some(app), Some("/home/me/a.txt"), None).is_err(), "{app:?}");
+        }
+        assert!(file_line(None, Some("/a"), Some("/b")).is_err());
+        assert!(file_line(None, Some(&format!("/{}", "a".repeat(600))), None).is_err());
+    }
 
     #[test]
     fn base64_round_trips() {

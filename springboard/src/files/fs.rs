@@ -449,9 +449,15 @@ pub fn civil(local: i64) -> (i32, u32, u32, u32, u32) {
 
 const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/// "Today at 09:41", "Yesterday at 18:02" or "4 Oct 2026 at 00:22";
-/// `offset` is the zone's seconds east of UTC.
+/// "Today at 09:41", "Yesterday at 18:02" or "4 Oct 2026 at 00:22", with the time in 24-hour style;
+/// `offset` is the zone's seconds east of UTC. A caller that knows the user's clock style uses `date_text_in`.
 pub fn date_text(mtime: i64, now: i64, offset: i32) -> String {
+    date_text_in(mtime, now, offset, true)
+}
+
+/// `date_text` with the time as the user's clocks write it (`ClockStyle::time_text`, the one formatter of the menu
+/// bar and the lock screen): "Today at 09:41" with 24-hour time on, "Today at 9:41 AM" with it off.
+pub fn date_text_in(mtime: i64, now: i64, offset: i32, h24: bool) -> String {
     let (y, m, d, h, min) = civil(mtime + offset as i64);
     let (ny, nm, nd, ..) = civil(now + offset as i64);
     let (yy, ym, yd, ..) = civil(now + offset as i64 - 86_400);
@@ -462,7 +468,7 @@ pub fn date_text(mtime: i64, now: i64, offset: i32) -> String {
     } else {
         format!("{d} {} {y}", MONTHS[(m - 1) as usize])
     };
-    format!("{day} at {h:02}:{min:02}")
+    format!("{day} at {}", crate::status::clock_in(h as i32, min as i32, h24))
 }
 
 /// A root the sidebar offers.
@@ -873,6 +879,12 @@ pub(crate) mod tests {
         assert_eq!(date_text(now - 3600, now, 0), "Yesterday at 23:22");
         assert_eq!(date_text(now - 3600, now, 3600), "Today at 00:22", "zone shifts the day");
         assert_eq!(date_text(0, now, 0), "1 Jan 1970 at 00:00");
+        // the 12-hour style of Settings > Date & Time, written as the menu bar clock writes it
+        assert_eq!(date_text_in(now - 60, now, 0, true), "Today at 00:21");
+        assert_eq!(date_text_in(now - 60, now, 0, false), "Today at 12:21 AM");
+        assert_eq!(date_text_in(now - 3600, now, 0, false), "Yesterday at 11:22 PM");
+        assert_eq!(date_text_in(now + 12 * 3600, now + 13 * 3600, 0, false), "Today at 12:22 PM");
+        assert_eq!(date_text_in(0, now, 9 * 3600 + 5 * 60, false), "1 Jan 1970 at 9:05 AM");
     }
 
     #[test]

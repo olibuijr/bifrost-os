@@ -3019,7 +3019,9 @@ impl Shell {
             }
         }
         let run: Vec<&str> = run.iter().map(String::as_str).collect();
-        let controls: Vec<(&str, usize, u32)> = self.ext.iter().flatten().map(|h| (h.id.as_str(), h.controls.len(), h.commands.0)).collect();
+        // only running apps: a host whose app exited by itself or crashed keeps its slot (and the last tree the app
+        // sent) until the app is opened again or the shell closes it, and must not be listed here
+        let controls: Vec<(&str, usize, u32)> = self.ext.iter().flatten().filter(|h| h.running()).map(|h| (h.id.as_str(), h.controls.len(), h.commands.0)).collect();
         #[allow(unused_mut)]
         let mut text = ext_state_text(&run, &controls);
         // every other client's window the shell lists (native and Linux apps), so a test can see which one is active

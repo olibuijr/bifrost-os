@@ -1,7 +1,7 @@
 use super::*;
 use super::super::settings_actions::SettingsIntent as Action;
 /// A fixed "now" for the row lines (seconds, UTC offset): 2026-10-22 22:13 UTC.
-const W: (i64, i32) = (1_792_707_200, 0);
+const W: (i64, i32, bool) = (1_792_707_200, 0, true);
 
 #[test]
 fn settings_results_draw_the_symbol_their_pane_has_in_settings() {
@@ -53,6 +53,10 @@ fn rows_have_a_title_and_a_second_line_saying_what_they_are() {
     assert!(line.contains(" \u{b7} Documents \u{b7} "), "kind, folder, then the date: {line}");
     assert!(line.ends_with(&crate::files::fs::date_text(W.0 - 60, W.0, 0)), "{line}");
     assert!(line.contains("Today at"), "{line}");
+    // with 24-Hour Time off the date ends as the menu bar clock writes the time
+    let (_, twelve) = row_text(&dated, name, (W.0, W.1, false));
+    assert!(twelve.ends_with(&crate::files::fs::date_text_in(W.0 - 60, W.0, 0, false)), "{twelve}");
+    assert!(twelve.ends_with(" AM") || twelve.ends_with(" PM"), "{twelve}");
     let def = Hit::Definition { word: "weather".into(), dictionary: "Test".into(), preview: "n. the state of the atmosphere".into() };
     assert_eq!(row_text(&def, name, W), ("weather".to_string(), "n. the state of the atmosphere".to_string()));
     let look = Hit::Definition { word: "zyx".into(), dictionary: String::new(), preview: String::new() };

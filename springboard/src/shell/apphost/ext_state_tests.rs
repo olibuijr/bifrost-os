@@ -34,3 +34,32 @@ fn the_foreign_windows_line_names_each_window_once_and_the_active_one() {
     assert_eq!(super::foreign_state_line(windows.iter()), "foreign_windows=ai.film:7:1,org.x:9:0\n");
     assert_eq!(super::foreign_state_line(std::iter::empty()), "foreign_windows=\n");
 }
+
+/// E2E 0.10.49: an app that quit by itself or crashed keeps its host (status `Exited`) in its slot, and the state
+/// report listed its controls as if it still ran. The report and the accessibility map list running apps only.
+#[cfg(feature = "desktop-wayland")]
+#[test]
+fn an_app_that_exited_leaves_the_state_report_and_the_accessibility_map() {
+    use super::{AppHost, Status};
+    let mut sh = crate::shell::tests::desktop_shell();
+    let cfg = bifrost_proto::Configure { w: 64, h: 48, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+    let mut peers = Vec::new();
+    for id in ["is.a.notes", "is.a.mail"] {
+        let (mine, peer) = bifrost_proto::sys::socketpair_pair().unwrap();
+        peers.push(peer);
+        let mut host = AppHost::with_channel(id, mine, None, cfg);
+        host.commands = bifrost_proto::Commands(0xf);
+        host.controls = vec![bifrost_proto::Node { id: 1, role: bifrost_proto::Role::Button, label: "Send".into(), value: String::new(), bounds: bifrost_proto::UiRect { x: 0., y: 0., w: 10., h: 10. }, enabled: true }];
+        sh.ext.push(Some(host));
+    }
+    let line = |sh: &crate::shell::Shell, key: &str| sh.describe_ext().lines().find(|l| l.starts_with(key)).unwrap().to_string();
+    assert_eq!(line(&sh, "apps_running="), "apps_running=is.a.notes,is.a.mail");
+    assert_eq!(line(&sh, "app_controls="), "app_controls=is.a.notes:1:f,is.a.mail:1:f");
+    // Mail exits (a quit of its own, or a crash): the host stays in the slot, as `pump` leaves it
+    sh.ext[1].as_mut().unwrap().status = Status::Exited(139);
+    assert_eq!(line(&sh, "apps_running="), "apps_running=is.a.notes");
+    assert_eq!(line(&sh, "app_controls="), "app_controls=is.a.notes:1:f");
+    let map = sh.ax_map(0.);
+    assert!(map.under("app/is.a.notes").count() > 0, "the running app keeps its elements");
+    assert_eq!(map.under("app/is.a.mail").count(), 0, "the app that exited has none");
+}
