@@ -509,10 +509,17 @@ pub const TITLE_ID: u32 = 0x4000;
 /// The most room the window title takes on the toolbar; a longer one is cut with an ellipsis.
 const TITLE_MAX_PT: f32 = ui::SPACE_XXXL * 6.0;
 
-/// The width of the title's slot in points: the title's own width, up to `TITLE_MAX_PT`, and a gap after it.
+/// What the window title carries after the document's name while it has unsaved changes.
+pub const EDITED_SUFFIX: &str = " \u{2013} Edited";
+
+/// The width of the title's slot in points: the width of the title as it reads with unsaved changes ("name – Edited"),
+/// up to `TITLE_MAX_PT`, and a gap after it. The room for "Edited" is kept while the document is clean too, so the
+/// buttons after the title stay where they are, and none drops off the end of the bar, when the document becomes
+/// edited or is saved.
 fn title_width(ui: &Ui, title: &str) -> f32 {
     let scale = ui.pt(1.0).max(0.001);
-    (ui.measure(title, ui::MAC_BODY_PT, Weight::Semibold) / scale).ceil().min(TITLE_MAX_PT) + ui::SPACE_S
+    let widest = if title.ends_with(EDITED_SUFFIX) { title.to_string() } else { format!("{title}{EDITED_SUFFIX}") };
+    (ui.measure(&widest, ui::MAC_BODY_PT, Weight::Semibold) / scale).ceil().min(TITLE_MAX_PT) + ui::SPACE_S
 }
 
 /// `title` cut with an ellipsis to fit `max_px` in the semibold face it is drawn in.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.24
+
+- Save shows "Saving name…" as soon as it is asked for and "Saved name" when the file is written. A picture is encoded in the background, so the window is not held while a large one is saved.
+- The toolbar buttons stay where they are, and none leaves the bar, when the title gains or loses "Edited".
+- When another app changed the file since it was opened, the alert also offers Revert: after a confirmation the file is opened as it is now, without the unsaved changes.
+- Insert > Page from File no longer writes over the working copy of another file of the same name.
+- A second Save while one is under way is ignored instead of being mixed up with the first.
+
 ## 0.11.23
 
 - The window shows the document's name at the head of the toolbar, with "Edited" while it has unsaved changes; the Window menu and the close light follow.
