@@ -676,7 +676,7 @@ impl Viewer {
     /// document. The window is full-size, so the shell draws no title row: the title leads the toolbar.
     fn window_title(&self) -> String {
         match self.document_name() {
-            Some(name) if self.edited() => format!("{name} \u{2013} Edited"),
+            Some(name) if self.edited() => format!("{name}{}", canvas::EDITED_SUFFIX),
             Some(name) => name,
             None => String::new(),
         }
@@ -3670,6 +3670,21 @@ mod tests {
         // with no document there is no title and the bar is as before
         let (bar, _) = canvas::toolbar(&ctx.ui, &lay, false, "", Tool::Pan, Side::Pages);
         assert!(bar.items.iter().all(|item| item.id != canvas::TITLE_ID));
+    }
+
+    /// The slot keeps the room "Edited" takes, so an edit or a save moves no button and drops none off the bar's end.
+    #[test]
+    fn the_buttons_stay_where_they_are_when_the_title_says_edited() {
+        let ctx = menu_ctx();
+        // a full bar (buttons already left out), a bar with room to spare, and a name long enough to meet the cap
+        for (w, name) in [(900, "pic.png"), (1200, "pic.png"), (2400, "pic.png"), (1200, "a long name that meets the cap of the title slot, and more.png")] {
+            let lay = Layout::new(&ctx.ui, w, 800);
+            let edited_title = format!("{name}{}", canvas::EDITED_SUFFIX);
+            let (clean_bar, clean) = canvas::toolbar(&ctx.ui, &lay, true, name, Tool::Pan, Side::Pages);
+            let (edited_bar, edited) = canvas::toolbar(&ctx.ui, &lay, true, &edited_title, Tool::Pan, Side::Pages);
+            assert_eq!(clean, edited, "{name} at {w}: the same buttons in the same places");
+            assert_eq!(clean_bar.items.len(), edited_bar.items.len(), "{name} at {w}");
+        }
     }
 
     /// The worker writes a PDF's save, so its reply arrives with no input event: the request for the original has to
