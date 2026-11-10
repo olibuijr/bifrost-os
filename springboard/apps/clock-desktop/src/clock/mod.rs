@@ -1506,7 +1506,7 @@ impl Clock {
             let x = cx + dx;
             // the selected card (last clicked or right-clicked; Delete removes it) carries an accent ring
             if self.selected_alarm == Some(a.id) && dx == 0.0 {
-                let ring = ui.pt(2.0);
+                let ring = ui.pt(SPACE_XXS);
                 s.fill_rrect(x - ring, y - ring, w + 2.0 * ring, h + 2.0 * ring, ui.pt(m::CARD_RADIUS) + ring, LINK);
             }
             s.fill_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), CARD_BG.now());

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.15
+
+- Compliance: the Recently Deleted title is recorded as a tinted title with a count; no change in behaviour.
+
 ## 1.20.14
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.19
+
+- Compliance: the found-in event times use a named day length; no change in behaviour.
+
 ## 0.17.18
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

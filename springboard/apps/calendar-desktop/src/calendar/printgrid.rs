@@ -14,6 +14,11 @@ use bifrost_app::print::{Orientation, PdfPage, PrintInfo};
 /// The standard fonts the pages use, in the order of their names in the content: `/F0` and `/F1`.
 pub const FONTS: [&str; 2] = ["Helvetica", "Helvetica-Bold"];
 
+/// The units per em of `WIDTHS`: thousandths of the type size.
+const UNITS_PER_EM: f32 = 1000.0;
+/// Minutes in a day: an event that runs past midnight ends at this minute on the grid.
+const DAY_MINUTES: u32 = 1440;
+
 /// Helvetica's advance widths for the characters from space to tilde, in thousandths of the type size.
 const WIDTHS: [u16; 95] = [
     278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, // space to /
@@ -36,7 +41,7 @@ pub fn text_width(text: &str, size: f32) -> f32 {
             _ => 556,
         })
         .sum();
-    units as f32 * size / 1000.0
+    units as f32 * size / UNITS_PER_EM
 }
 
 /// `text` cut to fit `max_w` points, with `...` in place of what was cut. Text that fits is returned as it is.
@@ -302,7 +307,7 @@ fn time_grid(c: &mut Canvas, grid: &Grid, events: &[CalendarEvent], occurs: &dyn
         c.text(x0, band_top + 8.0, 6.5, false, GRAY_TEXT, "all-day");
     }
     // the hours
-    let spans: Vec<(u32, u32)> = per_day.iter().flat_map(|d| d.iter().filter(|e| !e.all_day).map(|e| (e.minute as u32, (e.minute as u32 + e.duration as u32).min(1440)))).collect();
+    let spans: Vec<(u32, u32)> = per_day.iter().flat_map(|d| d.iter().filter(|e| !e.all_day).map(|e| (e.minute as u32, (e.minute as u32 + e.duration as u32).min(DAY_MINUTES)))).collect();
     let (h0, h1) = hour_range(grid.day_start, grid.day_end, &spans);
     let grid_top = band_top + band_h;
     let hour_h = ((y0 + h - grid_top) / (h1 - h0) as f32).max(1.0);
@@ -321,7 +326,7 @@ fn time_grid(c: &mut Canvas, grid: &Grid, events: &[CalendarEvent], occurs: &dyn
     // the blocks, side by side where they overlap
     for (i, day_events) in per_day.iter().enumerate() {
         let timed: Vec<&&CalendarEvent> = day_events.iter().filter(|e| !e.all_day).collect();
-        let day_spans: Vec<(u32, u32)> = timed.iter().map(|e| (e.minute as u32, (e.minute as u32 + e.duration as u32).min(1440))).collect();
+        let day_spans: Vec<(u32, u32)> = timed.iter().map(|e| (e.minute as u32, (e.minute as u32 + e.duration as u32).min(DAY_MINUTES))).collect();
         let slots: Vec<Slot> = layout::layout(&day_spans, 30);
         for ((e, span), slot) in timed.iter().zip(&day_spans).zip(slots) {
             let (x, bw) = layout::slot_x(slot, x0 + gutter + col_w * i as f32, col_w, 1.5);
@@ -333,7 +338,7 @@ fn time_grid(c: &mut Canvas, grid: &Grid, events: &[CalendarEvent], occurs: &dyn
             if text_w > 8.0 {
                 c.text(x + 4.0, y + 7.0, CELL_SIZE, true, BLACK, &fit(&e.title, CELL_SIZE, text_w));
                 if bh >= 18.0 {
-                    let when = format!("{} - {}", time_label(e.minute), time_label(((e.minute as u32 + e.duration as u32) % 1440) as u16));
+                    let when = format!("{} - {}", time_label(e.minute), time_label(((e.minute as u32 + e.duration as u32) % DAY_MINUTES) as u16));
                     c.text(x + 4.0, y + 7.0 + CELL_LINE, CELL_SIZE, false, GRAY_TEXT, &fit(&when, CELL_SIZE, text_w));
                 }
                 if bh >= 28.0 && !e.location.is_empty() {

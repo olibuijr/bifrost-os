@@ -187,6 +187,10 @@ impl App for ScreenshotApp {
     }
 
     fn configure(&mut self, ctx: &Ctx) {
+        if self.size == (0.0, 0.0) {
+            // first configure: the shell takes and saves the picture, so the app never holds anything unsaved
+            ctx.enable_sudden_termination();
+        }
         self.size = (ctx.cfg.w as f32, ctx.cfg.h as f32);
     }
 

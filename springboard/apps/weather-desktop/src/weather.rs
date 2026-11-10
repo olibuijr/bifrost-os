@@ -111,6 +111,8 @@ const QUOTE_ROW: f32 = 60.0;
 /// The line of the quotes' source credit under the watchlist, in points.
 const ATTRIBUTION_H: f32 = 24.0;
 const REMOVE_W: f32 = 48.0;
+/// The width kept free in the My Location row for the temperature at its trailing edge.
+const HERE_TEMP_ROOM_PT: f32 = 150.0;
 /// The Next Hour card (minute-by-minute rain) above the hourly strip.
 const NEXT_TOP: f32 = 296.0;
 const NEXT_H: f32 = 100.0;
@@ -2134,7 +2136,7 @@ impl Weather {
                         if self.here_shown() {
                             c.fill_rect(x as usize, (y + ui.pt(SPACE_S)) as usize, ui.pt(SPACE_XS) as usize, ui.pt(rh - 20.0) as usize, LINK);
                         }
-                        let room = (w - ui.pt(150.0)).max(ui.pt(SPACE_HUGE));
+                        let room = (w - ui.pt(HERE_TEMP_ROOM_PT)).max(ui.pt(SPACE_HUGE));
                         self.put(&mut c, ui, "My Location", MAC_BODY_PT, Weight::Semibold, LABEL.now(), Align::Left, x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
                         let hint = ui.fit(&self.here_hint(), MAC_FOOTNOTE_PT, room);
                         self.put(&mut c, ui, &hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), Align::Left, x + ui.pt(SPACE_L), y + ui.pt(37.0));

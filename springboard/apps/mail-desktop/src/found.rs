@@ -26,6 +26,9 @@ pub fn add_label(kind: bifrost_app::controls::found_in::SuggestionKind) -> Optio
     }
 }
 
+/// Minutes in a day: the longest entry, and where an entry that runs past midnight moves to the next day.
+const DAY_MINUTES: u32 = 1440;
+
 /// The start and end of the calendar entry for a proposed event, as the Calendar service writes them
 /// (`YYYY-MM-DDTHH:MM`, local time). `now` is the Unix time and `offset` the local zone's seconds east of GMT. A
 /// weekday means its next occurrence, today included. The entry lasts the proposal's length, at least 15 minutes and at
@@ -35,13 +38,13 @@ pub fn event_times(event: &ProposedEvent, now: i64, offset: i64) -> (String, Str
     let weekday = (today + 3).rem_euclid(7) as u8; // Monday = 0
     let day = today + i64::from(event.days_from(weekday));
     let start = u32::from(event.start_minute);
-    let length = u32::from(event.duration_minutes).clamp(15, 1440);
+    let length = u32::from(event.duration_minutes).clamp(15, DAY_MINUTES);
     let end = start + length;
     let write = |day: i64, minute: u32| {
         let (year, month, date) = crate::message::civil_from_days(day);
         format!("{year:04}-{month:02}-{date:02}T{:02}:{:02}", minute / 60, minute % 60)
     };
-    (write(day, start), write(day + i64::from(end / 1440), end % 1440))
+    (write(day, start), write(day + i64::from(end / DAY_MINUTES), end % DAY_MINUTES))
 }
 
 /// The `maps:` link that searches for `place` in the Maps app, with the text percent-encoded. Nothing leaves the

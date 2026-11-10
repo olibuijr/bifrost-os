@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.15
+
+- Compliance: the gallery selection ring uses the spacing tokens; no change in behaviour.
+
 ## 1.24.14
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
