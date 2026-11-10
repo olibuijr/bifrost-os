@@ -233,6 +233,7 @@ pub mod pickers;
 pub mod wake;
 pub mod desktop_network;
 pub mod disk_image;
+pub mod volume_eject;
 mod desktop_bar;
 mod tablet_gestures;
 #[cfg(feature = "desktop-wayland")]

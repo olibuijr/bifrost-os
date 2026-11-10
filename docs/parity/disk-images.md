@@ -68,6 +68,14 @@ Attach needs an absolute `.iso` or `.img` path that is canonical (no link), a re
 account, under the account's home. Detach only releases a loop device whose backing file is such an image under the
 home folder. Both need the session token like every other non-unlock method.
 
+Attach binds with partition scanning (`LOOP_SET_STATUS64`, `LO_FLAGS_PARTSCAN`), so a partitioned image shows
+`/dev/loopNpM`. `shell::disk_image` mounts the whole device when it holds a file system (a disc image with a
+partition table beside it stays one volume); otherwise each partition the kernel lists under `/sys/block/loopN`
+whose `blkid -p` type is one the system mounts, at most 16, named by its label or `<image name> <number>`. Swap,
+encrypted and unknown partitions are passed over; an EFI system partition is `vfat` and is mounted. Detaching the
+device, a partition or a volume folder unmounts every volume of the image (last mounted first) and releases the loop
+device once. Not yet run on Midget.
+
 ## Midget checks still needed
 
 1. `hdiutil create -size 10m -o ~/t.img`, then `hdiutil info` and `hdiutil verify` on it.

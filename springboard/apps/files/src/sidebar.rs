@@ -1,15 +1,5 @@
 //! The source list: Favorites, Locations and Tags sections (Files's sidebar).
 use crate::*;
-use std::sync::Mutex;
-
-/// Why the last eject failed, until the app loop shows it (a worker thread leaves it here).
-static EJECT_NOTICE: Mutex<Option<String>> = Mutex::new(None);
-
-fn post_eject_notice(notice: String) {
-    if let Ok(mut slot) = EJECT_NOTICE.lock() {
-        *slot = Some(notice);
-    }
-}
 
 /// The sidebar column's width, its rows' start below the traffic lights, and the header band's height (points).
 pub(crate) const SIDEBAR_W: f32 = 160.;
@@ -36,7 +26,7 @@ pub(crate) struct Place {
     pub(crate) symbol: &'static str,
     pub(crate) dot: Option<u32>,
     pub(crate) path: PathBuf,
-    /// The partition a removable volume row ejects (`/dev/sdb1`); None for every other row.
+    /// The device a volume row ejects (`/dev/sdb1`, or `/dev/loop0` for a disk image); None for every other row.
     pub(crate) eject: Option<String>,
 }
 
@@ -146,36 +136,16 @@ impl Files {
             _ => self.navigate(place.path, true),
         }
     }
-    /// Ejects a removable volume in the background (unmount, then power off). A folder open inside it moves home first.
-    /// A failure is logged and shown in the status bar, naming the programs that still hold the volume open
-    /// (`volumes::eject_with_notice`); the row goes away on the next sidebar build once the volume is gone.
+    /// Ejects a volume. A folder open inside it moves home first. The shell does the work (`system::eject_effect`
+    /// picks the request: a disk image's volume, or a removable disk's); its event brings a failure, which the status
+    /// bar shows. The row goes away on the next sidebar build once the volume is gone.
     fn eject_volume(&mut self, name: &str, device: &str, mount: &Path) {
         if self.path.starts_with(mount) {
             let home = self.home.clone();
             self.navigate(home, true);
         }
-        // a disk image's volume: only the shell can unmount it and release its loop device
-        if springboard::shell::disk_image::is_loop_device(device) {
-            self.sys.effects.push(Effect::DetachImage(device.to_string(), name.to_string()));
-            self.revision += 1;
-            return;
-        }
-        let (name, device, mount) = (name.to_string(), device.to_string(), mount.to_path_buf());
-        DispatchQueue::global(Qos::Utility).async_(move || {
-            if let Some(notice) = springboard::files::volumes::eject_with_notice(&name, &device, &mount) {
-                eprintln!("eject {device}: {notice}");
-                post_eject_notice(notice);
-                // wake the app loop so `tick` shows it
-                DispatchQueue::main().async_(|| {});
-            }
-        });
+        self.sys.effects.push(system::eject_effect(device, name));
         self.revision += 1;
-    }
-    /// The notice a failed eject left, once: the status bar shows it.
-    pub(crate) fn take_eject_notice(&mut self) -> bool {
-        let Some(notice) = EJECT_NOTICE.lock().ok().and_then(|mut n| n.take()) else { return false };
-        self.notice = Some(notice);
-        true
     }
     /// How far the source list can scroll: its rows past the bottom of the column (`SIDEBAR_SCROLL` is the header band).
     pub(crate) fn side_scroll_max(&self) -> f32 {

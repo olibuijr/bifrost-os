@@ -1,5 +1,7 @@
 //! Loop devices for disk images: `disk.loop_attach` and `disk.loop_detach`. An unprivileged session cannot run
 //! `losetup` (the kernel refuses it without root), so privd does the two steps and the caller mounts the device.
+//! The device is bound with partition scanning on, so an image that holds a partition table (an installer image, a
+//! memory-card dump) shows its partitions as `/dev/loopNpM`; an image without one is unchanged.
 //!
 //! The image must be what root can trust without following anything the user could redirect: an absolute path ending
 //! in `.iso` or `.img`, reached with no symbolic link, a regular file owned by the installed account, under that
@@ -25,12 +27,55 @@ const O_PATH: i32 = 0o10000000;
 const LOOP_SET_FD: std::os::raw::c_ulong = 0x4C00;
 /// Returns the number of a free loop device (on the control device).
 const LOOP_CTL_GET_FREE: std::os::raw::c_ulong = 0x4C82;
+/// Sets the status of a bound loop device from a [`LoopInfo64`].
+const LOOP_SET_STATUS64: std::os::raw::c_ulong = 0x4C04;
+/// The status flag that makes the kernel read the image's partition table.
+const LO_FLAGS_PARTSCAN: u32 = 8;
 const EBUSY: i32 = 16;
 /// How often a loop device that another process took first is given up for the next free one.
 const BIND_TRIES: usize = 8;
 
 extern "C" {
     fn ioctl(fd: i32, request: std::os::raw::c_ulong, ...) -> i32;
+}
+
+/// The kernel's `struct loop_info64` (232 bytes), the argument of `LOOP_SET_STATUS64`.
+#[repr(C)]
+#[allow(dead_code)] // the kernel reads the fields
+struct LoopInfo64 {
+    lo_device: u64,
+    lo_inode: u64,
+    lo_rdevice: u64,
+    lo_offset: u64,
+    lo_sizelimit: u64,
+    lo_number: u32,
+    lo_encrypt_type: u32,
+    lo_encrypt_key_size: u32,
+    lo_flags: u32,
+    lo_file_name: [u8; 64],
+    lo_crypt_name: [u8; 64],
+    lo_encrypt_key: [u8; 32],
+    lo_init: [u64; 2],
+}
+
+/// The status that turns partition scanning on and changes nothing else: no offset, no size limit, and the kernel
+/// keeps the read-only flag the bind gave the device (it is not one this request can clear).
+fn partscan_status() -> LoopInfo64 {
+    LoopInfo64 {
+        lo_device: 0,
+        lo_inode: 0,
+        lo_rdevice: 0,
+        lo_offset: 0,
+        lo_sizelimit: 0,
+        lo_number: 0,
+        lo_encrypt_type: 0,
+        lo_encrypt_key_size: 0,
+        lo_flags: LO_FLAGS_PARTSCAN,
+        lo_file_name: [0; 64],
+        lo_crypt_name: [0; 64],
+        lo_encrypt_key: [0; 32],
+        lo_init: [0; 2],
+    }
 }
 
 /// A loop device name: `/dev/loop` and then digits.
@@ -97,6 +142,13 @@ fn bind_free(image: &File, read_only: bool) -> Result<String, PErr> {
         let dev = OpenOptions::new().read(true).write(!read_only).open(&device).map_err(|e| PErr::internal(format!("{device}: {e}")))?;
         // SAFETY: both descriptors are open for the length of the call; the request takes the image's descriptor.
         if unsafe { ioctl(dev.as_raw_fd(), LOOP_SET_FD, image.as_raw_fd() as std::os::raw::c_ulong) } == 0 {
+            // Read the partition table. A kernel that refuses leaves the device bound as before: an image that is one
+            // file system still opens, and a partitioned one is reported as holding nothing that can be opened.
+            let status = partscan_status();
+            // SAFETY: `dev` is open and `status` is a whole `loop_info64` that lives for the length of the call.
+            if unsafe { ioctl(dev.as_raw_fd(), LOOP_SET_STATUS64, &status as *const LoopInfo64) } != 0 {
+                eprintln!("privd: {device}: partition scan not turned on: {}", std::io::Error::last_os_error());
+            }
             return Ok(device);
         }
         let e = std::io::Error::last_os_error();
@@ -169,6 +221,14 @@ mod tests {
     /// The owner of a folder this test created, so the owner check sees the account it expects.
     fn uid_of(folder: &Path) -> u32 {
         std::fs::metadata(folder).map(|m| m.uid()).unwrap_or(0)
+    }
+
+    #[test]
+    fn the_partition_scan_status_has_the_kernel_layout_and_sets_only_that_flag() {
+        assert_eq!(std::mem::size_of::<LoopInfo64>(), 232);
+        let status = partscan_status();
+        assert_eq!(status.lo_flags, LO_FLAGS_PARTSCAN);
+        assert_eq!((status.lo_offset, status.lo_sizelimit, status.lo_encrypt_type), (0, 0, 0));
     }
 
     #[test]

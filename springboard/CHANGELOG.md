@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Disk images: an image with a partition table (an installer image, a memory-card dump) opens. Each partition with a file system that can be read is a volume, named by its label or by the image and the partition's number; ejecting one of them ejects the image.
+- Files: ejecting a USB stick is done by the shell, which unmounts the volume and powers the disk off; Files could not from inside its sandbox. A volume in use names the programs to close.
+
 ## 0.10.48 — 2026-11-10
 
 Fixes from the retest of 0.10.47 on the lab PC.
