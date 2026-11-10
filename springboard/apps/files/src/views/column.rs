@@ -66,6 +66,12 @@ impl Files {
         let fit = ((self.w - (self.side() + 16.)) / self.vo.col_w).floor().max(1.) as usize;
         self.ancestors.len().min(fit - 1)
     }
+    /// The left and right edge of the open folder's column: the last column of rows, which is the one that scrolls.
+    /// What is right of it is the preview of the selected file, or nothing.
+    pub(crate) fn open_column(&self) -> (f32, f32) {
+        let x0 = (self.side() + 16.) + self.ancestor_shown() as f32 * self.vo.col_w;
+        (x0, x0 + self.vo.col_w)
+    }
     /// The rows of the `index`th ancestor column, with hidden files left out as the list is.
     pub(crate) fn ancestor_rows(&self, index: usize) -> Vec<&Entry> {
         self.ancestors[index].1.iter().filter(|e| self.show_hidden || !e.name.starts_with('.')).collect()
@@ -101,7 +107,6 @@ impl Files {
     /// The columns view: the folders above the open one, then the open folder's rows. The open folder's column scrolls
     /// by `scroll`; the rows are drawn into their own area, so one that only partly fits is cut at its edge.
     pub(crate) fn paint_columns(&self, ui: &Ui, s: &mut Surface, visible: &[usize]) {
-        let w = self.w;
         let n = self.ancestor_shown();
         let first = self.ancestors.len() - n;
         let bottom = self.bottom();
@@ -130,7 +135,7 @@ impl Files {
                 column_row(&mut view, ui, e, x0, y, self.vo.col_w, state);
             }
         }
-        let x0 = (self.side() + 16.) + n as f32 * self.vo.col_w;
+        let (x0, x1) = self.open_column();
         rect(s, ui, x0, self.body_top(), 1., bottom - self.body_top(), SEPARATOR_C.now());
         {
             let mut view = s.rows(area.0, area.1);
@@ -145,8 +150,10 @@ impl Files {
                 let e = &self.rows[i];
                 // the open folder's column has the keyboard focus: its selection is the accent plate
                 let state = RowState::of(self.selection.contains(&i), true);
+                // the plate is as wide as the column, as in the folders above: what is right of the divider is the
+                // preview of the selected file, not a part of its row
                 if let Some(plate) = state.plate() {
-                    rect(&mut view, ui, x0, y, w - x0, ROW_H, plate);
+                    rect(&mut view, ui, x0, y, x1 - x0, ROW_H, plate);
                 }
                 // the item being renamed shows its name field in place of the name
                 if !self.paint_column_name_field(ui, &mut view, e, x0, y) {
@@ -155,7 +162,9 @@ impl Files {
                 self.paint_badges(ui, &mut view, &e.path, x0 + 8. + SPACE_XL - 2., y + 13.);
             }
         }
-        self.paint_column_preview(ui, s, x0 + self.vo.col_w);
+        self.paint_column_preview(ui, s, x1);
+        // over the rows and inside the column, left of the preview's divider
+        self.paint_scroll_knob(ui, s, visible.len());
     }
 }
 
@@ -213,6 +222,33 @@ mod tests {
         assert_eq!(at(0., 1), 0, "the other folder above has no plate");
         assert_eq!(at(1., 1), SELECTION.now(), "the selected row of the focused column: accent plate");
         assert_eq!(at(1., 0), 0, "an unselected row has no plate");
+    }
+
+    #[test]
+    fn the_selected_rows_plate_ends_at_its_columns_divider() {
+        let ui = font_ui();
+        let mut files = crate::tests::fixture((0..100).map(|i| crate::tests::folder(&format!("f{i:03}"))).collect());
+        files.columns = true;
+        files.grid = false;
+        files.select_only(2);
+        let (w, h) = (1200usize, 800usize);
+        let mut px = vec![0u32; w * h];
+        let visible = files.visible();
+        files.paint_columns(&ui, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, &visible);
+        let (left, right) = files.open_column();
+        assert!(right + 60. < files.w, "there is room right of the column");
+        let y = ui.pt(files.rows_top() + 2. * ROW_H + 3.) as usize;
+        let at = |x: f32| px[y * w + ui.pt(x) as usize];
+        assert_eq!(at(left + 120.), SELECTION.now(), "the plate fills the row inside the column");
+        assert_eq!(at(right - 20.), SELECTION.now(), "up to the divider");
+        for x in [right + 4., right + 60., files.w - 4.] {
+            assert_ne!(at(x), SELECTION.now(), "and not past it, across the preview's place ({x})");
+        }
+        // a long folder shows its scroll knob inside the column, left of the divider
+        let (x, ky, kw, len) = files.scroll_knob(visible.len()).expect("a hundred rows scroll");
+        let knob = |x: f32, y: f32| px[ui.pt(y) as usize * w + ui.pt(x) as usize];
+        assert_ne!(knob(x + kw / 2., ky + len / 2.), 0, "the knob is drawn");
+        assert!(x + kw < right && x > left);
     }
 
     #[test]

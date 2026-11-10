@@ -479,6 +479,7 @@ impl Files {
         (!blocked).then_some(target)
     }
     pub(crate) fn render(&mut self, ui: &Ui, s: &mut Surface) -> Damage {
+        self.clamp_scroll(); // a resize or a shorter folder can leave the view scrolled past its end
         let state = format!("{}:{}:{}:{:?}:{}:{}:{:?}:{:?}:{}:{}:{}:{}:{}:{:?}:{:?}:{:?}:{:?}:{}",
             self.revision, self.grid, self.scroll, self.sort, format!("{}:{}:{:?}:{:?}",self.query,self.query.caret(),self.query.selection(),self.controls.focused().map(|n|n.id)), self.searching,
             self.preview, self.error, self.loading, self.w, self.h, ui.s, self.show_hidden,
