@@ -844,6 +844,27 @@ fn default_font_takes_every_family() {
     assert!(!app.perform(&ctx, Action::DefaultFont(last + 1)), "an index past the families is refused");
 }
 
+/// E2E4: text typed into a new document was drawn at 12 pt, smaller than the window's own 13 pt labels. A new document
+/// is typed at the body size whatever the Settings choose for it, and the format bar's size pop-up says that size.
+#[test]
+fn a_new_document_is_typed_at_the_body_size_and_the_format_bar_says_so() {
+    for (plain, font) in [(false, 0u8), (false, 1), (true, 0)] {
+        let mut app = TextEditApp::new();
+        app.opts.new_plain = plain;
+        app.opts.default_font = font;
+        let id = app.docs.new_document();
+        app.apply_new_defaults(id);
+        assert_eq!(app.status().style.size, text::BODY_SIZE, "plain {plain}, font {font}");
+        assert_eq!(format_bar::size_text(app.status().style.size), "13");
+        app.docs.get_mut(id).unwrap().text.type_text("Hello");
+        let doc = active_doc(&app.docs).unwrap();
+        assert!(doc.text.cells().iter().all(|c| c.style.size == text::BODY_SIZE));
+        // the page is laid out in those sizes at Actual Size: what the format bar says is what is drawn
+        assert_eq!(app.zoom, 1.0);
+        assert!(zoomed(doc.text.cells(), app.zoom).iter().all(|c| c.style.size == app.status().style.size));
+    }
+}
+
 /// QA W2-11: Cmd+T did nothing and the Format menu had no Show Fonts or Show Colors.
 #[test]
 fn show_fonts_and_show_colors_open_panels_that_format_the_selection() {
