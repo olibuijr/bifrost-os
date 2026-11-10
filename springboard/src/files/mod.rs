@@ -138,6 +138,8 @@ pub struct Files {
     /// wall clock (Unix seconds) and zone offset, for the dates shown
     now: i64,
     offset: i32,
+    /// 24-Hour Time of Settings > Date & Time, for the dates shown (`set_clock_24h`)
+    h24: bool,
     pressed: Option<Target>,
     /// where and when the current touch began, until it moves
     press: Option<(f32, f32, f64)>,
@@ -194,6 +196,7 @@ impl Files {
             tags_file,
             now: 0,
             offset: 0,
+            h24: true,
             pressed: None,
             press: None,
             scrolling: false,
@@ -255,6 +258,12 @@ impl Files {
     pub fn set_wall(&mut self, unix: i64, offset: i32) {
         self.now = unix;
         self.offset = offset;
+    }
+
+    /// Writes the dates with 24-hour time (`on`) or with AM and PM, as the user's clocks do. Rows drawn already keep
+    /// their text until the folder is listed again.
+    pub fn set_clock_24h(&mut self, on: bool) {
+        self.h24 = on;
     }
 
     /// Fds to wait on: finished jobs and, while playing, the player.
@@ -485,7 +494,7 @@ impl Files {
                     }
                 }
                 Done::Preview { path, result } => {
-                    let (w, now, offset) = (self.w, self.now, self.offset);
+                    let (w, wall) = (self.w, (self.now, self.offset, self.h24));
                     for page in self.nav.pages_mut() {
                         if let Page::Preview(p) = page {
                             if p.path != path {
@@ -496,7 +505,7 @@ impl Files {
                                 Loaded::Image(img) => Body::Image(img.clone()),
                                 Loaded::Info(kind) => {
                                     p.kind = *kind;
-                                    Body::Info(PreviewPage::info_rows(ui, w, &p.entry, *kind, now, offset))
+                                    Body::Info(PreviewPage::info_rows(ui, w, &p.entry, *kind, wall))
                                 }
                                 Loaded::Error(e) => Body::Error(ui.text(&ui.fit(e, 15.0, ui.pt(600.0)), 15.0, Weight::Regular, crate::shell::ui::SECONDARY)),
                             };
@@ -1075,7 +1084,7 @@ impl Files {
             (Action::Copy, Some(e)) => self.clipboard = Some(e.path.clone()),
             (Action::GetInfo, Some(e)) => {
                 let mut page = PreviewPage::new(ui, &e);
-                page.body = Body::Info(PreviewPage::info_rows(ui, self.w, &e, e.kind, self.now, self.offset));
+                page.body = Body::Info(PreviewPage::info_rows(ui, self.w, &e, e.kind, (self.now, self.offset, self.h24)));
                 self.nav.push(Page::Preview(page), t);
             }
             (Action::OpenInTerminal, e) => {
