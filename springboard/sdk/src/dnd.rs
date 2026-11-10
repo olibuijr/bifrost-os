@@ -38,6 +38,16 @@ pub fn begin(ctx: &Ctx, allowed: u8, items: Vec<DragItem>, preview: DragPreview)
     session
 }
 
+/// The image of the session just begun, at device pixels: `w` by `h` straight RGBA, `proto::rich::MAX_DRAG_IMAGE` a
+/// side at most. The shell draws it as it is, centred on the pointer, instead of the small `preview` of [`begin`]
+/// scaled up, so draw it at the item's size in points times the display scale (`ctx.ui.s`). An image of another size
+/// or with the wrong number of bytes is not sent, and the session keeps its preview.
+pub fn set_image(ctx: &Ctx, session: u32, w: u32, h: u32, rgba: Vec<u8>) {
+    if crate::proto::rich::drag_image_size_ok(w, h) && rgba.len() == (w as usize) * (h as usize) * 4 {
+        ctx.send_to_shell(ToShell::DragImage { session, w, h, rgba });
+    }
+}
+
 /// The operation this window will perform at the current point (a single `dragop` bit; 0 refuses).
 pub fn reply(ctx: &Ctx, session: u32, op: u8) {
     ctx.send_to_shell(ToShell::DragReply { session, op });

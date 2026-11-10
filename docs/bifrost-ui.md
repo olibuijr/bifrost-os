@@ -1086,6 +1086,13 @@ the menu is a plain context menu (no icons, no "More..."), and Copy of a file co
   `dnd::preview_from_rgba` (nearest-sampled to at most 32 x 32). The session id has bit 31 set. While it runs the shell owns the pointer
   (the source gets no more touches) and draws the preview under it. `Event::Ended { op }` closes it (`op` 0: nobody took the drop;
   also the immediate answer when the shell refuses: another session runs, the app is not in front, no items).
+  The preview is in points: the shell scales it by the UI scale (nearest), so on a display of scale 2 it is at most
+  32 pt of blocky pixels. `dnd::set_image(ctx, session, w, h, rgba)`, called right after `begin`, gives the session an
+  image at device pixels instead (`ToShell::DragImage`, at most `proto::rich::MAX_DRAG_IMAGE` = 128 px a side, its
+  pixels in a memfd because they do not fit a packet); the shell draws it one to one, centred on the pointer. Draw it
+  at the item's size in points times `ctx.ui.s`. Files sends the lifted item's icon this way. The message is new after
+  system 0.10.50: an app that sends it to an older shell is stopped as incompatible, so such an app's manifest needs
+  the `min_shell` of the first release that has it.
 - **Perform**: on release over a window that replied with an operation the shell first hands the files over, each as a fresh
   **read-only** grant made from the source's grant (`Broker::transfer`, a `DocBatch` and `DocGranted` with `request == session`),
   then sends `Perform` with the items; file items carry the new grant ids and a file that could not be handed over is dropped.

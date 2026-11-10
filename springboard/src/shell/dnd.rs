@@ -68,6 +68,8 @@ pub struct Session {
     pub allowed: u8,
     pub items: Vec<DragItem>,
     pub preview: DragPreview,
+    /// `preview` is the source's image at device pixels (`ToShell::DragImage`): it is drawn as it is, not scaled
+    pub device: bool,
     /// pointer in screen px, once it moved
     pub pos: Option<(f32, f32)>,
     over: Option<Over>,
@@ -107,7 +109,24 @@ pub fn negotiate(allowed: u8, reply: u8) -> u8 {
 
 impl Session {
     pub fn new(id: u32, source: u8, source_app: &str, allowed: u8, items: Vec<DragItem>, preview: DragPreview) -> Self {
-        Session { id, source, source_app: source_app.into(), allowed, items, preview, pos: None, over: None, performing: None, mods: ModifierFlags::EMPTY }
+        Session { id, source, source_app: source_app.into(), allowed, items, preview, device: false, pos: None, over: None, performing: None, mods: ModifierFlags::EMPTY }
+    }
+
+    /// The source's image at device pixels takes the place of the preview. A size over the limit, or pixels that do
+    /// not fill it, leave the preview as it is.
+    pub fn set_device_image(&mut self, w: u32, h: u32, rgba: Vec<u8>) -> bool {
+        if !bifrost_proto::rich::drag_image_size_ok(w, h) || rgba.len() != (w as usize) * (h as usize) * 4 {
+            return false;
+        }
+        self.preview = DragPreview { w, h, rgba };
+        self.device = true;
+        true
+    }
+
+    /// The scale the image is drawn at on a display of UI scale `ui`: 1 for an image at device pixels, else the UI
+    /// scale, because a preview is in points.
+    pub fn image_scale(&self, ui: f32) -> f32 {
+        if self.device { 1.0 } else { ui }
     }
 
     /// The modifier keys held now; they narrow the mask the destinations hear and the operation a reply selects.
@@ -204,11 +223,17 @@ impl Session {
 
 /// The preview as a premultiplied image for the compositor (straight RGBA in, `gfx::rgba` out).
 pub fn preview_image(p: &DragPreview) -> Option<bifrost_render::gfx::Image> {
-    if !p.valid() || p.w == 0 || p.h == 0 {
+    if !whole(p) {
         return None;
     }
     let px = p.rgba.chunks_exact(4).map(|c| bifrost_render::gfx::rgba(c[0], c[1], c[2], c[3])).collect();
     Some(bifrost_render::gfx::Image { w: p.w as usize, h: p.h as usize, px })
+}
+
+/// Whether the image has pixels and as many bytes as its size says. Its size was checked when it arrived: a preview
+/// by the packet's decoder (`MAX_PREVIEW`), an image at device pixels by `Session::set_device_image`.
+fn whole(p: &DragPreview) -> bool {
+    p.w > 0 && p.h > 0 && p.rgba.len() == (p.w as usize) * (p.h as usize) * 4
 }
 
 /// Checks the items of a new session: at least one, every item offered as at least one type, and only files the caller can
@@ -274,6 +299,14 @@ impl super::Shell {
                 if self.dnd.session.as_ref().is_some_and(|s| s.id == session && s.source == slot) {
                     let outs = self.dnd.session.as_mut().map(|s| s.cancel()).unwrap_or_default();
                     self.dnd_apply(outs);
+                }
+            }
+            // the source's image at device pixels, sent right after it began the session
+            ToShell::DragImage { session, w, h, rgba } => {
+                if let Some(s) = self.dnd.session.as_mut().filter(|s| s.id == session && s.source == slot) {
+                    if s.set_device_image(w, h, rgba) {
+                        self.dirty = true;
+                    }
                 }
             }
             _ => {}
@@ -534,7 +567,8 @@ impl super::Shell {
     pub(super) fn dnd_draw(&self, s: &mut bifrost_render::gfx::Surface) {
         let Some(sess) = &self.dnd.session else { return };
         let (Some((x, y)), Some(img)) = (sess.pos, preview_image(&sess.preview)) else { return };
-        let (ix, iy) = drag_image_origin(&sess.preview, (x, y), self.layout.s);
+        // drawn here at its own size: a preview is not scaled up in this frame, an image at device pixels needs none
+        let (ix, iy) = drag_image_origin(&sess.preview, (x, y), sess.image_scale(self.layout.s));
         s.blit(&img, ix, iy, 255, DRAG_IMAGE_ALPHA as u32);
     }
 
@@ -544,8 +578,9 @@ impl super::Shell {
     #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
     pub(super) fn dnd_overlay(&self) -> Option<(i32, i32, usize, usize, Vec<u32>)> {
         let sess = self.dnd.session.as_ref()?;
-        let origin = drag_image_origin(&sess.preview, sess.pos?, self.layout.s);
-        drag_overlay(&sess.preview, origin, self.layout.s, (self.w.max(0) as usize, self.h.max(0) as usize))
+        let k = sess.image_scale(self.layout.s);
+        let origin = drag_image_origin(&sess.preview, sess.pos?, k);
+        drag_overlay(&sess.preview, origin, k, (self.w.max(0) as usize, self.h.max(0) as usize))
     }
 
     /// Where the drag image sits (with a margin), for the desktop's cleared regions: the GPU path owns the wallpaper, so
@@ -553,12 +588,14 @@ impl super::Shell {
     pub(super) fn dnd_rect(&self) -> Option<(i32, i32, i32, i32)> {
         let sess = self.dnd.session.as_ref()?;
         let pos = sess.pos?;
-        if !sess.preview.valid() || sess.preview.w == 0 || sess.preview.h == 0 {
+        if !whole(&sess.preview) {
             return None;
         }
-        let (x, y) = drag_image_origin(&sess.preview, pos, self.layout.s);
+        // the size the image has on screen (`drag_overlay`): a preview is scaled by the UI scale, never below 1
+        let k = sess.image_scale(self.layout.s).max(1.0);
+        let (x, y) = drag_image_origin(&sess.preview, pos, k);
         let m = 2;
-        Some((x - m, y - m, sess.preview.w as i32 + 2 * m, sess.preview.h as i32 + 2 * m))
+        Some((x - m, y - m, (sess.preview.w as f32 * k).round() as i32 + 2 * m, (sess.preview.h as f32 * k).round() as i32 + 2 * m))
     }
 }
 
@@ -576,7 +613,7 @@ const DRAG_IMAGE_ALPHA: u8 = 200;
 /// the surface's position, size and pixels; None when the preview is empty or not valid, or nothing of it is on the
 /// screen.
 pub fn drag_overlay(p: &DragPreview, origin: (i32, i32), k: f32, screen: (usize, usize)) -> Option<(i32, i32, usize, usize, Vec<u32>)> {
-    if !p.valid() || p.w == 0 || p.h == 0 {
+    if !whole(p) {
         return None;
     }
     let k = k.max(1.0);
@@ -812,6 +849,26 @@ mod tests {
         assert_eq!(drag_overlay(&p, (-4, 0), 2.0, (100, 100)), None);
         assert_eq!(drag_overlay(&DragPreview::default(), (0, 0), 1.0, (100, 100)), None);
         assert_eq!(drag_overlay(&DragPreview { w: 4, h: 4, rgba: vec![0; 3] }, (0, 0), 1.0, (100, 100)), None);
+    }
+
+    #[test]
+    fn an_image_at_device_pixels_replaces_the_preview_and_is_not_scaled() {
+        let item = DragItem::new(Payload::Text("t".into()));
+        let mut s = Session::new(1, 0, "a", dragop::COPY, vec![item], DragPreview { w: 2, h: 1, rgba: vec![9; 8] });
+        assert_eq!(s.image_scale(2.0), 2.0, "a preview is in points: it is scaled to the display");
+        // a size over the limit, or pixels that do not fill it, leave the preview
+        assert!(!s.set_device_image(129, 1, vec![0; 129 * 4]));
+        assert!(!s.set_device_image(4, 4, vec![0; 3]));
+        assert!(!s.device && s.preview.w == 2);
+        // 128 by 128: a 64 pt icon on a display of scale 2
+        assert!(s.set_device_image(128, 128, vec![255; 128 * 128 * 4]));
+        assert_eq!(s.image_scale(2.0), 1.0, "it is at device pixels already");
+        let k = s.image_scale(2.0);
+        let origin = drag_image_origin(&s.preview, (500.0, 400.0), k);
+        assert_eq!(origin, (436, 336), "centred on the pointer");
+        let (x, y, w, h, px) = drag_overlay(&s.preview, origin, k, (1000, 1000)).unwrap();
+        assert_eq!((x, y, w, h, px.len()), (436, 336, 128, 128, 128 * 128), "one image pixel to one screen pixel");
+        assert_eq!(preview_image(&s.preview).map(|i| (i.w, i.h)), Some((128, 128)));
     }
 
     #[test]
