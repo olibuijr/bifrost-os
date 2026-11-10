@@ -41,10 +41,20 @@ impl Files {
         // a folder that is gone (a restored or launch path, or one removed while it was shown) opens the nearest folder
         // above it that is still there, and says so
         let gone = (!self.is_virtual_folder(&path) && !path.is_dir()).then(|| path.clone());
+        // a folder of a volume that was ejected or pulled out is not a removed folder: the folder above it is the
+        // media folder, which nobody opened. The volume's folders leave the history, and the entry that replaces them
+        // (the last folder shown before the volume, else the home folder) opens without a notice
+        let lost = gone.as_deref().is_some_and(sidebar::lost_volume);
         let path = match &gone {
+            Some(_) if lost => {
+                self.at = sidebar::forget_lost(&mut self.history, self.at, &sidebar::lost_volume);
+                self.history.get(self.at).cloned().unwrap_or_else(|| self.home.clone())
+            }
             Some(missing) => existing_folder(missing, &self.home),
             None => path,
         };
+        // the replacement is in the history already, unless nothing was left of it
+        let remember = if lost { self.history.is_empty() } else { remember };
         if remember {
             self.history.truncate(if self.history.is_empty() {
                 0
@@ -67,7 +77,7 @@ impl Files {
         self.ext.borrow_mut().show(&path);
         self.loading = true;
         self.error = None;
-        self.notice = gone.as_deref().map(not_found_message);
+        self.notice = gone.as_deref().filter(|_| !lost).map(not_found_message);
         self.selection.clear();
         self.scroll = 0.;
         self.query.clear();

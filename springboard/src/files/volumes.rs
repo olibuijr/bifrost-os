@@ -54,6 +54,18 @@ pub fn parse_mounts(text: &str) -> Vec<Volume> {
         .collect()
 }
 
+/// Whether `path` is under one of the media folders, where removable volumes are mounted.
+pub fn under_media(path: &Path) -> bool {
+    MEDIA_ROOTS.iter().any(|root| path.starts_with(root))
+}
+
+/// Whether `path` is a folder of a volume that is gone: under a media folder, not there any more (`exists`), and inside
+/// none of the volumes mounted now (`mounts`, their mount points). A folder deleted from a volume that is still mounted
+/// is not one, and neither is anything outside the media folders.
+pub fn on_lost_volume(path: &Path, exists: bool, mounts: &[PathBuf]) -> bool {
+    !exists && under_media(path) && !mounts.iter().any(|m| path.starts_with(m))
+}
+
 /// The removable volumes mounted now, read from `/proc/mounts` (none when it cannot be read).
 pub fn mounted() -> Vec<Volume> {
     std::fs::read_to_string("/proc/mounts").map(|text| parse_mounts(&text)).unwrap_or_default()
@@ -140,6 +152,20 @@ pub fn eject_notice(volume: &str, error: &str, blockers: &[Blocker]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_folder_of_an_ejected_volume_is_lost_and_others_are_not() {
+        let mounts = vec![PathBuf::from("/run/media/me/Stick")];
+        let lost = |p: &str, exists: bool| on_lost_volume(Path::new(p), exists, &mounts);
+        assert!(lost("/run/media/me/TESTVOL", false), "the mount point of a volume that is gone");
+        assert!(lost("/run/media/me/TESTVOL/photos/2024", false), "a folder inside it");
+        assert!(lost("/media/Card", false));
+        assert!(!lost("/run/media/me/Stick/gone", false), "deleted from a volume that is still mounted");
+        assert!(!lost("/run/media/me", true), "the folder the volumes are mounted in is still there");
+        assert!(!lost("/home/me/Documents/old", false), "a removed folder outside the media folders");
+        assert!(!lost("/run/mediax/me/V", false), "only whole path components match");
+        assert!(under_media(Path::new("/media/Card/a")) && !under_media(Path::new("/home/me/media")));
+    }
 
     #[test]
     fn mounts_under_the_media_folders_are_removable_volumes() {
