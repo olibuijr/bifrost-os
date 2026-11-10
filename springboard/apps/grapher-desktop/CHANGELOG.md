@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- Cut, Copy, Paste and Select All work in the equation field; a pasted block makes one equation per line.
+
 ## 0.1.11
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

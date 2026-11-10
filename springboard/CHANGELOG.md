@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.10.47 — 2026-11-10
+
+Fixes from an end-to-end test of 0.10.46 on the lab PC.
+
+- Lock screen: a timer or alarm that wakes the display always lands on the lock screen, like a notification. Every wake now goes through one rule: only a key, a tap or the power button keeps the Require Password delay.
+- Users & Groups: your own account opens again, so Change Password can be reached.
+- Disk images: double-clicking an image in Files mounts it as a volume you can read and eject, and a failure says why. Volumes mounted for you appear in Files.
+- Windows: no black fragments stay on the desktop after an app quits through its Save sheet or Open panel.
+- Viewer: SVG, TIFF, BMP and icon pictures open, by double-click too; the Open panel offers them; an error names the document in plain words. The browser opens a file it is handed.
+- Grapher: Cut, Copy, Paste and Select All work.
+- Audio Setup lists the devices (a new audio-devices permission, for that app only). Color Meter says why it cannot capture the screen.
+- Setup Assistant: it opens after login instead of failing on the login window, remembers that it finished, and is not shown on a machine already in use.
+- Settings: About shows the computer name set in Sharing; a prompt stays inside a narrow pane.
+
 ## 0.10.46 — 2026-11-09
 
 Fixes from a code review of the whole system: 66 defects found by reading, each one checked a second time, then fixed.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.21
+
+- SVG, TIFF, BMP and icon pictures open; the Open panel offers every type the app opens; a document that does not open is named with a plain reason; old working copies are removed.
+
 ## 0.11.20
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
