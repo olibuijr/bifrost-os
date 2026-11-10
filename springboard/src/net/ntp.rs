@@ -157,14 +157,22 @@ fn desktop() -> bool {
     true
 }
 
-/// "Synchronized by systemd-timesyncd" from timedatectl's NTPSynchronized/NTP properties.
-pub fn timesyncd_text(synchronized: Option<&str>, enabled: Option<&str>) -> String {
-    match (synchronized, enabled) {
-        (Some("yes"), _) => "Synchronized by systemd-timesyncd".into(),
-        (_, Some("no")) => "Network time is off (timedatectl set-ntp true)".into(),
-        (Some(_), _) => "Waiting for systemd-timesyncd".into(),
-        _ => "timedatectl is not available".into(),
+/// The Date & Time line under Set Automatically. `auto` is the switch, `enabled` and `synchronized` are what the system
+/// says (`timezone::timesyncd_enabled`, `timesyncd_synchronized`), and `busy` is a request to change it that is still
+/// on its way. The line never contradicts the switch: where the system has not followed it, it says so. `enabled` is
+/// looked at before `synchronized`, because the sync mark in `/run` outlives a service that was stopped.
+pub fn timesyncd_text(synchronized: Option<&str>, enabled: Option<&str>, auto: bool, busy: bool) -> String {
+    match (auto, enabled, synchronized) {
+        (_, None, _) => "Network time is not available on this computer",
+        (true, Some("yes"), Some("yes")) => "Synchronized by systemd-timesyncd",
+        (true, Some("yes"), _) => "Waiting for systemd-timesyncd",
+        (true, _, _) if busy => "Turning on network time…",
+        (true, _, _) => "Network time could not be turned on",
+        (false, Some("yes"), _) if busy => "Turning off network time…",
+        (false, Some("yes"), _) => "Network time could not be turned off",
+        (false, _, _) => "Network time is off",
     }
+    .into()
 }
 
 /// Whether the clock is kept right automatically (Set Automatically).
@@ -202,7 +210,7 @@ pub fn describe(ago_secs: u64, offset_us: i64) -> String {
 /// The last sync result for the Date & Time page.
 pub fn status_text() -> String {
     if desktop() {
-        return timesyncd_text(timezone::timesyncd_synchronized(), timezone::timesyncd_enabled());
+        return timesyncd_text(timezone::timesyncd_synchronized(), timezone::timesyncd_enabled(), auto(), timezone::ntp_busy());
     }
     match LAST.lock().ok().as_deref() {
         Some(Some((at, Outcome::Synced { offset_us }))) => describe(at.elapsed().as_secs(), *offset_us),
@@ -271,10 +279,34 @@ mod tests {
 
     #[test]
     fn timesyncd_status_wording() {
-        assert_eq!(timesyncd_text(Some("yes"), Some("yes")), "Synchronized by systemd-timesyncd");
-        assert!(timesyncd_text(Some("no"), Some("no")).starts_with("Network time is off"));
-        assert_eq!(timesyncd_text(Some("no"), Some("yes")), "Waiting for systemd-timesyncd");
-        assert_eq!(timesyncd_text(None, None), "timedatectl is not available");
+        assert_eq!(timesyncd_text(Some("yes"), Some("yes"), true, false), "Synchronized by systemd-timesyncd");
+        assert_eq!(timesyncd_text(Some("no"), Some("yes"), true, false), "Waiting for systemd-timesyncd");
+        assert_eq!(timesyncd_text(Some("no"), Some("no"), false, false), "Network time is off");
+        assert_eq!(timesyncd_text(None, None, true, false), "Network time is not available on this computer");
+    }
+
+    /// The page read "Network time is off (timedatectl set-ntp true)" under a Set Automatically switch that was on.
+    /// With the switch on the line never says "off" and never names a command: it says the change is on its way, or
+    /// that it did not happen.
+    #[test]
+    fn the_line_never_contradicts_the_switch() {
+        for sync in [Some("yes"), Some("no")] {
+            for enabled in [Some("yes"), Some("no")] {
+                for busy in [false, true] {
+                    let on = timesyncd_text(sync, enabled, true, busy);
+                    assert!(!on.contains("is off") && !on.contains("timedatectl"), "{on}");
+                    let off = timesyncd_text(sync, enabled, false, busy);
+                    assert!(!off.contains("Synchronized") && !off.contains("Waiting") && !off.contains("timedatectl"), "{off}");
+                }
+            }
+        }
+        assert_eq!(timesyncd_text(Some("no"), Some("no"), true, true), "Turning on network time…");
+        assert_eq!(timesyncd_text(Some("no"), Some("no"), true, false), "Network time could not be turned on");
+        assert_eq!(timesyncd_text(Some("yes"), Some("yes"), false, true), "Turning off network time…");
+        assert_eq!(timesyncd_text(Some("yes"), Some("yes"), false, false), "Network time could not be turned off");
+        // the sync mark in /run stays after the service stops: a stopped service is not "Synchronized"
+        assert_eq!(timesyncd_text(Some("yes"), Some("no"), true, false), "Network time could not be turned on");
+        assert_eq!(timesyncd_text(Some("yes"), Some("no"), false, false), "Network time is off");
     }
 
     /// A well-formed server reply to `req` with the given times.

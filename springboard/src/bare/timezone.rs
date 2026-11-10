@@ -8,7 +8,7 @@
 //! `timedatectl set-timezone`, and `timedatectl` also says whether systemd-timesyncd
 //! keeps the clock (`timedatectl_show`, `set_ntp`; net::ntp stays out of its way).
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
 
 pub const DEFAULT: &str = "Atlantic/Reykjavik";
@@ -511,12 +511,43 @@ pub fn timesyncd_enabled() -> Option<&'static str> {
     Some(if on { "yes" } else { "no" })
 }
 
+/// `set_ntp` requests still on their way, so the Date & Time line can tell "turning on" from "did not turn on".
+static NTP_BUSY: AtomicU32 = AtomicU32::new(0);
+/// Counts the moments the network time state may have changed (a request began or ended), so a reader that caches the
+/// Date & Time line reads it again instead of showing the state from before the switch moved.
+static NTP_EPOCH: AtomicU32 = AtomicU32::new(0);
+
+/// Whether a `set_ntp` request has not finished yet.
+pub fn ntp_busy() -> bool {
+    NTP_BUSY.load(Ordering::Relaxed) > 0
+}
+
+/// Changes whenever a `set_ntp` request begins or ends.
+pub fn ntp_epoch() -> u32 {
+    NTP_EPOCH.load(Ordering::Relaxed)
+}
+
+/// Whether `timedatectl set-ntp` has work to do for the wish `on`. `link` is the unit's enablement
+/// (`timesyncd_enabled`, what the Date & Time line reads) and `active` is timedatectl's `NTP` property, which says
+/// whether the service runs now. The two differ (a service started without its link, a link whose service is stopped),
+/// so either one disagreeing with the wish is a reason to ask; asking only `active` left a running, not enabled
+/// service alone and the page reading "off" under a switch that was on.
+pub fn ntp_differs(link: Option<&str>, active: Option<&str>, on: bool) -> bool {
+    [link, active].iter().flatten().any(|v| (*v == "yes") != on)
+}
+
 /// Turns systemd's network time on or off (`timedatectl set-ntp`) when it differs; best effort.
 pub fn set_ntp(on: bool) {
+    NTP_BUSY.fetch_add(1, Ordering::Relaxed);
+    NTP_EPOCH.fetch_add(1, Ordering::Relaxed);
     crate::bare::sys::spawn_named("set-ntp", move || {
-        if timedatectl_show("NTP").is_some_and(|v| (v == "yes") != on) {
-            let _ = crate::privd_client::connect().set_ntp(on);
+        if ntp_differs(timesyncd_enabled(), timedatectl_show("NTP").as_deref(), on) {
+            if let Err(e) = crate::privd_client::connect().set_ntp(on) {
+                eprintln!("springboard: network time {}: {e}", if on { "on" } else { "off" });
+            }
         }
+        NTP_BUSY.fetch_sub(1, Ordering::Relaxed);
+        NTP_EPOCH.fetch_add(1, Ordering::Relaxed);
     });
 }
 
@@ -553,6 +584,22 @@ pub fn offset_label(secs: i32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A service that runs without its enablement link reads "off" on the Date & Time page (the page reads the link)
+    /// while `timedatectl` reports NTP=yes: turning network time on must still ask, or the two never meet.
+    #[test]
+    fn set_ntp_asks_when_the_link_or_the_running_service_disagrees_with_the_wish() {
+        assert!(ntp_differs(Some("no"), Some("yes"), true), "running, not enabled: the page would read off");
+        assert!(ntp_differs(Some("yes"), Some("no"), true), "enabled, not running");
+        assert!(ntp_differs(Some("no"), Some("no"), true));
+        assert!(!ntp_differs(Some("yes"), Some("yes"), true), "nothing to do");
+        assert!(ntp_differs(Some("yes"), Some("no"), false), "stopped but still enabled comes back at the next start");
+        assert!(!ntp_differs(Some("no"), Some("no"), false));
+        // what cannot be read is not a reason to ask
+        assert!(!ntp_differs(None, None, true));
+        assert!(ntp_differs(None, Some("no"), true));
+        assert!(!ntp_differs(Some("yes"), None, true));
+    }
 
     #[test]
     fn localtime_links_give_zone_names() {
