@@ -977,10 +977,11 @@ dependencies = [
 
 [[package]]
 name = "bifrost-screenshot"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
+ "springboard",
 ]
 
 [[package]]
