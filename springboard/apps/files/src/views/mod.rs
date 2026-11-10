@@ -7,6 +7,13 @@ pub(crate) mod icon;
 pub(crate) mod list;
 pub(crate) mod options;
 
+/// What a row says its kind is, in every view: the description of the type its name maps to ("TIFF image",
+/// "HTML Document", "Disk Image"), "Folder", or the coarse kind when the name has no known type. The coarse kind alone
+/// says what the row previews as, so it calls a picture the viewer does not decode a document.
+pub(crate) fn kind_text(e: &Entry) -> &'static str {
+    fs::kind_description(&e.name, e.is_dir, e.kind)
+}
+
 pub(crate) fn text(s: &mut Surface, ui: &Ui, label: &str, pt: f32, color: u32, x: f32, y: f32, max: f32) {
     let label = ui.fit(label, pt, ui.pt(max.max(0.)));
     let im = ui.text(&label, pt, Weight::Regular, color);
@@ -69,5 +76,46 @@ impl Files {
             ((y - self.rows_top() + self.scroll) / 32.).floor().max(0.) as usize
         };
         visible.get(n).copied()
+    }
+}
+
+#[cfg(test)]
+mod kind_tests {
+    use super::*;
+
+    /// A row as the listing makes it: the coarse kind is the one the name gives.
+    fn row(name: &str) -> Entry {
+        Entry { name: name.into(), path: Path::new("/fixture").join(name), is_dir: false, size: 1, mtime: 0, kind: fs::kind_of(name, false), items: None }
+    }
+
+    #[test]
+    fn the_kind_text_names_the_type_and_not_only_what_the_row_previews_as() {
+        for (name, kind) in [
+            ("a.png", "PNG image"),
+            ("a.jpg", "JPEG image"),
+            ("a.bmp", "BMP image"),
+            ("a.gif", "GIF image"),
+            ("a.ico", "Icon image"),
+            ("a.tiff", "TIFF image"),
+            ("a.svg", "SVG image"),
+            ("a.html", "HTML Document"),
+            ("a.img", "Disk Image"),
+            ("a.iso", "Disk Image"),
+            ("a.txt", "Plain Text"),
+        ] {
+            assert_eq!(kind_text(&row(name)), kind, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_name_of_no_known_type_keeps_the_coarse_kind_and_a_folder_is_a_folder() {
+        assert_eq!(kind_text(&row("blob")), "Document");
+        let mut sniffed = row("Makefile");
+        sniffed.kind = Kind::Text;
+        assert_eq!(kind_text(&sniffed), "Plain Text");
+        let mut folder = row("pics.png");
+        folder.is_dir = true;
+        folder.kind = Kind::Folder;
+        assert_eq!(kind_text(&folder), "Folder");
     }
 }

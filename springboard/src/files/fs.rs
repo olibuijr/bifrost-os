@@ -703,6 +703,16 @@ pub(crate) mod tests {
         assert_eq!(kind_description("Makefile", false, Kind::Text), "Plain Text", "sniffed text, no extension");
         assert_eq!(kind_description("blob", false, Kind::Other), "Document");
         assert_eq!(kind_description("pics", true, Kind::Folder), "Folder");
+        // every picture type says so whether or not the viewer decodes it, whatever coarse kind the row carries
+        for (n, d) in [("a.bmp", "BMP image"), ("a.gif", "GIF image"), ("a.ico", "Icon image"), ("a.tiff", "TIFF image"), ("a.TIF", "TIFF image"), ("a.jpg", "JPEG image"), ("a.webp", "WebP image"), ("a.svg", "SVG image")] {
+            let kind = kind_of(n, false);
+            assert_eq!(kind_description(n, false, kind), d, "{n}");
+            assert!(kind_description(n, false, kind).ends_with("image"), "{n} is named as an image");
+            assert!(bifrost_ui::uttype::conforms(type_of(n).unwrap(), "public.image"), "{n} conforms to the image type");
+        }
+        assert_eq!(kind_description("disk.img", false, Kind::Other), "Disk Image");
+        assert_eq!(kind_description("disc.iso", false, Kind::Other), "Disk Image");
+        assert_eq!(kind_description("page.html", false, Kind::Text), "HTML Document", "not Plain Text");
         // every extension the old lists knew still gives the same coarse kind
         for (n, k) in [("a.toml", Kind::Text), ("a.svg", Kind::Text), ("a.srt", Kind::Text), ("a.m3u", Kind::Text), ("a.cpp", Kind::Text), ("a.ogg", Kind::Audio), ("a.opus", Kind::Audio), ("a.mov", Kind::Video), ("a.7z", Kind::Archive), ("a.apk", Kind::Archive), ("a.jar", Kind::Archive), ("a.png", Kind::Image), ("a.gif", Kind::Other)] {
             assert_eq!(kind_of(n, false), k, "{n}");

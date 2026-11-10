@@ -22,6 +22,9 @@ pub enum SidebarItem {
         avatar: Option<(String, u32)>,
         /// The glyph is drawn in the secondary grey, not the accent (Files's Locations rows: home, computer, trash).
         neutral: bool,
+        /// A small glyph at the row's trailing edge (the eject mark of a removable volume), `TRAILING_GLYPH_PT` wide:
+        /// it takes less of the row than a word, so the label keeps the width.
+        trailing_symbol: Option<String>,
     },
     /// A collapsible section header (`NativeOutlineView` group row with a disclosure button). `collapsed` is the app's
     /// state: rows under a collapsed section are hidden until the next header or section.
@@ -33,7 +36,7 @@ impl SidebarItem {
         SidebarItem::Header(label.into())
     }
     pub fn row(id: u32, label: &str) -> Self {
-        SidebarItem::Row { id, label: label.into(), count: None, enabled: true, symbol: None, dot: None, subtitle: None, trailing: None, avatar: None, neutral: false }
+        SidebarItem::Row { id, label: label.into(), count: None, enabled: true, symbol: None, dot: None, subtitle: None, trailing: None, avatar: None, neutral: false, trailing_symbol: None }
     }
     fn map_row(mut self, f: impl FnOnce(&mut Option<String>, &mut Option<u32>, &mut Option<u32>, &mut bool, &mut Option<String>, &mut Option<String>, &mut Option<(String, u32)>)) -> Self {
         if let SidebarItem::Row { symbol, dot, count, enabled, subtitle, trailing, avatar, .. } = &mut self {
@@ -74,10 +77,28 @@ impl SidebarItem {
         }
         self
     }
+    /// A small glyph at the trailing edge, after any count and trailing text (a removable volume's eject mark).
+    pub fn with_trailing_symbol(mut self, name: &str) -> Self {
+        if let SidebarItem::Row { trailing_symbol, .. } = &mut self {
+            *trailing_symbol = Some(name.into());
+        }
+        self
+    }
     /// A collapsible section header with disclosure (`NativeOutlineView`); the app owns `collapsed`.
     pub fn section(id: u32, label: &str, collapsed: bool) -> Self {
         SidebarItem::Section { id, label: label.into(), collapsed }
     }
+}
+
+/// Side of a row's trailing glyph (`SidebarItem::with_trailing_symbol`), in points.
+pub const TRAILING_GLYPH_PT: f32 = 14.0;
+
+/// The width a row's label may take: from where its text starts (`text_x`, after the glyph, dot or avatar) to the
+/// first trailing accessory. The accessories (`widths`: a count, trailing text, a trailing glyph) are packed against
+/// `right`, the plate's inner edge, each followed by `gap`. Never negative. Any one unit, points or pixels.
+pub fn label_room(text_x: f32, right: f32, widths: &[f32], gap: f32) -> f32 {
+    let taken: f32 = widths.iter().map(|w| w + gap).sum();
+    (right - taken - text_x).max(0.0)
 }
 
 /// A source-list row length `pt` at sidebar icon `scale` (Settings > Appearance > Sidebar Icon Size,
@@ -376,5 +397,32 @@ mod tests {
         l.select(1);
         assert_eq!(l.scroll_to_selected(100.0, off), 22.0, "scrolls back up to the first row");
         assert_eq!(l.scroll_to_selected(10_000.0, 50.0), 0.0, "a tall viewport needs no scroll");
+    }
+}
+
+#[cfg(test)]
+mod trailing_tests {
+    use super::*;
+
+    #[test]
+    fn a_trailing_symbol_is_set_on_a_row_only() {
+        let row = SidebarItem::row(1, "TESTVOL").with_symbol("externaldrive").with_trailing_symbol("eject");
+        assert!(matches!(&row, SidebarItem::Row { trailing_symbol: Some(s), trailing: None, .. } if s == "eject"));
+        assert!(matches!(SidebarItem::row(1, "Home"), SidebarItem::Row { trailing_symbol: None, .. }));
+        assert_eq!(SidebarItem::header("Locations").with_trailing_symbol("eject"), SidebarItem::header("Locations"));
+    }
+
+    #[test]
+    fn the_label_takes_the_width_up_to_the_first_trailing_accessory() {
+        // a 160 pt column: the text starts at 46 after the glyph and the plate's inner edge is at 142
+        assert_eq!(label_room(46.0, 142.0, &[], 8.0), 96.0);
+        // a trailing glyph leaves more of the row to the label than a word of 34 pt does
+        let glyph = label_room(46.0, 142.0, &[TRAILING_GLYPH_PT], 8.0);
+        let word = label_room(46.0, 142.0, &[34.0], 8.0);
+        assert_eq!(glyph, 74.0);
+        assert_eq!(word, 54.0);
+        assert!(glyph > word);
+        assert_eq!(label_room(46.0, 142.0, &[20.0, 14.0], 8.0), 46.0, "a count and a glyph");
+        assert_eq!(label_room(130.0, 142.0, &[34.0], 8.0), 0.0, "never negative");
     }
 }

@@ -67,7 +67,7 @@ pub fn polygon_verbs(pts: &[(f32, f32)]) -> Vec<PathVerb> {
 }
 
 /// Every name `glyph` draws, for galleries and tests.
-pub const NAMES: [&str; 80] = [
+pub const NAMES: [&str; 82] = [
     "chevron.left", "chevron.right", "sidebar.left", "square.grid.2x2", "list.bullet", "rectangle.split.3x1",
     "magnifyingglass", "minus.magnifyingglass", "plus.magnifyingglass", "xmark.circle.fill", "folder", "folder.badge.plus", "checkmark.circle", "clock",
     "menubar.dock.rectangle", "doc", "arrow.down.circle", "house", "desktopcomputer", "internaldrive", "trash", "tag",
@@ -79,7 +79,7 @@ pub const NAMES: [&str; 80] = [
     "arrow.clockwise", "xmark", "rectangle.grid.1x2", "chevron.up", "text.alignleft", "square.on.square",
     "bold", "italic", "underline", "strikethrough", "text.aligncenter", "text.alignright", "text.justify", "list.number",
     "tray", "paperplane", "archivebox", "xmark.bin", "arrowshape.turn.up.left", "arrowshape.turn.up.left.2",
-    "building.2", "exclamationmark.circle",
+    "building.2", "exclamationmark.circle", "externaldrive", "eject",
 ];
 
 /// True when `name` has a drawing.
@@ -252,6 +252,18 @@ pub fn glyph(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32) 
         "internaldrive" => {
             rbox(s, 0.06, 0.3, 0.88, 0.42, 0.1);
             dot(s, 0.78, 0.51, 0.05);
+        }
+        // a drive that can be taken out: the drive's box, its light, and the cable end under it
+        "externaldrive" => {
+            rbox(s, 0.06, 0.2, 0.88, 0.42, 0.1);
+            dot(s, 0.78, 0.41, 0.05);
+            poly(s, &[(0.5, 0.62), (0.5, 0.82)], false);
+            poly(s, &[(0.32, 0.84), (0.68, 0.84)], false);
+        }
+        // the eject mark: a triangle pointing up over a bar
+        "eject" => {
+            fill(s, &[(0.5, 0.16), (0.88, 0.58), (0.12, 0.58)]);
+            bar(s, 0.12, 0.7, 0.76, 0.14);
         }
         "trash" => {
             poly(s, &[(0.14, 0.24), (0.86, 0.24)], false);
