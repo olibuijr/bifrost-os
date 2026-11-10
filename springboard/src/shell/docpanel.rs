@@ -1387,11 +1387,22 @@ impl Broker {
         v
     }
 
+    /// Opens what was chosen in an open panel that asked for `mode`. A file the account may not write still opens for a
+    /// panel that asked for read-write, read-only (the grant says so, and the app's save in place is then refused), as
+    /// opening it with its default app does (`Opener::open_default`). Returns the mode it opened in.
+    fn open_as(&self, path: &Path, mode: DocMode) -> Result<(std::fs::File, DocMode), DocErrorCode> {
+        match self.opener.open_any(path, mode) {
+            Ok(f) => Ok((f, mode)),
+            Err(DocErrorCode::Denied) if mode == DocMode::Write => self.opener.open(path, DocMode::Read).map(|f| (f, DocMode::Read)),
+            Err(code) => Err(code),
+        }
+    }
+
     /// Opens one chosen file or folder and records its grant.
     fn open_chosen(&mut self, app_id: &str, request: u32, path: &Path, mode: DocMode) -> (ToApp, Option<std::fs::File>) {
         let fail = |code| (ToApp::DocError { request, code }, None);
-        match self.opener.open_any(path, mode) {
-            Ok(f) => {
+        match self.open_as(path, mode) {
+            Ok((f, mode)) => {
                 let size = f.metadata().map_or(0, |m| m.len());
                 let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                 match self.grants.add(app_id, path, mode, &f) {
@@ -1413,8 +1424,8 @@ impl Broker {
                 Some(path) => self.open_chosen(app_id, request, path, mode),
                 None => fail(DocErrorCode::Cancelled),
             },
-            (Kind::Open(mode), Outcome::Open(path)) => match self.opener.open_any(&path, mode) {
-                Ok(f) => {
+            (Kind::Open(mode), Outcome::Open(path)) => match self.open_as(&path, mode) {
+                Ok((f, mode)) => {
                     let size = f.metadata().map_or(0, |m| m.len());
                     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                     match self.grants.add(app_id, &path, mode, &f) {
@@ -1483,6 +1494,11 @@ impl Broker {
                     let name = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                     match self.opener.begin_save(&dir, &name) {
                         Ok((pending, f)) => {
+                            // the file that replaces the original keeps the original's permissions
+                            if let Ok(old) = self.opener.open(&path, DocMode::Read).and_then(|o| o.metadata().map_err(|_| DocErrorCode::Denied)) {
+                                use std::os::unix::fs::PermissionsExt;
+                                let _ = f.set_permissions(std::fs::Permissions::from_mode(old.permissions().mode() & 0o777));
+                            }
                             if let Some(i) = self.saves.iter().position(|(a, r, ..)| a == app_id && *r == request) {
                                 let (.., old) = self.saves.remove(i);
                                 old.abort(&self.opener);
@@ -2320,6 +2336,35 @@ pub(crate) mod tests {
         if fs::metadata(&d).unwrap().uid() != 0 {
             assert!(matches!(b.transfer_open("files", &locked_grant, "editor", 7, true), Ok((ToApp::DocGranted { mode: DocMode::Read, .. }, _))), "a file the person may not write stays read-only");
         }
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_read_write_open_of_a_locked_file_is_read_only_and_a_save_in_place_keeps_the_mode() {
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+        let (d, o) = scratch("open-as");
+        let mut b = Broker::new(o, &d.join("state/grants.json"));
+        let file = d.join("home/Documents/b.txt");
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o600)).unwrap();
+        let (reply, _) = b.finish("viewer", 1, Kind::Open(DocMode::Write), Outcome::Open("Documents/b.txt".into()));
+        let ToApp::DocGranted { grant, mode: DocMode::Write, .. } = reply else { panic!("{reply:?}") };
+        let Some((ToApp::DocGranted { .. }, Some(mut f))) = b.request("viewer", ToShell::DocSaveGrant { request: 2, grant }) else { panic!("the save in place begins") };
+        f.write_all(b"saved").unwrap();
+        assert_eq!(fs::read(&file).unwrap(), b"b.txt", "nothing is replaced before the commit");
+        assert!(matches!(b.request("viewer", ToShell::DocCommit { request: 2 }), Some((ToApp::DocGranted { .. }, Some(_)))));
+        assert_eq!(fs::read(&file).unwrap(), b"saved");
+        assert_eq!(fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o600, "the saved file keeps the original's mode");
+        if fs::metadata(&d).unwrap().uid() != 0 {
+            fs::set_permissions(d.join("home/Documents/A.md"), fs::Permissions::from_mode(0o444)).unwrap();
+            let (reply, f) = b.finish("viewer", 3, Kind::Open(DocMode::Write), Outcome::Open("Documents/A.md".into()));
+            let ToApp::DocGranted { grant: locked, mode: DocMode::Read, .. } = reply else { panic!("a file the person may not write opens read-only: {reply:?}") };
+            assert!(f.is_some());
+            assert!(matches!(b.request("viewer", ToShell::DocSaveGrant { request: 4, grant: locked }), Some((ToApp::DocError { code: DocErrorCode::Denied, .. }, None))));
+        }
+        // a folder chosen in a read-write panel keeps the mode asked for (a package is saved in place through it)
+        let (reply, _) = b.finish("viewer", 5, Kind::Open(DocMode::Write), Outcome::Open("Documents/Drafts".into()));
+        assert!(matches!(reply, ToApp::DocGranted { mode: DocMode::Write, .. }), "{reply:?}");
         fs::remove_dir_all(&d).unwrap();
     }
 
