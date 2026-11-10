@@ -188,6 +188,7 @@ impl Browser {
         ctx.wants_keyboard(true);
         self.inspector.load(ctx);
         self.prefs = prefs::Prefs::load(ctx);
+        self.uploads.set_data_dir(&ctx.data_dir);
         self.lib.load(ctx);
         // No unsaved state: the shell may stop the browser at once on quit (docs/bifrost-ui.md "Sudden termination").
         ctx.enable_sudden_termination();
@@ -225,7 +226,7 @@ impl Browser {
         }
         if self.strip_shown() {
             for (i, r) in self.tab_rects(ui, ctx.cfg.w).into_iter().enumerate() {
-                let title = self.pool.as_ref().and_then(|p| p.state(self.tabs.get(i)?.view)).map(|s| s.title.clone()).unwrap_or_default();
+                let title = self.pool.as_ref().and_then(|p| p.state(self.tabs.get(i)?.view)).map(|s| self.shown_title(&s.title, &s.url)).unwrap_or_default();
                 nodes.push(Node { id: TAB0 + i as u64, role: Role::Button, label: if title.is_empty() { "Untitled".into() } else { title }, value: if i == self.current { "selected".into() } else { String::new() }, bounds: r, enabled: true });
             }
         }

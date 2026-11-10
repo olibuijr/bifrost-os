@@ -131,7 +131,7 @@ impl Browser {
                     glyphs::glyph(s, ui, "xmark", Self::close_rect(r), LABEL_2.now());
                 }
                 let st = self.pool.as_ref().and_then(|p| p.state(self.tabs.get(i)?.view));
-                let title = st.map(|s| if s.title.is_empty() { self.shown_url(&s.url) } else { s.title.clone() }).unwrap_or_default();
+                let title = st.map(|s| if s.title.is_empty() { self.shown_url(&s.url) } else { self.shown_title(&s.title, &s.url) }).unwrap_or_default();
                 let title = if title.is_empty() || title == START { "New Tab".to_string() } else { title };
                 // site icon (16 pt) left of the title; the pair is centred (Browser)
                 let icon_px = ui.pt(favicon::ICON_PT).round() as usize;
@@ -163,7 +163,7 @@ impl Browser {
                 .iter()
                 .map(|t| {
                     let st = self.pool.as_ref().and_then(|p| p.state(t.view));
-                    (st.map(|s| s.title.clone()).unwrap_or_default(), st.map(|s| self.shown_url(&s.url)).unwrap_or_default())
+                    (st.map(|s| self.shown_title(&s.title, &s.url)).unwrap_or_default(), st.map(|s| self.shown_url(&s.url)).unwrap_or_default())
                 })
                 .collect();
             self.overview.draw(s, ui, wpt, self.content_top(), &tabs, self.current);

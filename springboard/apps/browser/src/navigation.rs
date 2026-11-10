@@ -194,10 +194,26 @@ impl Browser {
         self.uploads.shown(url).is_some()
     }
 
+    /// The title shown for the page at `url`: the page's own, except when the engine gave a private copy without a
+    /// title its address or path as the title (`Uploads::shown_title`).
+    pub(super) fn shown_title(&self, title: &str, url: &str) -> String {
+        self.uploads.shown_title(title, url).unwrap_or_else(|| title.to_string())
+    }
+
+    /// True when `url` is a private copy, which cannot be bookmarked (it is gone when the window closes, and the file
+    /// it was made from is one the browser cannot read): the page area says so (`draw_page_feedback`).
+    pub(super) fn refuse_bookmark(&mut self, url: &str) -> bool {
+        if !self.private_copy(url) {
+            return false;
+        }
+        self.uploads.error = Some(uploads::NO_BOOKMARK.into());
+        true
+    }
+
     /// Clicking the address field's star: bookmarks the open page, or removes its bookmark when it has one.
     pub(super) fn toggle_bookmark(&mut self) {
         let Some((url, title)) = self.view().and_then(|v| self.pool.as_ref()?.state(v)).map(|st| (st.url.clone(), st.title.clone())) else { return };
-        if self.private_copy(&url) {
+        if self.refuse_bookmark(&url) {
             return;
         }
         self.store.toggle_bookmark(&url, &title, store::now());
