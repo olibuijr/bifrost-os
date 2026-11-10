@@ -205,22 +205,42 @@ fn write(tabs: &[(String, String)], sel: usize, zoom: &HashMap<String, f32>) {
     }
 }
 
+/// The tabs whose address `keep` accepts, in order, and where the selected one (`sel`) is among them. When the
+/// selected tab is dropped, the kept tab before it is selected (the first one when there is none before it).
+fn kept(tabs: Vec<(String, String)>, sel: usize, keep: impl Fn(&str) -> bool) -> (Vec<(String, String)>, usize) {
+    let mut out = Vec::with_capacity(tabs.len());
+    let mut at = 0;
+    for (i, tab) in tabs.into_iter().enumerate() {
+        if keep(&tab.0) {
+            if i <= sel {
+                at = out.len();
+            }
+            out.push(tab);
+        }
+    }
+    (out, at)
+}
+
+/// A saved tab that restore opens: one with a page. A tab that never loaded one is not brought back.
+fn restorable(url: &str) -> bool {
+    !url.is_empty() && url != START
+}
+
 impl Browser {
-    /// The open tabs as (url, title). A private copy of a handed file is gone with the window, so its tab is saved as
-    /// an empty one, which restore skips like a tab that never loaded.
-    fn snapshot(&self) -> Vec<(String, String)> {
-        self.tabs
-            .iter()
-            .map(|t| self.pool.as_ref().and_then(|p| p.state(t.view)).map(|s| (s.url.clone(), s.title.clone())).unwrap_or_default())
-            .map(|page| if self.private_copy(&page.0) { Default::default() } else { page })
-            .collect()
+    /// The open tabs as (url, title) and the selected one's place among them. A private copy of a handed file is gone
+    /// with the window, so its tab is not saved at all: no empty line is left in the file and the saved selection
+    /// counts only the tabs that are written.
+    fn snapshot(&self) -> (Vec<(String, String)>, usize) {
+        let tabs = self.tabs.iter().map(|t| self.pool.as_ref().and_then(|p| p.state(t.view)).map(|s| (s.url.clone(), s.title.clone())).unwrap_or_default()).collect();
+        kept(tabs, self.current, |url| !self.private_copy(url))
     }
 
-    /// Opens the saved tabs and selects the saved one; false when there was nothing to restore.
+    /// Opens the saved tabs and selects the saved one; false when there was nothing to restore. Tabs without a page
+    /// (and the empty lines an earlier version wrote for private copies) are skipped, and the selection follows.
     pub fn restore_session(&mut self) -> bool {
         let (tabs, sel, zoom) = load();
         self.session.zoom = zoom;
-        let tabs: Vec<_> = tabs.into_iter().filter(|(u, _)| !u.is_empty() && u != START).collect();
+        let (tabs, sel) = kept(tabs, sel, restorable);
         if tabs.is_empty() {
             return false;
         }
@@ -245,10 +265,11 @@ impl Browser {
         if !self.session.dirty && self.session.changed_at.is_none() && self.session.saved_once && self.current == self.session.last_sel {
             return;
         }
-        let snap = self.snapshot();
-        let (sel, nz) = (self.current, self.session.zoom.clone());
+        let (snap, sel) = self.snapshot();
+        // `last_sel` is the tab selected in the window; `sel` is its place among the tabs that are written
+        let (current, nz) = (self.current, self.session.zoom.clone());
         let s = &mut self.session;
-        if snap == s.last && sel == s.last_sel && s.last_zoom == nz && s.saved_once {
+        if snap == s.last && current == s.last_sel && s.last_zoom == nz && s.saved_once {
             s.changed_at = None;
             s.dirty = false;
             return;
@@ -257,11 +278,11 @@ impl Browser {
         if t - since < DEBOUNCE_S {
             return;
         }
-        if snap.iter().any(|(u, _)| !u.is_empty() && u != START) || s.saved_once {
+        if snap.iter().any(|(u, _)| restorable(u)) || s.saved_once {
             write(&snap, sel, &s.zoom);
         }
         s.last = snap;
-        s.last_sel = sel;
+        s.last_sel = current;
         s.last_zoom = nz;
         s.saved_once = true;
         s.changed_at = None;
@@ -277,7 +298,7 @@ impl Browser {
         let history: Vec<String> = list.into_iter().take(index + 1).collect();
         let (url, title) = closed_page(state, &history);
         // a private copy of a handed file is listed by the address it is shown under, not the copy's path
-        let title = if title.trim().is_empty() { self.uploads.shown(&url).unwrap_or(title) } else { title };
+        let title = if title.trim().is_empty() { self.uploads.shown(&url).unwrap_or(title) } else { self.shown_title(&title, &url) };
         self.session.closed.push(ClosedTab { url, title, history, at: i });
     }
 
@@ -414,6 +435,43 @@ mod tests {
         // nothing at all: a blank tab is still a closed tab
         assert_eq!(closed_page(None, &[]), (START.to_string(), String::new()));
         assert_eq!(closed_page(Some((String::new(), String::new())), &[]), (START.to_string(), String::new()));
+    }
+
+    fn tabs(urls: &[&str]) -> Vec<(String, String)> {
+        urls.iter().map(|u| (u.to_string(), String::new())).collect()
+    }
+
+    #[test]
+    fn dropped_tabs_leave_no_entry_and_the_selection_follows() {
+        let private = |url: &str| !url.starts_with("file:///data/opened-files/");
+        let copy = "file:///data/opened-files/7-1/0/page.html";
+        // the copy is selected, after two pages: the page before it is
+        assert_eq!(kept(tabs(&["https://a", "https://b", copy]), 2, private), (tabs(&["https://a", "https://b"]), 1));
+        // a page after a copy keeps the selection
+        assert_eq!(kept(tabs(&[copy, "https://a", "https://b"]), 2, private), (tabs(&["https://a", "https://b"]), 1));
+        assert_eq!(kept(tabs(&["https://a", copy, "https://b"]), 0, private), (tabs(&["https://a", "https://b"]), 0));
+        // the copy is first and selected: the first page
+        assert_eq!(kept(tabs(&[copy, "https://a"]), 0, private), (tabs(&["https://a"]), 0));
+        // only copies: nothing is saved
+        assert_eq!(kept(tabs(&[copy, copy]), 1, private), (Vec::new(), 0));
+        // nothing dropped: unchanged, and a selection past the end is the last tab
+        assert_eq!(kept(tabs(&["https://a", "https://b"]), 1, private), (tabs(&["https://a", "https://b"]), 1));
+        assert_eq!(kept(tabs(&["https://a", "https://b"]), 9, private), (tabs(&["https://a", "https://b"]), 1));
+    }
+
+    #[test]
+    fn a_saved_session_has_no_empty_tab_and_an_old_one_restores_past_them() {
+        let private = |url: &str| !url.starts_with("file:///data/opened-files/");
+        let (snap, sel) = kept(tabs(&["https://a", "file:///data/opened-files/7-1/0/page.html", "https://b"]), 2, private);
+        let text = render(&snap, sel, &HashMap::new());
+        assert_eq!(text, "v 1\nsel 1\ntab https://a\t\ntab https://b\t\n");
+        // a file an earlier version wrote: an empty line for the copy, the selection counted with it
+        let old = parse("v 1\nsel 2\ntab https://a\tA\ntab \t\ntab https://b\tB\n");
+        assert_eq!(old.tabs.len(), 3);
+        let (open, sel) = kept(old.tabs, old.sel, restorable);
+        assert_eq!(open.iter().map(|t| t.0.as_str()).collect::<Vec<_>>(), ["https://a", "https://b"]);
+        assert_eq!(sel, 1, "the tab that was selected is selected again");
+        assert!(!restorable(START) && !restorable(""));
     }
 
     #[test]
