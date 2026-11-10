@@ -2718,12 +2718,13 @@ impl Shell {
         }
         let ui = &self.ui;
         let clock = status::clock_in(info.hour, info.min, self.clock_style.use_24h);
+        let lock_clock = lock_clock_text(&self.clock_style, &info);
         let short_date = status::date_text(info.wday, info.mday, info.mon);
         let minute_changed = (info.hour, info.min, info.mday) != (self.info.hour, self.info.min, self.info.mday) || self.chrome.time.is_none();
         if minute_changed {
             self.chrome.time = Some(ui.chrome(&clock, 12.0, Weight::Semibold, WHITE));
             self.chrome.date = Some(ui.chrome(&short_date, 12.0, Weight::Semibold, WHITE));
-            self.lock_time = Some(ui.chrome(&clock, 110.0, Weight::Semibold, WHITE));
+            self.lock_time = Some(ui.chrome(&lock_clock, 110.0, Weight::Semibold, WHITE));
             self.lock_date = Some(ui.chrome(&lock_date_text(&info), 22.0, Weight::Semibold, WHITE));
         }
         if info.battery != self.info.battery || self.chrome.percent.is_none() {
@@ -6632,6 +6633,12 @@ impl LockView<'_> {
     }
 }
 
+/// The large clock of the lock screen and the screen saver: the menu bar clock's time part (`ClockStyle::time_text`), so
+/// the three agree on 12 or 24-hour time (Date & Time > 24-Hour Time) and on the zero-padded hour.
+fn lock_clock_text(style: &bifrost_ui::menu_extras::ClockStyle, i: &Info) -> String {
+    style.time_text(i.hour, i.min)
+}
+
 /// The date over the lock clock, short as the reference has it: "Thu Sep 10".
 fn lock_date_text(i: &Info) -> String {
     const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -6661,6 +6668,32 @@ fn quicksearch_draw_timing(d: std::time::Duration) {
         let avg = QUICKSEARCH_US.swap(0, Relaxed) as f64 / 120.0 / 1000.0;
         QUICKSEARCH_N.store(0, Relaxed);
         eprintln!("springboard: quicksearch draw avg {avg:.2} ms over 120 frames");
+    }
+}
+
+#[cfg(test)]
+mod lock_clock_tests {
+    use super::*;
+    use bifrost_ui::menu_extras::ClockStyle;
+
+    /// The lock screen read "1:55" and "2:08" while the menu bar read "01:55" and "02:08" (and "23:07" on both the
+    /// evening before): the same 24-hour setting, written without the leading zero. Both now come from one function.
+    #[test]
+    fn the_lock_clock_is_the_menu_bar_clock_without_the_date() {
+        for use_24h in [true, false] {
+            let style = ClockStyle { use_24h, ..ClockStyle::default() };
+            let bar = ClockStyle { show_date: false, ..style };
+            for (hour, min) in [(0, 0), (1, 55), (2, 8), (9, 5), (12, 0), (13, 30), (23, 7)] {
+                let info = Info { hour, min, ..Info::default() };
+                assert_eq!(lock_clock_text(&style, &info), bar.text(info.wday, info.mday, info.mon, hour, min), "{hour}:{min} 24h={use_24h}");
+            }
+        }
+        let style = ClockStyle::default();
+        assert_eq!(lock_clock_text(&style, &Info { hour: 2, min: 8, ..Info::default() }), "02:08");
+        assert_eq!(lock_clock_text(&style, &Info { hour: 23, min: 7, ..Info::default() }), "23:07");
+        let twelve = ClockStyle { use_24h: false, ..style };
+        assert_eq!(lock_clock_text(&twelve, &Info { hour: 2, min: 8, ..Info::default() }), "2:08 AM");
+        assert_eq!(lock_clock_text(&twelve, &Info { hour: 23, min: 7, ..Info::default() }), "11:07 PM");
     }
 }
 
