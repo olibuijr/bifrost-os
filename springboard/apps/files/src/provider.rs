@@ -216,18 +216,23 @@ impl Providers {
 }
 
 /// The extension host of this Files process, for every kind of extension (file providers and file-manager sync
-/// extensions). The first use reads the installed packages and starts a thread that stops idle extensions.
+/// extensions). The first use reads the installed packages and starts the timer that stops idle extensions.
 pub(crate) fn shared_host() -> Arc<Mutex<Host>> {
     static HOST: OnceLock<Arc<Mutex<Host>>> = OnceLock::new();
     Arc::clone(HOST.get_or_init(|| {
         let host = Arc::new(Mutex::new(Host::installed()));
-        let reaped = Arc::clone(&host);
-        std::thread::spawn(move || loop {
-            std::thread::sleep(REAP_EVERY);
-            locked(&reaped).reap(Instant::now());
-        });
+        reap_later(Arc::clone(&host));
         host
     }))
+}
+
+/// Stops the extensions that have been idle, `REAP_EVERY` from now and again after each run: a timer on the
+/// background queue, with a second of leeway so it wakes together with other timers. No thread sleeps for it.
+fn reap_later(host: Arc<Mutex<Host>>) {
+    DispatchQueue::global(Qos::Background).async_after_leeway(REAP_EVERY, Duration::from_secs(1), move || {
+        locked(&host).reap(Instant::now());
+        reap_later(host);
+    });
 }
 
 /// The providers of this Files process, over the shared extension host.

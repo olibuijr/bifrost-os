@@ -46,7 +46,7 @@ fn reply_of(result: Result<Json, HostError>) -> AppEventReply {
     }
 }
 
-/// The host, when it is free and `bundle_id` runs; otherwise the extension is started on a thread of its own (once at
+/// The host, when it is free and `bundle_id` runs; otherwise the extension is started on the utility queue (once at
 /// a time) and None is returned.
 fn running_host<'a>(host: &'a Arc<Mutex<Host>>, bundle_id: &str, warming: &Arc<AtomicBool>) -> Option<std::sync::MutexGuard<'a, Host>> {
     let guard = match host.try_lock() {
@@ -61,7 +61,7 @@ fn running_host<'a>(host: &'a Arc<Mutex<Host>>, bundle_id: &str, warming: &Arc<A
     }
     if !warming.swap(true, Ordering::SeqCst) {
         let (host, bundle_id, warming) = (Arc::clone(host), bundle_id.to_string(), Arc::clone(warming));
-        std::thread::spawn(move || {
+        DispatchQueue::global(Qos::Utility).async_(move || {
             let started = locked(&host).begin(&bundle_id, FILE_MANAGER_POINT, Instant::now());
             if let Ok(lease) = started {
                 locked(&host).end(lease, Instant::now());

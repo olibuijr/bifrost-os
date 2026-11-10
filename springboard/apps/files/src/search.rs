@@ -4,6 +4,7 @@ use crate::*;
 use springboard::shell::ui::SIDEBAR_PLATE;
 
 /// The most hits a search returns; the walk stops there and the status line says so.
+// compliance-allow: LAY-03 a count of search hits, not a size on screen
 pub(crate) const RESULT_CAP: usize = 1000;
 
 /// The scope bar's height under the toolbar (and the tab strip), in points.
