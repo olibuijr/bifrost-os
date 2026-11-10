@@ -314,7 +314,8 @@ pub fn spec(id: PageId, v: &View, detail: &str, note: &str, o: &Options) -> Spec
         _ => {
             let me = v.user(&v.me);
             let card = match me {
-                Some(u) => Item::new(u.full_name.as_str()).value(format!("{} · {}", u.name, role(u))).link(PageId::UserDetail),
+                // the card shows the full name; the detail page is looked up by the account name
+                Some(u) => Item::new(u.full_name.as_str()).key(u.name.as_str()).value(format!("{} · {}", u.name, role(u))).link(PageId::UserDetail),
                 None => Item::new(v.me.as_str()).value("Account"),
             };
             let others: Vec<Item> = v.users.iter().filter(|u| u.name != v.me).map(user_row).collect();
@@ -367,6 +368,20 @@ mod tests {
         assert_eq!(s.groups[1].items[0].action, Action::Push(PageId::UserDetail));
         assert_eq!(s.groups[2].items[0].action, Action::Users(Edit::Add(false)));
         assert_eq!(s.groups[2].items[1].action, Action::Users(Edit::Add(true)));
+    }
+
+    #[test]
+    fn every_account_row_opens_its_page_by_account_name_whatever_it_shows() {
+        let v = View::from_text("olof:x:1000:1000:Ólöf Björk Dev:/home/olof:/bin/bash\nkid:x:1001:1001:Litla Systir:/home/kid:/bin/bash\n", GROUP, "olof");
+        let s = spec(PageId::Users, &v, "", "", &Options::default());
+        let card = &s.groups[0].items[0];
+        assert_eq!((card.label.as_str(), card.detail()), ("Ólöf Björk Dev", "olof"), "the card shows the full name and opens the account");
+        assert_eq!(s.groups[1].items[0].detail(), "kid");
+        for row in [card, &s.groups[1].items[0]] {
+            assert_eq!(row.action, Action::Push(PageId::UserDetail));
+            let page = spec(PageId::UserDetail, &v, row.detail(), "", &Options::default());
+            assert!(page.groups.iter().any(|g| g.items.iter().any(|i| i.label == "Change Password…")), "{} has no page", row.label);
+        }
     }
 
     #[test]

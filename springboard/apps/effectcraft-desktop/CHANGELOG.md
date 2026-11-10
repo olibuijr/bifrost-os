@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.23.0
+
+- Upstream effectcraft v0.23.0.
+  ## What's Changed
+  * Roto Brush: per-split scratch vectors in the parallel distance transform by @vangel76 in https://github.com/storytold/effectcraft/pull/2333
+  * Roto Brush: propagate on the band bounding box by @vangel76 in https://github.com/storytold/effectcraft/pull/2335
+  * Subspace Warp: a symmetric QR eigen solver and a banded mesh solve make plan() 5x cheaper (#2319) by @vangel76 in https://github.com/storytold/effectcraft/pull/2332
+  * opusenc: memoise SILK rate-loop trials, ring buffer for noise feedback by @vangel76 in https://github.com/storytold/effectcraft/pull/2399
+
 ## 0.22.0
 
 - Upstream effectcraft v0.22.0.

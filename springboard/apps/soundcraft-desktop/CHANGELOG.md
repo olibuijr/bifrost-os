@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.19.0
+
+- Upstream soundcraft v0.19.0.
+  ## What's Changed
+  * fix(ui): Left and Right arrows centre the Edit window on the selection (#1376) by @ZIDAN44 in https://github.com/storytold/soundcraft/pull/1415
+  * fix(engine): Bounce Stems and Export Clips work in the web build (#1409) by @ZIDAN44 in https://github.com/storytold/soundcraft/pull/1416
+  * fix(ui): the Sub counter opens its format menu, as the Main counter does (#1374) by @ZIDAN44 in https://github.com/storytold/soundcraft/pull/1417
+  * Release: refresh contributor credits for each release (#1424) by @Luis-0508 in https://github.com/storytold/soundcraft/pull/1425
+
 ## 0.18.0
 
 - Upstream soundcraft v0.18.0.

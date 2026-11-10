@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.18.0
+
+- Upstream gridcraft v0.18.0.
+  ## What's Changed
+  * Sort: the closed Sort by box names the column, as its list does (#3446) by @ZIDAN44 in https://github.com/storytold/gridcraft/pull/3506
+  * View: a sheet keeps its own scroll position when sheets move (#3485) by @ZIDAN44 in https://github.com/storytold/gridcraft/pull/3507
+  * Selection: Ctrl+Shift+Arrow searches the active cell's line (#3484) by @ZIDAN44 in https://github.com/storytold/gridcraft/pull/3508
+  * gridcraft-web: window.gridcraft, the page command API from craft-web-api by @helenkwok in https://github.com/storytold/gridcraft/pull/3524
+
 ## 0.17.0
 
 - Upstream gridcraft v0.17.0.

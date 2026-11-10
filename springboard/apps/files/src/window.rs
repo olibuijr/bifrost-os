@@ -207,21 +207,9 @@ impl Files {
             let dest = e.path.parent().map(Path::to_path_buf).unwrap_or_else(|| self.path.clone());
             self.start_job("Expanding", JobKind::Extract, vec![e.path], dest);
         } else if Self::is_disk_image(&e) {
-            // a disk image mounts read-only (`hdiutil attach` prints the loop device and the folder), then the folder opens here
-            let path = e.path;
-            DispatchQueue::global(Qos::Utility).async_(move || {
-                let Ok(out) = std::process::Command::new("hdiutil").arg("attach").arg(&path).output() else {
-                    return;
-                };
-                if !out.status.success() {
-                    return;
-                }
-                let text = String::from_utf8_lossy(&out.stdout).into_owned();
-                if let Some((_, point)) = text.trim().split_once(' ') {
-                    // the mounted folder opens in this window (`tick` takes it on the main thread)
-                    system::from_worker(system::FromWorker::Show(PathBuf::from(point)));
-                }
-            });
+            // a disk image mounts read-only: this sandbox has no way to the shell's control socket, so the shell is
+            // asked through its `disks` service; the volume's folder (or why it failed) comes back in `image_event`
+            self.sys.effects.push(Effect::AttachImage(e.path));
         } else {
             // the shell opens it in the default app for its type and grants that app the file (`workspace::open_file`)
             self.sys.effects.push(Effect::OpenFiles(vec![e.path], None));

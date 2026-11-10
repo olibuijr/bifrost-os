@@ -114,7 +114,8 @@ impl Setup {
             self.error = Some("The time zone could not be changed. Try again.".into());
             return true;
         }
-        let path = setup::state_path(&setup::shell_data_dir());
+        // in the app's own data directory: the sandbox shows this app no other part of the shell's tree
+        let path = setup::own_state_path();
         let state = State { done: true, applied: false, choices: self.choices.clone() };
         if state.save(&path).is_err() {
             self.error = Some("Your choices could not be saved. Try again.".into());

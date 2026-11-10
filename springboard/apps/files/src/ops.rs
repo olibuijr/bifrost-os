@@ -581,7 +581,15 @@ impl Files {
             return;
         }
         // the shared pasteboard decides what is pasted; its reply starts the job (system.rs `service_answer`)
-        self.sys.effects.push(Effect::ReadBoard(self.path.clone()));
+        self.sys.effects.push(Effect::ReadBoard(self.path.clone(), false));
+    }
+    /// Option+Cmd+V: the copied items are moved into the open folder instead of copied.
+    pub(crate) fn paste_move(&mut self) {
+        if self.in_recents() {
+            self.notice = Some("Open a folder to move items into it".into());
+            return;
+        }
+        self.sys.effects.push(Effect::ReadBoard(self.path.clone(), true));
     }
     /// New Folder (the toolbar button, File > New Folder, Cmd+Shift+N): makes "New Folder" in the open folder. When the
     /// folder has been read again the new item is selected, scrolled into view and its name is open for editing with

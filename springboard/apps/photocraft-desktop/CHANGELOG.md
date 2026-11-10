@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.22.0
+
+- Upstream photocraft v0.22.0.
+  ## What's Changed
+  * fix(export): preserve high-quality JPEG colour detail in Export As by @fokas-hoa in https://github.com/storytold/photocraft/pull/7985
+  * Integration batch 19: epic PRs (WIP) by @davidmann4 in https://github.com/storytold/photocraft/pull/11643
+  * fix(transform): a click on another layer's pixels commits the box; the next click picks it (#11100, #8208) by @Higgs32584 in https://github.com/storytold/photocraft/pull/9862
+  * Move tool: an arrow nudge is one screen pixel, as in Photoshop (#9511) by @hectorviov in https://github.com/storytold/photocraft/pull/10438
+
 ## 0.21.0
 
 - Upstream photocraft v0.21.0.

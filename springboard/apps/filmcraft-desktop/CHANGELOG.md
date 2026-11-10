@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.19.0
+
+- Upstream filmcraft v0.19.0.
+  ## What's Changed
+  * Effect Controls: Scale Width is greyed out while Uniform Scale is on (#4381) by @ZIDAN44 in https://github.com/storytold/filmcraft/pull/4407
+  * filmcraft-web: window.filmcraft takes its request functions from craft-web-api by @helenkwok in https://github.com/storytold/filmcraft/pull/4420
+  * #65: CommandSpec carries which target keys a command takes by name by @vangel76 in https://github.com/storytold/filmcraft/pull/1413
+  * audio-dsp: narrow the public API to what other crates use by @vangel76 in https://github.com/storytold/filmcraft/pull/3147
+
 ## 0.18.0
 
 - Upstream filmcraft v0.18.0.

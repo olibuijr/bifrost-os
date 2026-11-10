@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.20.0
+
+- Upstream pdfcraft v0.20.0.
+  ## What's Changed
+  * perf(cos): an object that can't be read is searched for once, not on every read by @KenM76 in https://github.com/storytold/pdfcraft/pull/5802
+  * M3: copy keeps formatting as HTML (Copy with formatting) by @KenM76 in https://github.com/storytold/pdfcraft/pull/6197
+  * Add text: gray or CMYK colour, painted with g or k (#6440) by @ZIDAN44 in https://github.com/storytold/pdfcraft/pull/6471
+  * pdfcraft-web: window.pdfcraft, the page command API from craft-web-api, opt-in with ?control by @helenkwok in https://github.com/storytold/pdfcraft/pull/6497
+
 ## 0.19.0
 
 - Upstream pdfcraft v0.19.0.

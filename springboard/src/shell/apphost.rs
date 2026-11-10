@@ -794,7 +794,8 @@ impl AppHost {
         let fd = theirs.fd();
         #[cfg(feature="desktop-wayland")]
         let mut cmd = if std::env::var_os("SPRINGBOARD_WAYLAND").is_some() {
-            let manifest=Manifest::parse(&std::fs::read_to_string(exec.parent().unwrap().join("manifest.toml"))?).ok_or_else(||std::io::Error::other("Invalid app manifest"))?;
+            let manifest_path=exec.parent().unwrap().join("manifest.toml");
+            let manifest=Manifest::parse(&std::fs::read_to_string(&manifest_path).map_err(|e|std::io::Error::new(e.kind(),format!("app manifest {}: {e}",manifest_path.display())))?).ok_or_else(||std::io::Error::other("Invalid app manifest"))?;
             if manifest.id!=id {return Err(std::io::Error::other("App identity mismatch"));}
             let policy=crate::bare::app_policy::Policy::from_permissions(id,&manifest.permissions)?.with_entitlements(id,&manifest.kind,&manifest.entitlements);
             crate::bare::app_policy::command(id,exec,data_dir,policy,false)?
@@ -2250,12 +2251,30 @@ impl Shell {
             }
             Err(e) => {
                 bifrost_core::log::shell_logger("apphost").error(format!("cannot start {}: {e}", app.manifest.id));
-                // the person is told which app and why (a package that asks for a permission this system does not offer)
-                self.launch_failed_because(slot, launch_failure_reason(&e));
+                // the person is told which app and why (a package that asks for a permission this system does not offer),
+                // unless the screen is locked: nobody asked for that start, so it is logged and not shown
+                if launch_failure_is_shown(self.is_locked()) {
+                    self.launch_failed_because(slot, launch_failure_reason(&e));
+                }
                 // never leave an empty (black) window behind a launch that failed
                 #[cfg(feature = "desktop-wayland")]
                 self.desk_close_app(AppId::External(slot as u8));
             }
+        }
+    }
+
+    /// First run: opens the Setup Assistant when it is due (`setup::due`: the run did not finish and the session is
+    /// unlocked), at most once per shell run, so closing the window without finishing does not bring it back at the
+    /// next unlock. Called at start-up, where it does nothing on the login window, and when the session unlocks.
+    pub(super) fn open_setup_assistant_if_due(&mut self, t: f64) {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static OFFERED: AtomicBool = AtomicBool::new(false);
+        if OFFERED.load(Ordering::Relaxed) || !crate::setup::due(&root(), self.is_locked()) {
+            return;
+        }
+        if let Some(slot) = slot_of(crate::setup::APP_ID) {
+            OFFERED.store(true, Ordering::Relaxed);
+            self.open(AppId::External(slot as u8), t);
         }
     }
 
@@ -3073,6 +3092,13 @@ mod migrate_tests;
 
 #[cfg(test)]
 mod registry_update_tests;
+
+/// Whether a start that failed is put on screen as a notice. Not while the screen is locked: the person cannot have
+/// asked for an app there (a start the shell made itself, such as the first-run assistant at boot), and a notice about
+/// it would be the first thing they see after logging in. The failure is always logged.
+pub fn launch_failure_is_shown(locked: bool) -> bool {
+    !locked
+}
 
 /// The alert title and body for an app that did not start, pure: an empty name reads as "The app".
 pub fn launch_failure_text(name: &str) -> (String, String) {

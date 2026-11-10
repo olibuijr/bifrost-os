@@ -62,6 +62,12 @@ pub trait ScreenSource {
     fn refused(&self) -> bool {
         false
     }
+
+    /// Why the shell refused the last display or pixel request, in the shell's words ("Screen recording is off for
+    /// ..."), or `None` when it did not refuse or gave no reason.
+    fn refusal(&self) -> Option<&str> {
+        None
+    }
 }
 
 /// Pixels this many cells wider than the loupe are requested, so a pointer that moves a pixel or two still reads from the
@@ -81,6 +87,8 @@ pub struct ShellSource {
     in_flight: Vec<(u32, Ask)>,
     /// The last display or pixel reply was an error, or came back unusable.
     refused: bool,
+    /// The shell's error text of that reply, when it was an error.
+    reason: Option<String>,
 }
 
 /// Whether two asks are the same kind, whatever their rectangle.
@@ -147,7 +155,10 @@ impl ScreenSource for ShellSource {
             Ask::Display => {
                 let size = result.as_ref().ok().and_then(screen_sample::decode_size);
                 self.refused = size.is_none();
-                std::mem::replace(&mut self.display, size) != size
+                // a new reason is a new line in the loupe, so it needs a frame as well
+                let reason = result.as_ref().err().cloned();
+                let told = std::mem::replace(&mut self.reason, reason.clone()) != reason;
+                (std::mem::replace(&mut self.display, size) != size) | told
             }
             // the app takes the pointer on its next turn, which draws when it moved: no frame is needed for it here
             Ask::Pointer => {
@@ -162,7 +173,9 @@ impl ScreenSource for ShellSource {
                     .filter(|(w, h, _)| *w == rect.w && *h == rect.h)
                     .map(|(_, _, bytes)| (rect, bytes.chunks_exact(3).map(|c| Rgb8::new(c[0], c[1], c[2])).collect::<Vec<_>>()));
                 self.refused = got.is_none();
-                let changed = got != self.loupe;
+                let reason = result.as_ref().err().cloned();
+                let told = std::mem::replace(&mut self.reason, reason.clone()) != reason;
+                let changed = got != self.loupe || told;
                 self.loupe = got;
                 changed
             }
@@ -182,6 +195,10 @@ impl ScreenSource for ShellSource {
 
     fn refused(&self) -> bool {
         self.refused
+    }
+
+    fn refusal(&self) -> Option<&str> {
+        self.reason.as_deref()
     }
 }
 
@@ -255,6 +272,20 @@ mod tests {
     }
 
     #[test]
+    fn a_refusal_keeps_the_shells_reason_until_a_reply_works() {
+        let mut s = ShellSource::default();
+        assert_eq!(s.refusal(), None);
+        s.track(1, Ask::Display);
+        assert!(s.answer(1, &Err("Screen recording is off for Digital Color Meter.".into())), "the reason is drawn");
+        assert!(s.refused());
+        assert_eq!(s.refusal(), Some("Screen recording is off for Digital Color Meter."));
+        s.track(2, Ask::Display);
+        s.answer(2, &Ok(size(100, 80)));
+        assert!(!s.refused());
+        assert_eq!(s.refusal(), None);
+    }
+
+    #[test]
     fn only_our_requests_are_taken() {
         let mut s = ShellSource::default();
         s.track(7, Ask::Pointer);
@@ -299,7 +330,8 @@ mod tests {
     fn a_refused_reply_marks_the_source_and_a_good_one_clears_it() {
         let mut s = ShellSource::default();
         s.track(1, Ask::Display);
-        assert!(!s.answer(1, &Err("denied".into())));
+        // the reason is new, so the loupe needs a frame to show it
+        assert!(s.answer(1, &Err("denied".into())));
         assert!(s.refused());
         s.track(2, Ask::Display);
         assert!(s.answer(2, &Ok(size(10, 10))));

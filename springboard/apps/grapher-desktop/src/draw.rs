@@ -39,6 +39,9 @@ fn paint_panel(g: &mut Grapher, s: &mut Surface, ui: &Ui) {
     let typed = g.model.selected_row().map(|r| r.text.clone()).unwrap_or_default();
     let mut buffer = TextField::new();
     buffer.push_str(&typed);
+    if g.all_selected {
+        buffer.select(0..typed.len());
+    }
     widgets::text_field(s, ui, &buffer, field, PLACEHOLDER, g.model.selected.is_some());
 
     let problem = g

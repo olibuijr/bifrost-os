@@ -1112,6 +1112,9 @@ impl Shell {
         // cleared on the frame after it closes (desk_regions keeps it), so no shadow line is left behind
         // (each cascading submenu as well)
         for (_,popup,_) in self.menu_level_rects(){let g=self.ui.pt(super::desk::SHADOW_REACH_PT) as i32+2;v.push(popup_damage_rect(popup,self.desktop_bar_height() as i32,g,self.ui.pt(2.) as i32));}
+        // the dim an open or save panel lays over its window's body: far larger than the panel's own region, and drawn
+        // again on every frame, so it is cleared with the regions (and once more on the frame after the panel goes)
+        if let Some(r)=self.doc_dim_rect(){v.push(r);}
         let d=self.dock_surface_rect();let m=self.ui.pt(120.) as i32;
         v.push(((d.x-m).max(0),(d.y-m).max(0),d.w+2*m,d.h+2*m));
         // the desktop Control Center and Notification Center panels, with room for their shadow

@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream wordcraft v0.17.0.
+  ## What's Changed
+  * doc: encrypted .docx opens again — the CFB guard refuses only more FAT sectors than the file has (#5109) by @Bra1nZ in https://github.com/storytold/wordcraft/pull/5830
+  * ODT: a frame offering several picture formats shows one it can read (gap 19) by @alehel in https://github.com/storytold/wordcraft/pull/5706
+  * ODT: a heading's text of another size keeps it (gap 19) by @alehel in https://github.com/storytold/wordcraft/pull/5725
+  * ODT: a table row that doesn't break across pages stays so (gap 19) by @alehel in https://github.com/storytold/wordcraft/pull/5726
+
 ## 0.16.0
 
 - Upstream wordcraft v0.16.0.

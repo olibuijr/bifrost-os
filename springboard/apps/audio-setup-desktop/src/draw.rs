@@ -120,8 +120,9 @@ fn paint_detail(w: &mut AudioSetup, s: &mut Surface, ui: &Ui, d: &DeviceInfo) {
 fn paint_empty(w: &mut AudioSetup, s: &mut Surface, ui: &Ui) {
     let (x, cw) = (w.content_x(), w.content_w());
     let y0 = UNIFIED_BAR_PT + crate::window::PAD_PT;
-    let (title, body) = if w.error.is_some() {
-        ("Audio Setup", "The audio server is not running, so there are no devices to show.")
+    let (title, body) = if w.error.is_some() && w.devices.is_empty() {
+        // why is the red line at the bottom of the window (`AudioSetup::error`): it names what failed
+        ("Audio Setup", "The audio devices could not be listed.")
     } else if w.devices.is_empty() {
         ("Audio Setup", "No audio devices are connected.")
     } else {

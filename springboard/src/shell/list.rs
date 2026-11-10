@@ -161,12 +161,25 @@ pub struct Item {
     pub popup: Option<Popup>,
     /// the segmented control's choices (set with `segmented`, drawn by `Accessory::Segmented`)
     pub segments: Option<Popup>,
+    /// what a detail page is opened for when it is not the label (an account's login name under its full name)
+    pub key: Option<String>,
 }
 
 impl Item {
     /// A plain row with a label.
     pub fn new(label: impl Into<String>) -> Self {
-        Item { icon: None, glyph: None, label: label.into(), value: String::new(), accessory: Accessory::None, body: Body::Row, action: Action::None, tint: Tint::Plain, leading_check: false, badge: 0, app_icon: None, popup: None, segments: None }
+        Item { icon: None, glyph: None, label: label.into(), value: String::new(), accessory: Accessory::None, body: Body::Row, action: Action::None, tint: Tint::Plain, leading_check: false, badge: 0, app_icon: None, popup: None, segments: None, key: None }
+    }
+
+    /// Names what the row's detail page is opened for, when the label shows something else.
+    pub fn key(mut self, key: impl Into<String>) -> Self {
+        self.key = Some(key.into());
+        self
+    }
+
+    /// What the row's detail page is opened for: its key, else its label.
+    pub fn detail(&self) -> &str {
+        self.key.as_deref().unwrap_or(&self.label)
     }
 
     pub fn icon(mut self, icon: Icon) -> Self {

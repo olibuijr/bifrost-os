@@ -1,6 +1,6 @@
 id = "is.olibuijr.preview.desktop"
 name = "Viewer"
-version = "0.11.20"
+version = "0.11.21"
 exec = "bifrost-viewer"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -9,7 +9,7 @@ category = "Utilities"
 kind = "system-app"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
-handles = ["public.png:owner", "public.jpeg:owner", "com.compuserve.gif:owner", "public.webp:owner", "public.svg-image:alternate", "public.image:default", "com.adobe.pdf:owner"]
+handles = ["public.png:owner", "public.jpeg:owner", "com.compuserve.gif:owner", "public.webp:owner", "public.tiff:owner", "com.microsoft.bmp:owner", "com.microsoft.ico:owner", "public.svg-image:owner", "public.image:default", "com.adobe.pdf:owner"]
 window = "full-size"
 
 [[service]]

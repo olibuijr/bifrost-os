@@ -1661,12 +1661,8 @@ impl Shell {
         apphost::migrate_legacy(Path::new(dir), clock::APP_ID, &data);
         let _ = std::fs::create_dir_all(&data);
         clock::adopt_old_dir(&PathBuf::from(dir).join("appdata").join(clock::APP_ID), &data);
-        // first run: the Setup Assistant opens over the desktop until its state file says the run finished
-        if crate::setup::needs_window(Path::new(dir)) {
-            if let Some(slot) = apphost::slot_of(crate::setup::APP_ID) {
-                self.open(AppId::External(slot as u8), t);
-            }
-        }
+        // first run: the Setup Assistant opens once the session is unlocked (no app starts on the login window)
+        self.open_setup_assistant_if_due(t);
         let mut fx = self.clock.load(&data.join("clock.ini").to_string_lossy(), t);
         fx.push(Effect::AutoLock(self.idle_off_ms as u32));
         fx
@@ -3383,8 +3379,7 @@ impl Shell {
         };
         if wake {
             self.dark_tap = None;
-            self.screen_on = true;
-            self.screen_woke(t);
+            self.wake_display(options::WakeCause::Person, t);
             return vec![Effect::ScreenOn];
         }
         vec![]
@@ -3457,7 +3452,7 @@ impl Shell {
     }
 
     /// The display goes off from idle or the power key. With a Require Password grace the screen is not locked yet:
-    /// it stays as it was until `screen_woke` sees the display come back after the grace. A lock already on stays.
+    /// it stays as it was until `wake_display` sees the display come back after the grace. A lock already on stays.
     fn display_off(&mut self, t: f64) -> Vec<Effect> {
         let before = self.screen;
         let grace = self.options().lock_grace_s;
@@ -3469,12 +3464,17 @@ impl Shell {
         fx
     }
 
-    /// The display came on: inside the grace the screen returns as it was, after it the screen is locked.
-    fn screen_woke(&mut self, t: f64) {
+    /// Turns a dark display on. Every wake goes through here, so one rule decides what the display shows: a wake the
+    /// person caused inside the Require Password grace returns the screen as it was, and after the grace the screen is
+    /// locked. A wake nobody at the machine caused (an alarm, a timer, a notification) is no proof the person is back,
+    /// so it ends a grace still running and the display always comes on locked.
+    pub(super) fn wake_display(&mut self, cause: options::WakeCause, t: f64) {
+        self.screen_on = true;
         self.weather_refresh.wake();
         let Some((off, before)) = self.grace_from.take() else { return };
         let grace_s = self.options().lock_grace_s;
-        self.screen = if options::grace_lapsed(off, t, grace_s) { Screen::Lock } else { before };
+        let locked = cause == options::WakeCause::Unattended || options::grace_lapsed(off, t, grace_s);
+        self.screen = if locked { Screen::Lock } else { before };
     }
 
     /// The machine was suspended for `slept_ms`. The shell clock stood still for that time, so the moment the display
@@ -3649,8 +3649,7 @@ impl Shell {
             return if self.screen_on {
                 self.display_off(t)
             } else {
-                self.screen_on = true;
-                self.screen_woke(t);
+                self.wake_display(options::WakeCause::Person, t);
                 vec![Effect::ScreenOn]
             };
         }
@@ -4467,6 +4466,7 @@ impl Shell {
                         self.wallpaper_owed();
                         // the lock took the windows' toplevels down: they map again in the shell's order (E2E13 2)
                         self.desk_restack_after_unlock();
+                        self.open_setup_assistant_if_due(t);
                         // the lock screen's buffers are gone: hand their pages back to the system
                         #[cfg(target_env = "gnu")]
                         {
@@ -4615,8 +4615,7 @@ impl Shell {
             self.dirty = true;
             self.last_input = t;
             if !self.screen_on {
-                self.screen_on = true;
-                self.screen_woke(t);
+                self.wake_display(options::WakeCause::Unattended, t);
                 effects.push(Effect::ScreenOn);
             }
             self.notify_alarm();

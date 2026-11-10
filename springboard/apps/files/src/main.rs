@@ -417,6 +417,9 @@ impl App for Files {
         self.service_answer(request, result)
     }
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &bifrost_core::json::Json) -> bool {
+        if service == bifrost_core::disk_wire::SERVICE {
+            return self.image_event(event, body);
+        }
         if !bifrost_app::quick_look::is_quick_look(service) {
             return false;
         }
@@ -490,11 +493,10 @@ impl App for Files {
             self.revision += 1;
             changed = true;
         }
-        // a provider download to open, or a mounted disk image to show
+        // a provider download to open
         for work in system::take_from_workers() {
             match work {
                 system::FromWorker::Open(path) => self.sys.effects.push(Effect::OpenFiles(vec![path], None)),
-                system::FromWorker::Show(folder) => self.navigate(folder, true),
             }
             changed = true;
         }

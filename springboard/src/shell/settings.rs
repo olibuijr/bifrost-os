@@ -1240,7 +1240,8 @@ impl Settings {
             PageId::InternetAccounts => self.loads.accounts.start("accounts-read", super::internet_accounts_page::load),
             PageId::Account => self.start_account_view(),
             PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => self.loads.users.start("users-read", super::users_page::View::load),
-            PageId::Sharing => self.loads.sharing.start("sharing-read", super::sharing_page::View::load),
+            // About shows the computer name Sharing sets
+            PageId::Sharing | PageId::About => self.loads.sharing.start("sharing-read", super::sharing_page::View::load),
             PageId::PrintScan => self.loads.printers.start("print-scan-read", super::print_scan_page::View::load),
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => {
                 let (unix, off) = crate::bare::sys::wall_time();
@@ -3208,7 +3209,7 @@ impl Settings {
             Action::None | Action::Slider(_) => vec![],
             Action::Push(id) => {
                 if matches!(id, PageId::WifiDetail | PageId::BluetoothDetail | PageId::NotificationApp | PageId::UserDetail | PageId::GroupDetail) {
-                    self.detail = item.label.clone();
+                    self.detail = item.detail().to_string();
                 }
                 self.push(ui, id, t);
                 match id {

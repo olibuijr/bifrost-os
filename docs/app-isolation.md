@@ -24,6 +24,7 @@ Supported manifest capabilities:
 | network | Host network namespace |
 | storage | Local account's full home directory (Files compatibility) |
 | audio | Sound devices and the existing audio service socket, when present |
+| audio-devices | Audio Setup only: the audio server's control socket (`/run/bifrost/audio/control`, read-only bind of the socket file). A control client can reconfigure devices for every app, so `audio` does not include it |
 | camera | Photo Booth only: the specific `/dev/videoN` character devices that probe as supported streaming-capture nodes; no `/dev` subtree or unrelated hardware is mounted |
 | screen | Color Meter only: declares intent to use screen sampling; each read still requires the person's existing screen-recording authorization through the shell service |
 | notifications | May post notifications through the shell |

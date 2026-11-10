@@ -11,7 +11,7 @@ use bifrost_app::controls::Rect;
 use bifrost_app::kit::{pack, TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
-use bifrost_app::{KeyInput, TouchKind};
+use bifrost_app::{Command, Commands, KeyInput, TouchKind};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -61,6 +61,9 @@ pub struct Grapher {
     pub message: String,
     /// True once the saved equations were read (or the first run found none).
     pub loaded: bool,
+    /// True after Select All, until the next key, command or tap: the whole equation in the field is selected, so
+    /// typing or pasting replaces it and Backspace clears it.
+    pub all_selected: bool,
 }
 
 impl Grapher {
@@ -73,6 +76,7 @@ impl Grapher {
             last_px: (0.0, 0.0),
             message: String::new(),
             loaded: false,
+            all_selected: false,
         }
     }
 
@@ -238,11 +242,16 @@ impl Grapher {
 
     /// A key: text types into the selected equation, Backspace deletes, Return starts a new equation.
     pub fn key(&mut self, dir: &Path, key: KeyInput) -> bool {
+        // any key ends Select All; text and Backspace first take the selected equation away
+        let replace = std::mem::take(&mut self.all_selected);
         let changed = match key {
             KeyInput::Text(text) => {
                 // a line break in pasted or typed text starts a new equation, as Return does; the first line goes into
                 // the selected one. Empty lines add nothing, so a trailing break or a lone newline changes nothing.
                 let mut changed = false;
+                if replace && text.chars().any(|c| !c.is_control()) {
+                    changed = self.clear_selected();
+                }
                 let mut typed = false;
                 for line in break_lines(&text).split('\n') {
                     let clean: String = line.chars().filter(|c| !c.is_control()).collect();
@@ -257,6 +266,7 @@ impl Grapher {
                 }
                 changed
             }
+            KeyInput::Code(8) if replace => self.clear_selected(),
             KeyInput::Code(8) => self.model.backspace(),
             KeyInput::Code(13) => {
                 self.model.add("");
@@ -267,16 +277,74 @@ impl Grapher {
         if changed {
             self.persist(dir);
         }
-        changed
+        changed || replace
+    }
+
+    /// The text of the selected equation, when it has any.
+    fn selected_text(&self) -> Option<&str> {
+        self.model.selected_row().map(|row| row.text.as_str()).filter(|text| !text.is_empty())
+    }
+
+    /// Empties the selected equation. True when it held text.
+    fn clear_selected(&mut self) -> bool {
+        let Some(id) = self.model.selected else { return false };
+        match self.model.rows.iter_mut().find(|row| row.id == id) {
+            Some(row) if !row.text.is_empty() => {
+                row.text.clear();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Which Edit menu commands apply now. The field has no caret, so Cut, Copy and Select All take the whole selected
+    /// equation and need it to hold text; Paste needs text on the pasteboard.
+    pub fn commands(&self, pasteboard: Option<&str>) -> Commands {
+        let text = self.selected_text().is_some();
+        Commands::default()
+            .with(Command::Cut, text)
+            .with(Command::Copy, text)
+            .with(Command::Paste, pasteboard.is_some_and(|board| !board.is_empty()))
+            .with(Command::SelectAll, text)
+    }
+
+    /// Runs an Edit menu command (the menu item or its key equivalent) on the equation field. `pasteboard` is the text
+    /// on the pasteboard when the command arrives. Returns whether the window needs a new frame, and the text Cut or
+    /// Copy puts on the pasteboard.
+    pub fn command(&mut self, dir: &Path, command: Command, pasteboard: Option<&str>) -> (bool, Option<String>) {
+        match command {
+            // pasted text goes the way typed text does: one equation per non-empty line
+            Command::Paste => match pasteboard {
+                Some(text) => (self.key(dir, KeyInput::Text(text.to_string())), None),
+                None => (false, None),
+            },
+            Command::Copy => (false, self.selected_text().map(str::to_string)),
+            Command::Cut => {
+                let cut = self.selected_text().map(str::to_string);
+                let changed = self.clear_selected();
+                if changed {
+                    self.persist(dir);
+                }
+                (changed | std::mem::take(&mut self.all_selected), cut)
+            }
+            Command::SelectAll => {
+                let select = self.selected_text().is_some();
+                (std::mem::replace(&mut self.all_selected, select) != select, None)
+            }
+            _ => (false, None),
+        }
     }
 
     /// The action of a completed tap. True when the window needs a new frame.
     pub fn activate(&mut self, ui: &Ui, dir: &Path, target: Target) -> bool {
-        match target {
+        // a tap on a row or a button ends Select All
+        let deselected = !matches!(target, Target::Nothing | Target::Plot) && std::mem::take(&mut self.all_selected);
+        let changed = match target {
             Target::Nothing | Target::Plot => false,
             Target::Row(id) => self.model.select(id),
             Target::Button(id) => self.button(ui, dir, id),
-        }
+        };
+        changed || deselected
     }
 
     /// Adds an empty equation and selects it, so what is typed next goes into it and not into an existing one.
@@ -406,6 +474,43 @@ mod tests {
         assert!(g.key(&dir, KeyInput::Text("y = sin(x)\ny = x^3 / 8\r\ny = 2\n".into())));
         let texts: Vec<&str> = g.model.rows.iter().map(|r| r.text.as_str()).collect();
         assert_eq!(texts, vec!["y = sin(x)", "y = x^3 / 8", "y = 2"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_paste_command_makes_one_equation_per_line() {
+        let dir = std::env::temp_dir().join("grapher-paste-command-test");
+        let mut g = Grapher::new();
+        g.model = Model::from_text("");
+        g.add_equation(&dir);
+        let board = "y = 2*x\ny = cos(x)\ny = x + 1";
+        assert!(g.commands(Some(board)).supports(Command::Paste));
+        assert!(!g.commands(None).supports(Command::Paste));
+        assert_eq!(g.command(&dir, Command::Paste, Some(board)), (true, None));
+        let texts: Vec<&str> = g.model.rows.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(texts, vec!["y = 2*x", "y = cos(x)", "y = x + 1"]);
+        assert_eq!(std::fs::read_to_string(dir.join(SAVE_FILE)).ok().as_deref(), Some(board));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cut_copy_and_select_all_act_on_the_selected_equation() {
+        let dir = std::env::temp_dir().join("grapher-edit-command-test");
+        let mut g = Grapher::new();
+        g.model = Model::from_text("y = x");
+        g.model.selected = None;
+        assert!(!g.commands(None).supports(Command::Copy), "nothing is selected");
+        g.model.select(1);
+        assert_eq!(g.command(&dir, Command::Copy, None), (false, Some("y = x".to_string())));
+        // Select All, then a paste, replaces the equation
+        assert_eq!(g.command(&dir, Command::SelectAll, None), (true, None));
+        assert!(g.all_selected);
+        assert!(g.command(&dir, Command::Paste, Some("y = 3")).0);
+        assert!(!g.all_selected);
+        assert_eq!(g.model.to_text(), "y = 3");
+        assert_eq!(g.command(&dir, Command::Cut, None), (true, Some("y = 3".to_string())));
+        assert_eq!(g.model.to_text(), "");
+        assert!(!g.commands(Some("y = 1")).supports(Command::Cut));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -39,6 +39,12 @@ fn centre((x, y, w, h): (f32, f32, f32, f32)) -> (f32, f32) {
 }
 
 const CARD_W_PT: f32 = 540.0;
+
+/// The card's width in a window `w` px wide: `CARD_W_PT`, or what a narrower window leaves inside the sheet padding
+/// on both sides, so the card and its Cancel and confirm buttons never reach the window's edges.
+fn card_w(ui: &Ui, w: i32) -> f32 {
+    ui.pt(CARD_W_PT).min(w as f32 - 2.0 * ui.pt(bifrost_ui::sheet::SHEET_PAD_PT))
+}
 const CARD_H_PT: f32 = 164.0;
 const BAR_PT: f32 = 76.0;
 const BUTTON_W_PT: f32 = 120.0;
@@ -207,7 +213,7 @@ impl Sheet {
 
     /// Opens at `t` with the keyboard sliding in.
     pub fn new(ui: &Ui, ssid: String, w: i32, t: f64) -> Self {
-        let prompt = ui.fit(&format!("Enter the password for “{ssid}”"), 13.0, ui.pt(CARD_W_PT - 40.0));
+        let prompt = ui.fit(&format!("Enter the password for “{ssid}”"), 13.0, card_w(ui, w) - ui.pt(40.0));
         let mut keyboard = Keyboard::new(w as f32, ui.s, false);
         keyboard.appear(t);
         Sheet {
@@ -228,7 +234,7 @@ impl Sheet {
     /// A one-field prompt (`forms::Prompt`): its title, message, field label and button replace the password sheet's.
     pub fn form(ui: &Ui, w: i32, t: f64, p: super::forms::Prompt) -> Self {
         let mut sh = Sheet::new(ui, String::new(), w, t);
-        let message = ui.fit(&p.message, 13.0, ui.pt(CARD_W_PT - 40.0));
+        let message = ui.fit(&p.message, 13.0, card_w(ui, w) - ui.pt(40.0));
         sh.field = TextField::new(ui, "", 17.0, p.secure, p.max);
         sh.field.set_text(ui, &p.initial);
         sh.prompt = ui.text(&message, 13.0, Weight::Semibold, LABEL.now());
@@ -505,7 +511,7 @@ impl Sheet {
     /// The card, centred in the space above the keyboard. When the sheet
     /// is taller than that, it rises until the focused row clears the keyboard.
     fn card(&self, ui: &Ui, w: i32, h: i32) -> (f32, f32, f32, f32) {
-        let (cw, ch) = (ui.pt(CARD_W_PT), self.card_h(ui));
+        let (cw, ch) = (card_w(ui, w), self.card_h(ui));
         let (top, bottom) = (ui.pt(24.0), self.keyboard_top(ui, h).unwrap_or(h as f32));
         let mut y = (top + (bottom - top - ch) / 2.0).round();
         if let Some(o) = &self.other {
@@ -744,6 +750,28 @@ mod tests {
         let mut buf = vec![0u32; 1200 * 1920];
         sh.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 1200, 1920, 100.0);
         assert!(fy > 0.0);
+    }
+
+    /// E2E 0.10.46: in a Settings window narrower than the card, the Computer Name prompt ran past the window, so its
+    /// Cancel and Done sat on the window's edges.
+    #[test]
+    fn a_prompt_in_a_narrow_window_keeps_the_sheet_padding_around_its_buttons() {
+        let ui = ui();
+        let pad = ui.pt(bifrost_ui::sheet::SHEET_PAD_PT);
+        let prompt = || super::super::forms::Prompt::computer_name("-=Lab=-");
+        let (w, h) = (ui.pt(CARD_W_PT - 100.0) as i32, 1920);
+        let sh = Sheet::form(&ui, w, 0.0, prompt());
+        let (cx, _, _, _) = sh.cancel_rect(&ui, w, h);
+        let (jx, _, jw, _) = sh.join_rect(&ui, w, h);
+        assert!(cx >= pad - 0.5, "Cancel starts {cx} px in, inside the {pad} px padding");
+        assert!(jx + jw <= w as f32 - pad + 0.5, "Done ends at {} of {w} px", jx + jw);
+        let (fx, _, fw, _) = sh.field_rect(&ui, w, h);
+        assert!(fx > cx && fx + fw < jx + jw, "the field stays inside the card");
+        // a window with room keeps the card's own width, centred
+        let wide = Sheet::form(&ui, 1200, 0.0, prompt());
+        let (x, _, cw, _) = wide.card(&ui, 1200, 1920);
+        assert_eq!(cw, ui.pt(CARD_W_PT));
+        assert_eq!(x, (1200.0 - cw) / 2.0);
     }
 
     // Auto-repeat of a held key belongs to the keyboard app: `holding_backspace_repeats_after_a_delay` in apps/keyboard.

@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.17.0
+
+- Upstream deckcraft v0.17.0.
+  ## What's Changed
+  * Reject invalid index in shape.adjust and shape.quickStyle by @Silvertree2010 in https://github.com/storytold/deckcraft/pull/1934
+  * deckcraft-web: window.deckcraft, the page command API from craft-web-api by @helenkwok in https://github.com/storytold/deckcraft/pull/1932
+  * Fix format.paragraph silently left-aligning known align names by @Silvertree2010 in https://github.com/storytold/deckcraft/pull/1950
+  * Accessibility: name ribbon drop-downs by purpose and expose the shown text as their value (#1956) by @Naseq in https://github.com/storytold/deckcraft/pull/1963
+
 ## 0.16.0
 
 - Upstream deckcraft v0.16.0.

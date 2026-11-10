@@ -14,6 +14,10 @@
 //!   and device checks. The service validates and plans; it does not run the commands yet (they need the privileged
 //!   helper, which still has to be tried on Midget with a real USB disk).
 //! - `claim` / `unclaim` `{bsd_name}` -> `{ok}`: exclusive use of a disk for the calling app.
+//! - `attach_image` `{path, read_only?}` / `detach_image` `{target}` -> `{started}`: mounts a disk image of the account
+//!   or releases one (`shell::disk_image`). These two also answer an app with the `storage` permission (Files). The
+//!   work runs on a thread; the outcome comes to the calling app as `image_attached` / `image_detached`
+//!   `{ok, path|target, device, mount_point, error}`.
 //!
 //! Events (to every app, from `bifrost_core::disk_wire`): `disk_appeared`, `disk_disappeared`,
 //! `disk_description_changed`.
@@ -55,6 +59,8 @@ pub struct Disks {
     dev: PathBuf,
     /// the probes running for arrived disks: each sends the disk's label and a verdict per volume
     probes: Vec<Receiver<(String, Vec<(String, Verdict)>)>>,
+    /// the disk image attach and detach requests still running
+    images: crate::shell::disk_image::Jobs,
 }
 
 impl Default for Disks {
@@ -76,6 +82,7 @@ impl Disks {
             arrivals: Vec::new(),
             dev: PathBuf::from("/dev"),
             probes: Vec::new(),
+            images: Default::default(),
         }
     }
 
@@ -184,6 +191,14 @@ impl SystemService for Disks {
     }
 
     fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+        // an app that already reads and writes the whole home folder (Files) may have one of the account's disk images
+        // mounted or released: privd checks the image itself, and the answer shows nothing of the other disks
+        if crate::shell::disk_image::Jobs::handles(method) {
+            if !super::app_has_permission(app_id, "storage") {
+                super::require_system_app(app_id, disk_wire::SERVICE)?;
+            }
+            return self.images.start(app_id, method, params);
+        }
         // volumes, labels and mount points are information the sandbox hides, and a claim locks a disk against Disk
         // Utility: the service answers system apps only
         super::require_system_app(app_id, disk_wire::SERVICE)?;
@@ -194,11 +209,14 @@ impl SystemService for Disks {
     }
 
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
+        // a finished disk image request goes to the app that asked, on the tick it ends
+        let ended = self.images.finished();
+        let mut events: Vec<Event> = ended.into_iter().map(|(app, event, body)| Event { app: Some(app), event: event.to_string(), body }).collect();
         if t < self.next_scan {
-            return Vec::new();
+            return events;
         }
         self.next_scan = t + SCAN_EVERY_MS;
-        let events = self.rescan();
+        events.extend(self.rescan());
         // a claim does not outlive its app: a quit app would otherwise lock the disk against Disk Utility until restart
         for owner in self.session.claim_owners() {
             let running = crate::shell::apphost::slot_of(&owner).is_some_and(|slot| matches!(shell.ext.get(slot), Some(Some(_))));

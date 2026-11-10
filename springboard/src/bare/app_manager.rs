@@ -3,7 +3,7 @@ use std::{
     fs, io,
     os::fd::AsRawFd,
     os::unix::process::CommandExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
     sync::{Mutex, OnceLock},
 };
@@ -27,6 +27,39 @@ fn stats(text: &str) -> String {
     format!("{{{}}}", fields.join(","))
 }
 const ROOT: &str = "/sys/fs/cgroup/bifrost-apps";
+/// The cgroup v2 mount, the parent of `ROOT`.
+const MOUNT: &str = "/sys/fs/cgroup";
+/// The controllers every app group is given limits in.
+const CONTROLLERS: &str = "+cpu +memory +pids";
+/// An I/O error with the step that failed in front, same kind: "No such file or directory" alone does not say which
+/// of the files a launch touches was missing.
+fn step(what: impl std::fmt::Display, e: io::Error) -> io::Error {
+    io::Error::new(e.kind(), format!("{what}: {e}"))
+}
+/// Hands `CONTROLLERS` to the children of the group at `dir`.
+fn enable_controllers(dir: &Path) -> io::Result<()> {
+    fs::write(dir.join("cgroup.subtree_control"), CONTROLLERS)
+        .map_err(|e| step(format_args!("enable cpu, memory and pids below {}", dir.display()), e))
+}
+/// Makes the app subtree under the cgroup mount `mount` and sets its limits; returns its path.
+///
+/// The mount's own `cgroup.subtree_control` comes first. A group can hand its children only the controllers its
+/// parent handed it, and the service manager turns a controller on at the top only once one of its units needs it:
+/// memory and pids from the start, cpu not until a unit asks for it (a user manager started by a remote login, for
+/// example). Early in a boot the app subtree therefore had no cpu controller, the write below failed with "No such
+/// file or directory" (the kernel's answer for a controller the parent does not offer) and no app could start. The
+/// shell is root and owns this policy, so it asks for the three controllers itself. A failure here is not fatal: when
+/// they are already on, the app subtree's own write succeeds, and when they are not it fails with its step named.
+fn prepare_root(mount: &Path, total: u64) -> io::Result<PathBuf> {
+    let _ = enable_controllers(mount);
+    let root = mount.join("bifrost-apps");
+    fs::create_dir_all(&root).map_err(|e| step(format_args!("create {}", root.display()), e))?;
+    for (name, value) in [("memory.high", total * 3 / 4), ("memory.max", total * 9 / 10)] {
+        fs::write(root.join(name), value.to_string()).map_err(|e| step(format_args!("write {}", root.join(name).display()), e))?;
+    }
+    enable_controllers(&root)?;
+    Ok(root)
+}
 static GROUPS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// The resource file is only written while someone reads it (`want_resources`): idle means no 5 s timer.
 static EPOCH: OnceLock<std::time::Instant> = OnceLock::new();
@@ -122,21 +155,8 @@ fn budgets(total: u64, focused: bool) -> (u64, u64) {
 /// Prepare before fork; attach before executing any app code or spawning children.
 pub fn configure(cmd: &mut Command, id: &str) -> io::Result<()> {
     let path = group(id)?;
-    fs::create_dir_all(ROOT)?;
-    let total = ram();
-    fs::write(
-        PathBuf::from(ROOT).join("memory.high"),
-        (total * 3 / 4).to_string(),
-    )?;
-    fs::write(
-        PathBuf::from(ROOT).join("memory.max"),
-        (total * 9 / 10).to_string(),
-    )?;
-    fs::write(
-        PathBuf::from(ROOT).join("cgroup.subtree_control"),
-        "+cpu +memory +pids",
-    )?;
-    fs::create_dir_all(&path)?;
+    prepare_root(Path::new(MOUNT), ram())?;
+    fs::create_dir_all(&path).map_err(|e| step(format_args!("create {}", path.display()), e))?;
     let (high, max) = budgets(ram(), true);
     for (name, value) in [
         ("memory.high", high.to_string()),
@@ -145,11 +165,12 @@ pub fn configure(cmd: &mut Command, id: &str) -> io::Result<()> {
         ("pids.max", "4096".into()),
         ("cpu.weight", "100".into()),
     ] {
-        fs::write(path.join(name), value)?;
+        fs::write(path.join(name), value).map_err(|e| step(format_args!("write {}", path.join(name).display()), e))?;
     }
     let procs = fs::OpenOptions::new()
         .write(true)
-        .open(path.join("cgroup.procs"))?;
+        .open(path.join("cgroup.procs"))
+        .map_err(|e| step(format_args!("open {}", path.join("cgroup.procs").display()), e))?;
     // SAFETY: getpid/write and stack-only decimal conversion; no allocation after fork.
     unsafe {
         cmd.pre_exec(move || {
@@ -195,6 +216,27 @@ pub fn terminate(id: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn the_app_subtree_is_given_its_controllers_from_the_top_down() {
+        let mount = std::env::temp_dir().join(format!("app-manager-cgroup-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&mount);
+        fs::create_dir_all(&mount).unwrap();
+        let root = prepare_root(&mount, 8 << 30).unwrap();
+        assert_eq!(root, mount.join("bifrost-apps"));
+        // the mount hands the controllers to the app subtree, which hands them to each app's group
+        assert_eq!(fs::read_to_string(mount.join("cgroup.subtree_control")).unwrap(), "+cpu +memory +pids");
+        assert_eq!(fs::read_to_string(root.join("cgroup.subtree_control")).unwrap(), "+cpu +memory +pids");
+        assert_eq!(fs::read_to_string(root.join("memory.high")).unwrap(), (6u64 << 30).to_string());
+        let _ = fs::remove_dir_all(&mount);
+    }
+    #[test]
+    fn a_failed_step_is_named_and_keeps_its_kind() {
+        // no such mount: the error says which file, not only "No such file or directory"
+        let missing = Path::new("/nonexistent-cgroup-mount/x");
+        let e = enable_controllers(missing).unwrap_err();
+        assert_eq!(e.kind(), io::ErrorKind::NotFound);
+        assert!(e.to_string().starts_with("enable cpu, memory and pids below /nonexistent-cgroup-mount/x: "), "{e}");
+    }
     #[test]
     fn app_manager_identity() {
         assert!(group("is.olibuijr.files.desktop").is_ok());

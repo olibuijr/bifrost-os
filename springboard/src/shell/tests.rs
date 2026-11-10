@@ -2706,6 +2706,48 @@
         assert!(sh.is_locked(), "back to the lock screen underneath");
     }
 
+    /// Security (0.10.46): with Require Password after a minute, a Clock timer that fired on a dark display woke it
+    /// onto the unlocked session. Nobody at the machine caused that wake, so it lands on the lock screen whether the
+    /// grace is still running or over, and the alert still rings and shows there.
+    #[test]
+    fn a_timer_wake_during_or_after_the_password_grace_lands_on_the_lock_screen() {
+        for (i, later) in [5_000.0, 61_000.0, 120_000.0].into_iter().enumerate() {
+            let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-clock-grace-wake").join(format!("{}-{i}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("clock.ini").to_string_lossy().into_owned();
+            let mut sh = shell();
+            sh.prefs.set("lock_grace_seconds", "60").unwrap();
+            unlock(&mut sh);
+            sh.set_wall(1_000_000, 0, 1000.0);
+            sh.clock.load(&path, 1000.0);
+            assert!(sh.clock.start_timer("", later as i64 + 100, 1900.0).is_some());
+            sh.tick(1950.0);
+            assert_eq!(sh.event(Event::Power, 2000.0), vec![Effect::ScreenOff]);
+            assert!(!sh.screen_on() && !sh.is_locked(), "with a grace the dark screen is not locked yet");
+            let fx = sh.tick(2000.0 + later);
+            assert!(fx.contains(&Effect::Alarm) && fx.contains(&Effect::ScreenOn), "the timer rings and wakes the display: {fx:?}");
+            assert!(sh.screen_on() && sh.is_locked(), "a timer never shows the session unlocked ({later} ms after the display went off)");
+            assert!(sh.clock.alert().is_some() && sh.clock_takeover(), "the alert is up over the lock screen");
+        }
+    }
+
+    /// The person's own wake keeps the grace: inside it the session returns, after it the screen is locked.
+    #[test]
+    fn a_wake_the_person_caused_keeps_the_password_grace() {
+        for ev in [Event::Power, Event::Wake] {
+            let mut sh = shell();
+            sh.prefs.set("lock_grace_seconds", "60").unwrap();
+            unlock(&mut sh);
+            sh.event(Event::Power, 2000.0);
+            assert_eq!(sh.event(ev, 5000.0), vec![Effect::ScreenOn]);
+            assert!(sh.screen_on() && !sh.is_locked(), "three seconds are inside the grace");
+            sh.event(Event::Power, 6000.0);
+            assert_eq!(sh.event(ev, 70_000.0), vec![Effect::ScreenOn]);
+            assert!(sh.is_locked(), "over a minute is past the grace");
+        }
+    }
+
     /// E2E N6: the full-screen alert paints the whole frame, so the frame after Stop repaints the whole desktop, not
     /// only the regions the desktop's partial frame would clear (the desktop stayed black but for the Stop strip).
     #[test]

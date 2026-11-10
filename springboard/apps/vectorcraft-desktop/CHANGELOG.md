@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.23.0
+
+- Upstream vectorcraft v0.23.0.
+  ## What's Changed
+  * Path booleans: check the windings against the operands' areas and resolve the operands when they don't add up (#5478) by @mockydevs in https://github.com/storytold/vectorcraft/pull/5917
+  * Drop Shadow: a swatch beside Color opens the Color Picker (#5364) by @mockydevs in https://github.com/storytold/vectorcraft/pull/5918
+  * Find and Replace: type inside a locked or hidden group is left alone (#5900) by @Hamza0101 in https://github.com/storytold/vectorcraft/pull/5921
+  * Find Whole Word: a change of style inside a word is not a word boundary (#5901) by @Hamza0101 in https://github.com/storytold/vectorcraft/pull/5922
+
 ## 0.22.0
 
 - Upstream vectorcraft v0.22.0.
