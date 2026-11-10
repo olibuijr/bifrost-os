@@ -7,7 +7,8 @@
 use crate::model::{self, fit_box, Adjust, Mark};
 use crate::pdfjob::{self, Inbox, Job, Jobs, Key, Opened, Outline, Reply, DOCUMENT_RENDER_BOUNDS};
 use bifrost_app::image_filter::{Filter, FilterChain};
-use bifrost_app::image_source::ImageSource;
+use bifrost_app::image_source::{ImageSource, SourceError};
+use bifrost_app::kit::cg::imageio;
 use bifrost_app::kit::Image;
 use std::cell::RefCell;
 use crate::forms::{FormWidget, Kind};
@@ -342,10 +343,14 @@ impl Document {
     }
 }
 
-/// Decodes the bytes of a picture file.
+/// Decodes the bytes of a picture file. An SVG document is not one of the raster formats `ImageSource` reads from a
+/// header, so it is drawn at its own size by the decoder every other picture view uses (`imageio::decode`).
 pub fn decode_picture(bytes: &[u8]) -> Result<Image, String> {
-    let source = ImageSource::new(bytes).map_err(|e| format!("{e:?}"))?;
-    source.decode().map_err(|e| format!("{e:?}"))
+    match ImageSource::new(bytes) {
+        Ok(source) => source.decode().map_err(|e| format!("{e:?}")),
+        Err(SourceError::NotImage) => imageio::decode(bytes).ok_or_else(|| format!("{:?}", SourceError::NotImage)),
+        Err(e) => Err(format!("{e:?}")),
+    }
 }
 
 /// The file name a picture taken from the clipboard is kept under: `Clipboard <stamp>.png`, or `.jpg` for JPEG data.
@@ -480,6 +485,15 @@ mod tests {
     fn picture_doc(w: usize, h: usize) -> Document {
         let img = Image { w, h, px: vec![0; w * h] };
         Document::new(Path::new("/a/b.png"), Path::new("/nonexistent"), vec![(w, h)], Source::Picture(Rc::new(img)), Vec::new(), false)
+    }
+
+    #[test]
+    fn an_svg_document_opens_as_a_picture_of_its_own_size() {
+        let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" width="6" height="4"><rect width="6" height="4" fill="#ff0000"/></svg>"##;
+        let img = decode_picture(svg).expect("the manifest declares SVG, so it opens");
+        assert_eq!((img.w, img.h), (6, 4));
+        assert!(img.px.iter().any(|p| *p != 0), "the rectangle is drawn");
+        assert!(decode_picture(b"plain text, not a picture").is_err());
     }
 
     #[test]
