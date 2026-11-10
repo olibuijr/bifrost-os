@@ -16,6 +16,7 @@ use bifrost_app::quicksearch::{CSSearchableIndex, CSSearchableItem, CSSearchable
 use bifrost_app::proto::GrantId;
 use bifrost_app::{Ctx, DocumentEvent};
 use springboard::shell::disk_image;
+use springboard::shell::volume_eject;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
@@ -41,8 +42,12 @@ pub(crate) enum Effect {
     /// brings the folder to show, or why it failed.
     AttachImage(PathBuf),
     /// Eject on a disk image volume: the shell unmounts it and releases its loop device (`disks` `detach_image`).
-    /// The loop device and the volume's name.
+    /// Every volume of the image goes with it. The volume's device (the loop device or a partition of it) and name.
     DetachImage(String, String),
+    /// Eject on a removable volume (a USB stick): the shell unmounts it and powers its disk off (`disks`
+    /// `eject_volume`). The sandbox has no system bus and no device nodes, so the app cannot do it itself. The
+    /// volume's partition and name.
+    EjectVolume(String, String),
     /// Space: show the preview panel for these paths, starting at the index.
     ShowPreview(Vec<PathBuf>, usize),
     /// Space again: hide the preview panel.
@@ -196,7 +201,7 @@ pub(crate) enum Waiting {
     Paste(PathBuf, bool),
     /// The shell's answer to opening this disk image (the outcome itself comes as an event).
     ImageAttach(PathBuf),
-    /// The shell's answer to ejecting the disk image volume of this name.
+    /// The shell's answer to ejecting the volume of this name (a disk image's or a removable disk's).
     ImageDetach(String),
     /// The Open With panel's reply, for the file at this path.
     OpenWith(PathBuf),
@@ -235,6 +240,10 @@ impl SystemState {
                 }
                 Effect::DetachImage(device, name) => {
                     let id = bifrost_app::service::call(ctx, bifrost_core::disk_wire::SERVICE, disk_image::M_DETACH, &one_field("target", &device));
+                    self.wait(id, Waiting::ImageDetach(name));
+                }
+                Effect::EjectVolume(device, name) => {
+                    let id = bifrost_app::service::call(ctx, bifrost_core::disk_wire::SERVICE, volume_eject::M_EJECT, &one_field("target", &device));
                     self.wait(id, Waiting::ImageDetach(name));
                 }
                 Effect::ShowPreview(paths, index) => {
@@ -409,6 +418,16 @@ pub(crate) fn move_plan(plan: Option<(Op, Vec<PathBuf>)>) -> Option<(Op, Vec<Pat
     plan.map(|(_, paths)| (Op::Move, paths))
 }
 
+/// The request that ejects the volume `name` on `device`, the device its sidebar row carries. A disk image's volume
+/// (a loop device or a partition of one) is released with its image; every other volume is a removable disk's, which
+/// the shell unmounts and powers off. Both go to the shell: nothing is ejected from inside the sandbox.
+pub(crate) fn eject_effect(device: &str, name: &str) -> Effect {
+    match disk_image::image_device_of(device) {
+        Some(_) => Effect::DetachImage(device.to_string(), name.to_string()),
+        None => Effect::EjectVolume(device.to_string(), name.to_string()),
+    }
+}
+
 /// The line shown when the disk image `name` could not be opened: the first line of `error` says why. It is kept
 /// short, the name first and the reason right after it, because the status bar shows one line.
 pub(crate) fn image_notice(name: &str, error: &str) -> String {
@@ -520,8 +539,9 @@ impl Files {
         true
     }
 
-    /// The shell finished opening or ejecting a disk image (`disks` events `image_attached`, `image_detached`). An
-    /// opened image's volume is shown in this window; every failure becomes a notice naming the image or the volume.
+    /// The shell finished opening or ejecting a disk image, or ejecting a removable volume (`disks` events
+    /// `image_attached`, `image_detached`, `volume_ejected`). An opened image's volume is shown in this window; every
+    /// failure becomes a notice naming the image or the volume.
     pub(crate) fn image_event(&mut self, event: &str, body: &bifrost_core::json::Json) -> bool {
         let ok = body.get("ok") == Some(&bifrost_core::json::Json::Bool(true));
         let error = body.str_field("error").unwrap_or_default();
@@ -534,8 +554,8 @@ impl Files {
                     None => self.notice = Some(image_notice(&name, &error)),
                 }
             }
-            disk_image::E_DETACHED if ok => {}
-            disk_image::E_DETACHED => {
+            disk_image::E_DETACHED | volume_eject::E_EJECTED if ok => {}
+            disk_image::E_DETACHED | volume_eject::E_EJECTED => {
                 let target = body.str_field("target").unwrap_or_default();
                 let name = self.places().into_iter().find(|p| p.eject.as_deref() == Some(target.as_str())).map(|p| p.label).unwrap_or(target);
                 self.notice = Some(springboard::files::volumes::eject_notice(&name, &error, &[]));
@@ -915,6 +935,53 @@ mod tests {
             .collect();
         let call = |method: &str, body: &str| ("disks".to_string(), method.to_string(), body.to_string());
         assert_eq!(calls, vec![call("attach_image", r#"{"path":"/home/u/t.img"}"#), call("detach_image", r#"{"target":"/dev/loop0"}"#)]);
+    }
+
+    #[test]
+    fn every_eject_goes_to_the_shell_and_only_an_image_volume_to_detach_image() {
+        // a disk image's volume: its loop device, or a partition of a partitioned image
+        assert_eq!(eject_effect("/dev/loop0", "T"), Effect::DetachImage("/dev/loop0".into(), "T".into()));
+        assert_eq!(eject_effect("/dev/loop3p2", "card 2"), Effect::DetachImage("/dev/loop3p2".into(), "card 2".into()));
+        // a removable disk's volume is never sent to detach_image
+        for device in ["/dev/sdb1", "/dev/sdb", "/dev/nvme0n1p2", "/dev/mmcblk0p1"] {
+            assert_eq!(eject_effect(device, "Stick"), Effect::EjectVolume(device.into(), "Stick".into()), "{device}");
+        }
+        let ctx = test_ctx();
+        let mut sys = SystemState::default();
+        sys.effects.push(eject_effect("/dev/sdb1", "Stick"));
+        sys.effects.push(eject_effect("/dev/loop3p2", "card 2"));
+        sys.flush(&ctx);
+        let calls: Vec<(String, String, String)> = ctx
+            .take_sent()
+            .into_iter()
+            .filter_map(|m| match m {
+                ToShell::ServiceCall { service, method, body, .. } => Some((service, method, body)),
+                _ => None,
+            })
+            .collect();
+        let call = |method: &str, body: &str| ("disks".to_string(), method.to_string(), body.to_string());
+        assert_eq!(calls, vec![call("eject_volume", r#"{"target":"/dev/sdb1"}"#), call("detach_image", r#"{"target":"/dev/loop3p2"}"#)]);
+    }
+
+    #[test]
+    fn a_removable_volume_that_does_not_eject_says_why() {
+        use bifrost_core::json::parse;
+        let mut f = crate::tests::fixture(vec![]);
+        // the shell refuses the call outright
+        f.sys.wait(9, Waiting::ImageDetach("Stick".into()));
+        assert!(f.service_answer(9, &Err("the volume's device is needed".into())));
+        assert_eq!(f.notice.as_deref(), Some("\u{201c}Stick\u{201d} could not be ejected: the volume's device is needed"));
+        // the unmount fails: the shell's reason is shown
+        f.notice = None;
+        let busy = parse(r#"{"target":"/dev/sdb1","ok":false,"error":"In use by vlc. Close it and try again."}"#).unwrap();
+        assert!(f.image_event(volume_eject::E_EJECTED, &busy));
+        assert_eq!(f.notice.as_deref(), Some("\u{201c}/dev/sdb1\u{201d} could not be ejected: In use by vlc. Close it and try again."));
+        // an eject that worked leaves no notice and redraws the sidebar
+        f.notice = None;
+        let gone = parse(r#"{"target":"/dev/sdb1","ok":true,"device":"/dev/sdb1","powered_off":"true"}"#).unwrap();
+        let before = f.revision;
+        assert!(f.image_event(volume_eject::E_EJECTED, &gone));
+        assert_eq!((f.notice.clone(), f.revision > before), (None, true));
     }
 
     #[test]
