@@ -37,5 +37,5 @@ carry the launcher and association, and browser updates stay independent. Files 
 ## CLI
 
 `bifrost pc midget` (`tools/midget.py`): `context X Y`, `hover X Y`, `open-app ID`, `open-url URL`, `open-folder ID PATH`,
-`show-in-files PATH`, `state`. Store apps open by their installed slot, and a window closes when its app exits. The state
+`open-file ID PATH`, `show-in-files PATH`, `state`. Store apps open by their installed slot, and a window closes when its app exits. The state
 output includes dock choices and visibility, the current menu and the CPU and memory percentages.

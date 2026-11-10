@@ -15,9 +15,6 @@ use bifrost_ui::services_menu::{self as menu, Route, Selection, Service};
 use std::path::Path;
 use std::time::Duration;
 
-/// The Files app, which shows folders (Show in Files).
-const FILES_APP: &str = "is.olibuijr.files.desktop";
-
 /// How long an intent waits for its app's control socket after the app opens.
 const INTENT_WAIT: Duration = Duration::from_secs(8);
 
@@ -207,9 +204,9 @@ impl Shell {
                 let folder = reveal_folder(&path);
                 self.open_terminal_at(Path::new(&folder), t)
             }
+            // a folder is shown itself; a file is shown selected in the folder that holds it
             Route::Reveal(path) => {
-                let folder = reveal_folder(&path);
-                if let Err(e) = self.desktop_open_folder(FILES_APP, &folder, t) {
+                if let Err(e) = self.desktop_show_in_files(Path::new(&path), t) {
                     eprintln!("services: {e}");
                 }
             }

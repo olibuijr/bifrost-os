@@ -95,7 +95,7 @@ Gotchas: the lab key only works on the live (lab ISO) system; the installed syst
 | `update [--restart]` | `bifrost-update-guard install` (stages the package transaction), then `apply` with `--restart` |
 | `recovery`, `apps`, `mem`, `idle LABEL` | `bifrost-update-guard status`; `/run/bifrost/app-resources.json` ([app-manager.md](app-manager.md)); process-tree PSS; idle CPU per process |
 | `shot`, `click`, `type`, `key`, `move`, `drag`, `scroll`, `seq` | computer use: look at a screenshot, act at its pixels with a real keyboard and pointer (below) |
-| `open-app ID`, `open-url URL`, `open-folder ID PATH`, `show-in-files PATH`, `context X Y`, `hover X Y`, `tap`, `swipe`, `tap-window`, `key`, `trace on\|off`, `appearance`, `wallpaper` | input and shell commands (below) |
+| `open-app ID`, `open-url URL`, `open-folder ID PATH`, `open-file ID PATH`, `show-in-files PATH`, `context X Y`, `hover X Y`, `tap`, `swipe`, `tap-window`, `key`, `trace on\|off`, `appearance`, `wallpaper` | input and shell commands (below) |
 | `login-bypass on\|off` | root touches or removes `/etc/bifrost/no-login`; with it on the login window accepts an empty password. Recovery only, turn it off again |
 | `labboot on\|off` | UEFI BootOrder with PXE first (a reset always lands in the live lab ISO) or the disk first |
 | `wipe`, `qa-install`, `reinstall`, `follow` | reinstall paths (see "Reinstall Midget autonomously") |
@@ -463,7 +463,8 @@ CLI (wraps `tools/app-control.py`):
 | One call | `bifrost pc control call is.olibuijr.notes.desktop notes.list '{"query":"milk"}'` |
 
 Text control socket (`/run/bifrost/shell-control.sock`, the shell, not an app): `open-app ID`, `open-url URL`, and
-since 0.4.47 `open-folder ID /absolute/folder` (see Show in Files above).
+since 0.4.47 `open-folder ID /absolute/folder`, and `reveal-file ID /absolute/file` and `open-file ID /absolute/file`
+(see Show in Files and Open a file in an app above).
 
 **Who may use it.** The shell's control socket is a Unix socket at `/run/bifrost/shell-control.sock` (mode 0600, owned by the installed account), not a TCP port. The kernel reports each peer's uid (`SO_PEERCRED`); only root and the account the window server runs as are served, any other uid is refused and logged once. Sandboxed apps mount a fresh `/run` and cannot see the path. `SPRINGBOARD_CONTROL_SOCKET` (an absolute path) overrides the path for emulators and tests. Lab tools reach it over ssh as root: `tools/midget.py` runs a one-line `python3` with `AF_UNIX` on the
 remote side (`control_script`), and `bifrost pc midget control|state|tap-window|ax|press|wait` all go through it. Nothing listens on
@@ -507,13 +508,33 @@ Show in Files: another app or a script asks for a folder to open in Files.
 - Limits: the control line is 512 bytes, so the folder path must be shorter than about 470
   bytes; a folder path with a newline is refused.
 - The helper shows folders only: given a file, `bifrost-apps --open <file>` opens the file with its
-  default application (`gio open`), which fails for a type that has none. It is not a reveal.
-- CLI: `python3 tools/midget.py show-in-files <absolute file or folder>` sends the `open-folder`
-  line itself (as root over ssh, no helper and no default-application lookup): a folder opens in
-  Files, a file of any type opens the folder that holds it. The file is not selected, because the
-  request (`open-request`) carries a folder only and Files has no request that selects an item.
+  default application (`gio open`), which fails for a type that has none. It is not a reveal (see `reveal-file` below).
+- Show a file: `reveal-file is.olibuijr.files.desktop <absolute file>` on the same socket opens the folder that
+  holds the file, selects the file and scrolls it into view (icon and list views; the columns and gallery views do
+  not scroll). Shell: `desktop_reveal_file` writes the folder as `open-request` and the item's name beside it as
+  `open-select` (`handoff::write_reveal`); Files takes both (`handoff::take_request`, `Files::show_request`) and
+  selects the item once the folder is listed. A Files app from before `open-select` opens the folder only, and
+  `open-folder` with a folder works as before and selects nothing. A file whose name starts with a dot is selected
+  only when Files shows hidden files. The shell's own Show in Files (the Services menu, an app's Show in Files, the
+  Downloads stack) uses the same request for a file.
+- CLI: `python3 tools/midget.py show-in-files <absolute file or folder>` sends the line itself (as root over ssh,
+  no helper and no default-application lookup): a folder opens in Files (`open-folder`), a file of any type is
+  shown selected in the folder that holds it (`reveal-file`). On a shell from before `reveal-file` it falls back to
+  `open-folder` and says the file is not selected.
   `python3 tools/midget.py open-folder is.olibuijr.files.desktop <folder>` is the same line for a
-  folder that is known to exist.
+  folder that is known to exist. On the machine, `open -R <file>` sends `reveal-file` too.
+
+Open a file in an app: `open-file <app id> <absolute file>` on the shell's control socket.
+- Shell: `desktop_open_file` (`springboard/src/shell/desk.rs`) checks the app ID and the path
+  (`workspace::check_open_file`: an absolute path to an existing file, no `..` step), that the app is one a person
+  launches, and that the file passes the malware check (a file that would ask or be refused is not opened; open it
+  from Files). It then hands the file over as the Downloads stack and Files' Open With do (`open_path_with`): an
+  installed app comes up and receives the file as a granted document, a built-in app opens it itself. The file must
+  be in the account's home folder, where document grants live.
+- On the machine: `open -a <app id> <file>...` (and `open -e <file>`, `open -t <file>` for the text editor) sends one
+  `open-file` line per file. `open <file>` without an app is still refused: there is no request yet that picks the
+  default app.
+- From the lab: `python3 tools/midget.py open-file is.olibuijr.textedit.desktop /home/<account>/notes.txt`.
 
 ## Releases and the test machine (2026-10-08)
 

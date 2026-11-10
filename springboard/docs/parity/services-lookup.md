@@ -62,9 +62,10 @@ Look Up popover with dictionary and quick search results on Ctrl+Cmd+D and three
 
 ### Show in Files
 
-- BifrOSt path: `Route::Reveal` takes the first file path; the shell shows the folder itself when it is a folder, else
-  the folder that holds the file (`reveal_folder`), through `desktop_open_folder` for `is.olibuijr.files.desktop`.
-- Needs Midget: Files opens at the folder.
+- BifrOSt path: `Route::Reveal` takes the first file path; the shell shows the folder itself when it is a folder
+  (`desktop_open_folder`), else the folder that holds the file with the file selected (`desktop_reveal_file`), both
+  through `desktop_show_in_files` for `is.olibuijr.files.desktop`.
+- Needs Midget: Files opens at the folder with the file selected.
 
 ### Ctrl+Cmd+D (Look Up)
 

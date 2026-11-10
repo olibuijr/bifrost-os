@@ -1,12 +1,14 @@
-//! `open`: opens folders, URLs and apps with the desktop's own handlers. The shell does the work over its control socket,
-//! the same channel `bifrost-open-url` uses: `open-app <id>` starts an installed app, `open-folder <id> <path>` shows a
-//! folder in Files, and `open-url <url>` routes a link by its scheme. The shell answers `ok` or `error: <why>`.
+//! `open`: opens folders, files, URLs and apps with the desktop's own handlers. The shell does the work over its control
+//! socket, the same channel `bifrost-open-url` uses: `open-app <id>` starts an installed app, `open-folder <id> <path>`
+//! shows a folder in Files, `reveal-file <id> <path>` shows a file selected in its folder, `open-file <id> <path>` opens
+//! a file in an app, and `open-url <url>` routes a link by its scheme. The shell answers `ok` or `error: <why>`.
 //!
-//! Supported: `-a`/`-b` (an installed app id, with no operands), `-e`/`-t` (the text editor, with no operands), `-R` (show
-//! a file's folder in Files), `-u` (URL operands), URL operands, `file://` URLs, and folder operands (shown in Files).
-//! Refused with a message rather than run wrongly: an ordinary file opened with its default app, any file passed to an
-//! app, and the options `-W -n -g -j -F -f -h -s --arch --env --stdin --stdout --stderr --args`. The shell has no request
-//! for a file yet, so those wait on one.
+//! Supported: `-a`/`-b` (an installed app id, alone or with files to open in it), `-e`/`-t` (the text editor, alone or
+//! with files), `-R` (show a file selected in its folder in Files), `-u` (URL operands), URL operands, `file://` URLs,
+//! and folder operands (shown in Files).
+//! Refused with a message rather than run wrongly: an ordinary file opened with its default app (the shell has no
+//! request for that yet), a folder or a URL passed to an app, and the options
+//! `-W -n -g -j -F -f -h -s --arch --env --stdin --stdout --stderr --args`.
 
 use crate::control;
 use std::path::{Path, PathBuf};
@@ -77,6 +79,10 @@ pub enum Request {
     OpenApp(String),
     OpenUrl(String),
     OpenFolder { app: String, folder: PathBuf },
+    /// Show `file` selected in the folder that holds it.
+    RevealFile { app: String, file: PathBuf },
+    /// Open `file` in `app`, which receives it as a document.
+    OpenFile { app: String, file: PathBuf },
 }
 
 impl Request {
@@ -86,6 +92,8 @@ impl Request {
             Request::OpenApp(id) => format!("open-app {id}"),
             Request::OpenUrl(url) => format!("open-url {url}"),
             Request::OpenFolder { app, folder } => format!("open-folder {app} {}", folder.to_string_lossy()),
+            Request::RevealFile { app, file } => format!("reveal-file {app} {}", file.to_string_lossy()),
+            Request::OpenFile { app, file } => format!("open-file {app} {}", file.to_string_lossy()),
         }
     }
 }
@@ -96,14 +104,14 @@ pub fn plan(o: &Options) -> Result<Vec<Request>, String> {
         return Err("-e and -t cannot be combined with -a".into());
     }
     if o.app.is_some() || o.editor {
-        if !o.operands.is_empty() {
-            return Err("opening files with an app is not supported yet (the shell takes no file for an app)".into());
-        }
         if o.reveal || o.url {
             return Err("-R and -u need a file or a URL, not an app".into());
         }
         let app = o.app.clone().unwrap_or_else(|| TEXT_EDITOR_APP.to_string());
-        return Ok(vec![Request::OpenApp(app)]);
+        if o.operands.is_empty() {
+            return Ok(vec![Request::OpenApp(app)]);
+        }
+        return o.operands.iter().map(|op| plan_file_in_app(op, &app)).collect();
     }
     if o.operands.is_empty() {
         return Err(USAGE.to_string());
@@ -124,6 +132,20 @@ fn plan_operand(op: &str, o: &Options) -> Result<Request, String> {
     plan_path(Path::new(op), o)
 }
 
+/// `-a app file`: the file opens in the app. A folder goes to Files only; a URL is not a file.
+fn plan_file_in_app(op: &str, app: &str) -> Result<Request, String> {
+    let path = match file_url_path(op) {
+        Some(path) => path,
+        None if is_url(op) && !Path::new(op).exists() => return Err(format!("{op}: opening a URL with an app is not supported yet")),
+        None => PathBuf::from(op),
+    };
+    let full = std::fs::canonicalize(&path).map_err(|e| format!("{}: {}", path.display(), io_text(&e)))?;
+    if full.is_dir() {
+        return if app == FILES_APP { Ok(Request::OpenFolder { app: app.into(), folder: full }) } else { Err(format!("{}: a folder opens in Files, not in {app}", path.display())) };
+    }
+    Ok(Request::OpenFile { app: app.into(), file: full })
+}
+
 fn plan_url(url: &str, o: &Options) -> Result<Request, String> {
     if o.reveal {
         return Err(format!("{url}: -R needs a file, not a URL"));
@@ -134,7 +156,8 @@ fn plan_url(url: &str, o: &Options) -> Result<Request, String> {
 fn plan_path(path: &Path, o: &Options) -> Result<Request, String> {
     let full = std::fs::canonicalize(path).map_err(|e| format!("{}: {}", path.display(), io_text(&e)))?;
     if o.reveal {
-        return Ok(Request::OpenFolder { app: FILES_APP.into(), folder: reveal_target(&full) });
+        // a folder is shown itself; a file is shown selected in the folder that holds it
+        return Ok(if full.is_dir() { Request::OpenFolder { app: FILES_APP.into(), folder: full } } else { Request::RevealFile { app: FILES_APP.into(), file: full } });
     }
     if full.is_dir() {
         return Ok(Request::OpenFolder { app: FILES_APP.into(), folder: full });
@@ -268,8 +291,40 @@ mod tests {
         assert_eq!(plan(&e), Ok(vec![Request::OpenApp(TEXT_EDITOR_APP.into())]));
         let both = Options { app: Some("x".into()), editor: true, ..Options::default() };
         assert!(plan(&both).is_err());
-        let with_file = Options { app: Some("x".into()), operands: vec!["a.txt".into()], ..Options::default() };
-        assert!(plan(&with_file).unwrap_err().contains("not supported yet"));
+        let reveal = Options { app: Some("x".into()), reveal: true, operands: vec!["a.txt".into()], ..Options::default() };
+        assert!(plan(&reveal).unwrap_err().contains("-R and -u"));
+    }
+
+    #[test]
+    fn files_named_with_an_app_open_in_it() {
+        let dir = scratch("in-app");
+        let (a, b) = (dir.join("to do.txt"), dir.join("b.md"));
+        std::fs::write(&a, b"x").unwrap();
+        std::fs::write(&b, b"x").unwrap();
+        let canon = std::fs::canonicalize(&dir).unwrap();
+        let text = |p: &Path| p.to_string_lossy().into_owned();
+
+        let with = Options { app: Some("is.x.app".into()), operands: vec![text(&a), format!("file://{}", text(&b))], ..Options::default() };
+        assert_eq!(
+            plan(&with),
+            Ok(vec![
+                Request::OpenFile { app: "is.x.app".into(), file: canon.join("to do.txt") },
+                Request::OpenFile { app: "is.x.app".into(), file: canon.join("b.md") },
+            ])
+        );
+        // -e and -t open the file in the text editor
+        let edit = Options { editor: true, operands: vec![text(&a)], ..Options::default() };
+        assert_eq!(plan(&edit), Ok(vec![Request::OpenFile { app: TEXT_EDITOR_APP.into(), file: canon.join("to do.txt") }]));
+        // a folder goes to Files only, a URL is not a file, and a missing file is named
+        let folder = Options { app: Some("is.x.app".into()), operands: vec![text(&dir)], ..Options::default() };
+        assert!(plan(&folder).unwrap_err().contains("a folder opens in Files"));
+        let in_files = Options { app: Some(FILES_APP.into()), operands: vec![text(&dir)], ..Options::default() };
+        assert_eq!(plan(&in_files), Ok(vec![Request::OpenFolder { app: FILES_APP.into(), folder: canon.clone() }]));
+        let url = Options { app: Some("is.x.app".into()), operands: vec!["https://a.is".into()], ..Options::default() };
+        assert!(plan(&url).unwrap_err().contains("not supported yet"));
+        let missing = Options { app: Some("is.x.app".into()), operands: vec![text(&dir.join("nope"))], ..Options::default() };
+        assert!(plan(&missing).unwrap_err().contains("No such file or directory"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -293,8 +348,11 @@ mod tests {
         let open_dir = Options { operands: vec![dir.to_string_lossy().into_owned()], ..Options::default() };
         assert_eq!(plan(&open_dir), Ok(vec![Request::OpenFolder { app: FILES_APP.into(), folder: canon_dir.clone() }]));
 
+        // -R shows a file selected in its folder, and a folder itself
         let reveal = Options { reveal: true, operands: vec![file.to_string_lossy().into_owned()], ..Options::default() };
-        assert_eq!(plan(&reveal), Ok(vec![Request::OpenFolder { app: FILES_APP.into(), folder: canon_dir }]));
+        assert_eq!(plan(&reveal), Ok(vec![Request::RevealFile { app: FILES_APP.into(), file: canon_dir.join("note.txt") }]));
+        let reveal_dir = Options { reveal: true, operands: vec![dir.to_string_lossy().into_owned()], ..Options::default() };
+        assert_eq!(plan(&reveal_dir), Ok(vec![Request::OpenFolder { app: FILES_APP.into(), folder: canon_dir }]));
 
         let plain_file = Options { operands: vec![file.to_string_lossy().into_owned()], ..Options::default() };
         assert!(plan(&plain_file).unwrap_err().contains("not supported yet"));
@@ -310,6 +368,10 @@ mod tests {
         assert_eq!(Request::OpenUrl("https://a.is".into()).line(), "open-url https://a.is");
         let folder = Request::OpenFolder { app: FILES_APP.into(), folder: PathBuf::from("/home/me/My Files") };
         assert_eq!(folder.line(), "open-folder is.olibuijr.files.desktop /home/me/My Files");
+        let reveal = Request::RevealFile { app: FILES_APP.into(), file: PathBuf::from("/home/me/My Files/a b.txt") };
+        assert_eq!(reveal.line(), "reveal-file is.olibuijr.files.desktop /home/me/My Files/a b.txt");
+        let file = Request::OpenFile { app: TEXT_EDITOR_APP.into(), file: PathBuf::from("/home/me/to do.txt") };
+        assert_eq!(file.line(), "open-file is.olibuijr.textedit.desktop /home/me/to do.txt");
     }
 
     #[test]

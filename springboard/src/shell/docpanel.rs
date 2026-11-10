@@ -2969,7 +2969,7 @@ impl super::Shell {
     }
 
     /// Opens the file at `path` in the built-in app `app`, which reads it as the shell: Photos shows a picture in its
-    /// viewer (one outside the library too), Files shows the file's folder. False for a built-in app that takes no file
+    /// viewer (one outside the library too), Files shows the file selected in its folder. False for a built-in app that takes no file
     /// (the caller then shows the file in Files) and when the app cannot open it.
     #[cfg(feature = "desktop-wayland")]
     fn open_in_builtin(&mut self, app: super::apps::AppId, path: &Path, t: f64) -> bool {
@@ -2985,8 +2985,7 @@ impl super::Shell {
                 true
             }
             AppId::Files => {
-                let folder = path.parent().unwrap_or(path).to_string_lossy().into_owned();
-                self.desktop_open_folder(super::workspace::FILES_APP, &folder, t).is_ok()
+                self.desktop_show_in_files(path, t).is_ok()
             }
             _ => false,
         }

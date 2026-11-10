@@ -509,14 +509,14 @@ impl App for Files {
         if self.spring_tick() {
             changed = true;
         }
-        // Show in Files: the shell or the helper leaves a folder request in our data folder; the watch wakes the loop
+        // Show in Files: the shell or the helper leaves a request (a folder, perhaps an item to select) in our data folder
         let events = self.watch.as_mut().map(|w| w.poll(std::time::Instant::now())).unwrap_or_default();
         self.record_events(events);
         if self.catch_up() {
             changed = true;
         }
-        if let Some(folder) = handoff::take_request(&ctx.data_dir) {
-            self.navigate(folder, true);
+        if let Some(request) = handoff::take_request(&ctx.data_dir) {
+            self.show_request(request);
             changed = true;
         }
         // a provider thread left a footer message (a download failed, or the file is on its way to its app)

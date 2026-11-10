@@ -635,6 +635,13 @@ impl Files {
         self.reveal(i);
         self.revision += 1;
     }
+    /// Show in Files (`handoff`): opens the request's folder and, when it names an item, leaves the item pending so it is
+    /// selected and scrolled into view once the folder is listed (`apply_pending`), in whichever view is shown.
+    pub(crate) fn show_request(&mut self, request: handoff::Request) {
+        self.navigate(request.folder, true);
+        // set after `navigate`, and replacing an item an earlier folder left pending
+        self.fx.pending = request.select.map(|path| Pending { path, rename: false });
+    }
     /// Once the open folder has been read again: selects the item a rename or New Folder left pending, scrolls to it
     /// and, for a new folder, opens its name for editing. An item that is not shown (hidden, or not in the folder) is
     /// dropped, and so is a pending item whatever else happens, so it never leaks into a later listing.
@@ -1040,6 +1047,57 @@ mod rename_tests {
         assert!(d.join("m.txt").exists() && !d.join("a.txt").exists());
         files.listing_arrives();
         assert_eq!(files.selection, vec![row_of(&files, "m.txt")]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_show_in_files_request_opens_the_folder_and_selects_the_item_in_every_view() {
+        let d = dir("showreq");
+        let sub = d.join("Reports");
+        std::fs::create_dir_all(&sub).unwrap();
+        for i in 0..100 {
+            std::fs::write(sub.join(format!("f{i:03}.txt")), "x").unwrap();
+        }
+        let target = sub.join("f099.txt");
+        // (grid, columns, gallery): icon, list, columns and gallery views
+        for (grid, columns, gallery) in [(true, false, false), (false, false, false), (false, true, false), (false, false, true)] {
+            let mut files = files_in(&d);
+            (files.grid, files.columns, files.vo.gallery) = (grid, columns, gallery);
+            files.select_only(0);
+            files.show_request(handoff::Request { folder: sub.clone(), select: Some(target.clone()) });
+            assert_eq!(files.path, sub, "the folder that holds the file is shown");
+            assert_eq!(files.history.last(), Some(&sub), "and Back returns from it");
+            assert!(files.selection.is_empty(), "nothing is selected until the folder is listed");
+            assert_eq!(files.fx.pending, Some(Pending { path: target.clone(), rename: false }));
+            files.listing_arrives();
+            assert_eq!(files.selected_paths(), vec![target.clone()], "the file is selected (grid {grid}, columns {columns}, gallery {gallery})");
+            assert!(files.naming.is_none() && files.fx.pending.is_none(), "selected, not renamed, and used once");
+            // the icon and list views scroll the item into view; the columns and gallery views have no scroll
+            if !columns && !gallery {
+                assert!(files.scroll > 0., "the view scrolled to the item (grid {grid})");
+                let before = files.scroll;
+                files.reveal(files.selection[0]);
+                assert_eq!(files.scroll, before, "it is fully in view");
+            }
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_folder_request_selects_nothing_and_a_missing_item_is_dropped() {
+        let d = dir("showfolder");
+        std::fs::write(d.join("a.txt"), "a").unwrap();
+        let mut files = files_in(&d);
+        // an item left pending by an earlier rename does not leak into the folder the request opens
+        files.fx.pending = Some(Pending { path: d.join("a.txt"), rename: true });
+        files.show_request(handoff::Request { folder: d.clone(), select: None });
+        assert!(files.fx.pending.is_none());
+        files.listing_arrives();
+        assert!(files.selection.is_empty() && files.naming.is_none(), "an older caller's folder request only opens the folder");
+        // the file was removed before Files listed the folder
+        files.show_request(handoff::Request { folder: d.clone(), select: Some(d.join("gone.txt")) });
+        files.listing_arrives();
+        assert!(files.selection.is_empty() && files.fx.pending.is_none());
         let _ = std::fs::remove_dir_all(&d);
     }
 
