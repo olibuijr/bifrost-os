@@ -527,7 +527,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-browser"
-version = "0.17.12"
+version = "0.17.13"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
