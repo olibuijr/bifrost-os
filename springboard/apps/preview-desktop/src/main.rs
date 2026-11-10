@@ -31,6 +31,7 @@ use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
 use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use bifrost_app::proto::{DocErrorCode, DocMode, GrantId};
 use bifrost_app::services::{is_viewable_path, ServiceCall};
 use bifrost_app::pasteboard::{NativePasteboard, PNG};
@@ -51,6 +52,7 @@ use springboard::shell::books::engine;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::mpsc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// File > Open and the Open Recent items. The ids sit above every `Action` id.
@@ -120,6 +122,39 @@ struct OriginalSave {
     request: Option<u32>,
     copy: PathBuf,
     written: PathBuf,
+}
+
+/// What File > Save writes for a picture: the picture as it is shown (its pixels, colour adjustment, turn and markup),
+/// encoded into `temp` in the data folder. It owns everything it needs, so it runs off the app loop: encoding a large
+/// PNG takes a second or more, and the window has to show "Saving" and keep answering meanwhile.
+struct PictureJob {
+    img: bifrost_app::kit::Image,
+    marks: Vec<Mark>,
+    src: usize,
+    turns: u8,
+    adjust: Adjust,
+    raster: Raster,
+    temp: PathBuf,
+}
+
+impl PictureJob {
+    /// Encodes and writes the picture. The file written, or why it was not.
+    fn run(self) -> Result<PathBuf, String> {
+        let out = export::finish(&self.img, &self.marks, self.src, self.turns, &self.adjust, 1.0);
+        export::write_image(&out, self.raster, &self.temp)?;
+        Ok(self.temp)
+    }
+}
+
+/// A picture's save while a queue encodes it: the document's file, and where the result arrives. `pump` takes it.
+struct PictureSave {
+    copy: PathBuf,
+    result: mpsc::Receiver<Result<PathBuf, String>>,
+}
+
+/// The status line while `path` is being saved.
+fn saving_status(path: &Path) -> String {
+    format!("Saving {}\u{2026}", name_of(path))
 }
 
 /// The alert shown when the original could not be written.
@@ -206,6 +241,8 @@ struct Viewer {
     signatures: Vec<Signature>,
     /// The file a save is written for, until the worker has written the copy that replaces it.
     pending_save: Option<PathBuf>,
+    /// A picture's save that is being encoded off the app loop.
+    picture_save: Option<PictureSave>,
     /// The export waiting for the save panel's file (Export As, File > Export), until it is written or cancelled.
     pending_export: Option<PendingExport>,
     /// The original file of each working copy, for File > Save.
@@ -286,6 +323,7 @@ impl Viewer {
             prefs: Prefs::default(),
             signatures: Vec::new(),
             pending_save: None,
+            picture_save: None,
             pending_export: None,
             origins: Origins::default(),
             released: Vec::new(),
@@ -500,37 +538,84 @@ impl Viewer {
     /// File > Save: the markup, page order and turns are written into the file the document was opened from, and the
     /// file is opened again. A picture is written as a picture in the format of its file; a PDF is written by its
     /// worker. Either way the saved document is first written into the data folder, and `save_written` takes it on.
+    /// The status says "Saving name…" at once, in the frame of the key press: a picture is encoded on a queue of its
+    /// own (`pump` takes the result), so the window is not held while a large one is written. While a save is under
+    /// way another one is not started: its answers from the shell would be taken for the first one's.
+    fn start_save(&mut self) {
+        if self.picture_save.is_some() || self.pending_save.is_some() || self.pending_original.is_some() {
+            return;
+        }
+        let Some((copy, job)) = self.prepare_save() else { return };
+        let (send, result) = mpsc::channel();
+        DispatchQueue::global(Qos::UserInitiated).async_(move || {
+            let _ = send.send(job.run());
+            // the loop sleeps until something arrives: main-queue work wakes it, and `tick` takes the result
+            DispatchQueue::main().async_(|| {});
+        });
+        self.picture_save = Some(PictureSave { copy, result });
+    }
+
+    /// `start_save` with the picture written before it returns: what the tests of the steps after the encoding use.
+    #[cfg(test)]
     fn save_document(&mut self) {
+        if let Some((copy, job)) = self.prepare_save() {
+            self.finish_save(copy, job.run());
+        }
+    }
+
+    /// The first half of a save. A PDF's save is handed to its worker (`pending_save`) and nothing is returned; for
+    /// a picture the document's file and the job that writes it are returned. Either way the status says "Saving".
+    fn prepare_save(&mut self) -> Option<(PathBuf, PictureJob)> {
         self.stop_editing();
         let Some(doc) = &self.doc else {
             self.status = "There is nothing to save.".into();
-            return;
+            return None;
         };
         let path = doc.path.clone();
         if doc.is_pdf {
             let temp = self.saving_file(&path, "pdf");
             let job = pdfmarks::save_job(path.clone(), temp, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author(), pdfmarks::Insertion::None, doc.field_edits());
             if doc.send(job) {
+                self.status = saving_status(&path);
                 self.pending_save = Some(path);
-                self.status = "Saving".into();
             } else {
                 self.status = "The document is not open.".into();
             }
-            return;
+            return None;
         }
         let page = self.view.page;
-        let Some(src) = doc.source_of(page) else { return };
-        let Some(img) = doc.picture(page) else { return };
+        let src = doc.source_of(page)?;
+        let img = doc.picture(page)?;
         let raster = raster_of(&path, self.jpeg_quality);
-        let out = export::finish(&img, &doc.marks, src, doc.turn_of(page), &self.adjust, 1.0);
-        let temp = self.saving_file(&path, raster.ext());
-        match export::write_image(&out, raster, &temp) {
-            Ok(()) => self.save_written(path, temp),
-            Err(e) => self.status = format!("Save failed: {e}"),
-        }
+        let job = PictureJob {
+            img: (*img).clone(),
+            marks: doc.marks.clone(),
+            src,
+            turns: doc.turn_of(page),
+            adjust: self.adjust,
+            raster,
+            temp: self.saving_file(&path, raster.ext()),
+        };
+        self.status = saving_status(&path);
+        Some((path, job))
     }
 
-    /// The PDF worker wrote the saved document.
+    /// Takes the result of a picture's save once its queue has written it. True when it arrived.
+    fn take_picture_save(&mut self) -> bool {
+        let Some(save) = self.picture_save.take() else { return false };
+        match save.result.try_recv() {
+            Ok(result) => self.finish_save(save.copy, result),
+            Err(mpsc::TryRecvError::Empty) => {
+                self.picture_save = Some(save);
+                return false;
+            }
+            // the job ended without an answer
+            Err(mpsc::TryRecvError::Disconnected) => self.status = "Save failed: the picture could not be written.".into(),
+        }
+        true
+    }
+
+    /// The saved document was written into the data folder, by the PDF worker or by a picture's save.
     fn finish_save(&mut self, copy: PathBuf, result: Result<PathBuf, String>) {
         match result {
             Ok(written) => self.save_written(copy, written),
@@ -544,8 +629,10 @@ impl Viewer {
     fn save_written(&mut self, copy: PathBuf, written: PathBuf) {
         match self.origins.grant_of(&self.data_dir, &copy) {
             Some(grant) => {
+                if self.doc.as_ref().is_some_and(|d| d.path == copy) {
+                    self.status = saving_status(&copy);
+                }
                 self.pending_original = Some(OriginalSave { grant, check: None, request: None, copy, written });
-                self.status = "Saving".into();
             }
             None => {
                 // a document opened by its path is its own file: it is written only while it is still the file that
@@ -1169,8 +1256,10 @@ impl Viewer {
         if let Some((query, hits)) = results {
             self.show_results(query, hits);
         }
-        // These come after the worker's replies are taken: a PDF's save is written by the worker, and its request has
-        // to leave in the turn the reply arrives in. Nothing else wakes the loop, so a request left for the next turn
+        // a picture's save was written by its queue
+        changed |= self.take_picture_save();
+        // These come after the results of the workers are taken: a save is written off the app loop, and its request
+        // has to leave in the turn the result arrives in. Nothing else wakes the loop, so a request left for the next turn
         // waited for the next input event, and "Saved" showed only then.
         // A save first opens the original again, once: the shell answers with `DocumentEvent::Opened` when it is still
         // the file that was opened (`original_checked` then asks for the save in place), else with `Failed`.
@@ -1510,7 +1599,7 @@ impl Viewer {
                 true
             }
             Action::Save => {
-                self.save_document();
+                self.start_save();
                 true
             }
             Action::RevertToSaved => {
@@ -3670,6 +3759,49 @@ mod tests {
         // with no document there is no title and the bar is as before
         let (bar, _) = canvas::toolbar(&ctx.ui, &lay, false, "", Tool::Pan, Side::Pages);
         assert!(bar.items.iter().all(|item| item.id != canvas::TITLE_ID));
+    }
+
+    /// File > Save answers in the frame of the key press with "Saving name…", the picture is encoded off the app loop,
+    /// and the turn its result arrives in (woken by the queue, with no input event) asks the shell for the original.
+    #[test]
+    fn a_picture_save_says_saving_at_once_and_goes_on_when_the_picture_is_written() {
+        let (mut v, copy) = viewer_on_copy("queued");
+        v.set_origin("b.png", Some(([9; 16], None)));
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
+        let ctx = menu_ctx();
+        v.start_save();
+        assert_eq!(v.status, "Saving b.png\u{2026}", "said before the picture is encoded");
+        assert!(v.picture_save.is_some() && v.pending_original.is_none());
+        assert_eq!(v.window_title(), "b.png \u{2013} Edited", "still edited until the file is written");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let mut frame = false;
+        while v.picture_save.is_some() {
+            assert!(std::time::Instant::now() < deadline, "the picture is written");
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            frame = v.pump(&ctx);
+        }
+        assert!(frame, "the turn the result arrives in asks for a frame");
+        let sent = ctx.take_sent();
+        assert!(matches!(sent[..], [bifrost_app::proto::ToShell::DocReopen { grant: [9, ..], .. }]), "asked in the same turn: {sent:?}");
+        assert_eq!(v.status, "Saving b.png\u{2026}");
+        let written = v.pending_original.as_ref().expect("the save goes on to the original").written.clone();
+        assert!(std::fs::read(&written).unwrap().starts_with(b"\x89PNG"));
+        // Save again while this one is under way starts no second save, whose answers would be mixed up with the first's
+        v.start_save();
+        assert!(v.picture_save.is_none());
+        v.pump(&ctx);
+        assert!(ctx.take_sent().is_empty());
+        v.original_checked(&ctx, None);
+        v.original_saved(None);
+        assert_eq!(v.status, "Saved b.png");
+        assert_eq!(v.window_title(), "b.png");
+        assert!(std::fs::read(&copy).unwrap().starts_with(b"\x89PNG"));
+        cleanup(&v);
+    }
+
+    #[test]
+    fn a_pdf_save_says_saving_with_the_name() {
+        assert_eq!(saving_status(Path::new("/data/opened/2/report.pdf")), "Saving report.pdf\u{2026}");
     }
 
     /// The slot keeps the room "Edited" takes, so an edit or a save moves no button and drops none off the bar's end.
