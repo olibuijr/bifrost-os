@@ -6,7 +6,7 @@
 
 What the test of 0.10.49 on the lab PC found.
 
-- Settings, Date & Time: the Time row follows the 24-Hour Time switch at once, and becomes settable as soon as Set Automatically goes off. The network time line agrees with the switch and no longer names a command; turning network time on also acts when the service runs without being enabled.
+- Settings, Date & Time: the Time row follows the 24-Hour Time switch at once, and becomes settable as soon as Set Automatically goes off. The network time line agrees with the switch and no longer names a command; turning network time on also acts when the service runs without being enabled. The line reads the state of the service the system uses (chrony where it is installed, else timesyncd) and the kernel's own synchronized mark; before, a computer on chrony read "Network time is off".
 - No battery notice on a computer without a battery, and none when the clock is only redrawn in another style. The same redraw could post a false Wi-Fi notice.
 - Files 1.34.18: a revealed row lands in the middle of the list with no gap under the header; a row that only partly fits is drawn cut in list view; a view switch keeps the selection and scrolls to it; the columns view scrolls; list and icon view show a scroll knob.
 - Files: every window, tab and history leaves a volume that is gone, also one unmounted elsewhere. The dragged item's image is drawn above the windows, where before it showed only over the wallpaper.

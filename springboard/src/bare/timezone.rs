@@ -491,23 +491,74 @@ pub fn timedatectl_show(prop: &str) -> Option<String> {
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// timesyncd's sync flag without a process or a bus call (the Date & Time page polls it): systemd-timesyncd
-/// touches `/run/systemd/timesync/synchronized` once the clock is synchronized. `None` without timesyncd.
-pub fn timesyncd_synchronized() -> Option<&'static str> {
-    timesyncd_enabled()?;
-    Some(if std::path::Path::new("/run/systemd/timesync/synchronized").exists() { "yes" } else { "no" })
+/// The unit timedated turns on for network time: the first installed unit named by the lists in the `ntp-units.d`
+/// folders, read in file-name order (chrony's list sorts before timesyncd's). Without a list, timesyncd if it is
+/// installed. `None` when no network time service is installed.
+pub fn ntp_unit() -> Option<String> {
+    let mut lists: Vec<(String, String)> = Vec::new();
+    for dir in ["/etc/systemd/ntp-units.d", "/run/systemd/ntp-units.d", "/usr/lib/systemd/ntp-units.d"] {
+        let Ok(rd) = std::fs::read_dir(dir) else { continue };
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.ends_with(".list") && !lists.iter().any(|(n, _)| *n == name) {
+                lists.push((name, std::fs::read_to_string(e.path()).unwrap_or_default()));
+            }
+        }
+    }
+    lists.sort();
+    let texts: Vec<&str> = lists.iter().map(|(_, t)| t.as_str()).collect();
+    pick_ntp_unit(&texts, &unit_installed)
 }
 
-/// Whether network time is on (timedatectl's `NTP`), read from the unit's enablement links instead of
-/// asking timedated, which a bus call would start and leave to time out again.
-pub fn timesyncd_enabled() -> Option<&'static str> {
-    let unit = "systemd-timesyncd.service";
-    let lib = ["/usr/lib/systemd/system", "/lib/systemd/system"].iter().any(|d| std::path::Path::new(&format!("{d}/{unit}")).exists());
-    if !lib {
+/// The first unit in `lists` (the texts of the list files, in order) that `installed` knows; timesyncd without any.
+fn pick_ntp_unit(lists: &[&str], installed: &dyn Fn(&str) -> bool) -> Option<String> {
+    let named = lists.iter().flat_map(|t| t.lines()).map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#'));
+    let fallback = "systemd-timesyncd.service";
+    named.chain(std::iter::once(fallback)).find(|u| installed(u)).map(str::to_string)
+}
+
+fn unit_installed(unit: &str) -> bool {
+    let dirs = ["/etc/systemd/system", "/usr/lib/systemd/system", "/lib/systemd/system"];
+    !unit.contains('/') && dirs.iter().any(|d| std::path::Path::new(&format!("{d}/{unit}")).exists())
+}
+
+unsafe extern "C" {
+    fn adjtimex(buf: *mut u8) -> i32;
+}
+
+/// Whether the kernel's clock is marked synchronized (what timedatectl's `NTPSynchronized` reads), whichever service
+/// keeps it. `None` when the kernel does not answer.
+fn kernel_clock_synchronized() -> Option<bool> {
+    // struct timex on 64-bit: modes (u32) at 0, status (i32) at 40; 208 bytes. modes 0 only reads.
+    #[repr(C, align(8))]
+    struct Timex([u8; 256]);
+    let mut t = Timex([0; 256]);
+    // SAFETY: the buffer is larger than struct timex and modes is 0, so the kernel only writes the state into it
+    let rc = unsafe { adjtimex(t.0.as_mut_ptr()) };
+    if rc < 0 {
         return None;
     }
-    let wants = ["sysinit.target.wants", "multi-user.target.wants"];
-    let on = wants.iter().any(|w| std::fs::symlink_metadata(format!("/etc/systemd/system/{w}/{unit}")).is_ok());
+    let status = i32::from_ne_bytes([t.0[40], t.0[41], t.0[42], t.0[43]]);
+    const STA_UNSYNC: i32 = 0x40;
+    Some(status & STA_UNSYNC == 0)
+}
+
+/// Whether the clock is synchronized, without a process or a bus call (the Date & Time page polls it). `None` without
+/// a network time service. The name is from when timesyncd was the only service looked at.
+pub fn timesyncd_synchronized() -> Option<&'static str> {
+    timesyncd_enabled()?;
+    Some(if kernel_clock_synchronized().unwrap_or(false) { "yes" } else { "no" })
+}
+
+/// Whether network time is on (timedatectl's `NTP`), read from the enablement links of the network time unit
+/// ([`ntp_unit`]: chrony where it is installed, else timesyncd) instead of asking timedated, which a bus call would
+/// start and leave to time out again. `None` without such a unit.
+pub fn timesyncd_enabled() -> Option<&'static str> {
+    let unit = ntp_unit()?;
+    let on = std::fs::read_dir("/etc/systemd/system").into_iter().flatten().flatten().any(|d| {
+        let name = d.file_name().to_string_lossy().to_string();
+        (name.ends_with(".wants") || name.ends_with(".requires")) && std::fs::symlink_metadata(d.path().join(&unit)).is_ok()
+    });
     Some(if on { "yes" } else { "no" })
 }
 
@@ -587,6 +638,23 @@ mod tests {
 
     /// A service that runs without its enablement link reads "off" on the Date & Time page (the page reads the link)
     /// while `timedatectl` reports NTP=yes: turning network time on must still ask, or the two never meet.
+    #[test]
+    fn the_network_time_unit_is_the_first_listed_one_that_is_installed() {
+        let chrony = "chronyd.service\n";
+        let sync = "# comment\n\nsystemd-timesyncd.service\n";
+        let both = |u: &str| u == "chronyd.service" || u == "systemd-timesyncd.service";
+        assert_eq!(pick_ntp_unit(&[chrony, sync], &both).as_deref(), Some("chronyd.service"));
+        let only_sync = |u: &str| u == "systemd-timesyncd.service";
+        assert_eq!(pick_ntp_unit(&[chrony, sync], &only_sync).as_deref(), Some("systemd-timesyncd.service"));
+        assert_eq!(pick_ntp_unit(&[], &only_sync).as_deref(), Some("systemd-timesyncd.service"));
+        assert_eq!(pick_ntp_unit(&[chrony, sync], &|_| false), None);
+    }
+
+    #[test]
+    fn the_kernel_answers_whether_its_clock_is_synchronized() {
+        assert!(kernel_clock_synchronized().is_some());
+    }
+
     #[test]
     fn set_ntp_asks_when_the_link_or_the_running_service_disagrees_with_the_wish() {
         assert!(ntp_differs(Some("no"), Some("yes"), true), "running, not enabled: the page would read off");
