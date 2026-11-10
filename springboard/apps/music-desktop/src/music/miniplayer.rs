@@ -129,7 +129,7 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, info: &Info, art: Option<&Im
     let title = ui.text(&ui.fit(&info.title, MAC_SUBHEAD_PT, text_w), MAC_SUBHEAD_PT, Weight::Semibold, WHITE);
     let artist = ui.text(&ui.fit(&info.artist, MAC_FOOTNOTE_PT, text_w), MAC_FOOTNOTE_PT, Weight::Regular, WHITE);
     s.blit_colored(&title, lay.title_x as i32, lay.title_y as i32, LABEL.now(), 255);
-    let gap = ui.pt(4.0);
+    let gap = ui.pt(SPACE_XS);
     s.blit_colored(&artist, lay.title_x as i32, (lay.title_y + title.h as f32 + gap) as i32, LABEL_2.now(), 255);
     bar(s, lay.scrub, if info.live { 0.0 } else { info.progress });
     bar(s, lay.volume, info.volume);

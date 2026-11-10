@@ -858,7 +858,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-music"
-version = "1.14.8"
+version = "1.14.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
