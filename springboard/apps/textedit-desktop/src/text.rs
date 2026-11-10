@@ -153,10 +153,16 @@ pub fn is_break(ch: char) -> bool {
 /// family, `stand_in`), as the reference's plain text font is a fixed-pitch one.
 pub const PLAIN_FONT: u8 = 2;
 
-/// The point size of new text.
+/// The point size a file's text has when the file gives none (the default of the rich text formats), and so the size
+/// of `Style::default()`, which every reader starts from.
 pub const DEFAULT_SIZE: f32 = 12.0;
-/// The sizes Bigger and Smaller step through.
-pub const SIZES: [f32; 9] = [9.0, 10.0, 11.0, 12.0, 14.0, 18.0, 24.0, 36.0, 48.0];
+/// The point size of text typed into a new document and of plain text, which has no size of its own: the system body
+/// size, the size the window's own labels are drawn in. A point of text is a point of the window (`Ui::text`), so the
+/// display scale applies to the page exactly as it does to the chrome.
+pub const BODY_SIZE: f32 = bifrost_app::kit::ui::MAC_BODY_PT;
+/// The sizes Bigger and Smaller step through, and the rows of the size pop-up and of the Fonts panel. `BODY_SIZE` is
+/// one of them, so both show a row for the size of new text.
+pub const SIZES: [f32; 10] = [9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 18.0, 24.0, 36.0, 48.0];
 /// The smallest and largest size a document may hold.
 pub const MIN_SIZE: f32 = 4.0;
 pub const MAX_SIZE: f32 = 144.0;
@@ -293,6 +299,11 @@ impl Default for Style {
 }
 
 impl Style {
+    /// The style of text typed where no character gives one (an empty document): family `font` at the body size.
+    pub fn new_text(font: u8) -> Style {
+        Style { font, size: BODY_SIZE, ..Style::default() }
+    }
+
     /// Whether two characters draw alike, so they can share one run of text (and one run in a file).
     pub fn same_run(&self, other: &Style) -> bool {
         self.bold == other.bold
@@ -418,7 +429,7 @@ impl Default for Text {
 
 impl Text {
     pub fn new() -> Self {
-        Text { cells: Vec::new(), anchor: 0, head: 0, typing: Style::default(), undo: Vec::new(), redo: Vec::new(), last_kind: None, epoch: 0, tab: DEFAULT_TAB, attachments: Vec::new(), default_font: 0 }
+        Text { cells: Vec::new(), anchor: 0, head: 0, typing: Style::new_text(0), undo: Vec::new(), redo: Vec::new(), last_kind: None, epoch: 0, tab: DEFAULT_TAB, attachments: Vec::new(), default_font: 0 }
     }
 
     /// The family new text takes where no character sets one (the Preferences' default font). Setting it changes no
@@ -431,12 +442,15 @@ impl Text {
     }
 
     /// A plain text document read from disk takes the plain text font throughout, as Make Plain Text leaves one, so
-    /// every plain document uses one font. Makes no undo entry (a load just started the history over).
+    /// every plain document uses one font, at the body size (a plain file holds no size). Makes no undo entry (a load
+    /// just started the history over).
     pub fn use_plain_font(&mut self) {
         for c in &mut self.cells {
             c.style.font = PLAIN_FONT;
+            c.style.size = BODY_SIZE;
         }
         self.typing.font = PLAIN_FONT;
+        self.typing.size = BODY_SIZE;
         self.default_font = PLAIN_FONT;
     }
 
@@ -595,7 +609,7 @@ impl Text {
         } else {
             self.cells.first().map(|c| c.style)
         };
-        self.typing = style.unwrap_or(Style { font: self.default_font, ..Style::default() });
+        self.typing = style.unwrap_or(Style::new_text(self.default_font));
         // typing after an attachment is text, not another attachment
         self.typing.attachment = 0;
         // typing continues a link only from inside it, not from its end
@@ -858,7 +872,7 @@ impl Text {
             entry.plain_switch = true;
         }
         self.cells.retain(|c| c.ch != OBJECT);
-        let plain = Style { font: PLAIN_FONT, ..Style::default() };
+        let plain = Style::new_text(PLAIN_FONT);
         for c in &mut self.cells {
             c.style = plain;
         }
@@ -1525,11 +1539,59 @@ mod tests {
         let mut t = plain("x");
         t.select(0, 1);
         t.bigger();
+        assert_eq!(t.cells()[0].style.size, 13.0);
+        t.bigger();
         assert_eq!(t.cells()[0].style.size, 14.0);
+        t.smaller();
         t.smaller();
         assert_eq!(t.cells()[0].style.size, 12.0);
         t.set_size(1000.0);
         assert_eq!(t.cells()[0].style.size, MAX_SIZE);
+    }
+
+    /// E2E4: text typed into a new document was 12 pt, one step under the 13 pt body size of the window's own labels.
+    #[test]
+    fn a_new_document_is_typed_at_the_system_body_size() {
+        assert_eq!(BODY_SIZE, bifrost_app::kit::ui::MAC_BODY_PT);
+        assert!(SIZES.contains(&BODY_SIZE), "the size pop-up and the Fonts panel have a row for it");
+        let mut t = Text::new();
+        assert_eq!(t.style().size, BODY_SIZE, "the format bar shows the size the first character is drawn in");
+        t.type_text("ab");
+        assert!(t.cells().iter().all(|c| c.style.size == BODY_SIZE));
+        // a caret move in an empty document, and the default font, keep it
+        let mut t = Text::new();
+        t.select(0, 0);
+        t.set_default_font(1);
+        assert_eq!((t.style().font, t.style().size), (1, BODY_SIZE));
+        // emptied again, the document is typed at the body size, not at the size of the deleted text
+        let mut t = plain("x");
+        t.select_all();
+        t.set_size(36.0);
+        t.delete_backward();
+        assert_eq!(t.len(), 0);
+        t.select(0, 0);
+        assert_eq!(t.style().size, BODY_SIZE);
+    }
+
+    #[test]
+    fn text_read_from_a_file_keeps_the_size_the_file_gives() {
+        let mut t = plain("ab");
+        assert!(t.cells().iter().all(|c| c.style.size == DEFAULT_SIZE), "a file with no size is 12 pt, as its format says");
+        t.type_text("c");
+        assert_eq!(t.cells()[2].style.size, DEFAULT_SIZE, "typing continues the text before the caret");
+    }
+
+    #[test]
+    fn plain_text_is_drawn_at_the_body_size() {
+        let mut t = plain("ab");
+        t.use_plain_font();
+        assert!(t.cells().iter().all(|c| (c.style.font, c.style.size) == (PLAIN_FONT, BODY_SIZE)));
+        assert_eq!((t.style().font, t.style().size), (PLAIN_FONT, BODY_SIZE));
+        let mut t = plain("ab");
+        t.select_all();
+        t.set_size(36.0);
+        t.make_plain();
+        assert!(t.cells().iter().all(|c| c.style.size == BODY_SIZE), "Make Plain Text drops the sizes too");
     }
 
     #[test]

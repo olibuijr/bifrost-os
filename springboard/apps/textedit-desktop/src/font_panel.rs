@@ -14,8 +14,8 @@ use bifrost_app::controls::Rect;
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::ui::{Ui, Weight, CELL_RADIUS_PT, DETAIL_BG, FIELD_BG, LABEL, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, SELECTION, SEPARATOR_C, SPACE_XS, SPACE_XXS, WHITE};
 
-/// Family rows shown at once.
-pub const ROWS: usize = 9;
+/// Family rows shown at once. The size column is as tall, so it holds every entry of `SIZES`.
+pub const ROWS: usize = 10;
 pub const ROW_H: f32 = 22.0;
 const PAD: f32 = 16.0;
 const TITLE_H: f32 = 28.0;
@@ -308,6 +308,19 @@ mod tests {
         assert_eq!(fonts_hit(&l, &p, x, y), None, "four typefaces");
         assert_eq!(fonts_hit(&l, &p, l.done.x + 1.0, l.done.y + 1.0), Some(FontsHit::Done));
         assert_eq!(fonts_hit(&l, &p, l.up.x + 1.0, l.up.y + 1.0), Some(FontsHit::Up));
+    }
+
+    /// E2E4: new text is 13 pt, so the size column has a row for it and still reaches its last size.
+    #[test]
+    fn the_size_column_has_a_row_for_every_size_and_one_for_the_body_size() {
+        let l = fonts_layout(900.0, 100.0);
+        let p = Fonts::new(0);
+        assert!(SIZES.len() <= ROWS, "every size fits the column");
+        for (i, size) in SIZES.iter().enumerate() {
+            let (x, y) = (l.size.x + 4.0, l.size.y + ROW_H * (i as f32 + 0.5));
+            assert_eq!(fonts_hit(&l, &p, x, y), Some(FontsHit::Size(i as u8)), "size {size}");
+        }
+        assert!(SIZES.iter().any(|s| *s == crate::text::BODY_SIZE), "the row the panel marks in a new document");
     }
 
     #[test]

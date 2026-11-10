@@ -313,10 +313,10 @@ impl Action {
             Action::EncodingToggle(i) => MENU_BASE + 0xe0 + i as u32,
             Action::FontStyle(i) => MENU_BASE + 0xee + i as u32,
             Action::Size(i) => MENU_BASE + 0xf2 + i as u32,
-            Action::ShowFonts => MENU_BASE + 0xfb,
-            Action::ShowColors => MENU_BASE + 0xfc,
-            Action::FontsDone => MENU_BASE + 0xfd,
-            Action::ColorsDone => MENU_BASE + 0xfe,
+            Action::ShowFonts => MENU_BASE + 0xfc,
+            Action::ShowColors => MENU_BASE + 0xfd,
+            Action::FontsDone => MENU_BASE + 0xfe,
+            Action::ColorsDone => MENU_BASE + 0xff,
         })
     }
 
@@ -434,11 +434,12 @@ impl Action {
             0xe7 => Action::Direction(false),
             0xe8 => Action::Direction(true),
             0xee..=0xf1 => Action::FontStyle((offset - 0xee) as u8),
-            0xf2..=0xfa => Action::Size((offset - 0xf2) as u8),
-            0xfb => Action::ShowFonts,
-            0xfc => Action::ShowColors,
-            0xfd => Action::FontsDone,
-            0xfe => Action::ColorsDone,
+            // one id per entry of `text::SIZES` (ten)
+            0xf2..=0xfb => Action::Size((offset - 0xf2) as u8),
+            0xfc => Action::ShowFonts,
+            0xfd => Action::ShowColors,
+            0xfe => Action::FontsDone,
+            0xff => Action::ColorsDone,
             FONT_IDS..=FONT_IDS_END => Action::Font((offset - FONT_IDS) as u8),
             DEFAULT_FONT_IDS..=DEFAULT_FONT_IDS_END => Action::DefaultFont((offset - DEFAULT_FONT_IDS) as u8),
             _ => return None,
@@ -1350,7 +1351,7 @@ mod tests {
             Action::FontStyle(0),
             Action::FontStyle(3),
             Action::Size(0),
-            Action::Size(8),
+            Action::Size(crate::text::SIZES.len() as u8 - 1),
             Action::ShowFonts,
             Action::ShowColors,
             Action::FontsDone,
@@ -1363,6 +1364,12 @@ mod tests {
         for a in all {
             let id = a.id().expect("own action has an id");
             assert_eq!(Action::from_id(id), Some(a));
+        }
+        // every size of the size pop-up has an id of its own (E2E4 added the body size to the list)
+        for i in 0..crate::text::SIZES.len() as u8 {
+            let id = Action::Size(i).id().unwrap();
+            assert_eq!(Action::from_id(id), Some(Action::Size(i)));
+            assert!(all.iter().filter(|a| !matches!(a, Action::Size(_))).all(|a| a.id() != Some(id)), "size {i}");
         }
         // every family index has an id of its own, after all the other items' ids
         let others: Vec<u32> = all.iter().filter(|a| !matches!(a, Action::Font(_) | Action::DefaultFont(_))).filter_map(|a| a.id()).collect();
