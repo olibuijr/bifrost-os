@@ -74,7 +74,8 @@ impl Browser {
         }
         self.pageui.cancel_all(&mut self.pool);
         self.pool = None;
-        self.uploads = Default::default();
+        // the handed files stay: their tabs are opened again below
+        self.uploads.reset();
         self.tabs.clear();
         self.pageui = Default::default();
         self.discard = Default::default();

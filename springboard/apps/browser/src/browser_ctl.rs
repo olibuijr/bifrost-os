@@ -186,6 +186,8 @@ impl Browser {
             ("id", control::num(t.view as f64)),
             ("index", control::num(i as f64)),
             ("url", control::text(&url)),
+            // what the address field shows for it (differs for a private copy of a handed file)
+            ("address", control::text(&self.shown_url(&url))),
             ("title", control::text(st.map_or("", |s| s.title.as_str()))),
             ("loading", Json::Bool(st.is_some_and(|s| s.loading))),
             ("can_back", Json::Bool(st.is_some_and(|s| s.can_go_back))),

@@ -53,7 +53,7 @@ impl Browser {
                     }
                     if let Some(s) = self.pool.as_ref().and_then(|p| p.state(v)) {
                         let (u, t) = (s.url.clone(), s.title.clone());
-                        if !u.starts_with(reader::DATA_PREFIX) {
+                        if !u.starts_with(reader::DATA_PREFIX) && !self.private_copy(&u) {
                             self.store.visit(&u, &t, store::now());
                         }
                     }
