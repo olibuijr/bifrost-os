@@ -4463,7 +4463,7 @@ dependencies = [
 
 [[package]]
 name = "springboard"
-version = "0.10.50"
+version = "0.10.51"
 dependencies = [
  "bifrost-assistant-client",
  "bifrost-audio-driver",
