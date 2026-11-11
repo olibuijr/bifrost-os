@@ -16,7 +16,7 @@ class ResidualWakeDetection(unittest.TestCase):
         body = compliance.rust_function_body(lines, start)
         source = "\n".join(p.read_text() for p in (files.parent / "ops.rs", files.parent / "search.rs"))
 
-        self.assertIn("next_deadline", body)
+        self.assertIn("watch_deadline", body)  # the watch streams' next_deadline, in perf.rs
         self.assertIn("t + THUMB_POLL_MS", body)
         self.assertFalse(compliance.res02_required(body, source, []))
 
