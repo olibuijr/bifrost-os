@@ -1021,7 +1021,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stocks"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

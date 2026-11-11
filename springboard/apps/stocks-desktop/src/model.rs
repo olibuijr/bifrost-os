@@ -22,6 +22,12 @@ pub struct Quote {
 }
 
 impl Quote {
+    /// The stamp as the detail header shows it: the exchange's date and time, the time as the user's clocks write it
+    /// ("2026-10-22 16:00" with 24-hour time on, "2026-10-22 4:00 PM" with it off).
+    pub fn stamp_text(&self) -> String {
+        stamp_text_in(&self.stamp, bifrost_app::time_zone::uses_24_hour_clock())
+    }
+
     /// The change since the previous close, in price units.
     pub fn change(&self) -> f64 {
         self.close - self.open
@@ -169,6 +175,21 @@ impl Watchlist {
     }
 }
 
+/// A quote's stamp ("2026-10-22 16:00", the exchange's time) with its time in a given clock style. The date and the
+/// zone stay the exchange's: a close at 16:00 there is shown as 16:00 or 4:00 PM wherever it is read. A stamp with no
+/// readable time is returned as it is.
+pub fn stamp_text_in(stamp: &str, h24: bool) -> String {
+    let Some((date, time)) = stamp.split_once(' ') else { return stamp.to_string() };
+    let mut parts = time.split(':');
+    let (Some(hour), Some(minute)) = (parts.next().and_then(|h| h.parse::<i32>().ok()), parts.next().and_then(|m| m.parse::<i32>().ok())) else {
+        return stamp.to_string();
+    };
+    if !(0..24).contains(&hour) || !(0..60).contains(&minute) {
+        return stamp.to_string();
+    }
+    format!("{date} {}", springboard::status::clock_in(hour, minute, h24))
+}
+
 /// The low and high of a series, or `None` when it is empty.
 pub fn value_range(values: &[f64]) -> Option<(f64, f64)> {
     let first = *values.first()?;
@@ -294,6 +315,22 @@ mod tests {
         assert!(!w.move_down(1));
         assert!(!w.move_up(7));
         assert_eq!(w.symbols(), ["a.us", "b.us"]);
+    }
+
+    #[test]
+    fn the_stamp_follows_the_clock_style() {
+        // morning, noon, afternoon and midnight, in both styles
+        let both = |stamp: &str| [stamp_text_in(stamp, true), stamp_text_in(stamp, false)];
+        assert_eq!(both("2026-10-22 09:30"), ["2026-10-22 09:30".to_string(), "2026-10-22 9:30 AM".to_string()]);
+        assert_eq!(both("2026-10-22 12:00"), ["2026-10-22 12:00".to_string(), "2026-10-22 12:00 PM".to_string()]);
+        assert_eq!(both("2026-10-22 16:00"), ["2026-10-22 16:00".to_string(), "2026-10-22 4:00 PM".to_string()]);
+        assert_eq!(both("2026-10-22 00:00"), ["2026-10-22 00:00".to_string(), "2026-10-22 12:00 AM".to_string()]);
+        // seconds are dropped; a stamp with no time, or an unreadable one, stays as it is
+        assert_eq!(stamp_text_in("2026-10-22 16:00:05", false), "2026-10-22 4:00 PM");
+        assert_eq!(stamp_text_in("2026-10-22", false), "2026-10-22");
+        assert_eq!(stamp_text_in("2026-10-22 late", false), "2026-10-22 late");
+        assert_eq!(stamp_text_in("2026-10-22 25:00", true), "2026-10-22 25:00");
+        assert_eq!(stamp_text_in("", true), "");
     }
 
     #[test]
