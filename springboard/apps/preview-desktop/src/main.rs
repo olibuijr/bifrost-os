@@ -1579,7 +1579,8 @@ impl Viewer {
         let (w, h) = doc.page_size(self.view.page)?;
         let (cx, cy, cw, ch) = lay.canvas();
         let (rw, rh) = model::turn_size(w, h, self.view.quarters);
-        let scale = self.view.zoom.scale(rw, rh, cw as usize, ch as usize);
+        let (fit_w, fit_h) = lay.fit_room();
+        let scale = self.view.zoom.scale(rw, rh, fit_w, fit_h);
         Some(canvas::place((cx, cy, cw, ch), rw, rh, scale, self.view.pan))
     }
 
@@ -2278,8 +2279,9 @@ impl Viewer {
             }
             Action::ZoomIn | Action::ZoomOut => {
                 let (w, h) = self.page_dims(lay);
-                let (_, _, cw, ch) = lay.canvas();
-                self.view.zoom = self.view.zoom.stepped(w, h, cw as usize, ch as usize, action == Action::ZoomIn);
+                // a step from Fit starts at the scale Fit shows, which leaves the margin
+                let (fit_w, fit_h) = lay.fit_room();
+                self.view.zoom = self.view.zoom.stepped(w, h, fit_w, fit_h, action == Action::ZoomIn);
             }
             Action::ActualSize => self.view.zoom = Zoom::Factor(1.0),
             Action::FitWindow => self.view.zoom = Zoom::Fit,
@@ -4572,6 +4574,52 @@ mod tests {
         assert_eq!(v.status, "Saved b.png");
         assert_eq!(v.adjust, Adjust::default(), "the adjustment is in the file, not applied a second time");
         assert!(!v.edited());
+        cleanup(&v);
+    }
+
+    /// In Fit the page keeps the margin to every edge of the canvas: at open, turned, cropped and at another window
+    /// size. A page that filled the canvas's height sat flush under the toolbar and on the window's bottom edge.
+    #[test]
+    fn a_fitted_page_keeps_the_margin_to_every_edge_of_the_canvas() {
+        let ctx = menu_ctx();
+        let mut v = viewer_with(Image { w: 1600, h: 800, px: vec![0xff00_00ff; 1600 * 800] });
+        let inside = |v: &Viewer, w: i32, h: i32, when: &str| {
+            let lay = v.layout(&ctx.ui, w, h);
+            let m = lay.margin;
+            assert_eq!(m, ctx.ui.pt(canvas::FIT_MARGIN_PT) as i32);
+            assert!(m > 0, "the window has a margin");
+            let (cx, cy, cw, ch) = lay.canvas();
+            let p = v.placed(&lay).expect("a picture");
+            let (right, bottom) = (p.x + p.w as i32, p.y + p.h as i32);
+            assert!(p.x >= cx + m && p.y >= cy + m && right <= cx + cw - m && bottom <= cy + ch - m, "{when}: {p:?} in {:?}", lay.canvas());
+            // the page is as large as the margin lets it be, and centred
+            let (slack_x, slack_y) = (cw - 2 * m - p.w as i32, ch - 2 * m - p.h as i32);
+            assert!(slack_x.min(slack_y) <= 1, "{when}: fitted");
+            assert!((p.x - cx - (cx + cw - right)).abs() <= 1 && (p.y - cy - (cy + ch - bottom)).abs() <= 1, "{when}: centred");
+        };
+        inside(&v, 1200, 780, "at open");
+        v.rotate(1);
+        inside(&v, 1200, 780, "turned");
+        v.rotate(1);
+        inside(&v, 1200, 780, "turned twice");
+        inside(&v, 700, 900, "a narrow window");
+        v.sidebar = false;
+        inside(&v, 1200, 780, "without the sidebar");
+        v.selection = Some((0, Norm { x: 0.0, y: 0.0, w: 0.5, h: 1.0 }));
+        v.crop();
+        assert_eq!(v.doc.as_ref().unwrap().sizes, [(800, 800)]);
+        inside(&v, 1200, 780, "cropped");
+        // a picture smaller than the room is shown at its own size, and the slideshow gives the page the whole screen
+        let small = viewer_with(Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] });
+        let lay = small.layout(&ctx.ui, 1200, 780);
+        assert_eq!(small.placed(&lay).map(|p| (p.w, p.h)), Some((2, 2)));
+        assert_eq!((Layout::bare(300, 200).margin, Layout::bare(300, 200).fit_room()), (0, (300, 200)));
+        // a step from Fit starts at the scale Fit shows
+        let lay = v.layout(&ctx.ui, 1200, 780);
+        let fitted = v.placed(&lay).unwrap().w as f32 / 800.0;
+        v.act(&ctx.ui, &lay, Action::ZoomOut);
+        let Zoom::Factor(stepped) = v.view.zoom else { panic!("a chosen level") };
+        assert!(stepped < fitted && stepped > fitted / 1.5, "{stepped} from {fitted}");
         cleanup(&v);
     }
 }

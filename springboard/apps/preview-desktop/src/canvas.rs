@@ -479,13 +479,30 @@ pub struct Layout {
     pub side: i32,
     /// The width of the Inspector along the right edge; 0 while it is hidden.
     pub inspector: i32,
+    /// The margin a page fitted to the window keeps to each edge of the canvas (`FIT_MARGIN_PT`), in pixels; 0 in the
+    /// slideshow, where the page has the whole screen.
+    pub margin: i32,
 }
+
+/// The margin Fit keeps between the page and each edge of the canvas, in points. Without it a page that fills the
+/// canvas's height sat flush against the toolbar and the window's bottom edge, under the window's rounded corners, and
+/// read as cut off.
+pub const FIT_MARGIN_PT: f32 = ui::SPACE_L;
 
 impl Layout {
     pub fn new(ui: &Ui, w: i32, h: i32) -> Layout {
         let bar = ui.pt(ui::SPACE_XXXL + ui::SPACE_L) as i32;
         let side = (ui.pt(ui::SPACE_XXXL * 5.0) as i32).min(w / 3).max(0);
-        Layout { w: w.max(1), h: h.max(1), bar, side, inspector: 0 }
+        Layout { w: w.max(1), h: h.max(1), bar, side, inspector: 0, margin: ui.pt(FIT_MARGIN_PT) as i32 }
+    }
+
+    /// The room a page fitted to the window is scaled into: the canvas less the margin on all four sides. The page is
+    /// centred in the canvas (`place`), so in Fit it keeps the margin to the toolbar, the sidebar, the right panel and
+    /// the window's edges alike, whatever its shape (at open, turned, cropped, a PDF page) and whatever the window's
+    /// size. A canvas smaller than two margins leaves one pixel.
+    pub fn fit_room(&self) -> (usize, usize) {
+        let (_, _, cw, ch) = self.canvas();
+        ((cw - 2 * self.margin).max(1) as usize, (ch - 2 * self.margin).max(1) as usize)
     }
 
     /// The canvas rectangle (x, y, w, h).
@@ -495,7 +512,7 @@ impl Layout {
 
     /// The window with the sidebar, toolbar and Inspector gone: the slideshow's layout.
     pub fn bare(w: i32, h: i32) -> Layout {
-        Layout { w: w.max(1), h: h.max(1), bar: 0, side: 0, inspector: 0 }
+        Layout { w: w.max(1), h: h.max(1), bar: 0, side: 0, inspector: 0, margin: 0 }
     }
 
     /// The width the Inspector takes when it is shown.
@@ -946,7 +963,8 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
             if let (Some(src), Some((w, h))) = (doc.source_of(page_no), doc.page_size(page_no)) {
                 let q = scene.view.quarters;
                 let (rw, rh) = model::turn_size(w, h, q);
-                let scale = scene.view.zoom.scale(rw, rh, cw as usize, ch as usize);
+                let (fit_w, fit_h) = lay.fit_room();
+                let scale = scene.view.zoom.scale(rw, rh, fit_w, fit_h);
                 let target_w = ((rw as f32 * scale).round() as usize).max(1);
                 let target_h = ((rh as f32 * scale).round() as usize).max(1);
                 let p = place((cx, cy, cw, ch), rw, rh, scale, scene.view.pan);
@@ -1598,7 +1616,7 @@ mod tests {
 
     #[test]
     fn sidebar_hit_uses_scroll_and_ignores_the_toolbar() {
-        let lay = Layout { w: 600, h: 400, bar: 40, side: 150, inspector: 0 };
+        let lay = Layout { w: 600, h: 400, bar: 40, side: 150, inspector: 0, margin: 0 };
         let rows = vec![(8, 100), (116, 100)];
         assert_eq!(sidebar_hit(&lay, &rows, 0.0, 10.0, 60.0), Some(0));
         assert_eq!(sidebar_hit(&lay, &rows, 100.0, 10.0, 60.0), Some(1));
@@ -1609,7 +1627,7 @@ mod tests {
 
     #[test]
     fn the_inspector_takes_room_from_the_canvas_and_the_slideshow_takes_none() {
-        let lay = Layout { w: 800, h: 600, bar: 40, side: 150, inspector: 200 };
+        let lay = Layout { w: 800, h: 600, bar: 40, side: 150, inspector: 200, margin: 0 };
         assert_eq!(lay.canvas(), (150, 40, 450, 560));
         assert_eq!(Layout::bare(800, 600).canvas(), (0, 0, 800, 600));
     }
