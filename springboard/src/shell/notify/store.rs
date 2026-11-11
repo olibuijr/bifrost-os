@@ -9,6 +9,29 @@ use std::path::PathBuf;
 
 /// How many notifications survive; older ones are evicted.
 pub const KEEP: usize = 50;
+/// The most notifications one stack (an app's thread) keeps: its oldest go first, so one busy app does not fill the
+/// store and push the others' out.
+pub const GROUP_KEEP: usize = 20;
+
+/// Whether `a` says again what `b` said: the same app, thread, title and body. The store keeps the newest of these
+/// only (a timer that ends every day is one entry with the latest time, not forty).
+fn repeats(a: &Notification, b: &Notification) -> bool {
+    a.app == b.app && a.thread == b.thread && a.title == b.title && a.body == b.body
+}
+
+/// Brings `items` (oldest first) within the store's bounds: of notifications that repeat each other the newest
+/// stays, a stack keeps its newest `GROUP_KEEP`, and the store its newest `KEEP`.
+fn bound(items: &mut Vec<Notification>) {
+    let mut kept: Vec<Notification> = Vec::with_capacity(items.len().min(KEEP));
+    for n in items.drain(..).rev() {
+        let stack = kept.iter().filter(|k| k.app == n.app && k.thread == n.thread).count();
+        if kept.len() < KEEP && stack < GROUP_KEEP && !kept.iter().any(|k| repeats(k, &n)) {
+            kept.push(n);
+        }
+    }
+    kept.reverse();
+    *items = kept;
+}
 
 /// One notification, as an app posted it.
 #[derive(Clone, Debug, PartialEq)]
@@ -189,9 +212,8 @@ impl Store {
         finish(current.take(), &mut items);
         items.sort_by_key(|n| n.id);
         items.dedup_by_key(|n| n.id);
-        if items.len() > KEEP {
-            items.drain(..items.len() - KEEP);
-        }
+        // a file written before the stacks were bounded is brought within the bounds as it is read
+        bound(&mut items);
         let next_id = items.last().map_or(1, |n| n.id + 1);
         Store { path: None, items, next_id, muted, asked, schedule, focus_allowed }
     }
@@ -237,15 +259,14 @@ impl Store {
         }
     }
 
-    /// Adds a notification (its id is assigned here), evicting the oldest
-    /// past `KEEP`, and saves. Returns the id.
+    /// Adds a notification (its id is assigned here) and saves. Returns the id. An older notification that said the
+    /// same (same app, thread, title and body) gives way to it; the stack's oldest go past `GROUP_KEEP` and the
+    /// store's oldest past `KEEP`.
     pub fn push(&mut self, mut n: Notification) -> u64 {
         n.id = self.next_id;
         self.next_id += 1;
         self.items.push(n);
-        if self.items.len() > KEEP {
-            self.items.drain(..self.items.len() - KEEP);
-        }
+        bound(&mut self.items);
         self.save();
         self.items.last().map_or(0, |n| n.id)
     }
@@ -478,13 +499,61 @@ mod tests {
     #[test]
     fn evicts_past_keep() {
         let mut s = Store::memory();
+        // three stacks in turn, so none reaches its own bound before the store is full
         for i in 0..KEEP as i64 + 7 {
-            s.push(note(AppId::Deildu, &format!("n{i}"), i));
+            s.push(threaded(AppId::Deildu, &format!("room-{}", i % 3), &format!("n{i}"), i));
         }
         assert_eq!(s.len(), KEEP);
         assert_eq!(s.get(1), None, "the oldest went first");
         assert_eq!(s.groups()[0].items[0].title, format!("n{}", KEEP + 6));
-        assert_eq!(s.groups()[0].items.last().unwrap().title, "n7");
+        let oldest = s.groups().iter().map(|g| g.items.last().unwrap().id).min();
+        assert_eq!(oldest, Some(8), "the seven oldest are gone");
+    }
+
+    #[test]
+    fn a_repeated_notification_is_one_entry_with_the_latest_time() {
+        let mut s = Store::memory();
+        let first = s.push(Notification::new(AppId::Files, "1 min", "Your timer is done.", 100));
+        s.push(note(AppId::Files, "other", 150));
+        for day in 1..=40 {
+            s.push(Notification::new(AppId::Files, "1 min", "Your timer is done.", 100 + day * 86_400));
+        }
+        assert_eq!(s.count(AppId::Files), 2, "forty timers that ended are one entry");
+        assert_eq!(s.get(first), None, "the older one gave way");
+        let g = s.groups();
+        assert_eq!((g[0].items[0].title.as_str(), g[0].items[0].time), ("1 min", 100 + 40 * 86_400), "with the latest time, on top");
+        assert_eq!(g[0].items[1].title, "other");
+        // the same words from another app, in another thread or with another body are their own entries
+        s.push(Notification::new(AppId::Settings, "1 min", "Your timer is done.", 5));
+        s.push(threaded(AppId::Files, "t", "other", 6));
+        s.push(Notification::new(AppId::Files, "1 min", "Your alarm is done.", 7));
+        assert_eq!(s.len(), 5);
+    }
+
+    #[test]
+    fn a_stack_keeps_its_newest_and_leaves_the_other_apps_theirs() {
+        let mut s = Store::memory();
+        s.push(note(AppId::Settings, "Low Battery", 1));
+        for i in 0..GROUP_KEEP as i64 + 15 {
+            s.push(note(AppId::Files, &format!("n{i}"), 10 + i));
+        }
+        assert_eq!(s.count(AppId::Files), GROUP_KEEP);
+        assert_eq!(s.count(AppId::Settings), 1, "a busy app does not push another app's notification out");
+        let g = s.groups();
+        assert_eq!(g[0].items[0].title, format!("n{}", GROUP_KEEP + 14));
+        assert_eq!(g[0].items.last().unwrap().title, "n15", "the stack's oldest went first");
+    }
+
+    #[test]
+    fn a_file_from_before_the_bounds_is_trimmed_as_it_is_read() {
+        let mut text = String::new();
+        for i in 0..40 {
+            text.push_str(&format!("[{}]\napp=is.olibuijr.term\ntime={}\ntitle=1 min\nbody=Your timer is done.\n", i + 1, 1000 + i));
+        }
+        let s = Store::parse(&text);
+        assert_eq!(s.len(), 1);
+        assert_eq!(s.get(40).map(|n| n.time), Some(1039), "the newest of the forty stays");
+        assert_eq!(s.next_id, 41);
     }
 
     #[test]
@@ -548,7 +617,7 @@ mod tests {
         assert_eq!(s.get(3).unwrap().title, "ok");
         assert_eq!(s.next_id, 4);
         for i in 0..KEEP + 5 {
-            text.push_str(&format!("[{}]\napp=is.olibuijr.term\ntitle=t{i}\n", 100 + i));
+            text.push_str(&format!("[{}]\napp=is.olibuijr.term\ntitle=t{i}\nthread=room-{}\n", 100 + i, i % 3));
         }
         let s = Store::parse(&text);
         assert_eq!(s.len(), KEEP);
