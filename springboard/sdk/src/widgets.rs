@@ -168,6 +168,11 @@ pub fn vibrancy() -> bool {
     VIBRANCY.with(|v| v.get())
 }
 
+/// Both settings `set_vibrancy` takes, for a caller that turns vibrancy off around a draw and puts it back.
+pub(crate) fn vibrancy_state() -> (bool, bool) {
+    (VIBRANCY.with(|v| v.get()), ALL_MATERIALS.with(|v| v.get()))
+}
+
 /// Called by the runtime when the shell's appearance bits arrive. `all_materials` is `appearance::MATERIALS`:
 /// the shell decodes every material kind and state (older shells get `MaterialKind::legacy` kinds).
 pub fn set_vibrancy(on: bool, all_materials: bool) {

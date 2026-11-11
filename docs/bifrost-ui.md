@@ -1460,6 +1460,15 @@ the windows behind the window. Ours, end to end:
   sends each External window's material rects (`expand_material`, window radius growth on inner sides) as the
   `ext-background-effect` blur region, exactly as for built-in windows; apps need no extra call beyond
   `visual_effect` / `source_list`. Direct Wayland-surface apps do not send a region yet (gap).
+- Extra windows (`app_windows`): `ToShell::WindowChrome { id, press, materials }` (tag 0x25a) carries one extra
+  window's press-taking rectangles (window points, at most `MAX_WINDOW_PRESS` = 64; from `App::window_controls`,
+  the roles the shell treats as controls) and its material list (as `Materials` writes it). The runtime sends it
+  after the window drew, when either list changed, and only to a shell that set `appearance::WINDOW_CHROME`
+  (bit 7, 128): a shell without it cannot decode the tag and would stop the app. With the bit, a
+  `WindowSpec::full_size_content()` window has working toolbar buttons (the rest of its 52 pt band moves the
+  window) and a blurred sidebar; `app_windows::shell_takes_window_chrome()` tells an app whether to ask for one.
+  Without the bit the runtime paints an extra window with vibrancy off (materials draw `solid()`), because
+  nothing would blur what is behind it. Files' New Window uses this (1.34.21).
 - Version guard: an app whose SDK protocol differs from the shell's (`Hello`, or packets that do not decode) is
   stopped, logged, and its window shows "This app needs an update" instead of black (`AppHost::incompatible`).
 - Shell: `AppHost::materials` holds the list; `Shell::take_wayland_materials` turns it into window px with a

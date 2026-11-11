@@ -31,6 +31,37 @@ impl WindowId {
     }
 }
 
+/// The shell set `appearance::WINDOW_CHROME`: it takes `ToShell::WindowChrome` for an extra window.
+static WINDOW_CHROME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether the shell gives an extra window the chrome of the main one: the press-taking controls of a full-size
+/// window's toolbar (`App::window_controls`) and the blur behind its materials (a translucent sidebar). True on a
+/// shell that said so (`appearance::WINDOW_CHROME`). Where it is false an app opens its extra windows with the shell's
+/// title bar (no `WindowSpec::full_size_content`: every press in a full-size window's toolbar band would move the
+/// window), and the runtime paints their materials opaque (nothing would blur what is behind them).
+pub fn shell_takes_window_chrome() -> bool {
+    WINDOW_CHROME.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Called by the runtime with the shell's appearance bits.
+pub(crate) fn set_shell_takes_window_chrome(on: bool) {
+    WINDOW_CHROME.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The rectangles of `nodes` that take a press themselves, for `ToShell::WindowChrome`: the roles the shell treats as
+/// controls in the main window's toolbar band. Containers, rows and static text are left out: the empty space they
+/// cover moves the window. At most `MAX_WINDOW_PRESS`, and only rectangles the wire takes.
+pub(crate) fn press_rects(nodes: &[bifrost_ui::Node]) -> Vec<bifrost_ui::Rect> {
+    use bifrost_ui::Role;
+    nodes
+        .iter()
+        .filter(|n| matches!(n.role, Role::Button | Role::TextField | Role::Toggle | Role::Checkbox | Role::Slider | Role::SegmentedControl | Role::MenuItem))
+        .map(|n| n.bounds)
+        .filter(|b| [b.x, b.y, b.w, b.h].iter().all(|v| v.is_finite()) && b.w > 0.0 && b.h > 0.0)
+        .take(crate::proto::MAX_WINDOW_PRESS)
+        .collect()
+}
+
 /// The most windows an app holds at once, the main window included, unless the app asks for another limit.
 pub const DEFAULT_LIMIT: usize = 8;
 
@@ -398,6 +429,25 @@ mod tests {
             assert_eq!(bifrost_ui::pan::source(), source);
         }
         bifrost_ui::pan::set_source(TouchSource::Finger);
+    }
+
+    #[test]
+    fn only_the_controls_that_take_a_press_are_told_to_the_shell() {
+        use bifrost_ui::{Node, Rect, Role};
+        let node = |id, role, x: f32, w: f32| Node { id, role, label: String::new(), value: String::new(), bounds: Rect { x, y: 12.0, w, h: 28.0 }, enabled: true };
+        let nodes = vec![
+            node(1, Role::Button, 212.0, 28.0),
+            node(2, Role::List, 0.0, 900.0),
+            node(3, Role::TextField, 700.0, 180.0),
+            node(4, Role::StaticText, 260.0, 120.0),
+            node(5, Role::Button, 300.0, 0.0),
+            node(6, Role::Button, f32::NAN, 28.0),
+            node(7, Role::SegmentedControl, 400.0, 120.0),
+        ];
+        let rects = press_rects(&nodes);
+        assert_eq!(rects.iter().map(|r| r.x).collect::<Vec<_>>(), vec![212.0, 700.0, 400.0], "the toolbar row, the title, an empty and a broken rectangle are left out");
+        let many: Vec<Node> = (0..200).map(|i| node(i, Role::Button, i as f32, 10.0)).collect();
+        assert_eq!(press_rects(&many).len(), crate::proto::MAX_WINDOW_PRESS);
     }
 
     #[test]
