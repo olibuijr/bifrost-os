@@ -377,6 +377,11 @@ fn a_folder_is_found_by_name_as_a_folder_row() {
     let groups = file_groups("pictures", &files);
     let folder = Hit::Folder { path: PathBuf::from("/home/me/Pictures"), name: "Pictures".into(), modified: 1_700_000_000 };
     assert_eq!(groups, vec![Group { title: "Files", hits: vec![folder.clone()] }, Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: PathBuf::from("/home/me"), name: "Pictures".into() }] }]);
+    // "pictures" is also a type word: the pictures the index gives for it come after the folder found by its name
+    let pic = "/home/me/Pictures/pic.png";
+    let typed = vec![Group { title: "Files", hits: vec![indexed(super::super::workspace::FILES_APP, pic, "pic.png")] }];
+    let (_, folded, _) = fold_indexed_files(typed, groups.clone(), None, |_| OnDisk::File(7));
+    assert_eq!(folded[0].hits, vec![folder.clone(), Hit::File { path: PathBuf::from(pic), name: "pic.png".into(), modified: 7 }]);
     let (title, sub) = row_text(&folder, |_| String::new(), (1_700_000_060, 0, true));
     assert_eq!(title, "Pictures");
     assert!(sub.starts_with("Folder \u{b7} me \u{b7} Today at "), "{sub}");

@@ -32,6 +32,17 @@ pub fn roots(files_root: &Path, home: Option<&Path>) -> Vec<PathBuf> {
     out
 }
 
+/// Where the volumes mounted for the account are (`/run/media/<account>/<volume>`).
+pub const VOLUMES_ROOT: &str = "/run/media";
+
+/// True when `path` is in a place Search lists files from: under one of the walk's `roots` (the Files root, the
+/// account's home) or under a mounted volume. A file anywhere else on the disk (the system's own trees) is never a
+/// result, whichever app indexed it. A path with a `..` in it is in no place: nothing is resolved here.
+pub fn in_listed_place(path: &Path, roots: &[PathBuf]) -> bool {
+    let plain = path.is_absolute() && !path.components().any(|c| matches!(c, std::path::Component::ParentDir));
+    plain && (path.starts_with(VOLUMES_ROOT) || roots.iter().any(|r| path.starts_with(r)))
+}
+
 /// The home folder Search walks: the installed account's home, else `$HOME`. The desktop shell runs as root from a
 /// system service that sets no `$HOME`, so the variable alone never named the person's home there and no file under
 /// it was listed (E2E5: "file-37" found nothing). Read on the walk's worker thread at every scan, so an account made
@@ -211,6 +222,20 @@ mod tests {
         std::os::unix::fs::symlink(home.join("Pictures"), home.join("Link")).unwrap();
         assert!(walk(&[home.clone()], LIMIT, VISIT_BUDGET).iter().all(|e| e.name != "Link"));
         let _ = fs::remove_dir_all(&home);
+    }
+
+    /// E2E7 2: "color.jpg" of /usr/share/cups/ipptool was listed, a file the Files app had indexed when it was opened.
+    #[test]
+    fn only_the_home_the_files_root_and_mounted_volumes_are_places_search_lists_from() {
+        let roots = roots(Path::new("/var/lib/springboard/Files"), Some(Path::new("/home/me")));
+        assert!(in_listed_place(Path::new("/home/me/Pictures/pic.png"), &roots));
+        assert!(in_listed_place(Path::new("/var/lib/springboard/Files/a.txt"), &roots));
+        assert!(in_listed_place(Path::new("/run/media/me/Stick/photo.jpg"), &roots), "a mounted volume");
+        assert!(!in_listed_place(Path::new("/usr/share/cups/ipptool/color.jpg"), &roots), "a system tree");
+        assert!(!in_listed_place(Path::new("/home/meg/secret.txt"), &roots), "another home that starts with the same letters");
+        assert!(!in_listed_place(Path::new("/home/me/../../etc/passwd"), &roots), "nothing is resolved, so a path that climbs is out");
+        assert!(!in_listed_place(Path::new("Pictures/pic.png"), &roots));
+        assert!(!in_listed_place(Path::new("/home/me/a.txt"), &[]), "before the first scan no place is known");
     }
 
     /// The tests never walk the home folder of the machine they run on, whatever `$HOME` or its accounts say.

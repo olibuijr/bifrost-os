@@ -940,7 +940,8 @@ enum OnDisk {
     File(i64),
     /// nothing is there any more: the file was deleted, moved or renamed since it was indexed
     Gone,
-    /// a file Search does not list: one in a folder Settings > Search excludes, or any file while the Files section is off
+    /// a file Search does not list: one in a folder Settings > Search excludes, one outside the home folder, the Files
+    /// root and the mounted volumes, or any file while the Files section is off
     Hidden,
     /// something Search cannot say more about (a folder, a path that could not be looked at): the item stays as it is
     Unknown,
@@ -1201,7 +1202,11 @@ impl QuickSearch {
             self.start_run(&query);
         }
         let (top, sections, files) = self.run_groups();
-        let (documents, files, gone) = fold_indexed_files(indexed_groups(&query, &self.opens), files, top.as_ref(), indexed_file_on_disk);
+        // a file the Files app indexed when it was opened there is a file row only in the places Search lists files
+        // from; one opened anywhere else on the disk (E2E7 2: /usr/share/cups/ipptool/color.jpg) is no result
+        let roots = &self.file_roots;
+        let on_disk = |path: &Path| if files_walk::in_listed_place(path, roots) { indexed_file_on_disk(path) } else { OnDisk::Hidden };
+        let (documents, files, gone) = fold_indexed_files(indexed_groups(&query, &self.opens), files, top.as_ref(), on_disk);
         // a query is merged again for every answer that streams in: each stale id is handed over once
         let gone: Vec<String> = gone.into_iter().filter(|id| !self.forgotten.contains(id)).collect();
         self.forgotten.extend(gone.iter().cloned());
@@ -1485,7 +1490,10 @@ pub struct QuickSearch {
     files: Vec<crate::files::fs::Entry>,
     files_folded: Vec<String>,
     /// the background file scan started at open, until its result is taken
-    files_rx: Option<std::sync::mpsc::Receiver<Vec<crate::files::fs::Entry>>>,
+    files_rx: Option<std::sync::mpsc::Receiver<(Vec<PathBuf>, Vec<crate::files::fs::Entry>)>>,
+    /// the folders the last file scan walked (`files_walk::roots`): a document of the Files app outside them and outside
+    /// the mounted volumes is not listed as a file (`files_walk::in_listed_place`)
+    file_roots: Vec<PathBuf>,
     /// the background read of the contacts and Deildu titles, until its result is taken
     sources_rx: Option<std::sync::mpsc::Receiver<SourcesRead>>,
     /// the root the file list was scanned under, and when that scan finished
@@ -1625,6 +1633,7 @@ impl QuickSearch {
             files: vec![],
             files_folded: vec![],
             files_rx: None,
+            file_roots: vec![],
             sources_rx: None,
             files_root: None,
             files_at: None,
@@ -1832,7 +1841,7 @@ impl QuickSearch {
                 let home = home.or_else(files_walk::search_home);
                 let roots = files_walk::roots(&root, home.as_deref());
                 let files: Vec<crate::files::fs::Entry> = files_walk::walk(&roots, files_walk::LIMIT, files_walk::VISIT_BUDGET).into_iter().filter(|e| !excluded.folder_excluded(&e.path)).collect();
-                let _ = tx.send(files);
+                let _ = tx.send((roots, files));
             });
             self.files_rx = Some(rx);
         }
@@ -1873,7 +1882,8 @@ impl QuickSearch {
     fn take_files(&mut self) -> bool {
         let Some(rx) = &self.files_rx else { return false };
         match rx.try_recv() {
-            Ok(files) => {
+            Ok((roots, files)) => {
+                self.file_roots = roots;
                 self.set_files(files);
                 self.files_rx = None;
                 self.files_at = Some(std::time::Instant::now());
@@ -2416,34 +2426,44 @@ impl QuickSearch {
         (self.rows_h(ui) - self.viewport_h(ui)).max(0.0)
     }
 
-    /// The card (x, y, w, h) in px at rest.
+    /// The two glass plates of the Golden Gate panel whose card is `card`, as (x, y, w, h, radius) in px: the field's
+    /// capsule and, when there is anything under it, the results card a gap below. `draw` fills exactly these and
+    /// declares exactly these to the presenter's blur; `desk_overlay` bounds them.
+    fn mac_plates(&self, ui: &Ui, (cx, cy, cw, ch): Rect) -> [Option<(f32, f32, f32, f32, f32)>; 2] {
+        let fh = self.px(ui, self.m().field);
+        let below = fh + self.px(ui, MAC_GAP_PT);
+        [Some((cx, cy, cw, fh, fh / 2.0)), (ch > below).then(|| (cx, cy + below, cw, ch - below, self.px(ui, self.m().radius)))]
+    }
+
     /// The desktop capsule and its results card as one overlay: (x, y, w, h) plus the alpha mask (capsule
     /// rounded to half its height, the card below it to the card radius). None unless shown on the desktop.
+    ///
+    /// The rectangle is the plates' bounds rounded outwards to whole pixels. It is also the region the desktop frame
+    /// clears and reports as redrawn (`desk_regions_now`), and the presenter drops a blur shape that was not declared
+    /// again only when it lies wholly inside such a region. With the origin rounded down and the size rounded up on
+    /// its own, a card at a fractional position ended below its region (y 173.75 + h 150.5 against 173 + 151), so
+    /// the shape of every earlier, taller result list stayed: blurred plates hanging under the card (E2E7 1).
     pub fn desk_overlay(&self, ui: &Ui, w: i32) -> Option<((usize, usize, usize, usize), Vec<u8>)> {
         if !self.mac || !self.active() {
             return None;
         }
-        let m = self.m();
         let (cx, cy, cw, ch) = self.card(ui, w);
-        let (x, y, ow, oh) = (cx.max(0.0) as usize, cy.max(0.0) as usize, cw.ceil() as usize, ch.ceil() as usize);
-        let fh = self.px(ui, m.field).ceil() as usize;
+        let (x0, y0) = (cx.max(0.0).floor(), cy.max(0.0).floor());
+        let (ow, oh) = (((cx + cw).ceil() - x0).max(0.0) as usize, ((cy + ch).ceil() - y0).max(0.0) as usize);
         let mut mask = vec![0u8; ow * oh];
-        let mut put = |top: usize, h: usize, r: f32| {
-            for (i, a) in crate::gfx::rrect_mask(ow, h, r).into_iter().enumerate() {
-                let at = (top + i / ow) * ow + i % ow;
-                if at < mask.len() {
-                    mask[at] = mask[at].max(a);
-                }
+        for (_, py, _, ph, r) in self.mac_plates(ui, (cx, cy, cw, ch)).into_iter().flatten() {
+            // each plate's rows, rounded outwards like the whole
+            let top = ((py.floor() - y0).max(0.0) as usize).min(oh);
+            let rows = (((py + ph).ceil() - y0).max(0.0) as usize).min(oh) - top;
+            for (i, a) in crate::gfx::rrect_mask(ow, rows, r).into_iter().enumerate() {
+                let at = top * ow + i;
+                mask[at] = mask[at].max(a);
             }
-        };
-        put(0, fh.min(oh), fh as f32 / 2.0);
-        let gap = self.px(ui, MAC_GAP_PT) as usize;
-        if oh > fh + gap {
-            put(fh + gap, oh - fh - gap, self.px(ui, m.radius));
         }
-        Some(((x, y, ow, oh), mask))
+        Some(((x0 as usize, y0 as usize, ow, oh), mask))
     }
 
+    /// The card (x, y, w, h) in px at rest.
     pub fn card(&self, ui: &Ui, w: i32) -> Rect {
         let m = self.m();
         (self.card_x(ui, w), self.px(ui, m.card_top), self.px(ui, m.card_w), self.px(ui, m.field) + self.content_h(ui))
@@ -2643,10 +2663,8 @@ impl QuickSearch {
         if self.mac {
             // Golden Gate: a glass capsule for the field and, when there are results, a glass card under it of the
             // same material, both through the presenter's glass hook as the menus are.
-            mac_glass(s, cx, cy, cw, fh, fh / 2.0, alpha);
-            if ch > fh {
-                let ry = cy + fh + self.px(ui, MAC_GAP_PT);
-                mac_glass(s, cx, ry, cw, ch - fh - self.px(ui, MAC_GAP_PT), self.px(ui, m.radius), alpha);
+            for (x, y, w, h, r) in self.mac_plates(ui, (cx, cy, cw, ch)).into_iter().flatten() {
+                mac_glass(s, x, y, w, h, r, alpha);
             }
         } else {
             // Liquid Glass (regular): blur the wallpaper and dock beneath, tint it, and light the edge.
@@ -3189,6 +3207,14 @@ impl Shell {
     /// Records a launch for the suggestions row (the shell does this on every open).
     pub fn note_launch(&mut self, app: AppId) {
         self.quicksearch.note_launch(app);
+    }
+
+    /// The folder Search walks as the home folder from now on, in place of the account's or `$HOME`. For host previews:
+    /// they give a folder of sample files, so a preview never reads or shows the developer's own file names.
+    pub fn set_search_home(&mut self, home: PathBuf) {
+        self.quicksearch.home = Some(home);
+        // a list scanned before is of another folder
+        self.quicksearch.files_at = None;
     }
 
     /// Types into the shown card as the keyboard would (remote control, previews).

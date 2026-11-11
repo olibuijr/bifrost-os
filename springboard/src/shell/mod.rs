@@ -18,7 +18,6 @@ pub mod apphost;
 pub mod app_window_table;
 pub mod helpbook;
 pub mod folder_actions;
-pub mod file_import;
 pub mod touch_frames;
 pub mod intents;
 pub mod preview_gen;
@@ -774,8 +773,6 @@ pub struct Shell {
     ota: Option<ota::Ota>,
     /// Folder Actions: the attachments saved under the data dir, rescanned from the tick (see `folder_actions`).
     folder_actions: folder_actions::Watcher,
-    /// the file importer: Documents, Desktop and Downloads kept in the Core Search index on a background thread (see `file_import`)
-    file_import: file_import::Importer,
     /// the shared weather summary: refreshed hourly and on wake, with no app window open
     weather_refresh: weather::Refresher,
     /// last time (ms) the apps registry was stat'ed for outside changes
@@ -1317,7 +1314,6 @@ impl Shell {
             folder_actions: folder_actions::Watcher::new(folder_actions::Registry::from_text(
                 &std::fs::read_to_string(folder_actions::file_path(&apphost::root())).unwrap_or_default(),
             )),
-            file_import: Default::default(),
             weather_refresh: weather::Refresher::default(),
             disk_check_ms: 0.0,
             idle_off_ms: Options::default().auto_lock_ms as f64,
@@ -4424,7 +4420,6 @@ impl Shell {
         self.visual_search_tick();
         self.ota_tick(t);
         self.folder_actions_tick();
-        self.file_import_tick();
         if self.weather_refresh.due(t) {
             self.weather_refresh.start(weather::data_path().into());
         }

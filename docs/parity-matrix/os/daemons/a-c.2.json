@@ -5254,24 +5254,19 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/file_import.rs, springboard/src/shell/spotindex.rs, springboard/ui/src/mdimport.rs",
-   "status": "parity",
-   "note": "Index importers. Built 2026-10-17: importer plug-ins (bifrost_ui mdimport), file-to-item conversion (spotindex::file_item), the bounded folder scan (spotindex::scan_folder_limited, reindex_folder) and the importer daemon (shell file_import): at shell start and every 30 seconds the tick starts one background thread that compares a cheap change signature of Documents, Desktop and Downloads and re-imports only the folders that changed, a third of the per-app budget each, under the Files app. Missing: importers for binary formats, and the folders are fixed (no Settings list of Search locations); a change is noticed within one period, not at once, since the shell has no file-change feed. Verified on the midget with BifrOSt 0.10.16 (os_verify).",
+   "bifrost": "springboard/src/shell/spotindex.rs, springboard/ui/src/mdimport.rs, springboard/src/shell/quicksearch_files.rs",
+   "status": "partial",
+   "note": "Index importers. Built 2026-10-17: importer plug-ins (bifrost_ui mdimport), file-to-item conversion (spotindex::file_item), and the bounded folder scan (spotindex::scan_folder_limited). The importer daemon (shell file_import: a 30 second poll of Documents, Desktop and Downloads) was removed 2026-11-11: it read $HOME, which the shell service does not have, so it never ran on the device, and since 0.10.51 Search lists the files of the whole home folder by name from its own bounded walk when it opens (quicksearch_files). Missing: nothing imports file contents on its own (a file is found by its text only once an app indexed it), and importers for binary formats.",
    "rea": [],
    "method": "heuristic",
    "checks": [
     {
      "kind": "test",
      "crate": "springboard",
-     "filter": "shell::file_import::tests"
-    },
-    {
-     "kind": "test",
-     "crate": "springboard",
      "filter": "shell::spotindex::tests"
     }
    ],
-   "ready_note": "The shell imports Documents, Desktop and Downloads into the Core Search index on a background thread, at start and when a folder's signature changes, bounded by depth, file count and a per-folder share (tests file_import, spotindex). Binary-format importers are not built."
+   "ready_note": "Importer plug-ins and the bounded folder scan are built and tested (spotindex); nothing runs them over the home folder, whose files Search finds by name from its own walk. Binary-format importers are not built."
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.spotlightknowledged.plist",
