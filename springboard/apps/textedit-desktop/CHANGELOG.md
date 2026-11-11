@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.18
+
+- The window opens sooner: the list of installed fonts is read in the background instead of before the first frame. Until it is ready Format > Font lists Helvetica, Times and Courier; the other families follow a moment later.
+- The status bar reads "1 word" and "1 character" for one.
+- Edit > Speech > Start Speaking is dimmed in a document with no text.
+
 ## 1.13.17
 
 - Text typed into a new document is 13 pt, the system body size the window's own labels use; it was 12 pt and looked small beside them. Plain text documents, and Make Plain Text, use the same size.
