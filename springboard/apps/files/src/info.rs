@@ -115,6 +115,9 @@ fn named(name: Option<String>, id: u32) -> String {
 pub(crate) struct Info {
     pub(crate) name: String,
     pub(crate) rows: Vec<(&'static str, String)>,
+    /// The rows that are dates, by label, with their Unix time: the panel writes them when it paints, so an open Get
+    /// Info follows a change of the clock style or the time zone as the views do.
+    pub(crate) dates: Vec<(&'static str, i64)>,
     /// The item Get Info describes, and its permission bits for the editable grid (`perms.rs`).
     pub(crate) path: PathBuf,
     pub(crate) mode: Option<u32>,
@@ -212,7 +215,8 @@ impl Files {
             editable = perms::can_edit(st.user_id, perms::current_uid()) && !provider::is_path(&entry.path);
         }
         self.preview = None;
-        self.info = Some(Info { name: entry.name.clone(), rows, path: entry.path.clone(), mode, editable });
+        let dates = created.map(|at| (CREATED_ROW, at)).into_iter().chain([(MODIFIED_ROW, entry.mtime)]).collect();
+        self.info = Some(Info { name: entry.name.clone(), rows, dates, path: entry.path.clone(), mode, editable });
         // the reference shows Get Info in a small window of its own; the panel stays as the fallback
         self.info_wanted = !self.info_window;
         self.revision += 1;
@@ -251,7 +255,9 @@ impl Files {
             for (i, (label, value)) in info.rows.iter().enumerate() {
                 let row_y = y + 56. + i as f32 * 26.;
                 text(s, ui, label, 12., LABEL_2.now(), x + 20., row_y + 2., 120.);
-                text(s, ui, value, 13., LABEL.now(), x + 150., row_y, w - x - 190.);
+                // a date is written now, in the clock style and the zone of this moment
+                let date = info.dates.iter().find(|(l, _)| l == label).map(|&(_, at)| date_text(at));
+                text(s, ui, date.as_deref().unwrap_or(value), 13., LABEL.now(), x + 150., row_y, w - x - 190.);
             }
             self.paint_perm_grid(ui, s);
             let grid_h = if info.mode.is_some() { perms::GRID_H + 14. } else { 0. };

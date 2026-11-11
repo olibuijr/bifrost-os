@@ -89,7 +89,9 @@ pub fn save(data_dir: &Path, recents: &Recents) -> std::io::Result<()> {
     std::fs::write(list_path(data_dir), recents.to_text())
 }
 
-/// Writes `bytes` into the data directory as the opened file `name` and returns the copy's path.
+/// Writes `bytes` into the data directory as the opened file `name` and returns the copy's path. Only the tests place
+/// a copy by its bare name: every open asks `origin::Origins::place` for the place and calls `keep_copy_at`.
+#[cfg(test)]
 pub fn keep_copy(data_dir: &Path, name: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
     keep_copy_at(data_dir, &copy_name(name), bytes)
 }

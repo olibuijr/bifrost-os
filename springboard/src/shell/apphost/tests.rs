@@ -293,6 +293,29 @@ fn appearance_is_sent_on_first_contact_and_only_when_it_changes() {
     assert_eq!(next(&peer), Some(ToApp::Appearance { flags: bifrost_proto::appearance::SHOW_BORDERS }));
 }
 
+/// Files kept "Today at 01:18" with 24-Hour Time off (0.10.51): an app cannot read the shell's settings, so the shell
+/// tells it the clock style and the zone.
+#[test]
+fn the_clock_style_and_the_zone_are_sent_on_first_contact_and_when_one_changes() {
+    use bifrost_proto::date_time::CLOCK_12_HOUR;
+    let (channel, peer) = sys::socketpair_pair().unwrap();
+    let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+    let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+    let next = |peer: &Channel| match peer.recv(false).unwrap() {
+        sys::Recv::Packet(p, _) => Some(ToApp::decode(&p).unwrap()),
+        _ => None,
+    };
+    assert_eq!((date_time_flags(true), date_time_flags(false)), (0, CLOCK_12_HOUR));
+    host.sync_date_time(date_time_flags(true), "Europe/Berlin");
+    assert_eq!(next(&peer), Some(ToApp::DateTime { flags: 0, zone: "Europe/Berlin".into() }), "first contact sends even 24-hour time");
+    host.sync_date_time(date_time_flags(true), "Europe/Berlin");
+    assert_eq!(next(&peer), None, "unchanged: nothing sent");
+    host.sync_date_time(date_time_flags(false), "Europe/Berlin");
+    assert_eq!(next(&peer), Some(ToApp::DateTime { flags: CLOCK_12_HOUR, zone: "Europe/Berlin".into() }), "24-Hour Time turned off");
+    host.sync_date_time(date_time_flags(false), "America/New_York");
+    assert_eq!(next(&peer), Some(ToApp::DateTime { flags: CLOCK_12_HOUR, zone: "America/New_York".into() }), "the zone changed");
+}
+
 #[test]
 fn the_light_scheme_is_a_flag_and_the_config_dark_is_its_inverse() {
     let _lock = crate::test_support::global_lock();

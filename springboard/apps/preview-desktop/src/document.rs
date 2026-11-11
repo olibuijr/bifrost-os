@@ -179,17 +179,19 @@ impl Document {
         self.sizes.get(self.source_of(page)?).copied()
     }
 
-    /// The box the thumbnail of shown page `page` fits, turned with the page, known without drawing it. The sidebar lays
-    /// rows out from this.
+    /// The box the thumbnail of shown page `page` takes, known without drawing it; the sidebar lays rows out from this.
+    /// It is the page as it is shown (turned) that is fitted into the tile, so a turned page is never wider than
+    /// `THUMB_W`: fitting the unturned page and turning the result made a turned portrait page twice as wide as its tile.
     pub fn thumb_box(&self, page: usize) -> Option<(usize, usize)> {
-        let (w, h) = self.thumb_fit(page)?;
-        Some(model::turn_size(w, h, self.turn_of(page)))
+        let (w, h) = self.page_size(page)?;
+        let (tw, th) = model::turn_size(w, h, self.turn_of(page));
+        Some(fit_box(tw, th, THUMB_W, 2 * THUMB_W))
     }
 
-    /// The box the unturned thumbnail of shown page `page` is fitted into.
+    /// The size the unturned thumbnail of shown page `page` is drawn at: turned, it fills `thumb_box`.
     fn thumb_fit(&self, page: usize) -> Option<(usize, usize)> {
-        let (w, h) = self.page_size(page)?;
-        Some(fit_box(w, h, THUMB_W, 2 * THUMB_W))
+        let (w, h) = self.thumb_box(page)?;
+        Some(model::turn_size(w, h, self.turn_of(page)))
     }
 
     /// The quarter turns of shown page `page`.
@@ -222,6 +224,24 @@ impl Document {
             _ => return,
         }
         self.sizes = vec![(img.w, img.h)];
+        self.source = Source::Picture(img);
+        self.drawn.borrow_mut().clear();
+        self.asked.borrow_mut().clear();
+        self.revision = self.revision.wrapping_add(1);
+    }
+
+    /// The picture was saved as `img`: its pixels hold the turn, the colour adjustment and the markup. It is the
+    /// document's picture, and its picture as opened, from now on, with no turn and no markup of its own, as if the
+    /// saved file had just been opened; the thumbnails are drawn again. Nothing happens for a PDF.
+    pub fn adopt_saved(&mut self, img: Rc<Image>) {
+        if !matches!(self.source, Source::Picture(_)) {
+            return;
+        }
+        self.sizes = vec![(img.w, img.h)];
+        self.order = vec![0];
+        self.turns = vec![0];
+        self.marks.clear();
+        self.original = Some(img.clone());
         self.source = Source::Picture(img);
         self.drawn.borrow_mut().clear();
         self.asked.borrow_mut().clear();
@@ -551,6 +571,25 @@ mod tests {
     }
 
     #[test]
+    fn a_saved_picture_is_adopted_as_the_document_with_nothing_left_to_save() {
+        let mut doc = picture_doc(4, 2);
+        doc.set_turn(0, 1);
+        doc.marks.push(Mark { kind: crate::model::MarkKind::Rect, page: 0, rect: crate::model::Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }, color: 0, text: String::new(), ink: Vec::new() });
+        let before = doc.revision;
+        let turned = doc.thumb(0).expect("a thumbnail");
+        doc.adopt_saved(Rc::new(Image { w: 2, h: 4, px: vec![7; 8] }));
+        assert!(!doc.edited(), "the saved picture is the document as opened");
+        assert_eq!((doc.sizes.clone(), doc.turn_of(0), doc.marks.len()), (vec![(2, 4)], 0, 0));
+        assert_ne!(doc.revision, before, "a drawn copy of the old pixels is stale");
+        assert!(!Rc::ptr_eq(&turned, &doc.thumb(0).unwrap()), "the thumbnail is drawn from the saved pixels");
+        assert_eq!(doc.picture(0).unwrap().px, vec![7; 8]);
+        // Revert to Original goes back to the saved picture, not to the one before the save
+        doc.replace_picture(Rc::new(Image { w: 1, h: 1, px: vec![0] }));
+        doc.restore_original();
+        assert_eq!(doc.sizes, [(2, 4)]);
+    }
+
+    #[test]
     fn an_svg_document_opens_as_a_picture_of_its_own_size() {
         let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" width="6" height="4"><rect width="6" height="4" fill="#ff0000"/></svg>"##;
         let img = decode_picture(svg).expect("the manifest declares SVG, so it opens");
@@ -613,12 +652,31 @@ mod tests {
     fn thumbnails_turn_with_their_page() {
         let mut doc = picture_doc(400, 200);
         doc.set_turn(0, 1);
-        assert_eq!(doc.thumb_box(0), Some((66, THUMB_W)));
+        assert_eq!(doc.thumb_box(0), Some((THUMB_W, 2 * THUMB_W)));
         let t = doc.thumb(0).expect("a thumbnail");
-        assert_eq!((t.w, t.h), (66, THUMB_W));
+        assert_eq!((t.w, t.h), (THUMB_W, 2 * THUMB_W));
         doc.set_turn(0, 0);
         let t = doc.thumb(0).expect("a thumbnail");
         assert_eq!((t.w, t.h), (THUMB_W, 66));
+    }
+
+    /// A portrait picture turned on its side (a saved rotation, then Rotate again) is a landscape page: its thumbnail
+    /// is fitted as one, not drawn twice the tile's width.
+    #[test]
+    fn a_turned_thumbnail_is_never_wider_than_its_tile() {
+        for (w, h) in [(200, 400), (400, 200), (300, 300), (90, 1000), (1000, 90)] {
+            let mut doc = picture_doc(w, h);
+            for quarters in 0..4 {
+                doc.set_turn(0, quarters);
+                let (bw, bh) = doc.thumb_box(0).expect("a box");
+                assert!(bw <= THUMB_W && bh <= 2 * THUMB_W, "{w}x{h} turned {quarters}: {bw}x{bh}");
+                let t = doc.thumb(0).expect("a thumbnail");
+                assert_eq!((t.w, t.h), (bw, bh), "{w}x{h} turned {quarters}: the thumbnail fills its box");
+            }
+        }
+        let mut doc = picture_doc(200, 400);
+        doc.set_turn(0, 1);
+        assert_eq!(doc.thumb_box(0), Some((THUMB_W, 66)));
     }
 
     #[test]

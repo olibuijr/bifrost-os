@@ -548,16 +548,36 @@ pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, side:
         w: (lay.w - lay.side).max(0) as f32 / scale,
         h: lay.bar.max(0) as f32 / scale,
     };
-    // Preserve the old narrow-window behavior: actions that do not fit remain available from the menus, rather than
-    // exposing the kit's overflow affordance without an app-specific overflow menu.
-    let full = Toolbar::new(items.clone());
-    let first = widgets::toolbar_layout(ui, bounds, &full);
-    if !first.overflow.is_empty() {
-        items = items.into_iter().filter(|item| !first.overflow.contains(&item.id)).collect();
-    }
+    // The buttons a narrow bar has no room for are not dropped: the kit puts them behind its `»` button
+    // (`ToolbarLayout::overflow`), and `overflow_hit` lists them in the menu that button opens.
     let bar = Toolbar::new(items);
     let layout = widgets::toolbar_layout(ui, bounds, &bar);
     (bar, layout)
+}
+
+/// The id of the toolbar's `»` button among the window's controls. It is no `Action`.
+pub const OVERFLOW_ID: u32 = 0x4001;
+/// What the `»` button is called.
+pub const OVERFLOW_LABEL: &str = "More Toolbar Items";
+
+/// The buttons behind the toolbar's `»` button, in bar order, each with whether it is enabled.
+pub fn overflow_actions(bar: &Toolbar, layout: &ToolbarLayout) -> Vec<(Action, bool)> {
+    layout
+        .overflow
+        .iter()
+        .filter_map(|id| bar.items.iter().find(|item| item.id == *id))
+        .filter_map(|item| Action::from_id(item.id).map(|action| (action, item.enabled)))
+        .collect()
+}
+
+/// A press at window pixel `(x, y)` on the toolbar's `»` button: where its menu opens (the button's leading edge, just
+/// below it, in window pixels) and the buttons it lists. None when the press is elsewhere or every button is on the bar.
+#[allow(clippy::too_many_arguments)]
+pub fn overflow_hit(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, side: Side, x: f32, y: f32) -> Option<((f32, f32), Vec<(Action, bool)>)> {
+    let (bar, layout) = toolbar(ui, lay, open, title, tool, side);
+    let scale = ui.pt(1.0).max(0.001);
+    let button = layout.overflow_button.filter(|r| r.contains(x / scale, y / scale))?;
+    Some(((button.x * scale, (button.y + button.h + ui::SPACE_XS) * scale), overflow_actions(&bar, &layout)))
 }
 
 /// The toolbar buttons with their glyphs, groups, enabled and selected state. Every button acts on the open document,
@@ -1359,6 +1379,15 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     }
 }
 
+/// Where a thumbnail `width` pixels wide is drawn in a sidebar `side` wide whose tiles are inset by `pad`: its left
+/// edge, the column of the thumbnail the drawing starts at, and how many columns are drawn. A thumbnail that fits is
+/// centred whole; a wider one is cut to the tile on both sides, so nothing is drawn past the sidebar's edge.
+pub fn thumb_span(side: i32, pad: i32, width: usize) -> (i32, usize, usize) {
+    let room = (side - 2 * pad).max(0) as usize;
+    let shown = width.min(room);
+    ((side - shown as i32) / 2, (width - shown) / 2, shown)
+}
+
 fn draw_pages(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Document) {
     let rows = rows(ui, doc);
     let pad = ui.pt(ui::SPACE_S) as i32;
@@ -1375,12 +1404,17 @@ fn draw_pages(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Docum
         let (bw, bh) = doc.thumb_box(i).unwrap_or((THUMB_W, (THUMB_W as f32 * 1.3) as usize));
         match doc.thumb(i) {
             Some(t) => {
-                let x = (lay.side - t.w as i32) / 2;
-                s.blit(&t, x, y + pad, 255, 255);
+                // a thumbnail wider than its tile (a narrow window's sidebar) shows its middle and stays inside the tile
+                let (x, skip, w) = thumb_span(lay.side, pad, t.w);
+                if w == t.w {
+                    s.blit(&t, x, y + pad, 255, 255);
+                } else if w > 0 {
+                    s.blit(&t.crop(skip, 0, w, t.h), x, y + pad, 255, 255);
+                }
             }
             None => {
-                let x = (lay.side - bw as i32) / 2;
-                fill(s, x, y + pad, bw as i32, bh as i32, ui::CARD_BG.now());
+                let (x, _, w) = thumb_span(lay.side, pad, bw);
+                fill(s, x, y + pad, w as i32, bh as i32, ui::CARD_BG.now());
             }
         }
         let box_h = bh as i32;
@@ -1548,6 +1582,18 @@ mod tests {
         // a point at the top-left of the turned canvas is the bottom-left of the source page for one turn
         let (u, v) = to_source(&p, 1, p.x as f32, p.y as f32);
         assert!((u - 0.0).abs() < 1e-5 && (v - 1.0).abs() < 1e-5, "got {u} {v}");
+    }
+
+    #[test]
+    fn a_thumbnail_is_drawn_inside_its_tile() {
+        // it fits: centred whole
+        assert_eq!(thumb_span(200, 8, 132), (34, 0, 132));
+        // wider than the tile: its middle, from the tile's left edge to its right edge
+        let (x, skip, shown) = thumb_span(200, 8, 264);
+        assert_eq!((x, skip, shown), (8, 40, 184));
+        assert!(x >= 0 && x + shown as i32 <= 200);
+        // a sidebar with no room draws nothing
+        assert_eq!(thumb_span(10, 8, 132).2, 0);
     }
 
     #[test]

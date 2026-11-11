@@ -1,14 +1,15 @@
-//! The files Search lists: the Files root ("On My PC") and the person's home folder (`search_home`), walked on a worker thread when
-//! Search opens (`QuickSearch::refresh_sources`) and reused for a while after. The shell has no file-system metadata
-//! index, so this is a bounded name walk: breadth first (shallow files are reached before a deep tree uses up the
-//! budget), hidden folders and build or package trees skipped, symbolic links not followed, at most `VISIT_BUDGET`
-//! entries looked at, and the newest `LIMIT` files kept.
+//! The files and folders Search lists: the Files root ("On My PC") and the person's home folder (`search_home`), walked
+//! on a worker thread when Search opens (`QuickSearch::refresh_sources`) and reused for a while after. The shell has no
+//! file-system metadata index, so this is a bounded name walk: breadth first (shallow entries are reached before a deep
+//! tree uses up the budget), hidden folders and build or package trees skipped (neither entered nor listed), symbolic
+//! links not followed, at most `VISIT_BUDGET` entries looked at, and the newest `LIMIT` files and folders kept. The
+//! roots themselves are not listed.
 
 use crate::files::fs::{kind_of, Entry};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
-/// The most files kept for Search, newest first.
+/// The most files and folders kept for Search, newest first.
 pub const LIMIT: usize = 6000;
 /// The most directory entries one walk looks at.
 pub const VISIT_BUDGET: usize = 60_000;
@@ -35,7 +36,14 @@ pub fn roots(files_root: &Path, home: Option<&Path>) -> Vec<PathBuf> {
 /// system service that sets no `$HOME`, so the variable alone never named the person's home there and no file under
 /// it was listed (E2E5: "file-37" found nothing). Read on the walk's worker thread at every scan, so an account made
 /// after the shell started is picked up.
+///
+/// None in the shell's own tests, whatever the machine has: a test never walks the home folder of the machine it runs
+/// on (its files would come in as results, and the walk would make the tests slow and dependent on that folder). A
+/// test that wants a home folder walked gives the panel one (`QuickSearch::home`).
 pub fn search_home() -> Option<PathBuf> {
+    if cfg!(test) {
+        return None;
+    }
     #[cfg(feature = "desktop-wayland")]
     let account = crate::bare::app_policy::Account::installed().ok().map(|a| a.home);
     #[cfg(not(feature = "desktop-wayland"))]
@@ -53,7 +61,9 @@ fn skipped(name: &str) -> bool {
     name.starts_with('.') || SKIP_DIRS.contains(&name)
 }
 
-/// The files under `roots`, newest first, at most `limit`, after looking at no more than `budget` entries.
+/// The files and folders under `roots`, newest first, at most `limit`, after looking at no more than `budget` entries.
+/// A folder the walk does not enter because of its name (`skipped`) is not listed either; one it does not enter because
+/// it is too deep is.
 pub fn walk(roots: &[PathBuf], limit: usize, budget: usize) -> Vec<Entry> {
     let mut out: Vec<Entry> = Vec::new();
     let mut queue: VecDeque<(PathBuf, usize)> = roots.iter().map(|r| (r.clone(), 0)).collect();
@@ -67,15 +77,18 @@ pub fn walk(roots: &[PathBuf], limit: usize, budget: usize) -> Vec<Entry> {
             }
             let Ok(ft) = e.file_type() else { continue };
             let name = e.file_name().to_string_lossy().into_owned();
-            if ft.is_dir() {
-                if depth < MAX_DEPTH && !skipped(&name) {
-                    queue.push_back((e.path(), depth + 1));
-                }
-            } else if ft.is_file() && !name.starts_with('.') {
-                let Ok(md) = e.metadata() else { continue };
-                let mtime = md.modified().ok().and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs() as i64);
-                out.push(Entry { kind: kind_of(&name, false), name, path: e.path(), is_dir: false, size: md.len(), mtime, items: None });
+            let is_dir = ft.is_dir();
+            // neither a link nor a special file; no hidden file, and no folder the walk stays out of
+            let left_out = if is_dir { skipped(&name) } else { !ft.is_file() || name.starts_with('.') };
+            if left_out {
+                continue;
             }
+            if is_dir && depth < MAX_DEPTH {
+                queue.push_back((e.path(), depth + 1));
+            }
+            let Ok(md) = e.metadata() else { continue };
+            let mtime = md.modified().ok().and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs() as i64);
+            out.push(Entry { kind: kind_of(&name, is_dir), name, path: e.path(), is_dir, size: if is_dir { 0 } else { md.len() }, mtime, items: None });
         }
     }
     out.sort_by(|a, b| b.mtime.cmp(&a.mtime).then_with(|| a.path.cmp(&b.path)));
@@ -126,7 +139,7 @@ mod tests {
             fs::write(home.join(format!("E2E/many/file-{i:02}.txt")), "x").unwrap();
         }
         let found = walk(&roots(Path::new("/nonexistent/Files"), Some(&home)), LIMIT, VISIT_BUDGET);
-        assert_eq!(found.len(), 41, "{found:?}");
+        assert_eq!(found.iter().filter(|e| !e.is_dir).count(), 41, "{found:?}");
         let hit = found.iter().find(|e| e.name == "file-37.txt").expect("file-37.txt is listed");
         assert_eq!(hit.path, home.join("E2E/many/file-37.txt"));
         let _ = fs::remove_dir_all(&home);
@@ -143,7 +156,7 @@ mod tests {
         fs::write(dir.join(".hidden"), "c").unwrap();
         fs::write(dir.join(".cache/e2e.bin"), "d").unwrap();
         fs::write(dir.join("proj/node_modules/x/e2e.js"), "e").unwrap();
-        let mut names: Vec<String> = walk(&[dir.clone()], 100, 1000).into_iter().map(|e| e.name).collect();
+        let mut names: Vec<String> = walk(&[dir.clone()], 100, 1000).into_iter().filter(|e| !e.is_dir).map(|e| e.name).collect();
         names.sort();
         assert_eq!(names, vec!["e2e-notes.txt".to_string(), "top.pdf".to_string()]);
         let first = walk(&[dir.clone()], 100, 1000).into_iter().find(|e| e.name == "top.pdf").unwrap();
@@ -161,8 +174,48 @@ mod tests {
         fs::write(dir.join("a/b/c/deep.txt"), "x").unwrap();
         let few = walk(&[dir.clone()], 100, 6);
         assert!(few.iter().all(|e| e.name != "deep.txt"), "the budget runs out before the deep file: {few:?}");
+        assert!(few.len() <= 6, "folders count against the budget like files: {few:?}");
         assert_eq!(walk(&[dir.clone()], 2, 1000).len(), 2);
-        assert_eq!(walk(&[dir.clone()], 100, 1000).len(), 6);
+        // five files, the deep one, and the three folders on the way to it
+        assert_eq!(walk(&[dir.clone()], 100, 1000).len(), 9);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// E2E6 4: "pictures" did not find the home folder "Pictures": the walk kept files only.
+    #[test]
+    fn folders_are_listed_by_name_within_the_same_bounds() {
+        let home = scratch("folders");
+        fs::create_dir_all(home.join("Pictures/Trips")).unwrap();
+        fs::create_dir_all(home.join(".config/Pictures")).unwrap();
+        fs::create_dir_all(home.join("proj/target/Pictures")).unwrap();
+        fs::write(home.join("Pictures/pic.png"), "p").unwrap();
+        let found = walk(&[home.clone()], LIMIT, VISIT_BUDGET);
+        let folders: Vec<&Entry> = found.iter().filter(|e| e.is_dir).collect();
+        let mut paths: Vec<PathBuf> = folders.iter().map(|e| e.path.clone()).collect();
+        paths.sort();
+        assert_eq!(paths, vec![home.join("Pictures"), home.join("Pictures/Trips"), home.join("proj")], "the root, hidden and generated trees are not listed");
+        let pictures = folders.iter().find(|e| e.name == "Pictures").unwrap();
+        assert_eq!(pictures.kind, crate::files::fs::Kind::Folder);
+        assert!(pictures.mtime > 0 && pictures.size == 0);
+        assert!(found.iter().any(|e| !e.is_dir && e.name == "pic.png"), "files are listed as before");
+        // a folder at the depth limit is listed, though not entered
+        let mut deep = home.clone();
+        for i in 0..=MAX_DEPTH {
+            deep = deep.join(format!("d{i}"));
+        }
+        fs::create_dir_all(deep.join("below")).unwrap();
+        let found = walk(&[home.clone()], LIMIT, VISIT_BUDGET);
+        assert!(found.iter().any(|e| e.path == deep), "the deepest folder looked at is listed");
+        assert!(found.iter().all(|e| e.path != deep.join("below")), "nothing below the depth limit is");
+        // a link to a folder is neither followed nor listed
+        std::os::unix::fs::symlink(home.join("Pictures"), home.join("Link")).unwrap();
+        assert!(walk(&[home.clone()], LIMIT, VISIT_BUDGET).iter().all(|e| e.name != "Link"));
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    /// The tests never walk the home folder of the machine they run on, whatever `$HOME` or its accounts say.
+    #[test]
+    fn no_home_folder_is_looked_up_in_tests() {
+        assert_eq!(search_home(), None);
     }
 }

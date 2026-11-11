@@ -332,7 +332,7 @@ impl Files {
         } else {
             bifrost_app::AppMenuItem::new(MENU_TRASH, "Move to Trash").key("cmd+backspace").enabled(has && !typing)
         };
-        vec![
+        let mut items = vec![
             new_folder,
             bifrost_app::AppMenuItem::separator(),
             open,
@@ -343,17 +343,51 @@ impl Files {
             bifrost_app::AppMenuItem::new(MENU_ALIAS, "Make Alias").key("ctrl+cmd+a").enabled(files_ok),
             bifrost_app::AppMenuItem::separator(),
             trash,
-        ]
+        ];
+        // a Get Info window shows no folder: none of the items has anything to act on there
+        if self.info_window {
+            for item in &mut items {
+                item.enabled = false;
+            }
+        }
+        items
     }
-}
-impl App for Files {
-    fn id(&self) -> &str {
-        "is.olibuijr.files.desktop"
+    /// The Edit commands this window takes now: the name field's or the search field's while one is typed in,
+    /// otherwise the file commands for its selection and its folder. A Get Info window takes none.
+    pub(crate) fn edit_commands(&self) -> Commands {
+        if self.info_window {
+            return Commands::default();
+        }
+        let clipboard = bifrost_app::kit::clipboard::text().is_some_and(|s| !s.is_empty());
+        if let Some((_, field)) = &self.naming {
+            return field.commands(clipboard);
+        }
+        if self.searching {
+            return self.query.commands(clipboard);
+        }
+        Commands::default()
+            .with(Command::Undo, !self.undo.is_empty())
+            .with(Command::Copy, !self.selection.is_empty())
+            .with(Command::Cut, !self.selection.is_empty())
+            .with(Command::Paste, !self.in_recents())
+            .with(Command::SelectAll, true)
     }
-    fn main_menu(&self, _ctx: &Ctx) -> Vec<bifrost_app::AppMenu> {
-        vec![bifrost_app::AppMenu { title: "File".into(), items: self.file_menu_items() }]
+    /// The Edit menu's Undo and Redo titles for this window.
+    pub(crate) fn edit_undo_titles(&self) -> (String, String) {
+        if self.naming.is_some() || self.searching || self.info_window { (String::new(), String::new()) } else { self.file_undo_titles() }
     }
-    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+    /// One input for this window: its handler, then the window Get Info asked for and the service calls queued.
+    pub(crate) fn window_input_event(&mut self, ctx: &Ctx, input: Input) -> bool {
+        let handled = self.route_input(ctx, input);
+        self.open_info_window(ctx);
+        self.flush_services(ctx);
+        handled
+    }
+    /// A File menu item chosen while this window is the key window.
+    pub(crate) fn file_menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if self.info_window {
+            return false;
+        }
         match id {
             MENU_OPEN => if let Some(i) = self.focus() { self.open(i) },
             MENU_QUICK_LOOK => self.quick_look(),
@@ -363,11 +397,43 @@ impl App for Files {
                 // Get Info from the menu bar (cmd+i) opens its own window here; only `event` did, so the panel
                 // stayed in the browser window until the next click
                 self.open_info_window(ctx);
+                self.flush_services(ctx);
                 return changed;
             }
             _ => return false,
         }
+        self.update_controls();
+        self.revision += 1;
+        self.flush_services(ctx);
         true
+    }
+}
+impl App for Files {
+    fn id(&self) -> &str {
+        "is.olibuijr.files.desktop"
+    }
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<bifrost_app::AppMenu> {
+        vec![bifrost_app::AppMenu { title: "File".into(), items: self.file_menu_items() }]
+    }
+    /// The File menu follows the key window: its items are enabled for that window's selection and folder.
+    fn menus_for(&self, _ctx: &Ctx, window: WindowId) -> Vec<bifrost_app::AppMenu> {
+        vec![bifrost_app::AppMenu { title: "File".into(), items: self.window_files(window).file_menu_items() }]
+    }
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        self.file_menu_action(ctx, id)
+    }
+    /// The key window's input. A menu item chosen while a New Window window is key acts on that window: the SDK's
+    /// default drops it for an extra window. Everything else takes the default way (`window_event`).
+    fn window_input(&mut self, ctx: &Ctx, window: WindowId, input: bifrost_app::proto::WindowInput) -> bool {
+        match input {
+            bifrost_app::proto::WindowInput::MenuAction(id) if !window.is_main() => {
+                let Some(at) = self.windows.iter().position(|e| e.id == window) else { return false };
+                let changed = self.windows[at].files.file_menu_action(ctx, id);
+                self.adopt_opened(at);
+                changed
+            }
+            other => bifrost_app::app_windows::default_window_input(self, ctx, window, other),
+        }
     }
     fn configure(&mut self, ctx: &Ctx) {
         self.painted_state.clear();
@@ -389,28 +455,22 @@ impl App for Files {
         self.ctl_rpc(method, params)
     }
     fn controls(&self, _: &Ctx)->Vec<Node> {let mut nodes=self.controls.nodes().to_vec();for n in &mut nodes {if n.id==4{n.value=self.query.to_string();}}nodes}
-    fn commands(&self, _: &Ctx)->Commands {
-        let clipboard = bifrost_app::kit::clipboard::text().is_some_and(|s| !s.is_empty());
-        if let Some((_, field)) = &self.naming {
-            return field.commands(clipboard);
-        }
-        if self.searching {
-            return self.query.commands(clipboard);
-        }
-        Commands::default()
-            .with(Command::Undo, !self.undo.is_empty())
-            .with(Command::Copy, !self.selection.is_empty())
-            .with(Command::Cut, !self.selection.is_empty())
-            .with(Command::Paste, !self.in_recents())
-            .with(Command::SelectAll, true)
+    /// The Edit menu follows the key window: Copy and Cut need a selection in the window that has the keys. The
+    /// shell sends a command only when the app reported it as taken, so with the main window's state alone a
+    /// selection in a New Window window could not be copied at all.
+    fn commands(&self, ctx: &Ctx) -> Commands {
+        self.window_files(ctx.key_window()).edit_commands()
     }
-    fn undo_titles(&self, _: &Ctx) -> (String, String) {
-        if self.naming.is_some() || self.searching { (String::new(), String::new()) } else { self.file_undo_titles() }
+    fn undo_titles(&self, ctx: &Ctx) -> (String, String) {
+        self.window_files(ctx.key_window()).edit_undo_titles()
     }
     fn event(&mut self, ctx: &Ctx, input: Input) -> bool {
-        let handled = self.route_input(ctx, input);
-        self.open_info_window(ctx);
-        self.flush_services(ctx);
+        let copies = self.fx.clip_rev;
+        let handled = self.window_input_event(ctx, input);
+        // what this window copied or cut is what a paste in any window takes
+        if self.fx.clip_rev != copies {
+            self.share_clip(None);
+        }
         handled
     }
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
@@ -419,6 +479,7 @@ impl App for Files {
     }
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &bifrost_core::json::Json) -> bool {
         if service == bifrost_core::disk_wire::SERVICE {
+            // (`image_event` shows an opened image's volume in the window that asked for it)
             return self.image_event(event, body);
         }
         if !bifrost_app::quick_look::is_quick_look(service) {
@@ -434,21 +495,13 @@ impl App for Files {
         self.preview_event(e)
     }
     fn drag(&mut self, ctx: &Ctx, ev: bifrost_app::dnd::Event) -> bool {
-        // a session belongs to the window that began it (or that another app's drag is over): a drag out of a New
-        // Window window is that window's, to its end
-        match ev {
-            bifrost_app::dnd::Event::Dest { session, phase, x, y, allowed, items } => {
-                let (x, y) = (x / ctx.ui.s, y / ctx.ui.s);
-                match self.drag_window(session) {
-                    Some(i) => self.windows[i].files.drag_out_dest(ctx, session, phase, x, y, allowed, items),
-                    None => self.drag_out_dest(ctx, session, phase, x, y, allowed, items),
-                }
-            }
-            bifrost_app::dnd::Event::Ended { session, .. } => match self.drag_window(session) {
-                Some(i) => self.windows[i].files.drag_out_ended(ctx, session),
-                None => self.drag_out_ended(ctx, session),
-            },
-        }
+        // the end of a session, and the events of a shell that does not name the window under the pointer
+        self.drag_event(ctx, None, ev)
+    }
+    fn window_drag(&mut self, ctx: &Ctx, window: Option<WindowId>, ev: bifrost_app::dnd::Event) -> bool {
+        // the window under the pointer resolves the drop: a drag from one window released over another is the
+        // other window's drop, at a point in its own coordinates
+        self.drag_event(ctx, window, ev)
     }
     fn document(&mut self, ctx: &Ctx, ev: bifrost_app::DocumentEvent) -> bool {
         // a grant for an Open goes to the workspace; the rest belong to drag and drop
@@ -466,19 +519,34 @@ impl App for Files {
         if window.is_main() {
             return self.event(ctx, ev);
         }
-        // the keyboard, the menus and the clipboard belong to the main window; a New Window takes its touches
-        let Some(e) = self.windows.iter_mut().find(|e| e.id == window) else { return false };
-        match ev {
-            // an extra window's touches arrive in window points (`WindowTouch`); `event` takes px, as the main window's
-            Input::Touch { .. } => {
-                let changed = e.files.event(ctx, bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0)));
-                // a window that window opened (Get Info) is drawn and closed from here, with the others
-                let opened = std::mem::take(&mut e.files.windows);
-                self.windows.extend(opened);
-                changed
+        // a New Window window takes everything the shell sends its way: its touches, and while it is the key window
+        // the keys and the Edit commands. (They were dropped here, so ⌘C, ⌘V and every other key did nothing in
+        // a second window.)
+        let Some(at) = self.windows.iter().position(|e| e.id == window) else { return false };
+        // ⌘W closes a Get Info window, and a browser window that has no other tab to close
+        if let Input::Key(key) = &ev {
+            let files = &self.windows[at].files;
+            if bifrost_app::app_windows::is_close_window_key(key) && windows::closes_window(files.info_window, files.tabs.len(), files.naming.is_some()) {
+                let _ = ctx.close_window(window);
+                return self.close_extra(window);
             }
-            _ => false,
         }
+        let files = &mut self.windows[at].files;
+        let touch = matches!(ev, Input::Touch { .. });
+        // a Get Info window has its permission grid to click and nothing to type into
+        if files.info_window && !touch {
+            return false;
+        }
+        let copies = files.fx.clip_rev;
+        // an extra window's touches arrive in window points (`WindowTouch`); the handlers take px, as the main window's
+        let ev = if touch { bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0)) } else { ev };
+        let changed = files.window_input_event(ctx, ev);
+        if files.fx.clip_rev != copies {
+            self.share_clip(Some(at));
+        }
+        // a window that window opened (Get Info, New Window) is drawn and closed from here, with the others
+        self.adopt_opened(at);
+        changed
     }
     fn draw_window(&mut self, ctx: &Ctx, window: WindowId, s: &mut Surface, t: f64) -> Damage {
         if window.is_main() {
@@ -501,6 +569,7 @@ impl App for Files {
         // a volume mounted or unmounted while the app runs: every sidebar follows the mount table
         let mut changed = self.follow_mounts(now, false);
         // this window, then the New Window ones: each has its own listing, search, job and folder events
+        let cut = self.clip.is_some();
         changed |= self.tick_view(ctx, t);
         let mut opened = Vec::new();
         for e in &mut self.windows {
@@ -509,6 +578,13 @@ impl App for Files {
             opened.append(&mut e.files.windows);
         }
         self.windows.extend(opened);
+        // a cut that was pasted (its move is done) is over in every window, not only in the one that pasted it
+        if cut && (self.clip.is_none() || self.windows.iter().any(|e| !e.files.info_window && e.files.clip.is_none())) {
+            self.clip = None;
+            for e in &mut self.windows {
+                e.files.clip = None;
+            }
+        }
         // a file the shell would not open (no app declares its type, or the grant was refused)
         if let Some(name) = system::take_open_failure() {
             self.notice = Some(format!("The document \u{201C}{name}\u{201D} could not be opened."));
@@ -850,12 +926,8 @@ impl Files {
                     match dest {
                         Some(dest) => {
                             self.spring_keep();
-                            // Option held during the drag copies, as in Files
-                            if copy {
-                                self.start_job("Copying", JobKind::Transfer(Op::Copy), paths, dest);
-                            } else {
-                                self.start_job("Moving", JobKind::Transfer(Op::Move), paths, dest);
-                            }
+                            // Option held during the drag copies, as in Files; so does a folder on another volume
+                            self.start_drop(copy, false, paths, dest);
                         }
                         // released over nothing that takes the items: a folder the drag sprang open is left again
                         None => {
@@ -1051,6 +1123,50 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+    #[test]
+    fn the_conflict_prompt_shades_the_whole_folder_view_and_leaves_the_sidebar() {
+        let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let ui = Ui::new(font, 1.0);
+        let mut files = fixture(vec![]);
+        let (w, h) = (960usize, 630usize);
+        let paint = |files: &mut Files| {
+            let mut px = vec![0u32; w * h];
+            files.paint(&ui, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 });
+            px
+        };
+        let before = paint(&mut files);
+        // a paste met a taken name: the job waits for the prompt's answer
+        let (_events, rx) = mpsc::channel::<Event>();
+        let (answers, _asked) = mpsc::channel::<Answer>();
+        files.work = Some(Work {
+            rx,
+            cancel: Arc::new(AtomicBool::new(false)),
+            title: "Copying".into(),
+            kind: JobKind::Transfer(Op::Copy),
+            dest: "/fixture".into(),
+            sources: vec![],
+            progress: Progress::default(),
+            conflict: Some("d4.txt".into()),
+            apply_all: false,
+            answers,
+        });
+        let after = paint(&mut files);
+        let (x, y, card_w, card_h) = prompt_frame(files.w, files.side());
+        let at = |px: &[u32], x: f32, y: f32| px[y as usize * w + x as usize];
+        let channels = |p: u32| [p & 255, (p >> 8) & 255, (p >> 16) & 255];
+        // under the card, where the names of the first line of icons are, the view is shaded: it used to be untouched
+        let below = (x + 40., y + card_h + 20.);
+        assert!(below.1 < files.bottom(), "the point is in the folder view");
+        let (was, is) = (at(&before, below.0, below.1), at(&after, below.0, below.1));
+        assert_ne!(was, is, "the view under the prompt is shaded");
+        assert!(channels(is).iter().zip(channels(was)).all(|(a, b)| *a <= b), "and darker, never lighter: {is:08x} from {was:08x}");
+        assert_eq!(is >> 24, 255, "the window stays opaque");
+        // far below, the same shade: one sheet over the whole view
+        assert_eq!(at(&after, below.0, files.bottom() - 8.), is);
+        // the card itself is the plain card colour, and the sidebar is not shaded
+        assert_eq!(at(&after, x + card_w - 6., y + 6.), CARD_BG.now());
+        assert_eq!(at(&after, 8., 400.), at(&before, 8., 400.));
     }
     #[test]
     fn partial_selection_matches_full_repaint_in_both_views() {

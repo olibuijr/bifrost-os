@@ -232,6 +232,7 @@ pub mod pip;
 pub mod pickers;
 pub mod wake;
 pub mod desktop_network;
+pub mod block_watch;
 pub mod disk_image;
 pub mod volume_eject;
 pub mod volume_mount;
@@ -2580,6 +2581,8 @@ impl Shell {
         if let Some(w) = self.audio_next_wake(t) {
             due.add(Some(w));
         }
+        // a service with something waiting (a volume about to be mounted); an idle one asks for nothing
+        for service in &self.services { due.add(service.next_wake(self, t)); }
         if std::env::var_os("SPRINGBOARD_WAKE_TRACE").is_some() {
             if let (Some(at), Some(src)) = (due.get(), due.source()) {
                 eprintln!("springboard: wake in {:.0} ms from {}:{}", at - t, src.file(), src.line());
@@ -5954,7 +5957,7 @@ fn draw_zoom(transition: Option<&Image>, s: &mut Surface, rect: Rect, r: f32, al
 impl Shell {
     /// Fds to poll (the pty, Deildu's and Files' job pipes); call `pump` when one is readable.
     pub fn poll_fds(&self) -> Vec<std::ffi::c_int> {
-        self.term.iter().map(|t| t.fd()).chain(self.deildu.iter().flat_map(|d| d.fds())).chain(self.photos.iter().flat_map(|p| p.fds())).chain(self.files.iter().flat_map(|f| f.fds())).chain([self.audio.fd()]).chain([if self.desk_active(){desktop_network::fd()}else{-1}]).chain(self.store.iter().flat_map(|n| n.fds())).chain(self.ext_fds()).chain((pasteboard_sync::poll_fd() >= 0).then(pasteboard_sync::poll_fd)).chain(keyboard::poll_fd()).collect()
+        self.term.iter().map(|t| t.fd()).chain(self.deildu.iter().flat_map(|d| d.fds())).chain(self.photos.iter().flat_map(|p| p.fds())).chain(self.files.iter().flat_map(|f| f.fds())).chain([self.audio.fd()]).chain([if self.desk_active(){desktop_network::fd()}else{-1}]).chain(self.store.iter().flat_map(|n| n.fds())).chain(self.ext_fds()).chain((pasteboard_sync::poll_fd() >= 0).then(pasteboard_sync::poll_fd)).chain(keyboard::poll_fd()).chain(block_watch::poll_fd()).collect()
     }
 
     /// `poll_fds` without the audio-service client's always-present fd.
@@ -5969,6 +5972,8 @@ impl Shell {
     /// exited shell is dropped.
     pub fn pump(&mut self) -> bool {
         let mut changed = false;
+        // device nodes that came or went: read here so the descriptor is quiet, taken in by the disks service's tick
+        block_watch::pump();
         let (c, exits) = self.term.pump();
         if self.term.take_rang() { self.bell.ring(); }
         if exits > 0 { self.notify_term_exit(); }

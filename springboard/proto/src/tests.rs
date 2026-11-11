@@ -244,6 +244,8 @@ fn to_app_round_trips() {
         ToApp::Open { url: "https://x.is/?a=1".into() },
         ToApp::Clipboard { text: String::new() },
         ToApp::Appearance { flags: appearance::INCREASE_CONTRAST | appearance::SHOW_BORDERS | 0x8000_0000 },
+        ToApp::DateTime { flags: date_time::CLOCK_12_HOUR | 0x8000_0000, zone: "Europe/Berlin".into() },
+        ToApp::DateTime { flags: 0, zone: String::new() },
         ToApp::InputSource { japanese: true },
         ToApp::InputSource { japanese: false },
         ToApp::AccentHold { letter: 'é' },

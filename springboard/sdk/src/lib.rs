@@ -909,6 +909,19 @@ pub trait App {
     }
     /// The app left the foreground: save state. No frames are drawn until `resume`.
     fn suspend(&mut self, _ctx: &Ctx) {}
+    /// The app is ending (`ToApp::Quit`, `Ctx::terminate`) and `suspend` has run: is a save still under way that the
+    /// runtime cannot see? The runtime already waits for the saves the shell has in flight (`save_document`,
+    /// `save_document_in_place`, until their `Saved` or `Failed`). An app whose save has steps before or between those
+    /// (a picture encoded on a queue, a worker thread that writes the file, a look at the original with
+    /// `reopen_document` before the save in place) returns `true` while such a save has not ended. The runtime then
+    /// keeps the app alive, with its window already closed by the shell, delivers the shell's document answers to
+    /// `document` and calls this again every few milliseconds, until it returns `false` or the quit wait (one second)
+    /// has passed. `tick` no longer runs, so the call does what `tick` would for the save: it takes the worker's result
+    /// and sends the next request. A save that does not end in time is cut off like any other work, so an app keeps
+    /// what it needs to say so at its next launch. The default `false` is right for an app with no such steps.
+    fn save_in_flight(&mut self, _ctx: &Ctx) -> bool {
+        false
+    }
     fn resume(&mut self, _ctx: &Ctx) {}
     /// IME and keyboard composition (`NativeTextInputClient` / `NativeTextInput`): `SetMarkedText`, `UnmarkText`,
     /// `DeleteSurrounding` and accessory buttons, from Wayland `text-input-v3` or the on-screen keyboard. Apps with a
@@ -996,6 +1009,14 @@ pub trait App {
     /// `NativeDraggingSource` ending for a session the app began). Return true when a frame is needed.
     fn drag(&mut self, _ctx: &Ctx, _ev: dnd::Event) -> bool {
         false
+    }
+    /// A destination event of a drag (`dnd::Event::Dest`) with the window of the app the pointer is over: the main
+    /// window (`WindowId::MAIN`) or one the app opened, in whose pixels the event's point is. `None` when the shell
+    /// does not say (one up to 0.10.51): the event is then for the app as a whole, as `drag` always got it. The
+    /// default hands the event to `drag`, so an app with one drop window needs nothing; an app whose extra windows
+    /// take drops overrides this and finds the drop target in `window`. `Ended` events go to `drag`.
+    fn window_drag(&mut self, ctx: &Ctx, _window: Option<app_windows::WindowId>, ev: dnd::Event) -> bool {
+        self.drag(ctx, ev)
     }
     /// State restoration (`NativeWindowRestoration`): the window's restoration identifier. `None` (the default) means the
     /// window is not restorable; the other restoration hooks are then never called. See `restoration`.

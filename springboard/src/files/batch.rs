@@ -217,8 +217,9 @@ fn put_back(aside: &Option<PathBuf>, dst: &Path) {
 /// Copies or moves `sources` into `dest`. On a name collision `ask` is
 /// consulted (once, or once per item unless the answer applies to all).
 /// `tick` is called as bytes move and returns false to cancel; a half-copied
-/// item is removed. Items into their own folder are kept both (copy) or
-/// left alone (move); a folder into itself fails.
+/// item is removed. Items into their own folder are kept both without asking
+/// (copy: the next free name, as Duplicate gives) or left alone (move); a
+/// folder into itself fails.
 pub fn transfer(op: Op, sources: &[PathBuf], dest: &Path, ask: &mut dyn FnMut(&Path) -> Answer, tick: &mut dyn FnMut(&Progress) -> bool) -> Report {
     let mut report = Report::default();
     let weights: Vec<(u64, usize)> = sources.iter().map(|s| weigh(s)).collect();
@@ -248,7 +249,11 @@ pub fn transfer(op: Op, sources: &[PathBuf], dest: &Path, ask: &mut dyn FnMut(&P
         }
         // the item a Replace takes the place of, kept under a hidden name until the replacement is whole
         let mut aside: Option<PathBuf> = None;
-        let dst = if target.symlink_metadata().is_ok() {
+        let dst = if same_place {
+            // a copy into the folder the item is in is a duplicate: the next free name, and nothing to ask (the
+            // name that is "taken" is the item's own)
+            fs::unique_name(dest, &name)
+        } else if target.symlink_metadata().is_ok() {
             let choice = match sticky {
                 Some(c) => c,
                 None => match ask(&target) {
@@ -271,8 +276,6 @@ pub fn transfer(op: Op, sources: &[PathBuf], dest: &Path, ask: &mut dyn FnMut(&P
                     run.progress.bytes_done += w.0;
                     continue;
                 }
-                // replacing a file with itself would destroy it
-                Resolution::Replace if same_place => fs::unique_name(dest, &name),
                 Resolution::KeepBoth => fs::unique_name(dest, &name),
                 Resolution::Replace => {
                     // the item to replace holds the source: removing it would remove the source too
@@ -568,6 +571,32 @@ mod tests {
         let r = transfer(Op::Copy, &[a.join("f")], &a, &mut |_| Some((Resolution::Replace, false)), &mut |_| true);
         assert_eq!(r.done, [a.join("f 2")]);
         assert_eq!(std::fs::read_to_string(a.join("f")).unwrap(), "1");
+    }
+
+    #[test]
+    fn a_copy_into_its_own_folder_takes_the_next_free_name_without_asking() {
+        let (_d, a, b) = setup("batch-same-folder");
+        std::fs::write(a.join("d4.txt"), "one").unwrap();
+        // pasted where it was copied: a duplicate, as Duplicate names it, and no prompt
+        let r = transfer(Op::Copy, &[a.join("d4.txt")], &a, &mut never, &mut |_| true);
+        assert_eq!(r.done, [a.join("d4 2.txt")]);
+        let r = transfer(Op::Copy, &[a.join("d4.txt")], &a, &mut never, &mut |_| true);
+        assert_eq!(r.done, [a.join("d4 3.txt")]);
+        assert_eq!(std::fs::read_to_string(a.join("d4.txt")).unwrap(), "one");
+        // a cut pasted where it was cut changes nothing
+        let r = transfer(Op::Move, &[a.join("d4.txt")], &a, &mut never, &mut |_| true);
+        assert!(r.done.is_empty() && r.failed.is_empty());
+        assert_eq!(r.skipped, [a.join("d4.txt")]);
+        // in a batch, only the items from another folder ask
+        std::fs::write(b.join("d4.txt"), "other").unwrap();
+        let mut asked = Vec::new();
+        let r = transfer(Op::Copy, &[a.join("d4.txt"), b.join("d4.txt")], &a, &mut |t| {
+            asked.push(t.to_path_buf());
+            Some((Resolution::Skip, false))
+        }, &mut |_| true);
+        assert_eq!(asked, [a.join("d4.txt")], "the item from the other folder met the taken name");
+        assert_eq!(r.done, [a.join("d4 4.txt")]);
+        assert_eq!(r.skipped, [b.join("d4.txt")]);
     }
 
     #[test]

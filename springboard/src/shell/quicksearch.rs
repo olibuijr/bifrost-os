@@ -203,7 +203,7 @@ const BIFROST: Metrics = Metrics {
 /// results in a separate glass card 12 pt below it (radius 28): filter chips across its top (one per kind of result
 /// present, in place of section headers), then rows of a 40 pt icon with a title and a second line, the top hit on
 /// an inset neutral plate (Return opens it). With nothing typed only the capsule shows. That is 0.37 of a 1408 pt
-/// wide screen: on a wider one everything grows with the screen (`QuickSearch::k`) so the proportions hold.
+/// wide screen; on a wider one the card keeps this size (`QuickSearch::k` is 1).
 const MAC: Metrics = Metrics {
     card_w: 520.0,
     card_top: 139.0,
@@ -225,10 +225,11 @@ const MAC: Metrics = Metrics {
     suggestions: false,
     chips: 52.0,
 };
-/// Golden Gate: the card is this fraction of the screen's width (the reference's 520 pt of 1408 pt), never narrower than
-/// its point size, and the whole layout grows by at most `MAC_K_MAX` with it.
+/// Golden Gate: the card keeps its measured point size on every screen (owner, 2026-11-11: a card that grew with the
+/// screen was too big). `MAC_CARD_FRACTION` is the share of a 1408 pt wide screen the 520 pt card takes; with
+/// `MAC_K_MAX` at 1 the layout never grows past its point size.
 const MAC_CARD_FRACTION: f32 = 0.37;
-const MAC_K_MAX: f32 = 2.5;
+const MAC_K_MAX: f32 = 1.0;
 /// Golden Gate: a filter chip's height, the gap between chips and the padding either side of its text
 const MAC_CHIP_H_PT: f32 = 28.0;
 const MAC_CHIP_GAP_PT: f32 = 8.0;
@@ -268,10 +269,13 @@ pub enum Hit {
     /// a file under the Files root or the home folder, previewed in Files; `modified` is its modification time (Unix
     /// seconds, 0 when unknown), shown on the row
     File { path: PathBuf, name: String, modified: i64 },
+    /// a folder under the Files root or the home folder, opened in Files; Cmd+Return shows it in the folder that holds
+    /// it. `modified` as for a file
+    Folder { path: PathBuf, name: String, modified: i64 },
     /// a dictionary definition of `word` (`quicksearch_dict`): opens the word in Dictionary; Space shows the whole
     /// definition in the Look Up popover. `dictionary` is empty for the "look it up" row of a word no dictionary has.
     Definition { word: String, dictionary: String, preview: String },
-    /// "Show in Folder": opens Files at `folder`, the folder that holds the file `name`
+    /// "Show in Folder": opens Files at `folder`, the folder that holds the file (or folder) `name`
     Reveal { folder: PathBuf, name: String },
     /// an app shortcut (`AppShortcut`): an intent declared in the app's manifest; opens the app and runs `intent.<id>`
     Shortcut { app_id: String, app_name: String, intent: String, title: String },
@@ -405,6 +409,15 @@ fn row_text(hit: &Hit, apps_name: impl Fn(AppId) -> String, (now, offset, h24): 
             }
             (name.clone(), parts.join(" \u{b7} "))
         }
+        Hit::Folder { path, name, modified } => {
+            // "Folder · olibuijr · Today at 09:41"
+            let mut parts = vec![crate::files::fs::Kind::Folder.label().to_string()];
+            parts.extend(Some(folder_of(path)).filter(|f| !f.is_empty()));
+            if *modified > 0 {
+                parts.push(crate::files::fs::date_text_in(*modified, now, offset, h24));
+            }
+            (name.clone(), parts.join(" \u{b7} "))
+        }
         Hit::Definition { word, dictionary, .. } if dictionary.is_empty() => (word.clone(), "Look up in Dictionary".to_string()),
         Hit::Definition { word, preview, .. } => (word.clone(), if preview.is_empty() { "Dictionary".to_string() } else { preview.clone() }),
         Hit::Reveal { folder, name } => (format!("Show {name} in Folder"), folder.display().to_string()),
@@ -442,7 +455,7 @@ fn kind_of_hit(hit: &Hit) -> Option<&'static str> {
         Hit::Contact { .. } => "Contacts",
         Hit::City(_) => "Clock",
         Hit::Deildu(_) => "Deildu",
-        Hit::File { .. } => "Files",
+        Hit::File { .. } | Hit::Folder { .. } => "Files",
         Hit::Event { .. } => "Calendar",
         Hit::Definition { .. } => "Dictionary",
         Hit::Answer(_) => "Calculator",
@@ -452,15 +465,19 @@ fn kind_of_hit(hit: &Hit) -> Option<&'static str> {
 }
 
 /// The list filtered to the chip `chip`: that kind's sections, with the Top Hit leading them when it is of that kind
-/// (it was taken out of its section, so the filtered list would miss its best row otherwise).
+/// (it was taken out of its section, so the filtered list would miss its best row otherwise). The Files chip keeps
+/// the "Show in Folder" action of its first file, after the files.
 fn filter_to_chip(groups: Vec<Group>, chip: &'static str) -> Vec<Group> {
     let mut lead: Vec<Hit> = vec![];
     let mut out: Vec<Group> = vec![];
+    let mut action: Option<Group> = None;
     for g in groups {
         if g.title == "Top Hit" && g.hits.first().and_then(kind_of_hit) == Some(chip) {
             lead.extend(g.hits);
         } else if g.title == chip {
             out.push(g);
+        } else if g.title == "Show in Folder" && chip == "Files" {
+            action = Some(g);
         }
     }
     if !lead.is_empty() {
@@ -470,6 +487,9 @@ fn filter_to_chip(groups: Vec<Group>, chip: &'static str) -> Vec<Group> {
         } else {
             out.push(Group { title: chip, hits: lead });
         }
+    }
+    if !out.is_empty() {
+        out.extend(action);
     }
     out
 }
@@ -627,11 +647,20 @@ fn now_secs() -> u64 {
 
 /// How long a query waits for its sources before the panel shows what has come in (kept small: it runs on the UI
 /// thread inside a frame). The rest streams in afterwards.
-const RUN_GRACE: std::time::Duration = std::time::Duration::from_millis(4);
+///
+/// In the shell's own tests a query waits for every source (`TEST_DEADLINE`): a test types and looks at the rows at
+/// once, with no frames in between, so with the 4 ms of the panel a source whose thread was not scheduled in time on a
+/// busy machine was simply missing from what the test saw (a contact typed by its number gave "Search in Terminal" as
+/// the first row in one run of four of the whole test binary). The wait ends as soon as the last source answers, so
+/// the tests are no slower for it.
+const RUN_GRACE: std::time::Duration = if cfg!(test) { TEST_DEADLINE } else { std::time::Duration::from_millis(4) };
 /// The longest a query waits for its slowest source before it goes on without it.
-const RUN_DEADLINE: std::time::Duration = std::time::Duration::from_millis(300);
+const RUN_DEADLINE: std::time::Duration = if cfg!(test) { TEST_DEADLINE } else { std::time::Duration::from_millis(300) };
 /// The wait of a query merged at once (`results`, used by the look-up popover and by tests).
-const SYNC_DEADLINE: std::time::Duration = std::time::Duration::from_millis(300);
+const SYNC_DEADLINE: std::time::Duration = if cfg!(test) { TEST_DEADLINE } else { std::time::Duration::from_millis(300) };
+/// The deadline of a query in the shell's own tests: long enough that every source's thread has run, however busy the
+/// machine is.
+const TEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// One section of results as a search source: its rows (the item the ranker sees, and the folded text the fuzzy matcher
 /// tests). It owns its rows, so a query can run it on its own thread. The hit a row opens is kept by `build_tables`.
@@ -650,6 +679,24 @@ struct Table {
     /// "lantern" does not find "Display & Brightness" through letters spread over them, and "aapl" does not find the
     /// Shortcuts row "Set Wallpaper to ..." (E2E12 1).
     strict: bool,
+    /// Rows that are not `strict` match as a name does (`name_match`): by a run of the name or its words' initials, not
+    /// by letters scattered through it. The Applications section; Deildu's titles keep the loose match.
+    names: bool,
+}
+
+/// Whether the folded query `q` matches the folded name `name` of an app: the name or one of its words starts with
+/// it, it is a run of the name anywhere ("book" in "Font Book", "color m" in "Digital Color Meter"), or it is the
+/// initials of the name's words in order from the first ("dcm", "as" for App Store). Letters scattered through the
+/// name do not match: "tall" found "Digital Color Meter" through digiTAL coLor (E2E6 5).
+fn name_match(q: &str, name: &str) -> bool {
+    if q.is_empty() {
+        return false;
+    }
+    if name.contains(q) {
+        return true;
+    }
+    let initials: String = name.split(|c: char| !c.is_alphanumeric()).filter_map(|w| w.chars().next()).collect();
+    q.chars().count() > 1 && initials.starts_with(q)
 }
 
 /// Whether the folded query `q` matches folded `text` well enough for a strict table: a contiguous run of the text
@@ -685,7 +732,13 @@ impl search_rank::Source for Table {
             .iter()
             .enumerate()
             .filter(|(i, (_, folded))| {
-                let hit = if self.strict { strict_match(&q, folded) } else { m.rank_folded(folded).is_some() };
+                let hit = if self.strict {
+                    strict_match(&q, folded)
+                } else if self.names {
+                    name_match(&q, folded)
+                } else {
+                    m.rank_folded(folded).is_some()
+                };
                 hit || self.prefixes.get(*i).is_some_and(|p| starts_a_word(p, &q))
                     || digits.as_deref().is_some_and(|d| self.phones.get(*i).is_some_and(|p| !p.is_empty() && p.contains(d)))
             })
@@ -711,7 +764,7 @@ fn table_row(hits: &mut BTreeMap<String, Hit>, key: String, title: &str, text: S
 fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
     let mut hits: BTreeMap<String, Hit> = BTreeMap::new();
     let fx = fixed();
-    // an app is found by its name (fuzzy) and by its aliases ("terminal" for Term, "preview" for Viewer) as word prefixes
+    // an app is found by its name (`name_match`) and by its aliases ("terminal" for Term, "preview" for Viewer) as word prefixes
     let mut app_prefixes = Vec::new();
     let apps_rows = apps()
         .iter()
@@ -749,7 +802,16 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
     shortcut_rows.extend(settings_intent_rows(&mut hits));
     shortcut_rows.extend(settings_action_rows(&mut hits, c.wallpapers));
     shortcut_rows.extend(media_transport_rows(&mut hits));
-    let file_rows = c.files.iter().zip(c.files_folded).map(|(e, f)| table_row(&mut hits, format!("file:{}", e.path.display()), &e.name, String::new(), search_rank::Kind::File, Hit::File { path: e.path.clone(), name: e.name.clone(), modified: e.mtime }, f.clone())).collect();
+    let file_rows = c
+        .files
+        .iter()
+        .zip(c.files_folded)
+        .map(|(e, f)| {
+            let (path, name, modified) = (e.path.clone(), e.name.clone(), e.mtime);
+            let hit = if e.is_dir { Hit::Folder { path, name, modified } } else { Hit::File { path, name, modified } };
+            table_row(&mut hits, format!("file:{}", e.path.display()), &e.name, String::new(), search_rank::Kind::File, hit, f.clone())
+        })
+        .collect();
     let event_rows = c
         .events
         .iter()
@@ -759,18 +821,18 @@ fn build_tables(c: &Corpus) -> (Vec<Table>, BTreeMap<String, Hit>) {
             table_row(&mut hits, format!("event:{}", e.id), &e.title, text, search_rank::Kind::Other, Hit::Event { title: e.title.clone() }, folded)
         })
         .collect();
-    // only an app's name is matched by scattered letters (its aliases by word prefix); Settings, Clock, Contacts,
-    // Shortcuts, Files and Calendar need a prefix, a word start or a contiguous run, so "aapl" does not list
-    // "Set Wallpaper to ..." in Shortcuts (E2E12 1)
+    // an app's name is matched by a run anywhere in it or by its initials (its aliases by word prefix), a Deildu title
+    // by letters in order; Settings, Clock, Contacts, Shortcuts, Files and Calendar need a prefix, a word start or a
+    // contiguous run from one, so "aapl" does not list "Set Wallpaper to ..." in Shortcuts (E2E12 1)
     let tables = vec![
-        Table { name: "Applications", rows: apps_rows, prefixes: app_prefixes, phones: Vec::new(), strict: false },
-        Table { name: "Settings", rows: settings_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
-        Table { name: "Clock", rows: city_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
-        Table { name: "Deildu", rows: deildu_rows, prefixes: Vec::new(), phones: Vec::new(), strict: false },
-        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new(), phones: contact_phones, strict: true },
-        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
-        Table { name: "Files", rows: file_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
-        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true },
+        Table { name: "Applications", rows: apps_rows, prefixes: app_prefixes, phones: Vec::new(), strict: false, names: true },
+        Table { name: "Settings", rows: settings_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true, names: false },
+        Table { name: "Clock", rows: city_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true, names: false },
+        Table { name: "Deildu", rows: deildu_rows, prefixes: Vec::new(), phones: Vec::new(), strict: false, names: false },
+        Table { name: "Contacts", rows: contact_rows, prefixes: Vec::new(), phones: contact_phones, strict: true, names: false },
+        Table { name: "Shortcuts", rows: shortcut_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true, names: false },
+        Table { name: "Files", rows: file_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true, names: false },
+        Table { name: "Calendar", rows: event_rows, prefixes: Vec::new(), phones: Vec::new(), strict: true, names: false },
     ];
     (tables, hits)
 }
@@ -801,8 +863,8 @@ fn file_problem_banner(path: &Path, what: &str, why: &str) -> (String, String) {
     (format!("\u{201c}{name}\u{201d} {what}"), why.to_string())
 }
 
-/// Splits a merged query into the Top Hit group, the sections, and the files group (with "Show in Folder" after it).
-/// `top` is the hit shown as the top hit; it is taken out of the sections, so no row is listed twice.
+/// Splits a merged query into the Top Hit group, the sections, and the files group (with "Show in Folder" after it,
+/// `show_in_folder`). `top` is the hit shown as the top hit; it is taken out of the sections, so no row is listed twice.
 fn split_merged(merged: &search_rank::Merged, hits: &BTreeMap<String, Hit>, top: Option<Hit>) -> (Option<Group>, Vec<Group>, Vec<Group>) {
     let top_group = top.clone().map(|h| Group { title: "Top Hit", hits: vec![h] });
     let mut sections = vec![];
@@ -813,22 +875,57 @@ fn split_merged(merged: &search_rank::Merged, hits: &BTreeMap<String, Hit>, top:
             continue;
         }
         if section.source == "Files" {
-            let show = match rows.first() {
-                Some(Hit::File { path, name, .. }) => Some(Group { title: "Show in Folder", hits: vec![reveal_of(path, name)] }),
-                _ => None,
-            };
             files.push(Group { title: "Files", hits: rows });
-            files.extend(show);
         } else {
             sections.push(Group { title: section.source, hits: rows });
         }
     }
+    let files = show_in_folder(top_group.as_ref(), files);
     (top_group, sections, files)
 }
 
-/// What the document icon of a file depends on: its name's extension, lower case ("" for a name without one).
+/// The path and name of a file or folder row.
+fn file_of(hit: &Hit) -> Option<(&Path, &str)> {
+    match hit {
+        Hit::File { path, name, .. } | Hit::Folder { path, name, .. } => Some((path.as_path(), name.as_str())),
+        _ => None,
+    }
+}
+
+/// `files` (the Files group, if any) with the "Show in Folder" action after it: one row, for the first file or folder
+/// of the list as it is shown, which is the Top Hit `top` when that is a file and else the first row of the Files
+/// group. That is the file Cmd+Return shows (`QuickSearch::reveal_hit`), so the row says what the chord does.
+///
+/// The action used to be built from the Files group's own rows alone, after the Top Hit had been taken out of them. A
+/// query whose only file match was the Top Hit (the usual case: "note.txt", "file-37") left that group empty, and so
+/// no "Show ... in Folder" row was listed at all (E2E6 3). An action already in `files` is replaced.
+fn show_in_folder(top: Option<&Group>, mut files: Vec<Group>) -> Vec<Group> {
+    files.retain(|g| g.title != "Show in Folder");
+    let listed = files.iter().filter(|g| g.title == "Files").flat_map(|g| &g.hits);
+    let action = top.iter().flat_map(|g| &g.hits).chain(listed).find_map(file_of).map(|(path, name)| reveal_of(path, name));
+    files.extend(action.map(|hit| Group { title: "Show in Folder", hits: vec![hit] }));
+    files
+}
+
+/// The name the folder icon is asked for and kept under (`file_icons_wanted`, `set_file_icon`): no file is named so.
+const FOLDER_ICON: &str = "/";
+
+/// What the document icon of a file depends on: its name's extension, lower case ("" for a name without one); the
+/// folder icon has a key of its own (`FOLDER_ICON`).
 fn file_icon_key(name: &str) -> String {
+    if name == FOLDER_ICON {
+        return FOLDER_ICON.to_string();
+    }
     Path::new(name).extension().map_or_else(String::new, |e| e.to_string_lossy().to_lowercase())
+}
+
+/// The name a file or folder row asks its icon by: the file's name, or `FOLDER_ICON` for a folder.
+fn icon_name(hit: &Hit) -> Option<&str> {
+    match hit {
+        Hit::File { name, .. } => Some(name.as_str()),
+        Hit::Folder { .. } => Some(FOLDER_ICON),
+        _ => None,
+    }
 }
 
 /// The "Show in Folder" hit of the file at `path` named `name`.
@@ -836,24 +933,57 @@ fn reveal_of(path: &Path, name: &str) -> Hit {
     Hit::Reveal { folder: path.parent().map_or_else(|| path.to_path_buf(), Path::to_path_buf), name: name.to_string() }
 }
 
-/// The modification time (Unix seconds, at least 1) of the plain file at `path` when Search may list it: None for a
-/// folder, a file that is gone, one in a folder Settings > Search excludes, or any file while its Files section is off.
-fn listable_file(path: &Path) -> Option<i64> {
+/// What Search finds at the path a document of the Files app is indexed under.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OnDisk {
+    /// a plain file Search may list, with its modification time (Unix seconds, at least 1)
+    File(i64),
+    /// nothing is there any more: the file was deleted, moved or renamed since it was indexed
+    Gone,
+    /// a file Search does not list: one in a folder Settings > Search excludes, or any file while the Files section is off
+    Hidden,
+    /// something Search cannot say more about (a folder, a path that could not be looked at): the item stays as it is
+    Unknown,
+}
+
+/// What is at `path` now, for a document of the Files app (`OnDisk`). One `stat` of the path.
+fn indexed_file_on_disk(path: &Path) -> OnDisk {
     let prefs = super::search_prefs::current();
     if !prefs.source_on("Files") || prefs.folder_excluded(path) {
-        return None;
+        return OnDisk::Hidden;
     }
-    let md = std::fs::metadata(path).ok().filter(|m| m.is_file())?;
-    Some(md.modified().ok().and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok()).map_or(1, |d| (d.as_secs() as i64).max(1)))
+    match std::fs::metadata(path) {
+        Ok(md) if md.is_file() => OnDisk::File(md.modified().ok().and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok()).map_or(1, |d| (d.as_secs() as i64).max(1))),
+        Ok(_) => OnDisk::Unknown,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => OnDisk::Gone,
+        Err(_) => OnDisk::Unknown,
+    }
+}
+
+/// `path` without the parts that do not change what it names (`.`, doubled and trailing separators), so two spellings
+/// of one path compare equal. Links are not resolved: nothing is read from the disk.
+fn plain_path(path: &Path) -> PathBuf {
+    path.components().collect()
 }
 
 /// Turns the documents the Files app put into the index (a file it opened; the item's id is the file's path) into
 /// file rows. As an indexed item such a file read as a row of the Files app with its kind alone: no folder or date,
-/// the app's icon, and no "Show in Folder" (E2E5 2 to 4: the only row "note.txt" gave). `modified` gives the
-/// modification time of a path that is a file Search may list; an item it knows nothing of stays as it is. A file
-/// the walk (or the Top Hit `top`) lists already is not listed twice.
-fn fold_indexed_files(documents: Vec<Group>, mut files: Vec<Group>, top: Option<&Group>, modified: impl Fn(&Path) -> Option<i64>) -> (Vec<Group>, Vec<Group>) {
+/// the app's icon, and no "Show in Folder" (E2E5 2 to 4: the only row "note.txt" gave). `on_disk` says what is at an
+/// item's path now (`indexed_file_on_disk`):
+///
+/// - a file Search may list becomes a file row, unless the walk (or the Top Hit `top`) lists that file already: one
+///   file gives one row, the walk's;
+/// - a file that is gone is not listed, and its id is returned (third) so the caller drops it from the index. In
+///   0.10.51 such an item stayed as the app's row, so the index's leftovers of deleted files were listed for ever, and
+///   one named like a file that exists read as that file listed twice (E2E6 1 and 2: "note.txt" beside the stale
+///   "note.txt" of an earlier folder, "pic.png" twice, "e2e7-notes.txt", "bad-huge.gif");
+/// - a file Search does not list (an excluded folder, the Files section off) is not listed as the app's row either;
+/// - anything else (another app's item, an id that is no absolute path, a folder) stays as it is.
+///
+/// Each section keeps at most `PER_GROUP` rows after this, and at most `PER_GROUP` files join the walk's.
+fn fold_indexed_files(documents: Vec<Group>, mut files: Vec<Group>, top: Option<&Group>, on_disk: impl Fn(&Path) -> OnDisk) -> (Vec<Group>, Vec<Group>, Vec<String>) {
     let mut found: Vec<Hit> = vec![];
+    let mut gone: Vec<String> = vec![];
     let documents: Vec<Group> = documents
         .into_iter()
         .filter_map(|mut g| {
@@ -863,36 +993,53 @@ fn fold_indexed_files(documents: Vec<Group>, mut files: Vec<Group>, top: Option<
                 if app_id != super::workspace::FILES_APP || !path.is_absolute() {
                     return true;
                 }
-                let (Some(name), Some(at)) = (path.file_name(), modified(path)) else { return true };
-                found.push(Hit::File { path: path.to_path_buf(), name: name.to_string_lossy().into_owned(), modified: at });
+                let Some(name) = path.file_name() else { return true };
+                match on_disk(path) {
+                    OnDisk::File(at) => found.push(Hit::File { path: path.to_path_buf(), name: name.to_string_lossy().into_owned(), modified: at }),
+                    OnDisk::Gone => gone.push(unique_id.clone()),
+                    OnDisk::Hidden => {}
+                    OnDisk::Unknown => return true,
+                }
                 false
             });
+            g.hits.truncate(PER_GROUP);
             (!g.hits.is_empty()).then_some(g)
         })
         .collect();
-    let path_of = |h: &Hit| match h {
-        Hit::File { path, .. } => Some(path.clone()),
-        _ => None,
-    };
+    let path_of = |h: &Hit| file_of(h).map(|(path, _)| plain_path(path));
     let mut listed: Vec<PathBuf> = top.iter().flat_map(|g| &g.hits).chain(files.iter().flat_map(|g| &g.hits)).filter_map(path_of).collect();
     found.retain(|h| {
         let new = path_of(h).is_some_and(|p| !listed.contains(&p));
         listed.extend(path_of(h).filter(|_| new));
         new
     });
-    let Some(first) = found.first().cloned() else { return (documents, files) };
-    match files.iter_mut().find(|g| g.title == "Files") {
-        Some(g) => g.hits.extend(found),
-        None => {
-            let show = match &first {
-                Hit::File { path, name, .. } => Some(Group { title: "Show in Folder", hits: vec![reveal_of(path, name)] }),
-                _ => None,
-            };
-            files.push(Group { title: "Files", hits: found });
-            files.extend(show);
+    found.truncate(PER_GROUP);
+    if !found.is_empty() {
+        match files.iter_mut().find(|g| g.title == "Files") {
+            Some(g) => g.hits.extend(found),
+            None => files.insert(0, Group { title: "Files", hits: found }),
         }
     }
-    (documents, files)
+    (documents, show_in_folder(top, files), gone)
+}
+
+/// Drops the documents `gone` (their ids) of the Files app from the index: files that were deleted since the app
+/// indexed them (`fold_indexed_files`). On a thread of its own, since the index is saved after it (`spotindex::flush`
+/// makes the app's whole list into text); the rows are left out of the list on show whether or not this has run yet.
+fn forget_gone_files(gone: Vec<String>) {
+    if gone.is_empty() {
+        return;
+    }
+    let forget = move || {
+        super::spotindex::apply(super::workspace::FILES_APP, bifrost_proto::ToShell::QuickSearchDelete { kind: bifrost_proto::quicksearch::DELETE_IDS, values: gone });
+        // the tests keep the index in memory: the saver would write under the real data dir
+        if !cfg!(test) {
+            super::spotindex::flush();
+        }
+    };
+    if let Err(e) = std::thread::Builder::new().name("quicksearch-forget".into()).spawn(forget) {
+        bifrost_core::log::shell_logger("quicksearch").error(format!("index clean-up thread: {e}"));
+    }
 }
 
 /// The definition row of `query` as its group ("Dictionary"), and whether the query asked for it ("define x").
@@ -958,7 +1105,7 @@ fn hit_category(hit: &Hit) -> (Option<super::search_scope::Category>, Option<&Pa
         Hit::Settings(_) | Hit::SettingsIntent { .. } | Hit::SettingsAction { .. } | Hit::MediaTransport { .. } => (Some(C::Settings), None),
         Hit::Contact { .. } => (Some(C::Contacts), None),
         Hit::Event { .. } => (Some(C::CalendarEvents), None),
-        Hit::File { path, .. } | Hit::Reveal { folder: path, .. } => (Some(C::Files), Some(path.as_path())),
+        Hit::File { path, .. } | Hit::Folder { path, .. } | Hit::Reveal { folder: path, .. } => (Some(C::Files), Some(path.as_path())),
         Hit::Indexed { .. } => (Some(C::Documents), None),
         Hit::City(_) => (Some(C::Cities), None),
         Hit::Answer(_) => (Some(C::Calculator), None),
@@ -1047,13 +1194,18 @@ impl QuickSearch {
             self.run_query.clear();
             self.frozen_top = None;
             self.shown.clear();
+            self.forgotten.clear();
             return vec![];
         }
         if query != self.run_query {
             self.start_run(&query);
         }
         let (top, sections, files) = self.run_groups();
-        let (documents, files) = fold_indexed_files(indexed_groups(&query, &self.opens), files, top.as_ref(), listable_file);
+        let (documents, files, gone) = fold_indexed_files(indexed_groups(&query, &self.opens), files, top.as_ref(), indexed_file_on_disk);
+        // a query is merged again for every answer that streams in: each stale id is handed over once
+        let gone: Vec<String> = gone.into_iter().filter(|id| !self.forgotten.contains(id)).collect();
+        self.forgotten.extend(gone.iter().cloned());
+        forget_gone_files(gone);
         let groups = compose(&query, calculator_group(&query), top, sections, documents, files);
         let groups = self.keep_shown_order(groups);
         self.shown = groups.iter().map(|g| g.title).collect();
@@ -1097,6 +1249,9 @@ fn app_section_title(name: &str) -> &'static str {
 /// (`bifrost_ui::search_rank`) across all apps at once: title and word match, recency of indexing, and local opens.
 /// Each section keeps its first `PER_GROUP` items in ranked order, and sections follow the best item of each app.
 /// Matches the ranker does not score keep their index order after the ranked ones. `usage` holds the panel's open counts.
+/// The Files app's section keeps every match: `fold_indexed_files` looks at each (its documents are files, some of
+/// them gone since) and cuts what is left to `PER_GROUP`. Cut here, three leftovers of deleted files hid the documents
+/// behind them.
 fn indexed_groups(query: &str, usage: &search_rank::Usage) -> Vec<Group> {
     // Settings > Search: the Documents source or an app's items switched off are left out
     let prefs = super::search_prefs::current();
@@ -1134,9 +1289,10 @@ fn indexed_groups(query: &str, usage: &search_rank::Usage) -> Vec<Group> {
             title: f.title,
             snippet: f.snippet,
         };
+        let whole = matches!(&hit, Hit::Indexed { app_id, .. } if app_id == super::workspace::FILES_APP);
         match groups.iter_mut().find(|g| g.title == title) {
             Some(g) => {
-                if g.hits.len() < PER_GROUP {
+                if whole || g.hits.len() < PER_GROUP {
                     g.hits.push(hit);
                 }
             }
@@ -1325,7 +1481,7 @@ pub struct QuickSearch {
     contacts: Vec<super::contactstore::Contact>,
     /// `folded_fields` of each contact
     contacts_folded: Vec<[String; 3]>,
-    /// files under the Files root and the home folder, newest first, and their folded names
+    /// files and folders under the Files root and the home folder, newest first, and their folded names
     files: Vec<crate::files::fs::Entry>,
     files_folded: Vec<String>,
     /// the background file scan started at open, until its result is taken
@@ -1363,6 +1519,9 @@ pub struct QuickSearch {
     frozen_top: Option<Hit>,
     /// the titles of the groups on screen, in order
     shown: Vec<&'static str>,
+    /// the ids of the Files app's indexed documents whose file was found gone and handed to `forget_gone_files`, so
+    /// the merges that follow do not hand them over again; emptied with the query
+    forgotten: Vec<String>,
     /// the calendar events, read on a worker (see `refresh_sources`)
     events: Vec<super::calendar::store::CalendarEvent>,
     calendar_stamp: Option<(PathBuf, std::time::SystemTime)>,
@@ -1407,8 +1566,8 @@ impl QuickSearch {
         self.search_imgs.clear();
     }
 
-    /// How much the Golden Gate layout is enlarged: the card is `MAC_CARD_FRACTION` of the screen's width, and when that is
-    /// wider than the card's point size everything in it (the field, the rows, the text) grows by the same factor.
+    /// How much the Golden Gate layout is enlarged: at most `MAC_K_MAX`, which is 1, so the card, the field, the rows and
+    /// the text keep their point sizes on a screen of any width.
     fn mac_k(&self, ui: &Ui) -> f32 {
         (self.screen_w * MAC_CARD_FRACTION / ui.pt(MAC.card_w).max(1.0)).clamp(1.0, MAC_K_MAX)
     }
@@ -1483,6 +1642,7 @@ impl QuickSearch {
             run_hits: BTreeMap::new(),
             frozen_top: None,
             shown: vec![],
+            forgotten: vec![],
             events: vec![],
             calendar_stamp: None,
             wall: (0, 0),
@@ -1667,9 +1827,9 @@ impl QuickSearch {
                 // Privacy: files in the folders Settings > Search excludes are never listed
                 let excluded = super::search_prefs::current();
                 // the Files root and the account's home folder, in a bounded walk (`quicksearch_files`). Tests never
-                // walk the home folder of the machine they run on: its files would come in as results whenever the
-                // walk happened to finish inside a test
-                let home = home.or_else(|| if cfg!(test) { None } else { files_walk::search_home() });
+                // walk the home folder of the machine they run on (`search_home` gives none there): its files would
+                // come in as results whenever the walk happened to finish inside a test
+                let home = home.or_else(files_walk::search_home);
                 let roots = files_walk::roots(&root, home.as_deref());
                 let files: Vec<crate::files::fs::Entry> = files_walk::walk(&roots, files_walk::LIMIT, files_walk::VISIT_BUDGET).into_iter().filter(|e| !excluded.folder_excluded(&e.path)).collect();
                 let _ = tx.send(files);
@@ -1901,15 +2061,15 @@ impl QuickSearch {
     }
 
     /// The file rows whose document icon is not drawn yet, as (file name, icon size in pixels), one per kind of file
-    /// (`file_icon_key`).
+    /// (`file_icon_key`); a folder row asks for the folder icon as `FOLDER_ICON`.
     pub(super) fn file_icons_wanted(&self, ui: &Ui) -> Vec<(String, usize)> {
         let px = self.px(ui, self.m().row_icon).round() as usize;
         let mut out: Vec<(String, usize)> = vec![];
         for (hit, _) in self.sections.iter().flat_map(|s| &s.rows) {
-            let Hit::File { name, .. } = hit else { continue };
+            let Some(name) = icon_name(hit) else { continue };
             let key = file_icon_key(name);
             if px > 0 && self.file_icon(name, px).is_none() && !out.iter().any(|(n, _)| file_icon_key(n) == key) {
-                out.push((name.clone(), px));
+                out.push((name.to_string(), px));
             }
         }
         out
@@ -1937,11 +2097,11 @@ impl QuickSearch {
         self.sections.get(si).and_then(|s| s.rows.get(ri)).map(|(h, _)| h.clone())
     }
 
-    /// Cmd+Return: "Show in Folder" for the file row the arrow keys are on, or else the first file row. None when no
-    /// file is listed.
+    /// Cmd+Return: "Show in Folder" for the file or folder row the arrow keys are on, or else the first such row. None
+    /// when no file is listed.
     pub fn reveal_hit(&self) -> Option<Hit> {
         let file = |h: &Hit| match h {
-            Hit::File { path, name, .. } => Some(reveal_of(path, name)),
+            Hit::File { path, name, .. } | Hit::Folder { path, name, .. } => Some(reveal_of(path, name)),
             Hit::Reveal { .. } => Some(h.clone()),
             _ => None,
         };
@@ -2110,7 +2270,7 @@ impl QuickSearch {
                     Hit::Event { title } => title.clone(),
                     Hit::Terminal(_) => "Search in Terminal".to_string(),
                     Hit::Answer(a) => format!("= {a}"),
-                    Hit::File { name, .. } => name.clone(),
+                    Hit::File { name, .. } | Hit::Folder { name, .. } => name.clone(),
                     Hit::Reveal { name, .. } => format!("Show {name} in Folder"),
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
                     Hit::SettingsIntent { title, .. } => title.to_string(),
@@ -2619,7 +2779,7 @@ impl QuickSearch {
                         Hit::Deildu(_) => Some(AppId::Deildu),
                         Hit::Terminal(_) => Some(AppId::Terminal),
                         Hit::Answer(_) => super::apphost::slot_of(super::apphost::CALCULATOR).map(|n| AppId::External(n as u8)),
-                        Hit::File { .. } | Hit::Reveal { .. } => Some(AppId::Files),
+                        Hit::File { .. } | Hit::Folder { .. } | Hit::Reveal { .. } => Some(AppId::Files),
                         Hit::Shortcut { app_id, .. } | Hit::Indexed { app_id, .. } => super::apphost::slot_of(app_id).map(|n| AppId::External(n as u8)),
                         Hit::Event { .. } => super::apphost::slot_of(super::services::calendar::STORE_APP).map(|n| AppId::External(n as u8)),
                         Hit::Definition { .. } => super::apphost::slot_of(bifrost_ui::services_menu::DICTIONARY_APP).map(|n| AppId::External(n as u8)),
@@ -2640,10 +2800,7 @@ impl QuickSearch {
                     let sized = app.and_then(|app| self.row_icons.iter().find(|(a, _)| *a == app)).map(|(_, img)| img).filter(|img| self.mac && img.h == isz.round() as usize);
                     let icon = sized.or_else(|| app.and_then(|app| self.icons.iter().find(|(a, ..)| *a == app)).map(|(_, _, small, _)| small));
                     // a file shows the document icon of its type, as Files and the Dock's stack do, not the Files app's
-                    let doc_icon = match hit {
-                        Hit::File { name, .. } => self.file_icon(name, isz.round() as usize),
-                        _ => None,
-                    };
+                    let doc_icon = icon_name(hit).and_then(|name| self.file_icon(name, isz.round() as usize));
                     let icon = doc_icon.or(icon);
                     match (icon, result_symbol(hit)) {
                         // an app icon: the row-square copy fills the slot, the 29 pt one is centred in it
@@ -2876,6 +3033,22 @@ impl Shell {
                 }
             }
             Hit::File { path, name, modified } => self.quicksearch_open_file(&path, &name, modified, t),
+            Hit::Folder { path, .. } => {
+                // the folder opens in Files: the Files app on the desktop, the built-in view elsewhere
+                let shown = if self.desk_active() {
+                    self.desktop_open_folder(super::workspace::FILES_APP, &path.to_string_lossy(), t)
+                } else {
+                    self.open(AppId::Files, t);
+                    let shown = match &mut self.files {
+                        Some(f) => f.show_folder(&self.ui, &path, t),
+                        None => false,
+                    };
+                    if shown { Ok(()) } else { Err("No location in Files holds it".to_string()) }
+                };
+                if let Err(e) = shown {
+                    self.file_action_failed(&path, "could not be opened in Files", &e);
+                }
+            }
             Hit::Definition { word, .. } => {
                 if std::mem::take(&mut self.quicksearch.space_preview) {
                     // Space: the whole definition in the Look Up popover
@@ -2891,7 +3064,11 @@ impl Shell {
                 // the folder
                 let target = reveal_target(&folder, &name);
                 if self.desk_active() {
-                    if let Err(e) = self.desktop_show_in_files(&target, t) {
+                    // the item selected in the folder that holds it, also when the item is a folder itself (which
+                    // `desktop_show_in_files` would open instead); the folder alone when the item is gone
+                    let files_app = super::workspace::FILES_APP;
+                    let shown = if target == folder { self.desktop_open_folder(files_app, &folder.to_string_lossy(), t) } else { self.desktop_reveal_file(files_app, &target.to_string_lossy(), t) };
+                    if let Err(e) = shown {
                         self.file_action_failed(&target, "could not be shown in Files", &e);
                     }
                 } else {
@@ -3063,7 +3240,7 @@ impl Shell {
             let mut img = Image::new(px, px);
             {
                 let mut sub = Surface { w: img.w, h: img.h, stride: img.w, px: &mut img.px, y0: 0 };
-                let entry = super::docpanel::Entry { name: name.clone(), dir: false, enabled: true, path: None };
+                let entry = super::docpanel::Entry { name: name.clone(), dir: name == FOLDER_ICON, enabled: true, path: None };
                 self.draw_file_icon(&mut sub, &entry, 0.0, 0.0, px as f32, 0);
             }
             self.quicksearch.set_file_icon(&name, px, img);

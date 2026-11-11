@@ -131,6 +131,12 @@ pub trait SystemService {
     fn tick(&mut self, _shell: &mut Shell, _t: f64) -> Vec<Event> {
         Vec::new()
     }
+    /// When the service needs its next tick without any input, at shell time `t` (milliseconds); `None` when
+    /// nothing is waiting, which is what an idle service answers. `Shell::next_wake` folds it into the loop's
+    /// wake-up, so a deadline here is a wake-up of the whole shell: one-shot deadlines only, never a standing poll.
+    fn next_wake(&self, _shell: &Shell, _t: f64) -> Option<f64> {
+        None
+    }
 }
 
 /// Whether the installed app `app_id` lists `permission` in its manifest.

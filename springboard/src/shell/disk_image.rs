@@ -18,6 +18,7 @@
 
 use crate::bare::account::Account;
 use super::volume_eject::{E_EJECTED, M_EJECT};
+use super::volume_mount::{E_MOUNTED, M_MOUNT};
 use crate::privd_client;
 use bifrost_core::json::Json;
 use std::path::{Path, PathBuf};
@@ -417,13 +418,20 @@ pub struct Jobs {
 }
 
 impl Jobs {
-    /// Whether `method` is one of the disk image methods or the eject of a removable volume.
+    /// Whether `method` is one of the disk image methods, the eject of a removable volume or the request to mount
+    /// one again.
     pub fn handles(method: &str) -> bool {
-        method == M_ATTACH || method == M_DETACH || method == M_EJECT
+        method == M_ATTACH || method == M_DETACH || method == M_EJECT || method == M_MOUNT
+    }
+
+    /// Whether a request is still running: the service's tick has an outcome to collect soon.
+    pub fn busy(&self) -> bool {
+        !self.running.is_empty()
     }
 
     /// Starts `attach_image {path, read_only?}` (read-only unless `read_only` is false), `detach_image {target}` or
-    /// `eject_volume {target}` (the partition of a removable volume, `shell::volume_eject`) for `app` and answers
+    /// `eject_volume {target}` (the partition of a removable volume, `shell::volume_eject`) or `mount_volume
+    /// {target}` (a removable volume that is attached and not mounted, `shell::volume_mount`) for `app` and answers
     /// `{started: true}`. The outcome follows as an event ([`Jobs::finished`]).
     pub fn start(&mut self, app: &str, method: &str, params: &Json) -> Result<Json, String> {
         if self.running.len() >= MAX_JOBS {
@@ -455,6 +463,14 @@ impl Jobs {
                     let _ = tx.send(super::volume_eject::eject(&what));
                 });
                 (E_EJECTED, ("target", target))
+            }
+            M_MOUNT => {
+                let target = params.str_field("target").filter(|p| super::volume_eject::valid_device(p)).ok_or("the volume's device is needed")?;
+                let what = target.clone();
+                std::thread::spawn(move || {
+                    let _ = tx.send(super::volume_mount::mount_requested(&what));
+                });
+                (E_MOUNTED, ("target", target))
             }
             _ => return Err(format!("disks has no method {method}")),
         };
@@ -735,9 +751,12 @@ mod tests {
         for bad in ["/run/media/me/Stick", "/dev/../etc/passwd", "sdb1", "/dev/-b"] {
             let target = Json::Obj(vec![("target".to_string(), Json::Str(bad.into()))]);
             assert!(jobs.start("app", M_EJECT, &target).is_err(), "{bad}");
+            // and so does a request to mount: nothing but a plain device name starts a thread
+            assert!(jobs.start("app", M_MOUNT, &target).is_err(), "{bad}");
         }
         assert!(jobs.start("app", M_EJECT, &Json::Null).is_err());
-        assert!(jobs.running.is_empty() && jobs.finished().is_empty());
+        assert!(Jobs::handles(M_MOUNT) && jobs.start("app", M_MOUNT, &Json::Null).is_err());
+        assert!(jobs.running.is_empty() && jobs.finished().is_empty() && !jobs.busy());
     }
 
     #[test]

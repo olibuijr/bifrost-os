@@ -8,6 +8,10 @@
 //!
 //! Source: [`begin`] with the items, the operations allowed and a [`DragPreview`]. The shell tracks the pointer and ends the
 //! session with [`Event::Ended`] (`op` 0 when nobody took the drop). Coordinates are window pixels, the space of `Touch`.
+//!
+//! An app with several windows hears which one the pointer is over: `App::window_drag` gets the `Dest` events with the
+//! window's id, and the point is in that window's pixels. The shell names the window from 0.10.52 on (the last field
+//! of `ToApp::DragDest`); an older shell does not, and the window is `None`.
 
 pub use crate::proto::{dragop, DragItem, DragPhase, DragPreview, Payload};
 use crate::proto::ToShell;
@@ -46,6 +50,12 @@ pub fn set_image(ctx: &Ctx, session: u32, w: u32, h: u32, rgba: Vec<u8>) {
     if crate::proto::rich::drag_image_size_ok(w, h) && rgba.len() == (w as usize) * (h as usize) * 4 {
         ctx.send_to_shell(ToShell::DragImage { session, w, h, rgba });
     }
+}
+
+/// Whether a `Dest` event for `window` has a window to go to: the main window, one the app has open, or no window
+/// named at all (an older shell). False for a window that closed while the drag was over it.
+pub fn window_open(ctx: &Ctx, window: Option<crate::app_windows::WindowId>) -> bool {
+    window.is_none_or(|w| w.is_main() || ctx.windows().route(w).is_some())
 }
 
 /// The operation this window will perform at the current point (a single `dragop` bit; 0 refuses).
@@ -114,6 +124,19 @@ mod tests {
         assert_eq!((p.w, p.h), (32, 16));
         let small = preview_from_rgba(2, 2, &[7; 16]);
         assert_eq!((small.w, small.h, small.rgba.len()), (2, 2, 16));
+    }
+
+    #[test]
+    fn a_dest_event_goes_to_an_open_window_and_not_to_a_closed_one() {
+        use crate::app_windows::{WindowId, WindowSpec};
+        let ctx = crate::runtime::test_ctx();
+        assert!(window_open(&ctx, None), "an older shell names no window: the app gets the event");
+        assert!(window_open(&ctx, Some(WindowId::MAIN)));
+        assert!(!window_open(&ctx, Some(WindowId(41))), "a window the app never opened");
+        let id = ctx.open_window(WindowSpec::new("Second", 300.0, 200.0)).unwrap();
+        assert!(window_open(&ctx, Some(id)));
+        ctx.close_window(id).unwrap();
+        assert!(!window_open(&ctx, Some(id)), "closed while the drag was over it");
     }
 
     #[test]

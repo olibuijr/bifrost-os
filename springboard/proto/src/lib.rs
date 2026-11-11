@@ -705,6 +705,11 @@ pub enum ToApp {
     /// System appearance settings (`appearance::*` bits), sent on start and whenever they change. Apps built before
     /// this message ignore it; bits an app does not know are ignored too.
     Appearance { flags: u32 },
+    /// The person's date and time conventions (Settings > Date & Time): `flags` are `date_time::*` bits, `zone` is the
+    /// system time zone's name in the tz database ("Europe/Berlin"; empty when the shell has none). Sent on first
+    /// contact and whenever either changes. An app built before this message ignores it, and so are bits it does not
+    /// know; an app that never gets it (an older shell) keeps 24-hour time and the zone it read itself. Tag 0x166.
+    DateTime { flags: u32, zone: String },
     /// Sent only to the keyboard system app (`kind = "system"`, `provides = ["keyboard"]`).
     KeyboardConfig(KeyboardConfig),
     /// The answer to `DocOpen`, `DocSave` or `DocReopen`: one file descriptor follows as SCM_RIGHTS. For a save it is
@@ -790,7 +795,10 @@ pub enum ToApp {
     /// A dragging session moves over the app's window (`NativeDraggingDestination`); `x`, `y` are window-local points.
     /// `items` are sent with `Entered` and `Perform`. For `Perform` the files of the items arrive first as `DocBatch`
     /// and `DocGranted` with `request == session`. Answer `Entered` and `Updated` with `ToShell::DragReply`.
-    DragDest { session: u32, phase: DragPhase, x: f32, y: f32, allowed: u8, items: Vec<DragItem> },
+    /// `window` is the window of the app the pointer is over (0 the main window, else the id of `WindowOpen`), in whose
+    /// pixels `x`, `y` are; a shell built before the field (up to 0.10.51) leaves it out and it reads as `None`. It is
+    /// the last field on the wire, so an app built before it reads the message as it always did.
+    DragDest { session: u32, phase: DragPhase, x: f32, y: f32, allowed: u8, items: Vec<DragItem>, window: Option<u32> },
     /// The session this app started ended (`draggingSession(_:endedAt:operation:)`); `op` is 0 when nobody took it.
     DragEnded { session: u32, op: u8 },
 }
@@ -843,6 +851,12 @@ impl KeychainStatus {
 /// Limits of keychain items (longer fields are refused with `Param`).
 pub const MAX_KEYCHAIN_NAME: usize = 255;
 pub const MAX_KEYCHAIN_VALUE: usize = 8 * 1024;
+
+/// Bits of `ToApp::DateTime { flags }`.
+pub mod date_time {
+    /// Date & Time > 24-Hour Time is off: times are written "2:05 PM". Clear means 24-hour time ("14:05").
+    pub const CLOCK_12_HOUR: u32 = 1;
+}
 
 /// Bits of `ToApp::Appearance { flags }`.
 pub mod appearance {
@@ -1420,6 +1434,7 @@ mod tag {
     pub const INPUT_SOURCE: u32 = 0x162;
     pub const ACCENT_HOLD: u32 = 0x163;
     pub const QUICK_ACTION: u32 = 0x164;
+    pub const DATE_TIME: u32 = 0x166;
     // several windows, window level and full screen: 0x240..=0x24f (0x1c0..=0x1cf belongs to `quicksearch`)
     pub const WINDOW_CLOSED: u32 = 0x248;
     pub const WINDOW_CONFIGURE: u32 = 0x249;
@@ -1775,6 +1790,13 @@ impl<'a> Reader<'a> {
         }
         Ok(ModifierFlags::from_bits_truncate(self.u32()?))
     }
+    /// A trailing `u32` that a sender built before the field left out: `None` at the end of the packet.
+    fn tail_u32(&mut self) -> Result<Option<u32>, DecodeError> {
+        if self.0.is_empty() {
+            return Ok(None);
+        }
+        self.u32().map(Some)
+    }
     fn items(&mut self) -> Result<Vec<(String, Vec<u8>)>, DecodeError> {
         let n = self.u32()? as usize;
         if n > 16 {
@@ -2040,6 +2062,11 @@ impl ToApp {
                 u32_(&mut b, tag::APPEARANCE);
                 u32_(&mut b, *flags);
             }
+            ToApp::DateTime { flags, zone } => {
+                u32_(&mut b, tag::DATE_TIME);
+                u32_(&mut b, *flags);
+                str_(&mut b, zone);
+            }
             ToApp::KeyboardConfig(c) => {
                 u32_(&mut b, tag::KEYBOARD_CONFIG);
                 b.push(c.layout as u8);
@@ -2214,6 +2241,7 @@ impl ToApp {
             tag::PASTEBOARD_BLOB => ToApp::PasteboardBlob { change_count: r.u32()?, types: r.layout()? },
             tag::CLIPBOARD => ToApp::Clipboard { text: r.str()? },
             tag::APPEARANCE => ToApp::Appearance { flags: r.u32()? },
+            tag::DATE_TIME => ToApp::DateTime { flags: r.u32()?, zone: r.str()? },
             tag::KEYBOARD_CONFIG => {
                 let layout = match r.u8()? {
                     0 => KeyboardLayout::Docked,

@@ -1088,11 +1088,22 @@ the menu is a plain context menu (no icons, no "More..."), and Copy of a file co
   also the immediate answer when the shell refuses: another session runs, the app is not in front, no items).
   The preview is in points: the shell scales it by the UI scale (nearest), so on a display of scale 2 it is at most
   32 pt of blocky pixels. `dnd::set_image(ctx, session, w, h, rgba)`, called right after `begin`, gives the session an
-  image at device pixels instead (`ToShell::DragImage`, at most `proto::rich::MAX_DRAG_IMAGE` = 128 px a side, its
-  pixels in a memfd because they do not fit a packet); the shell draws it one to one, centred on the pointer. Draw it
-  at the item's size in points times `ctx.ui.s`. Files sends the lifted item's icon this way. The message is new after
-  system 0.10.50: an app that sends it to an older shell is stopped as incompatible, so such an app's manifest needs
-  the `min_shell` of the first release that has it.
+  image at device pixels instead (`ToShell::DragImage`, at most `proto::rich::MAX_DRAG_IMAGE` = 512 px a side, its
+  pixels in a memfd because they do not fit a packet, 1 MiB at the limit); the shell draws it one to one, centred on
+  the pointer. Draw it at the item's size in points times `ctx.ui.s`. Files sends the lifted item's icon this way. The
+  message is new after system 0.10.50: an app that sends it to an older shell is stopped as incompatible, so such an
+  app's manifest needs the `min_shell` of the first release that has it. The limit was 128 px up to system 0.10.51
+  (it shrank an icon of more than 64 pt at scale 2); a shell of that age refuses a larger image as a packet it cannot
+  decode, so an app that sends more than 128 px needs `min_shell = "0.10.52"`.
+- **Windows**: from system 0.10.52 every `ToApp::DragDest` ends with the app's window the pointer is over (a `u32`: 0
+  the main window, else the id of `WindowOpen`), and its point is in that window's pixels. Moving from one window of
+  an app to another sends `Exited` for the first and `Entered` for the second. `App::window_drag(ctx, window, ev)`
+  gets the destination events with the window (`Some(id)`; `None` from a shell up to 0.10.51, which targets the app
+  as a whole); its default calls `App::drag`, so an app with one drop window changes nothing. The field is the last
+  one on the wire and optional: an app built before it ignores it. A `Perform` for a window the app has closed is
+  answered by the runtime (`performed(false)`). Files uses it to drop into the window under the pointer.
+- **Desktop**: files dropped on the desktop move there when they are on the Desktop folder's volume and the source
+  allows the move (Option copies, as the narrowed mask says); from another volume they are copied.
 - **Perform**: on release over a window that replied with an operation the shell first hands the files over, each as a fresh
   **read-only** grant made from the source's grant (`Broker::transfer`, a `DocBatch` and `DocGranted` with `request == session`),
   then sends `Perform` with the items; file items carry the new grant ids and a file that could not be handed over is dropped.
@@ -1189,6 +1200,18 @@ and the docbroker grants. The app implements `Document` (`read(bytes, uttype)`, 
 Wiring: `App::document` calls `controller.handle(ctx, ev)` (`None` = not the controller's request), `main_menu` returns
 `controller.file_menu()`, `menu_action` forwards ids for which `is_menu_id` is true, `tick`/`next_wake`/`suspend` forward, and after
 each edit the app calls `note_change`. `handle` answers with `Notice` values (`Created`, `Opened`, `Saved`, `Reverted`, `Closed`, `Failed`).
+
+Quitting in the middle of a save (`applicationShouldTerminate` answered `terminateLater`, in effect): when an app ends
+(`ToApp::Quit`, `Ctx::terminate`) the runtime keeps it alive, with its window already closed, until its saves have ended
+or one second has passed (`runtime::finish_saves`). A save counts while the shell owes an answer to `save_document` or
+`save_document_in_place`, and while the app says so through `App::save_in_flight(ctx) -> bool`: an app whose save has
+steps the runtime cannot see (a picture encoded on a queue, a look at the original with `reopen_document` before the
+save in place) returns `true` until the save has ended and, in the same call, does what its `tick` would (takes the
+worker's result, sends the next request); the runtime asks every 10 ms. The shell answers the document requests of an
+app it asked to quit (`Shell::ext_quit_poll`, `doc_quitting`) until the app is gone or its 1500 ms grace period is over,
+without showing a panel. Not matched: the wait is bounded (the reference waits for `reply(toApplicationShouldTerminate:)`
+without a limit), so a save that takes longer than a second from the quit is cut off; the app has to keep what it needs
+to say so at its next launch (Viewer does, see its changelog). First user: Viewer 0.11.25.
 
 Gaps (not matched yet): no versions browser (`Revert To > Browse All Versions`, no version history at all), no iCloud documents,
 no `NSFileCoordinator` or file-presenter watching (an external change to an open file is noticed only as `Stale` on the next
@@ -2814,7 +2837,42 @@ for a fixed offset). `TimeZone::known_time_zone_identifiers()` lists the databas
 returns English names: short forms are the abbreviation in force (the `DateFormatter` letters `z`, `zz` and `zzz` instead follow the reference en_US data: UTC and North American abbreviations, otherwise the short GMT form such as `GMT+1`), long forms come from a built-in table of common
 abbreviations (GMT, BST, CET, EST, PST, JST, AEST, NZST, ...) and are None for anything else. The data is the shell's
 `springboard/src/bare/timezone.rs` (TZif v1/v2 files, POSIX footer rules, abbreviations); `SYSTEM_TIME_ZONE_DID_CHANGE`
-names the zone-change notification, which nothing publishes yet.
+names the zone-change notification, which nothing publishes: a zone change reaches an app as described below.
+
+### The person's clock style and zone (`Locale.hourCycle`, `TimeZone.current` parity)
+
+An app must not read the shell's settings file to learn how the person writes times: its sandbox does not show
+`settings.ini` (only `account/` of the shell's folder is bound), so such a reader always gets its default. Files did
+this in 1.34.19 and kept "Today at 01:18" with 24-Hour Time off. The shell tells every app instead:
+
+- Wire: `ToApp::DateTime { flags, zone }`, tag `0x166`, sent on first contact and whenever Settings > Date & Time
+  changes the clock style or the zone (`AppHost::sync_date_time`, next to `sync_appearance`). `flags` are
+  `proto::date_time` bits (`CLOCK_12_HOUR` = 1; unknown bits are ignored), `zone` is the tz database name the shell
+  tells the time in (empty: not said). An app built before the message ignores the unknown tag. An app on a shell
+  that does not send it keeps 24-hour time and the machine's zone, which the runtime reads from `/etc/localtime` at
+  start (`/etc` and `/usr/share/zoneinfo` are visible in the sandbox). Before this, `TimeZone::current()` in an app was
+  always the built-in default zone, because only the shell process set one.
+- API (`bifrost_app::time_zone`): `uses_24_hour_clock()` (Date & Time > 24-Hour Time), `time_text(hour, minute)` and
+  `time_text_at(Date)` (a time of day as the menu bar writes it, `ClockStyle::time_text`: "14:05" or "2:05 PM"; the
+  second reads the instant in the system zone), and `conventions_revision()`, which changes with either setting, for
+  an app that keeps formatted dates. `TimeZone::current()` is the zone the shell named.
+- Change: the runtime applies the message, calls `App::configure` and sends a whole frame (also for a background
+  window), as for an appearance change. An app that formats its dates when it paints needs no code for a change.
+- Files (1.34.20) is the first user: the list, the columns preview, the gallery, Get Info, the preview panel and the
+  control `get_info` rows write dates with `views/options.rs` `date_text`, in the shell's form (`fs::date_text_in`:
+  "Today at 2:05 PM", "4 Oct 2026 at 00:22").
+
+Gaps: the date order, the first weekday and the region are not sent yet (`flags` has room). `Locale::current()` still
+reads the region from the shell's `settings.ini`, which a sandboxed app cannot see, so it falls back to `BIFROST_REGION`
+or `LANG` there; it should move to this message. Not yet checked on Midget.
+
+Apps that still write hours and minutes themselves (`{:02}:{:02}`), always 24-hour whatever the setting, and should
+move to `time_zone::time_text`: Calendar (`calendar.rs`, `calendar/connect.rs`), Clock (`system.rs`,
+`clock/map.rs`, `clock/intent.rs`, `clock/mod.rs`), Maps (`transit.rs`), Notes (`notes/store.rs`), Printers
+(`model.rs`), Reminders (`model.rs`), Mail (`message.rs`, the time of day), Keychain Access (`model.rs`) and Stickies
+(`dates.rs`). Mail and Printers also take one offset from `TimeZone::current()` for every date (wrong across a daylight
+saving change). The same pattern in Assistant, the browser's inspector, ColorSync Utility, Console, Photo Booth's
+trash, Wireless Diagnostics and Mail's message headers is a machine or log format and stays as it is.
 
 Gaps: Gregorian instants only; no names in languages other than English; the World Clock still uses its fixed city table
 (`shell/clock/tz.rs`) rather than `TimeZone`; apps have not moved to the SDK type. Tests live in `sdk/src/time_zone.rs`
@@ -2928,6 +2986,13 @@ Apple's CoreSpotlight lets an app index its own content so system search finds i
   name (`quicksearch::indexed_groups`, `app_section_title`). Items of an uninstalled app are dropped when the installed
   list changes (`spotindex::forget_missing`, called from `installed_changed`); an empty list (registry not read yet) keeps
   every item.
+- Files in the panel (`shell/quicksearch_files.rs`, `quicksearch::fold_indexed_files`): the walk of the Files root and the
+  account's home lists files and folders (a folder is a "Folder" row: Return opens it in Files, Cmd+Return shows it in
+  the folder that holds it). A document the Files app indexed is a path: it becomes a file row unless the walk lists
+  that file already; one whose file is gone is not listed and is deleted from the index (`forget_gone_files`, off the
+  UI thread). "Show … in Folder" is listed after the files for the first file shown, the Top Hit included, on both
+  layouts; Cmd+Return does the same for the selected file. An app is found by a run of its name, its words' initials
+  or an alias (`name_match`), not by scattered letters.
 - Settings > Search store: `<data>/search-prefs.txt` (`shell/search_prefs.rs`) holds the sources the panel does not query
   (`off <section>`, e.g. `off Files`), the apps whose indexed items are hidden (`app <id>`) and the folders file search
   leaves out (`exclude <folder>`, Privacy). The panel applies them (`sources_of`, `indexed_groups`, file walk). The

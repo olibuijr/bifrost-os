@@ -542,6 +542,82 @@ Open a file in an app: `open-file <app id> <absolute file>` on the shell's contr
   every app since 0.10.50: before, a built-in app (Photos) read a file outside the home folder as the shell.
 - From the lab: `python3 tools/midget.py open-file is.olibuijr.textedit.desktop /home/<account>/notes.txt`.
 
+## Removable volumes (2026-11-11)
+
+A USB stick, a disk in a plug-in case or a memory card is mounted by the shell when it is plugged in, and the ones
+already there are mounted when the session is unlocked. Code: `springboard/src/shell/volume_mount.rs` (what is
+mounted and how), `shell/block_watch.rs` (the wake-up), `shell/services/disks.rs` (the `disks` service that drives
+both), `shell/volume_eject.rs` (the eject).
+
+**What is mounted.** Only disks the kernel marks removable or that sit on a plug-in bus (any USB bus, a card in a
+slot), with a medium in them. On such a disk each partition that holds one of these file systems is a volume: FAT,
+exFAT, NTFS, ext2/3/4, Btrfs, XFS, F2FS, ISO 9660, UDF. A disk that carries the file system directly, without a
+partition table, is one volume.
+
+**Where.** `/run/media/<account>/<label>`; `Untitled` without a usable label, and `<label> 2` when the name is taken.
+The label is cleaned to a folder name and is never a path. `/run/media/<account>` is `root:<account's group>` 0750.
+
+**Options.** Always `nosuid,nodev,noexec`. `ro` for a write-protected device and for ISO 9660 and UDF. A file system
+without owners (FAT, exFAT, NTFS, the disc formats) gets `uid=` and `gid=` of the account, and FAT, exFAT and NTFS get
+`umask=0077` (the mount table shows it as `fmask=0077,dmask=0077`). A file system with owners keeps them. A shell
+that runs as the account instead of root asks the storage service, which picks the folder and the options.
+
+**What is skipped, and why.**
+
+| Skipped | Why |
+|---|---|
+| A disk with any part mounted outside the media folders, used as swap, or with another device built on it | It is the system's, also when the system was started from a stick |
+| Built-in disks, disk images (loop devices), RAM disks, device-mapper and RAID devices | Not removable; an image has its own path (`shell/disk_image.rs`) |
+| EFI system, firmware boot, reserved and recovery partitions; hidden partitions | Nobody asked to see them, and a stray write can stop the disk from starting a computer |
+| Swap, an encrypted container, a volume-manager or RAID member, an unknown or empty type | Nothing to open as a folder |
+| A volume that was decided on once: mounted, failed, nothing to mount, ejected, or found mounted | One notice per failure, no loop; an ejected volume stays ejected until it is unplugged |
+| Everything, while the screen is locked or the login window is up | The mount waits for the unlock and starts on the first tick after it |
+
+Volumes that are mounted when the screen locks stay mounted, and they stay mounted over Log Out too: this is a
+single-account computer, Log Out returns to the login window of the same account. When accounts are added, the end
+of a session has to unmount what was mounted for it.
+
+**When.** The shell watches `/dev` (inotify, in the main loop's poll set). The kernel makes a device's node there
+before anything else hears of it, so the plug wakes the shell at once; it reads `/sys/block`, waits 400 ms for the
+partitions, and runs one pass on a thread (`blkid -p` per device, then `mount`). From the kernel announcing the disk
+to the mounted volume that is well under a second; the kernel's own start of a USB disk (about a second) comes
+before it. Nothing polls: an idle shell gets no wake-up from this. The device list is also read at most every 10 s
+on a wake-up the shell has anyway, for what the watch does not tell (a mount made by another program, a card put
+into a reader without a new device node). `SPRINGBOARD_WAKE_TRACE=1` prints which deadline wakes the loop.
+
+**Pulled out without an eject.** The mounts of a device that is gone are taken away (`umount -l`) and their empty
+folders removed. A disk pulled and plugged in again so fast that the list never saw it missing is still a new
+device: the watch names both events.
+
+**Eject and the way back.** `eject_volume {target}` unmounts and powers the disk off; a disk that powers off
+disappears, so plugging it in again mounts it again. When the power stays on, the volume stays unmounted until the
+disk is really unplugged, or until an app asks with `mount_volume {target}` (`/dev/sdb1`): the request is checked
+like an eject (a plain device name, nothing else) and like a volume of the automatic pass (same disks, same file
+systems, same options, never a disk the system uses), and refused while the screen is locked. Both methods answer
+apps with the `storage` permission and system apps; the outcome is the event `volume_ejected` or `volume_mounted`.
+
+**Notices.** A volume that does not mount is one "Disk Could Not Be Opened" notice in plain words, for example
+"This disk uses a format this computer cannot read: exFAT" when the kernel has no driver for it. The tool's own
+message goes to the log (`disks: automount: ...`). The disk then gets no "USB Disk Connected ... is ready to use"
+notice.
+
+**Testing with an emulated stick** (on the lab PC, as root; no hardware needed):
+
+```sh
+truncate -s 64M /root/stick.img
+mkfs.vfat -n E2EUSB /root/stick.img          # a file system on the whole device; or partition it first
+modprobe dummy_hcd
+modprobe g_mass_storage file=/root/stick.img removable=1 stall=0     # plug it in
+grep /run/media /proc/mounts                                         # the volume, with the options above
+rmmod g_mass_storage                                                 # pull it out without an eject
+```
+
+What to look at: the time from `modprobe g_mass_storage` to the line in `/proc/mounts` (poll every 100 ms: `until
+grep -q E2EUSB /proc/mounts; do sleep 0.1; done`), the Files sidebar following it, the mount and its folder gone
+after `rmmod`, nothing mounted while the screen is locked and the mount arriving on unlock, and that the stick
+stays unmounted after Eject. For the format notice, make the image with `mkfs.exfat` and move the kernel's exfat
+module away (or blacklist it) before plugging in.
+
 ## Releases and the test machine (2026-10-08)
 
 Release tools: `tools/bump-apps.py DIR=NOTE ...` (or `--all-sdk NOTE`) patch-bumps manifest, Cargo.toml, the lock entry and `CHANGELOG.md` per app. Optional commit guard (not installed by default): `ln -sf ../../tools/hooks/pre-commit .git/hooks/pre-commit` runs the names scanner on staged files only.

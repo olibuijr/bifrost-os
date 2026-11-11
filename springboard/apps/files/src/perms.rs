@@ -214,7 +214,7 @@ mod tests {
         let _g = ACCENT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let font = Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
         let ui = Ui::new(font, 1.0);
-        let info = Info { name: "a".into(), rows: Vec::new(), path: PathBuf::from("/tmp/a"), mode: Some(0o777), editable: true };
+        let info = Info { name: "a".into(), rows: Vec::new(), dates: Vec::new(), path: PathBuf::from("/tmp/a"), mode: Some(0o777), editable: true };
         let files = Files::info_view(info, 340., 400., Path::new("/tmp"));
         let keep = accent();
         set_accent(Accent::Green);

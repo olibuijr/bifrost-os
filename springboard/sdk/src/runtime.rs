@@ -651,6 +651,8 @@ pub fn run<A: App>(app: A) {
     let data = PathBuf::from(std::env::var("BIFROST_DATA").unwrap_or_else(|_| ".".into()));
     let shell_dir = std::env::var("BIFROST_SHELL_DIR").unwrap_or_else(|_| "/var/lib/springboard".into());
     let _ = std::fs::create_dir_all(&data);
+    // the machine's time zone, until the shell names it (`ToApp::DateTime`)
+    crate::time_zone::adopt_system_zone();
     run_on(Channel::from_fd(fd), app, data, &shell_dir);
 }
 
@@ -1045,6 +1047,19 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     // a background window is still on screen on the desktop: repaint it once even while suspended
                     repaint_suspended = true;
                 }
+                // Settings > Date & Time: the clock style and the system zone (`time_zone::uses_24_hour_clock`,
+                // `TimeZone::current`). Every date on screen is written again, so the app is repainted whole, as for an
+                // appearance change, also while it is in the background.
+                ToApp::DateTime { flags, zone } => {
+                    if crate::time_zone::apply_system(flags, &zone) {
+                        if let Some(c) = &ctx {
+                            app.configure(c);
+                        }
+                        first_frame = true;
+                        need_frame = true;
+                        repaint_suspended = true;
+                    }
+                }
                 // the main window's composition takes the same route as an extra window's (`window_text_input`)
                 m @ (ToApp::SetMarkedText { .. } | ToApp::UnmarkText { .. } | ToApp::DeleteSurrounding { .. } | ToApp::AccentHold { .. }) => {
                     if let Some(c) = &ctx {
@@ -1156,9 +1171,15 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= app.share_done(c, request, (!target.is_empty()).then_some(target));
                     }
                 }
-                ToApp::DragDest { session, phase, x, y, allowed, items } => {
+                ToApp::DragDest { session, phase, x, y, allowed, items, window } => {
                     if let Some(c) = &ctx {
-                        need_frame |= app.drag(c, crate::dnd::Event::Dest { session, phase, x, y, allowed, items });
+                        let window = window.map(crate::app_windows::WindowId);
+                        if crate::dnd::window_open(c, window) {
+                            need_frame |= app.window_drag(c, window, crate::dnd::Event::Dest { session, phase, x, y, allowed, items });
+                        } else if phase == crate::proto::DragPhase::Perform {
+                            // the window closed under the drag: nothing takes the drop, and the session must end
+                            crate::dnd::performed(c, session, false);
+                        }
                     }
                 }
                 ToApp::DragEnded { session, op } => {
@@ -1383,23 +1404,37 @@ fn flush_out(chan: &Channel, ctx: &Ctx) {
     }
 }
 
-/// How long an app that is ending waits for the shell to finish the saves it has in flight (ms). Shorter than the
-/// shell's quit grace period (1500 ms), so the app leaves by itself instead of being killed in the middle of a save.
+/// How long an app that is ending waits for its saves to finish (ms). Shorter than the shell's quit grace period
+/// (1500 ms), so the app leaves by itself instead of being killed in the middle of a save.
 const QUIT_SAVE_WAIT_MS: f64 = 1000.0;
 
-/// The last turn of an app that ends (`ToApp::Quit`, `Ctx::terminate`), after its `suspend`: sends what the app queued,
+/// How often an ending app is asked whether its own part of a save has moved on (`App::save_in_flight`), in ms: a
+/// worker that finishes encoding wakes nothing the runtime waits on.
+const QUIT_SAVE_POLL_MS: f64 = 10.0;
+
+/// The last turns of an app that ends (`ToApp::Quit`, `Ctx::terminate`), after its `suspend`: sends what the app queued,
 /// then serves the shell's document replies (a save in place is answered twice, with `commit_document` in between)
-/// until no save is in flight, the shell goes away or `wait_ms` has passed. Every other message is dropped: the app
-/// is leaving.
+/// until no save is in flight, the shell goes away or `wait_ms` has passed. A save is in flight while the shell owes
+/// an answer to a save request (`docs.saves`) or while the app says so (`App::save_in_flight`): the steps a save takes
+/// before the shell hears of it (an encode off the loop, a look at the original) are the app's, and it is asked again
+/// every `QUIT_SAVE_POLL_MS` so that the request that follows them leaves in time. Every other message is dropped:
+/// the app is leaving.
 fn finish_saves<A: App>(chan: &Channel, app: &mut A, c: &Ctx, wait_ms: f64) {
-    flush_out(chan, c);
     let deadline = now_ms() + wait_ms;
-    while !c.docs.borrow().saves.is_empty() {
+    loop {
+        // the app's part first: a result that arrived lets it queue the next request, which is then sent
+        let working = app.save_in_flight(c);
+        flush_out(chan, c);
+        if !working && c.docs.borrow().saves.is_empty() {
+            break;
+        }
         let left = deadline - now_ms();
         if left <= 0.0 {
             break;
         }
-        if !chan.wait(Some(left.ceil() as i32)) {
+        // the shell's answers end the wait; the app's own worker does not, so the wait is short while it works
+        let wait = if working { left.min(QUIT_SAVE_POLL_MS) } else { left };
+        if !chan.wait(Some(wait.ceil() as i32)) {
             continue;
         }
         loop {
@@ -1415,7 +1450,6 @@ fn finish_saves<A: App>(chan: &Channel, app: &mut A, c: &Ctx, wait_ms: f64) {
                 app.document(c, ev);
             }
         }
-        flush_out(chan, c);
     }
 }
 
@@ -2118,6 +2152,147 @@ mod finish_saves_tests {
         // the shell is gone: no waiting at all
         drop(shell_end);
         finish_saves(&a, &mut app, &ctx, 60_000.0);
+    }
+}
+
+#[cfg(test)]
+mod save_in_flight_tests {
+    use super::*;
+    use crate::proto::DocMode;
+    use std::os::fd::AsRawFd;
+
+    /// A document app whose save has the steps the runtime cannot see: a worker writes the document first, then the
+    /// original is looked at (`reopen_document`), and only then the save in place is asked for and committed.
+    struct Staged {
+        grant: crate::proto::GrantId,
+        /// The worker's result, until it is taken.
+        worker: Option<std::sync::mpsc::Receiver<()>>,
+        check: Option<u32>,
+        save: Option<u32>,
+        saving: bool,
+        asked: u32,
+        seen: Vec<&'static str>,
+    }
+
+    impl Staged {
+        fn new(worker: Option<std::sync::mpsc::Receiver<()>>) -> Staged {
+            Staged { grant: [7; 16], worker, check: None, save: None, saving: true, asked: 0, seen: Vec::new() }
+        }
+    }
+
+    impl App for Staged {
+        fn id(&self) -> &str {
+            "is.test.staged"
+        }
+        fn draw(&mut self, _: &Ctx, s: &mut Surface, _: f64) -> Damage {
+            Damage::new(s.w, s.h)
+        }
+        fn save_in_flight(&mut self, ctx: &Ctx) -> bool {
+            self.asked += 1;
+            if self.worker.as_ref().is_some_and(|w| w.try_recv().is_ok()) {
+                self.worker = None;
+                self.seen.push("written");
+                self.check = Some(ctx.reopen_document(self.grant));
+            }
+            self.saving
+        }
+        fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+            match ev {
+                DocumentEvent::Opened(d) if self.check == Some(d.request) => {
+                    self.seen.push("checked");
+                    self.save = Some(ctx.save_document_in_place(self.grant));
+                }
+                DocumentEvent::SaveTo(d) if self.save == Some(d.request) => {
+                    self.seen.push("save to");
+                    ctx.commit_document(d.request);
+                }
+                DocumentEvent::Saved(d) if self.save == Some(d.request) => {
+                    self.seen.push("saved");
+                    self.saving = false;
+                }
+                _ => self.seen.push("other"),
+            }
+            false
+        }
+    }
+
+    fn sent(shell_end: &Channel) -> Vec<ToShell> {
+        let mut seen = Vec::new();
+        while let Ok(Recv::Packet(p, _)) = shell_end.recv(false) {
+            seen.push(ToShell::decode(&p).unwrap());
+        }
+        seen
+    }
+
+    /// Quit in the middle of a save: the worker's result, the look at the original and the save in place all still
+    /// happen, though none of the first two is a save the shell has in flight.
+    #[test]
+    fn a_save_with_steps_of_its_own_is_finished_before_the_app_ends() {
+        let (a, shell_end) = crate::proto::sys::socketpair_pair().unwrap();
+        let ctx = test_ctx();
+        let (done, worker) = std::sync::mpsc::channel();
+        let mut app = Staged::new(Some(worker));
+        // the worker has written the document when the app is told to quit
+        done.send(()).unwrap();
+        // the shell's answers, in the order the requests will be made: the original as it is, the temporary file, the saved one
+        let file = std::fs::File::open("/dev/null").unwrap();
+        let reply = |request| ToApp::DocGranted { request, grant: [7; 16], mode: DocMode::Write, name: "a".into(), size: 0 }.encode();
+        let (check, save) = (1, 2);
+        shell_end.send(&reply(check), &[file.as_raw_fd()]).unwrap();
+        shell_end.send(&reply(save), &[file.as_raw_fd()]).unwrap();
+        shell_end.send(&reply(save), &[file.as_raw_fd()]).unwrap();
+        finish_saves(&a, &mut app, &ctx, 60_000.0);
+        assert_eq!(app.seen, ["written", "checked", "save to", "saved"]);
+        assert_eq!((app.check, app.save), (Some(check), Some(save)), "the requests got the ids the answers were made for");
+        assert!(ctx.docs.borrow().saves.is_empty());
+        let seen = sent(&shell_end);
+        assert!(matches!(seen[..], [ToShell::DocReopen { request: 1, .. }, ToShell::DocSaveGrant { request: 2, .. }, ToShell::DocCommit { request: 2 }]), "{seen:?}");
+    }
+
+    /// The worker has not finished when the app is told to quit: nothing arrives on the channel, so the app is asked
+    /// again until it has, and then the wait ends at once instead of running to its bound.
+    #[test]
+    fn an_ending_app_is_asked_again_while_its_worker_writes() {
+        /// `Staged` with no shell to answer it: its save ends with the request the worker's result leads to.
+        struct Unanswered(Staged);
+        impl App for Unanswered {
+            fn id(&self) -> &str {
+                self.0.id()
+            }
+            fn draw(&mut self, c: &Ctx, s: &mut Surface, t: f64) -> Damage {
+                self.0.draw(c, s, t)
+            }
+            fn save_in_flight(&mut self, ctx: &Ctx) -> bool {
+                self.0.save_in_flight(ctx) && self.0.check.is_none()
+            }
+        }
+        let (a, shell_end) = crate::proto::sys::socketpair_pair().unwrap();
+        let ctx = test_ctx();
+        let (done, worker) = std::sync::mpsc::channel();
+        let mut app = Unanswered(Staged::new(Some(worker)));
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(40));
+            let _ = done.send(());
+        });
+        let started = now_ms();
+        finish_saves(&a, &mut app, &ctx, 60_000.0);
+        writer.join().unwrap();
+        assert!(app.0.asked > 2, "asked {} times", app.0.asked);
+        assert_eq!(app.0.seen, ["written"]);
+        assert!(now_ms() - started < 30_000.0, "the wait ended when the app's part did");
+        assert!(matches!(sent(&shell_end)[..], [ToShell::DocReopen { request: 1, .. }]), "the request the result led to was sent");
+    }
+
+    /// A save that does not end is not waited for past the bound.
+    #[test]
+    fn a_save_that_never_ends_is_given_up_after_the_bound() {
+        let (a, _shell_end) = crate::proto::sys::socketpair_pair().unwrap();
+        let ctx = test_ctx();
+        let mut app = Staged::new(None);
+        let started = now_ms();
+        finish_saves(&a, &mut app, &ctx, 30.0);
+        assert!(app.asked >= 2 && app.saving);
+        assert!(now_ms() - started < 10_000.0);
     }
 }
 

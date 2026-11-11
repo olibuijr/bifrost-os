@@ -218,6 +218,9 @@ pub(crate) struct SystemState {
     dock: Option<f32>,
     /// The names of the apps the shell would not open (the workspace answers in a closure; `tick` shows them).
     app_open_failed: std::rc::Rc<std::cell::RefCell<Vec<String>>>,
+    /// The disk images this window asked the shell to open and has not heard of yet: the `image_attached` event
+    /// comes to the app, and the window that asked is the one that shows the volume.
+    attaching: Vec<PathBuf>,
 }
 
 impl SystemState {
@@ -236,6 +239,7 @@ impl SystemState {
                 }
                 Effect::AttachImage(path) => {
                     let id = bifrost_app::service::call(ctx, bifrost_core::disk_wire::SERVICE, disk_image::M_ATTACH, &one_field("path", &path.to_string_lossy()));
+                    self.expect_image(&path);
                     self.wait(id, Waiting::ImageAttach(path));
                 }
                 Effect::DetachImage(device, name) => {
@@ -288,6 +292,21 @@ impl SystemState {
         let last = failed.pop();
         failed.clear();
         last
+    }
+
+    /// This window asked for the disk image at `path` to be opened.
+    pub(crate) fn expect_image(&mut self, path: &Path) {
+        if self.attaching.len() >= MAX_WAITING {
+            self.attaching.remove(0);
+        }
+        self.attaching.push(path.to_path_buf());
+    }
+
+    /// Whether this window asked for the image at `path`; it is asked for no more. The shell names the image by the
+    /// path it resolved, so an image asked for by another spelling of its path is known by its file name.
+    pub(crate) fn take_image(&mut self, path: &Path) -> bool {
+        let at = self.attaching.iter().position(|p| p == path).or_else(|| self.attaching.iter().position(|p| p.file_name().is_some() && p.file_name() == path.file_name()));
+        at.map(|i| self.attaching.remove(i)).is_some()
     }
 
     fn wait(&mut self, request: u32, what: Waiting) {
@@ -437,6 +456,18 @@ pub(crate) fn image_notice(name: &str, error: &str) -> String {
     }
 }
 
+/// The New Window window (its place in the list) that shows an opened disk image: the first one that asked for it,
+/// unless the main window did (`main`) or nobody did (an image opened by other means), which leaves it to the main
+/// window. `extras` says for each New Window window whether it asked.
+pub(crate) fn image_window(main: bool, extras: impl Iterator<Item = bool>) -> Option<usize> {
+    // every window is asked, so each one forgets the image it waited for
+    let asked: Vec<bool> = extras.collect();
+    if main {
+        return None;
+    }
+    asked.iter().position(|a| *a)
+}
+
 fn one_field(key: &str, value: &str) -> bifrost_core::json::Json {
     bifrost_core::json::Json::Obj(vec![(key.to_string(), bifrost_core::json::Json::Str(value.to_string()))])
 }
@@ -505,6 +536,8 @@ impl Files {
             // the shell refused the request outright (the outcome of one it took comes as an event, `image_event`)
             Waiting::ImageAttach(path) => {
                 if let Err(e) = result {
+                    // no event follows a refusal
+                    self.sys.take_image(&path);
                     self.notice = Some(image_notice(&file_name_of(&path), e));
                 }
             }
@@ -548,12 +581,21 @@ impl Files {
         let error = body.str_field("error").unwrap_or_default();
         match event {
             disk_image::E_ATTACHED => {
-                let name = body.str_field("path").map(|p| file_name_of(Path::new(&p))).unwrap_or_default();
+                let image = body.str_field("path").map(PathBuf::from).unwrap_or_default();
+                let name = file_name_of(&image);
+                // the window the image was opened from shows its volume (or the reason it has none): the event comes
+                // to the app, and it used to move the main window whichever window had asked
+                let asked = image_window(self.sys.take_image(&image), self.windows.iter_mut().map(|e| e.files.sys.take_image(&image)));
+                let window: &mut Files = match asked {
+                    Some(i) => &mut *self.windows[i].files,
+                    None => &mut *self,
+                };
                 match body.str_field("mount_point").map(PathBuf::from).filter(|_| ok) {
-                    Some(folder) if folder.is_dir() => self.navigate(folder, true),
-                    Some(_) => self.notice = Some(format!("The disk image \u{201C}{name}\u{201D} is open, but its volume cannot be shown here.")),
-                    None => self.notice = Some(image_notice(&name, &error)),
+                    Some(folder) if folder.is_dir() => window.navigate(folder, true),
+                    Some(_) => window.notice = Some(format!("The disk image \u{201C}{name}\u{201D} is open, but its volume cannot be shown here.")),
+                    None => window.notice = Some(image_notice(&name, &error)),
                 }
+                window.revision += 1;
             }
             // the volume is gone: no tab, window or history keeps a folder of it
             disk_image::E_DETACHED | volume_eject::E_EJECTED if ok => {
@@ -613,6 +655,28 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn an_opened_disk_image_is_shown_by_the_window_that_asked_for_it() {
+        let mut main = SystemState::default();
+        let mut second = SystemState::default();
+        second.expect_image(Path::new("/home/u/Downloads/disk.iso"));
+        // the event names the image: the main window did not ask, the second window did
+        let image = Path::new("/home/u/Downloads/disk.iso");
+        assert_eq!(image_window(main.take_image(image), [second.take_image(image)].into_iter()), Some(0));
+        // it is asked for once: a second event for the same image is the main window's
+        assert_eq!(image_window(main.take_image(image), [second.take_image(image)].into_iter()), None);
+        // the main window's own image stays the main window's, and an image nobody asked for too
+        main.expect_image(image);
+        assert_eq!(image_window(main.take_image(image), [false].into_iter()), None);
+        assert_eq!(image_window(false, [false, false].into_iter()), None);
+        assert_eq!(image_window(false, [false, true].into_iter()), Some(1));
+        // the shell names the path it resolved: the file name still finds the window
+        second.expect_image(Path::new("/home/u/link/disk.iso"));
+        assert!(second.take_image(Path::new("/data/real/disk.iso")));
+        assert!(!second.take_image(Path::new("/data/real/disk.iso")));
+        assert!(!second.take_image(Path::new("/data/real/other.iso")));
     }
 
     #[test]
