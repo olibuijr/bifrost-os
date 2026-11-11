@@ -446,7 +446,7 @@ fn golden_gate_panel_is_centred_near_the_top_with_no_suggestions() {
     let (x, y, w, h) = sh.quicksearch.card(&sh.ui, sh.w);
     let k = sh.quicksearch.k(&sh.ui);
     assert!((1.0..=MAC_K_MAX).contains(&k));
-    assert_eq!(w, sh.ui.pt(520.0 * k), "520 pt, grown with the screen so the card is 0.37 of its width");
+    assert_eq!(w, sh.ui.pt(520.0 * k), "520 pt on every screen");
     assert!(w >= sh.ui.pt(520.0) && (w >= sh.w as f32 * 0.37 - 1.0 || k == MAC_K_MAX));
     assert!((x - (sh.w as f32 - w) / 2.0).abs() < 1.0);
     assert_eq!(y, sh.ui.pt(139.0 * k));
@@ -454,14 +454,15 @@ fn golden_gate_panel_is_centred_near_the_top_with_no_suggestions() {
 }
 
 #[test]
-fn golden_gate_card_grows_with_a_wide_screen_and_the_bifrost_does_not() {
+fn golden_gate_card_keeps_its_point_size_on_a_wide_screen() {
     let mut sh = shell();
     unlock(&mut sh);
     sh.desk = Some(crate::shell::desk::Desk::new());
     open(&mut sh, 2000.0);
     sh.quicksearch.resize(sh.ui.pt(520.0) * 4.0);
     assert_eq!(sh.quicksearch.k(&sh.ui), MAC_K_MAX.min(0.37 * sh.quicksearch.screen_w / sh.ui.pt(520.0)));
-    assert!(sh.quicksearch.k(&sh.ui) > 1.0, "a screen four card widths wide enlarges the card");
+    assert_eq!(sh.quicksearch.k(&sh.ui), 1.0, "a screen four card widths wide leaves the card at its point size");
+    assert_eq!(sh.quicksearch.card(&sh.ui, sh.w).2, sh.ui.pt(520.0));
     sh.quicksearch.resize(sh.ui.pt(520.0));
     assert_eq!(sh.quicksearch.k(&sh.ui), 1.0, "a narrow screen keeps the point size");
     sh.quicksearch.mac = false;

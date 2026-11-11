@@ -203,7 +203,7 @@ const BIFROST: Metrics = Metrics {
 /// results in a separate glass card 12 pt below it (radius 28): filter chips across its top (one per kind of result
 /// present, in place of section headers), then rows of a 40 pt icon with a title and a second line, the top hit on
 /// an inset neutral plate (Return opens it). With nothing typed only the capsule shows. That is 0.37 of a 1408 pt
-/// wide screen: on a wider one everything grows with the screen (`QuickSearch::k`) so the proportions hold.
+/// wide screen; on a wider one the card keeps this size (`QuickSearch::k` is 1).
 const MAC: Metrics = Metrics {
     card_w: 520.0,
     card_top: 139.0,
@@ -225,10 +225,11 @@ const MAC: Metrics = Metrics {
     suggestions: false,
     chips: 52.0,
 };
-/// Golden Gate: the card is this fraction of the screen's width (the reference's 520 pt of 1408 pt), never narrower than
-/// its point size, and the whole layout grows by at most `MAC_K_MAX` with it.
+/// Golden Gate: the card keeps its measured point size on every screen (owner, 2026-11-11: a card that grew with the
+/// screen was too big). `MAC_CARD_FRACTION` is the share of a 1408 pt wide screen the 520 pt card takes; with
+/// `MAC_K_MAX` at 1 the layout never grows past its point size.
 const MAC_CARD_FRACTION: f32 = 0.37;
-const MAC_K_MAX: f32 = 2.5;
+const MAC_K_MAX: f32 = 1.0;
 /// Golden Gate: a filter chip's height, the gap between chips and the padding either side of its text
 const MAC_CHIP_H_PT: f32 = 28.0;
 const MAC_CHIP_GAP_PT: f32 = 8.0;
@@ -1407,8 +1408,8 @@ impl QuickSearch {
         self.search_imgs.clear();
     }
 
-    /// How much the Golden Gate layout is enlarged: the card is `MAC_CARD_FRACTION` of the screen's width, and when that is
-    /// wider than the card's point size everything in it (the field, the rows, the text) grows by the same factor.
+    /// How much the Golden Gate layout is enlarged: at most `MAC_K_MAX`, which is 1, so the card, the field, the rows and
+    /// the text keep their point sizes on a screen of any width.
     fn mac_k(&self, ui: &Ui) -> f32 {
         (self.screen_w * MAC_CARD_FRACTION / ui.pt(MAC.card_w).max(1.0)).clamp(1.0, MAC_K_MAX)
     }
