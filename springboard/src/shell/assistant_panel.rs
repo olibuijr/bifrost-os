@@ -94,6 +94,15 @@ struct Layout {
     cancel: Option<(f32, f32, f32, f32)>,
 }
 
+impl Layout {
+    /// The panel's two glass plates as (x, y, w, h, radius) in px: the field's capsule and, when there is an answer or
+    /// a card, the body a gap below. `draw` fills exactly these and declares exactly these to the presenter's blur;
+    /// `desk_overlay` bounds them (as Search's `mac_plates`).
+    fn plates(&self, ui: &Ui) -> [Option<(f32, f32, f32, f32, f32)>; 2] {
+        [Some((self.x, self.y, self.w, self.field_h, self.field_h / 2.0)), self.body.map(|(by, bh)| (self.x, by, self.w, bh, ui.pt(RADIUS_PT)))]
+    }
+}
+
 pub struct Panel {
     shown: bool,
     field: TextField,
@@ -335,16 +344,33 @@ impl Panel {
         }
     }
 
-    /// The rounded outline of the panel for the desktop's overlay surface: its rect and a coverage mask, as Search's.
+    /// The outline of the panel for the desktop's overlay surface: its rect and a coverage mask (the capsule rounded
+    /// to half its height, the body under it to the card radius, nothing in the gap between them), as Search's.
+    ///
+    /// The rectangle is the plates' bounds rounded outwards to whole pixels. It is also the region the desktop frame
+    /// clears and reports as redrawn (`desk_regions_now`), and the presenter drops a blur shape that was not declared
+    /// again only when it lies wholly inside such a region. With the origin rounded down and the size rounded up on
+    /// its own, a panel at a fractional position ended outside its region, so the plate of an earlier answer, or of
+    /// the panel after it closed, stayed on the desktop: the fault Search had.
     pub fn desk_overlay(&self, ui: &Ui, w: i32) -> Option<((usize, usize, usize, usize), Vec<u8>)> {
         if !self.shown {
             return None;
         }
         let l = self.layout(ui, w);
         let bottom = l.body.map_or(l.y + l.field_h, |(by, bh)| by + bh);
-        let (x, y) = (l.x.max(0.0) as usize, l.y.max(0.0) as usize);
-        let (ow, oh) = ((l.w.ceil() as usize).max(1), ((bottom - l.y).ceil() as usize).max(1));
-        Some(((x, y, ow, oh), crate::gfx::rrect_mask(ow, oh, ui.pt(RADIUS_PT))))
+        let (x0, y0) = (l.x.max(0.0).floor(), l.y.max(0.0).floor());
+        let (ow, oh) = ((((l.x + l.w).ceil() - x0).max(1.0)) as usize, ((bottom.ceil() - y0).max(1.0)) as usize);
+        let mut mask = vec![0u8; ow * oh];
+        for (_, py, _, ph, r) in l.plates(ui).into_iter().flatten() {
+            // each plate's rows, rounded outwards like the whole
+            let top = ((py.floor() - y0).max(0.0) as usize).min(oh);
+            let rows = (((py + ph).ceil() - y0).max(0.0) as usize).min(oh).saturating_sub(top);
+            for (i, a) in crate::gfx::rrect_mask(ow, rows, r).into_iter().enumerate() {
+                let at = top * ow + i;
+                mask[at] = mask[at].max(a);
+            }
+        }
+        Some(((x0 as usize, y0 as usize, ow, oh), mask))
     }
 
     /// Draws the panel: the field capsule, then the answer or card under it on its own glass.
@@ -355,9 +381,8 @@ impl Panel {
         let l = self.layout(ui, w);
         let pad = ui.pt(PAD_PT);
         let fh = l.field_h;
-        mac_glass(s, l.x, l.y, l.w, fh, fh / 2.0, 255);
-        if let Some((by, bh)) = l.body {
-            mac_glass(s, l.x, by, l.w, bh, ui.pt(RADIUS_PT), 255);
+        for (x, y, w, h, r) in l.plates(ui).into_iter().flatten() {
+            mac_glass(s, x, y, w, h, r, 255);
         }
         let text_x = l.x + ui.pt(FIELD_X_PT);
         let text_w = l.w - ui.pt(FIELD_X_PT + FIELD_CLEAR_PT);
@@ -732,6 +757,72 @@ mod tests {
         assert!(with_answer.3 > field_only.3, "the answer adds height to the overlay");
         p.hide();
         assert!(p.desk_overlay(&ui, 1200).is_none());
+    }
+
+    /// The Assistant left a stale glass plate where an earlier, taller answer was (and where the panel was). The
+    /// presenter drops a shape that is not declared again only when it lies wholly inside a region the frame redrew,
+    /// and the panel's region is `desk_overlay`: every plate must be inside it at any height and width, also where the
+    /// panel sits on a fraction of a pixel (the test scale is 1.5625: its top is 93.75 px, its left edge 162.5 px).
+    #[test]
+    fn the_glass_of_an_earlier_answer_goes_when_the_panel_changes_or_closes() {
+        use bifrost_render::glass;
+        let ui = ui();
+        let shapes = |p: &Panel, w: i32| -> Vec<glass::Rect> {
+            if !p.is_shown() {
+                return Vec::new();
+            }
+            p.layout(&ui, w).plates(&ui).into_iter().flatten().map(|(x, y, w, h, r)| glass::Rect { x, y, w, h, r, ..Default::default() }).collect()
+        };
+        let region = |p: &Panel, w: i32| -> Option<(f32, f32, f32, f32)> {
+            let ((x, y, ow, oh), mask) = p.desk_overlay(&ui, w)?;
+            assert_eq!(mask.len(), ow * oh);
+            Some((x as f32, y as f32, (x + ow) as f32, (y + oh) as f32))
+        };
+        let long = (0..120).map(|i| format!("line {i}")).collect::<Vec<_>>().join(" ");
+        let medium = (0..40).map(|i| format!("line {i}")).collect::<Vec<_>>().join(" ");
+        for w in [1200, 1201, 1366, 1920] {
+            let mut p = shown(&ui);
+            let mut before: Option<(Vec<glass::Rect>, Option<(f32, f32, f32, f32)>)> = None;
+            // the field alone, a tall answer, shorter ones, a card, a failure, then closed
+            for step in 0..7 {
+                match step {
+                    0 => {}
+                    1 => p.apply(Msg::Reply(Ok(Reply::Answer(long.clone())))),
+                    2 => p.apply(Msg::Reply(Ok(Reply::Answer(medium.clone())))),
+                    3 => p.apply(Msg::Reply(Ok(Reply::Answer("Hello.".into())))),
+                    4 => p.apply(Msg::Reply(Ok(Reply::Intent(call())))),
+                    5 => p.apply(Msg::Ran(Err("It did not work.".into()))),
+                    _ => p.hide(),
+                }
+                let (fresh, now) = (shapes(&p, w), region(&p, w));
+                assert_eq!(fresh.len(), match step { 0 => 1, 6 => 0, _ => 2 }, "step {step}: the capsule, and the body when there is one");
+                for s in &fresh {
+                    let r = now.expect("a shown panel has a region");
+                    assert!(s.x >= r.0 && s.y >= r.1 && s.x + s.w <= r.2 && s.y + s.h <= r.3, "step {step}, {w} px: the plate {s:?} is inside the panel's region {r:?}");
+                }
+                if let Some((mut stored, was)) = before.take() {
+                    // the frame after the change: the regions of the last frame and of this one were redrawn
+                    let damage: Vec<(f32, f32, f32, f32)> = was.into_iter().chain(now).collect();
+                    glass::merge(&mut stored, fresh.clone(), &damage);
+                    assert_eq!(stored, fresh, "step {step}, {w} px: only the plates of the panel on show are left");
+                }
+                before = Some((fresh, now));
+            }
+        }
+        // the mask keeps both plates, cuts their corners and leaves the gap between them out
+        let mut p = shown(&ui);
+        p.apply(Msg::Reply(Ok(Reply::Answer("Hello.".into()))));
+        let ((_, y0, ow, oh), mask) = p.desk_overlay(&ui, 1200).unwrap();
+        assert_eq!(mask[0], 0, "the capsule's corner is cut");
+        assert_eq!(mask[(oh - 1) * ow], 0, "the body's bottom left corner is cut");
+        assert_eq!(mask[oh * ow - 1], 0, "and its bottom right");
+        let l = p.layout(&ui, 1200);
+        for (_, y, _, h, _) in l.plates(&ui).into_iter().flatten() {
+            assert_eq!(mask[((y + h / 2.0) as usize - y0) * ow + ow / 2], 255, "the middle of a plate is kept");
+        }
+        let (by, _) = l.body.expect("the answer");
+        let gap_row = ((l.y + l.field_h + by) / 2.0) as usize - y0;
+        assert_eq!(mask[gap_row * ow + ow / 2], 0, "the gap between the capsule and the body is not part of the panel");
     }
 
     #[test]
