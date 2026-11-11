@@ -56,6 +56,14 @@ pub const LIFT_MS: f64 = 250.0;
 /// Where the account group sits, as a fraction of the screen height (the avatar's top edge).
 const GROUP_TOP: f32 = 0.62;
 
+/// The top edge (px) of the account block on a screen `h` px tall: the user picture, or the name field in name and
+/// password mode, moved up by `lift` px. The lock screen's notification list ends above it.
+pub fn block_top(ui: &Ui, h: i32, name_mode: bool, lift: f32) -> f32 {
+    let top = h as f32 * GROUP_TOP - lift;
+    // the name field sits one row above the password field (`Login::name_field`)
+    if name_mode { top + ui.pt(72.0 + 48.0 - 30.0 - 10.0) } else { top }
+}
+
 /// Whether the shell runs in the touch (tablet) form, where the login window raises the on-screen keyboard. The form
 /// comes from the shared form-factor model (`BIFROST_FORM`, then `/etc/bifrost/form`, default desktop).
 pub fn tablet_form() -> bool {
@@ -703,6 +711,12 @@ impl Login {
 
     // -- geometry ---------------------------------------------------------------
 
+    /// The top edge of the account block where it rests (a move for the on-screen keyboard counts from its start, so
+    /// the notification list above is laid out once, not on every frame of the move).
+    pub fn block_top(&self, ui: &Ui) -> f32 {
+        block_top(ui, self.h, self.name_mode, self.lift_anim.map_or(self.lift, |(_, _, to)| to))
+    }
+
     /// The account group (avatar, name, field) sits low in the middle, as in the reference; the clock keeps the top.
     fn avatar_rect(&self, ui: &Ui) -> Rect {
         let d = ui.pt(72.0);
@@ -1342,6 +1356,19 @@ mod tests {
         assert_eq!((l.w, l.h), (800, 1200));
         l.resize(800, 1200);
         assert_eq!((l.w, l.h), (800, 1200), "the same size again changes nothing");
+    }
+
+    #[test]
+    fn the_account_block_starts_at_the_picture_or_at_the_name_field() {
+        let ui = crate::shell::tests::ui();
+        let mut l = login(Reply::Unavailable);
+        assert_eq!(l.block_top(&ui), l.avatar_rect(&ui).1);
+        assert_eq!(block_top(&ui, l.h, false, 0.0), l.avatar_rect(&ui).1);
+        l.name_mode = true;
+        assert!((l.block_top(&ui) - l.name_field(&ui).1).abs() < 0.01, "name and password mode has no picture: the name field is the top");
+        assert!(l.block_top(&ui) < l.field(&ui).1);
+        // a taller screen moves the block down with it
+        assert!(block_top(&ui, 2160, false, 0.0) > block_top(&ui, 1080, false, 0.0));
     }
 
     fn wait(l: &mut Login, t: f64) -> Option<String> {

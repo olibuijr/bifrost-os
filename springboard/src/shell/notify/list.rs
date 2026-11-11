@@ -321,6 +321,27 @@ pub struct ListView {
     clear_all: Image,
     /// Options, View, Clear: the labels under a swiped card
     reveal: [Image; 3],
+    /// the line under a list that `fit` cut to its room: how many notifications the groups left out hold
+    overflow: Option<Image>,
+}
+
+/// "3 more notifications" (or "1 more notification").
+fn more_text(n: usize) -> String {
+    format!("{n} more notification{}", if n == 1 { "" } else { "s" })
+}
+
+/// How many of the groups (their heights in px, `gap` between them) fit in `room` px, when a line `more` px tall (and
+/// the gap above it) has to follow them whenever some are left out. Groups are only left out from the end.
+pub fn groups_that_fit(heights: &[f32], gap: f32, more: f32, room: f32) -> usize {
+    let n = heights.len();
+    (0..=n)
+        .rev()
+        .find(|&k| {
+            let groups: f32 = heights[..k].iter().sum::<f32>() + k.saturating_sub(1) as f32 * gap;
+            let line = if k == n { 0.0 } else if k == 0 { more } else { gap + more };
+            groups + line <= room
+        })
+        .unwrap_or(0)
 }
 
 type Rect = (f32, f32, f32, f32);
@@ -350,12 +371,46 @@ impl ListView {
                     less: ui.text("Show Less", 13.0, Weight::Semibold, WHITE),
                     caption: (!expanded && g.items.len() > 1).then(|| ui.text(&format!("{} notifications", g.items.len()), 13.0, Weight::Regular, TIME)),
                     cards: g.items[..shown].iter().map(|n| Card::new(ui, n, &img, now, opts.private || opts.hidden.contains(&g.app))).collect(),
-                    more: (hidden > 0).then(|| ui.text(&format!("{hidden} more notification{}", if hidden == 1 { "" } else { "s" }), 13.0, Weight::Regular, TIME)),
+                    more: (hidden > 0).then(|| ui.text(&more_text(hidden), 13.0, Weight::Regular, TIME)),
                 }
             })
             .collect();
         let label = |t: &str| ui.text(t, 15.0, Weight::Regular, WHITE);
-        ListView { mode, groups, clear_all: ui.text("Clear All", 13.0, Weight::Semibold, WHITE), reveal: [label("Options"), label("View"), label("Clear")] }
+        ListView { mode, groups, clear_all: ui.text("Clear All", 13.0, Weight::Semibold, WHITE), reveal: [label("Options"), label("View"), label("Clear")], overflow: None }
+    }
+
+    /// Cuts the list to `room` px of height (the lock screen's list ends above the account block): an expanded group
+    /// gives up cards first (they are counted in its own "more" line), then whole groups are left out from the end and
+    /// a line under the list says how many notifications they hold. Group indexes stay valid: only the tail goes.
+    pub fn fit(&mut self, ui: &Ui, room: f32) {
+        while self.height(ui) > room {
+            let Some(g) = self.groups.iter_mut().rev().find(|g| g.expanded && g.cards.len() > 1) else { break };
+            g.cards.pop();
+            g.more = Some(ui.text(&more_text(g.count - g.cards.len()), 13.0, Weight::Regular, TIME));
+        }
+        let heights: Vec<f32> = (0..self.groups.len()).map(|i| self.group_h(ui, i)).collect();
+        let line = ui.pt(MORE_PT);
+        let keep = groups_that_fit(&heights, ui.pt(GROUP_GAP_PT), line, room);
+        if keep == self.groups.len() {
+            return;
+        }
+        let left: usize = self.groups[keep..].iter().map(|g| g.count).sum();
+        self.groups.truncate(keep);
+        let text = if keep > 0 { more_text(left) } else { format!("{left} notification{}", if left == 1 { "" } else { "s" }) };
+        // a room too small even for the line shows nothing
+        self.overflow = (keep > 0 || line <= room).then(|| ui.text(&text, 13.0, Weight::Regular, TIME));
+    }
+
+    /// Group `i` as drawn when the list starts at `top` on a `w` px wide screen.
+    pub fn group_rect(&self, ui: &Ui, w: i32, top: f32, i: usize) -> Rect {
+        (Self::x(ui, w), self.group_top(ui, top, i), ui.pt(CARD_W_PT), self.group_h(ui, i))
+    }
+
+    /// The line of a list cut by `fit`, under the last group it kept; None when nothing was left out.
+    pub fn overflow_rect(&self, ui: &Ui, w: i32, top: f32) -> Option<Rect> {
+        self.overflow.as_ref()?;
+        let y = top + self.height(ui) + if self.groups.is_empty() { 0.0 } else { ui.pt(GROUP_GAP_PT) };
+        Some((Self::x(ui, w), y, ui.pt(CARD_W_PT), ui.pt(MORE_PT)))
     }
 
     /// Gives every card its category's action buttons. `actions` lists a notification's buttons by its store id.
@@ -574,6 +629,9 @@ impl ListView {
                     s.blit(c, (x + ui.pt(PAD_PT)) as i32, (cy - c.h as f32 / 2.0).round() as i32, 255, a);
                 }
             }
+        }
+        if let (Some(m), Some((ox, oy, _, oh))) = (&self.overflow, self.overflow_rect(ui, w, top)) {
+            s.blit(m, (ox + ui.pt(PAD_PT)) as i32, (oy + (oh - m.h as f32) / 2.0).round() as i32, 255, alpha);
         }
         // bifrost offers Clear All only in Notification Center, not on the lock screen
         if !self.is_empty() && self.mode == Mode::Center {
@@ -797,6 +855,98 @@ mod tests {
         assert_ne!(buf3[(by + bh / 2.0) as usize * w + (bx + bw / 2.0) as usize], 0, "clear button painted");
         let (bx, by, bw, bh) = c.clear_all_rect(&ui, 1200, 300.0);
         assert_ne!(buf3[(by + bh / 2.0) as usize * w + (bx + bw / 2.0) as usize], 0, "clear-all button painted");
+    }
+
+    #[test]
+    fn groups_fit_from_the_top_and_leave_room_for_the_line_that_counts_the_rest() {
+        let h = [80.0, 80.0, 80.0];
+        assert_eq!(groups_that_fit(&h, 10.0, 22.0, 1000.0), 3, "all of them: no line is needed");
+        assert_eq!(groups_that_fit(&h, 10.0, 22.0, 260.0), 3, "exactly their height with the gaps");
+        assert_eq!(groups_that_fit(&h, 10.0, 22.0, 259.0), 2, "the third does not fit; two and the line (202) do");
+        assert_eq!(groups_that_fit(&h, 10.0, 22.0, 201.0), 1, "two fit (170) but not with the line under them");
+        assert_eq!(groups_that_fit(&h, 10.0, 22.0, 111.0), 0, "one and the line need 112");
+        assert_eq!(groups_that_fit(&h, 10.0, 22.0, 0.0), 0);
+        assert_eq!(groups_that_fit(&[], 10.0, 22.0, 0.0), 0);
+    }
+
+    /// `n` groups, one per app, of 1, 40, 2, 1, 6, ... notifications.
+    fn many(n: usize) -> Vec<Group> {
+        let counts = [1usize, 40, 2, 1, 6];
+        crate::shell::apps()
+            .iter()
+            .take(n)
+            .enumerate()
+            .map(|(i, a)| Group {
+                app: a.id,
+                thread: String::new(),
+                items: (0..counts[i % counts.len()]).map(|k| Notification { image: None, app: a.id, title: "Title".into(), body: "body".into(), time: 0, id: (i * 100 + k) as u64, thread: String::new() }).collect(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_lock_list_cut_to_its_room_never_reaches_the_account_block() {
+        let ui = ui();
+        let top = ui.pt(crate::shell::notify::LOCK_LIST_TOP_PT);
+        let all = crate::shell::apps().len().min(12);
+        assert!(all >= 5, "the lab's five groups can be built");
+        let mut cut = 0;
+        for h in [480, 600, 720, 768, 900, 1080, 1200, 1440, 1920, 2160, 4320] {
+            for name_mode in [false, true] {
+                let block = crate::shell::login::block_top(&ui, h, name_mode, 0.0);
+                let room = (block - ui.pt(GROUP_GAP_PT) - top).max(0.0);
+                for n in 0..=all {
+                    // nothing expanded, the first group expanded, the last group expanded
+                    for open in [None, Some(0), n.checked_sub(1)] {
+                        let groups = many(n);
+                        let expanded: Vec<AppId> = open.and_then(|i| groups.get(i)).map(|g| g.app).into_iter().collect();
+                        let mut l = ListView::new(&ui, Mode::Lock, &groups, &icon, 0, Opts { expanded: &expanded, ..NONE });
+                        l.fit(&ui, room);
+                        let what = format!("screen {h} px, {n} groups, name mode {name_mode}, expanded {open:?}");
+                        assert!(l.groups.len() <= n);
+                        for i in 0..l.groups.len() {
+                            let (_, y, _, gh) = l.group_rect(&ui, 1200, top, i);
+                            assert!(y >= top && y + gh <= block, "group {i} ends at {} past the account block at {block}: {what}", y + gh);
+                            assert_eq!(l.groups[i].app, groups[i].app, "groups are only left out from the end: {what}");
+                        }
+                        assert!(top + l.height(&ui) <= block || l.groups.is_empty(), "{what}");
+                        match l.overflow_rect(&ui, 1200, top) {
+                            Some((_, y, _, oh)) => {
+                                assert!(l.groups.len() < n, "a line only when groups were left out: {what}");
+                                assert!(y + oh <= block, "the line ends at {} past the account block at {block}: {what}", y + oh);
+                                cut += 1;
+                            }
+                            // no line: everything is shown, or there is no room even for the line
+                            None => assert!(l.groups.len() == n || room < ui.pt(MORE_PT), "{what}"),
+                        }
+                    }
+                }
+            }
+        }
+        assert!(cut > 0, "some of the screens are too small for every group");
+        // room to spare changes nothing
+        let mut l = ListView::new(&ui, Mode::Lock, &many(5), &icon, 0, NONE);
+        l.fit(&ui, 100_000.0);
+        assert_eq!(l.groups.len(), 5);
+        assert!(l.overflow_rect(&ui, 1200, top).is_none());
+    }
+
+    #[test]
+    fn an_expanded_group_gives_up_cards_before_groups_are_left_out() {
+        let ui = ui();
+        let opts = Opts { expanded: &[AppId::Files], ..NONE };
+        let mut l = ListView::new(&ui, Mode::Lock, &groups(), &icon, 0, opts);
+        let full = l.height(&ui);
+        // room for the header, two cards, the "more" line and the second group
+        let room = full - 2.0 * ui.pt(CARD_H_PT + GAP_PT);
+        l.fit(&ui, room);
+        assert_eq!(l.groups.len(), 2, "both groups stay");
+        assert_eq!(l.groups[0].cards_len(), 2, "the expanded group shows two cards of its five");
+        assert!(l.height(&ui) <= room);
+        assert!(l.overflow_rect(&ui, 1200, 0.0).is_none());
+        // the cards left are still the newest, and a tap on them still names them
+        let (x, top) = (ListView::x(&ui, 1200), 300.0);
+        assert_eq!(l.hit(&ui, 1200, top, x + 10.0, top + ui.pt(HEADER_PT) + 5.0), Some(Hit::Card { group: 0, id: 9, app: AppId::Files }));
     }
 
     #[test]
