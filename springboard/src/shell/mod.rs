@@ -6650,7 +6650,7 @@ impl LockView<'_> {
             centred(s, tm, cx, clock_top - ui.pt(6.0) as i32);
         }
         self.notes.draw(s, ui, self.w, dy);
-        let dots_y = (dy + self.h) as f32 - ui.pt(26.0);
+        let dots_y = (dy + self.h) as f32 - ui.pt(notify::LOCK_HINT_PT);
         // a keyboard machine unlocks with Return, not a swipe; the login window asks for the password instead
         if self.status_inset == 0 {
             let hint = ui.text("Press Return to unlock", 15.0, Weight::Regular, rgba(255, 255, 255, 200));
