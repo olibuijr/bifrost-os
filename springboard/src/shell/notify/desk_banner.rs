@@ -281,7 +281,7 @@ impl Shell {
                     fx = self.clock_banner_answer(id, Answer::Stop, t);
                 }
                 if let Some(app) = app {
-                    self.open_from_notification(app, t);
+                    self.open_notification(Some(id), app, t);
                 }
                 // the reference clears the notification the banner showed, and only that one
                 self.clear_notification(id);
@@ -639,6 +639,23 @@ mod tests {
         tap(&mut sh, mid(card), t + 10.0);
         assert_eq!(sh.notify.store().len(), 1, "the other notification of the app stays");
         assert_eq!(sh.notify.store().groups()[0].latest().title, "First");
+    }
+
+    /// E2E rev 9: the item a "Moved to Desktop" notice shows was held in one slot beside the store and only while the
+    /// notice was the newest of Files, so a click in Notification Center after a later notice opened Files and showed
+    /// nothing. The item is the notification's own now.
+    #[test]
+    fn the_item_of_a_desktop_drop_stays_with_its_notification() {
+        let mut sh = desk();
+        let moved = sh.notify_id(note(AppId::Files, "Moved to Desktop").revealing("/home/a/Desktop/Plan.pdf"));
+        let later = sh.notify_id(note(AppId::Files, "Backup Complete"));
+        let kept = sh.notify.store().get(moved).and_then(|n| n.reveal.clone());
+        assert_eq!(kept, Some(std::path::PathBuf::from("/home/a/Desktop/Plan.pdf")), "a later notice of the app does not take the item away");
+        assert_eq!(sh.notify.store().get(later).and_then(|n| n.reveal.clone()), None);
+        // a notice that names no item shows nothing: its click opens the app as before
+        assert!(!sh.dnd_desktop_reveal(Some(later), AppId::Files, 900.0));
+        assert!(!sh.dnd_desktop_reveal(None, AppId::Files, 900.0), "the newest notice of Files names no item");
+        assert!(!sh.dnd_desktop_reveal(Some(u64::MAX), AppId::Files, 900.0), "a notification that is gone shows nothing");
     }
 
     /// E2E W5-5: a second notification while one banner is up takes the front, the first waits behind it (its edge
