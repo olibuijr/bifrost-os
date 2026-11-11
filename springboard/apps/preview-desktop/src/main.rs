@@ -32,7 +32,7 @@ use bifrost_app::controls::{Node, Rect, Role};
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::control::{RpcError, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND};
 use bifrost_app::dispatch::{DispatchQueue, Qos};
-use bifrost_app::proto::{DocErrorCode, DocMode, GrantId};
+use bifrost_app::proto::{ContextItem, DocErrorCode, DocMode, GrantId};
 use bifrost_app::services::{is_viewable_path, ServiceCall};
 use bifrost_app::pasteboard::{NativePasteboard, PNG};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
@@ -309,6 +309,9 @@ struct Viewer {
     inserted: Option<PathBuf>,
     /// The form widget that the keyboard is typing into.
     form_focus: Option<usize>,
+    /// The menu of the toolbar's `»` button, asked for by a press: where it opens (window pixels) and its items. The
+    /// event that carried the press sends it to the shell.
+    menu_request: Option<(f32, f32, Vec<ContextItem>)>,
 }
 
 impl Viewer {
@@ -371,6 +374,7 @@ impl Viewer {
             insert_at: None,
             inserted: None,
             form_focus: None,
+            menu_request: None,
         }
     }
 
@@ -2437,6 +2441,12 @@ impl Viewer {
             self.slide_by(1);
             return true;
         }
+        // the `»` button lists the buttons the bar has no room for; a choice comes back as that button's action
+        if let Some((at, hidden)) = canvas::overflow_hit(ui, lay, self.doc.is_some(), &self.window_title(), self.tool, self.side, x, y) {
+            let items = hidden.into_iter().map(|(action, enabled)| ContextItem::new(action.id(), action.label()).enabled(enabled)).collect();
+            self.menu_request = Some((at.0, at.1, items));
+            return true;
+        }
         if let Some(action) = canvas::button_hit(ui, lay, self.doc.is_some(), &self.window_title(), self.tool, self.side, x, y) {
             return self.act(ui, lay, action);
         }
@@ -3193,7 +3203,13 @@ impl App for Viewer {
             Input::Activate(id) => self.track(|viewer| viewer.menu_action(ctx, id as u32)),
             Input::Touch { kind, x, y, .. } => {
                 let (w, h) = self.size(ctx);
-                self.touch(&ctx.ui, w, h, kind, x, y)
+                let changed = self.touch(&ctx.ui, w, h, kind, x, y);
+                if let Some((x, y, items)) = self.menu_request.take() {
+                    if !items.is_empty() {
+                        ctx.context_menu(x, y, items);
+                    }
+                }
+                changed
             }
             _ => false,
         }
@@ -3203,6 +3219,15 @@ impl App for Viewer {
         let lay = self.layout(&ctx.ui, ctx.cfg.w as i32, ctx.cfg.h as i32);
         let title = self.window_title();
         let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, self.doc.is_some(), &title, self.tool, self.side);
+        // the `»` button, when the bar has no room for every button
+        let more = layout.overflow_button.map(|bounds| Node {
+            id: canvas::OVERFLOW_ID as u64,
+            role: Role::Button,
+            label: canvas::OVERFLOW_LABEL.into(),
+            value: String::new(),
+            bounds,
+            enabled: true,
+        });
         layout
             .visible
             .into_iter()
@@ -3219,6 +3244,7 @@ impl App for Viewer {
                     enabled: item.enabled,
                 })
             })
+            .chain(more)
             .collect()
     }
 
@@ -3934,6 +3960,43 @@ mod tests {
         // with no document there is no title and the bar is as before
         let (bar, _) = canvas::toolbar(&ctx.ui, &lay, false, "", Tool::Pan, Side::Pages);
         assert!(bar.items.iter().all(|item| item.id != canvas::TITLE_ID));
+    }
+
+    /// A bar too narrow for every button shows the kit's `»` button; a press on it asks for a menu of the buttons that
+    /// are not on the bar, so none is left out without a sign.
+    #[test]
+    fn buttons_that_do_not_fit_are_listed_behind_the_overflow_button() {
+        let ctx = menu_ctx();
+        let mut v = viewer_with(Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] });
+        let title = v.window_title();
+        let lay = v.layout(&ctx.ui, 900, 800);
+        let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, true, &title, Tool::Pan, Side::Pages);
+        let button = layout.overflow_button.expect("a 900 px bar has no room for every button");
+        assert!(!layout.overflow.is_empty());
+        let on_bar = layout.visible.iter().filter(|(id, _)| *id != canvas::TITLE_ID).count();
+        assert_eq!(on_bar + layout.overflow.len(), Action::toolbar().len(), "every button is on the bar or in the menu");
+        assert_eq!(bar.items.len(), Action::toolbar().len() + 1, "the bar's model holds every button and the title");
+        let k = ctx.ui.pt(1.0);
+        let at = ((button.x + button.w / 2.0) * k, (button.y + button.h / 2.0) * k);
+        assert_eq!(canvas::button_hit(&ctx.ui, &lay, true, &title, Tool::Pan, Side::Pages, at.0, at.1), None, "it is no action itself");
+        assert!(v.touch(&ctx.ui, 900, 800, TouchKind::Down, at.0, at.1));
+        let (x, y, items) = v.menu_request.take().expect("the press asks for the menu");
+        assert_eq!(items.iter().map(|i| i.id).collect::<Vec<_>>(), layout.overflow, "the hidden buttons, in bar order");
+        assert!(items.iter().all(|i| i.enabled && Action::from_id(i.id).is_some_and(|a| a.label() == i.label)));
+        assert!(x <= at.0 && y > at.1, "the menu opens below the button");
+        // the controls the shell is told of include the button
+        let ctx900 = {
+            let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+            let cfg = bifrost_app::proto::Configure { w: 900, h: 800, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+            Ctx::testing(Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.0), cfg)
+        };
+        assert!(v.controls(&ctx900).iter().any(|n| n.id == canvas::OVERFLOW_ID as u64 && n.label == canvas::OVERFLOW_LABEL));
+        // a bar with room for everything has no such button, and a press there asks for nothing
+        let wide = v.layout(&ctx.ui, 6000, 800);
+        let (_, layout) = canvas::toolbar(&ctx.ui, &wide, true, &title, Tool::Pan, Side::Pages);
+        assert!(layout.overflow.is_empty() && layout.overflow_button.is_none());
+        assert_eq!(canvas::overflow_hit(&ctx.ui, &wide, true, &title, Tool::Pan, Side::Pages, at.0, at.1), None);
+        cleanup(&v);
     }
 
     /// File > Save answers in the frame of the key press with "Saving name…", the picture is encoded off the app loop,

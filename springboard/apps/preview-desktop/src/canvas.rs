@@ -548,16 +548,36 @@ pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, side:
         w: (lay.w - lay.side).max(0) as f32 / scale,
         h: lay.bar.max(0) as f32 / scale,
     };
-    // Preserve the old narrow-window behavior: actions that do not fit remain available from the menus, rather than
-    // exposing the kit's overflow affordance without an app-specific overflow menu.
-    let full = Toolbar::new(items.clone());
-    let first = widgets::toolbar_layout(ui, bounds, &full);
-    if !first.overflow.is_empty() {
-        items = items.into_iter().filter(|item| !first.overflow.contains(&item.id)).collect();
-    }
+    // The buttons a narrow bar has no room for are not dropped: the kit puts them behind its `»` button
+    // (`ToolbarLayout::overflow`), and `overflow_hit` lists them in the menu that button opens.
     let bar = Toolbar::new(items);
     let layout = widgets::toolbar_layout(ui, bounds, &bar);
     (bar, layout)
+}
+
+/// The id of the toolbar's `»` button among the window's controls. It is no `Action`.
+pub const OVERFLOW_ID: u32 = 0x4001;
+/// What the `»` button is called.
+pub const OVERFLOW_LABEL: &str = "More Toolbar Items";
+
+/// The buttons behind the toolbar's `»` button, in bar order, each with whether it is enabled.
+pub fn overflow_actions(bar: &Toolbar, layout: &ToolbarLayout) -> Vec<(Action, bool)> {
+    layout
+        .overflow
+        .iter()
+        .filter_map(|id| bar.items.iter().find(|item| item.id == *id))
+        .filter_map(|item| Action::from_id(item.id).map(|action| (action, item.enabled)))
+        .collect()
+}
+
+/// A press at window pixel `(x, y)` on the toolbar's `»` button: where its menu opens (the button's leading edge, just
+/// below it, in window pixels) and the buttons it lists. None when the press is elsewhere or every button is on the bar.
+#[allow(clippy::too_many_arguments)]
+pub fn overflow_hit(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, side: Side, x: f32, y: f32) -> Option<((f32, f32), Vec<(Action, bool)>)> {
+    let (bar, layout) = toolbar(ui, lay, open, title, tool, side);
+    let scale = ui.pt(1.0).max(0.001);
+    let button = layout.overflow_button.filter(|r| r.contains(x / scale, y / scale))?;
+    Some(((button.x * scale, (button.y + button.h + ui::SPACE_XS) * scale), overflow_actions(&bar, &layout)))
 }
 
 /// The toolbar buttons with their glyphs, groups, enabled and selected state. Every button acts on the open document,
