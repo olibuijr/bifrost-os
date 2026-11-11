@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.10.54 — 2026-11-11
+
+What the test of 0.10.53 found.
+
+- Settings: a pop-up button's menu is opaque; the rows behind it showed through. The Control Center rows open the pane of their control. The Wallpaper pane has the toolbar of the other panes.
+- A notice the system posts for Files has the Files icon and name. The file a notice is about stays with it: a click on "Moved to Desktop" shows the file from the Notification Center as well, and after a restart.
+- One spelling of "color" in the system's text (en_US, the installer's language). Saved settings keep their keys.
+- Twelve apps write times in the chosen clock style and time zone and follow a change at once: Calendar, Clock, Maps, Notes, Printers, Reminders, Mail, Keychain Access, Weather, Voice Memos, News and Stocks. Calendar showed "8 AM" with 24-Hour Time on.
+- Files 1.34.22: toolbar menus open on the press, so pressing, moving to an item and letting go chooses it. A drop on a file row lands in the folder shown, in every view; a list of files refused every drop. Cmd+W closes the tab when the window has several. An inactive window draws its selection grey. What a paste, a copy or a drop adds is selected. A new window takes the folder, view and size of the window it is made from. Typing a name selects the item. Needs this shell's predecessor 0.10.53 or later.
+- Viewer 0.11.27: Save writes into the file only when it is a plain PNG or JPEG; any other picture (GIF, WebP, TIFF, BMP, a 16-bit or colour-profiled picture) is saved as a copy and the original stays as it is. Before, Save wrote PNG data under the original name. A saved PNG keeps its gamma, size, text and EXIF. Opening another file over unsaved changes asks first. No toolbar button is left out of a narrow window.
+- TextEdit 1.13.18: the first window comes before the scan of the installed fonts; "1 word". Activity Monitor 0.10.12: the sidebar is as wide as its labels. Sticky Notes 0.10.10: a note that moved or closed leaves nothing behind that takes clicks.
+
 ## 0.10.53 — 2026-11-11
 
 What the test of 0.10.52 found.

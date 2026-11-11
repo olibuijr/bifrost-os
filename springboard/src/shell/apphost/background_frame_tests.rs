@@ -16,6 +16,15 @@ fn behind_another_app() -> (crate::shell::Shell, Channel) {
     let b = sys::shm_create("behind-b", 48).unwrap();
     peer.send(&ToShell::Buffers { w: 4, h: 3, generation: 1 }.encode(), &[a.0, b.0]).unwrap();
     sh.ext_tick(2.0);
+    // the first buffers of an app open its window in front, one tick later (the fall-back of a direct app,
+    // `take_fallback`), and the front app follows the frontmost window from then on: so a window of a built-in app
+    // goes in front of it. Without this the fixture app was in front and no test here was about a window behind
+    sh.ext_tick(2.5);
+    sh.desk.as_mut().unwrap().front_intent = None;
+    sh.desk.as_mut().unwrap().open(&m, AppId::Settings, (300, 200));
+    sh.screen = Screen::App(AppId::Settings);
+    sh.ext_tick(2.75);
+    assert_eq!(sh.screen, Screen::App(AppId::Settings), "the fixture app stays behind");
     sh.dirty = false;
     sh.ext_frame = false;
     (sh, peer)
