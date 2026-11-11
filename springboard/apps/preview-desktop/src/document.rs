@@ -410,6 +410,7 @@ impl Stored {
     }
 
     /// One still 8-bit picture of `format` without a colour profile.
+    #[cfg(test)]
     pub fn plain(format: Format) -> Stored {
         Stored { format: Some(format), frames: 1, deep: false, profiled: false }
     }

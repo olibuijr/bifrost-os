@@ -40,7 +40,8 @@ fn new_pixels_of_a_minimized_window_ask_for_none() {
     }
     peer.send(&ToShell::Frame { buf: 0, damage: vec![[0, 0, 4, 3]] }.encode(), &[]).unwrap();
     sh.ext_tick(3.0);
-    assert!(!sh.ext_frame, "nothing of it shows (dirty {})", sh.dirty);
+    let wins: Vec<String> = sh.desk.as_ref().unwrap().wins.iter().map(|w| format!("{:?} min={}", w.app, w.minimized)).collect();
+    assert!(!sh.ext_frame, "nothing of it shows (dirty {}, screen {:?}, running {}, windows {wins:?})", sh.dirty, sh.screen, sh.ext[0].as_ref().is_some_and(|h| h.running()));
 }
 
 #[test]

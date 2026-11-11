@@ -128,7 +128,7 @@ pub struct News {
     row_bg: u32,
     /// the date and time conventions and the day the cached rows were drawn under: a change of 24-Hour Time or of
     /// the zone, or midnight ("Today at 08:15" is then yesterday), redraws them
-    row_time: (u64, i64),
+    row_time: (u32, i64),
     /// the toolbar as last drawn, for hits and the published controls
     bar: Option<ToolbarLayout>,
     /// the saved pages, kept in the app's data directory
