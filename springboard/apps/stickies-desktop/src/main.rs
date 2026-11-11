@@ -130,7 +130,8 @@ const SHEET_DELETE: u32 = 2;
 
 /// The text of the note the first launch opens.
 const WELCOME_TEXT: &str = "Make a note of it!\n\nSticky Notes keeps small notes on your desktop: reminders, lists, or text you use often.\n\n\u{2022} To add another note, choose File, New Sticky Note.\n\n\u{2022} To collapse a note, double-click its title bar.\n\nYour notes are here again when you open Sticky Notes.";
-/// The size of the welcome note in points: tall enough for all of its text, so the first note is never clipped.
+/// The size of the welcome note in points. Its height is the least it gets: `add_welcome_note` makes it as tall as
+/// its text needs, so the first note is never clipped.
 const WELCOME_SIZE_PT: (f32, f32) = (260.0, 320.0);
 /// Stacking offset of each new note, so new notes do not land on each other.
 const CASCADE_PT: f32 = 24.0;
@@ -374,6 +375,20 @@ impl StickiesApp {
     fn window_rect(ctx: &Ctx) -> Rect {
         let (w, h) = Self::to_points(ctx, ctx.cfg.w as f32, ctx.cfg.h as f32);
         Rect { x: 0.0, y: 0.0, w, h }
+    }
+
+    /// Opens the welcome note of the first launch: as tall as its text needs at this text size, and showing its first
+    /// line. E2E 9: at the fixed height the text ran a line or two over, and with the caret at its end the note opened
+    /// scrolled down, under a "more text above" mark that looked like a stray character below the title bar.
+    fn add_welcome_note(board: &mut Board, ui: &bifrost_app::kit::Ui, now: u64) {
+        let (x, y) = Self::cascade_position(board);
+        let id = board.add_text(WELCOME_TEXT, x, y, now);
+        if let Some(note) = board.find_mut(id) {
+            note.resize(WELCOME_SIZE_PT.0, WELCOME_SIZE_PT.1);
+            note.resize(note.w, board::fitted_height(ui, note).max(WELCOME_SIZE_PT.1));
+            note.anchor = 0;
+            note.caret = 0;
+        }
     }
 
     fn cascade_position(board: &Board) -> (f32, f32) {
@@ -1470,11 +1485,7 @@ impl App for StickiesApp {
             let first = store::first_launch(&ctx.data_dir);
             let mut board = store::load(&ctx.data_dir);
             if first && board.notes.is_empty() {
-                let (x, y) = Self::cascade_position(&board);
-                let id = board.add_text(WELCOME_TEXT, x, y, Self::now());
-                if let Some(note) = board.find_mut(id) {
-                    note.resize(WELCOME_SIZE_PT.0, WELCOME_SIZE_PT.1);
-                }
+                Self::add_welcome_note(&mut board, &ctx.ui, Self::now());
                 self.dirty = true;
             }
             self.board = Some(board);
@@ -1715,6 +1726,28 @@ mod tests {
         again.configure(&ctx_in(&dir));
         assert!(again.board.as_ref().unwrap().notes.is_empty(), "a board the person emptied is not refilled");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E 9: a "^" sat under the title bar of the first note: its text did not fit and it opened scrolled to its end.
+    #[test]
+    fn the_welcome_note_shows_all_of_its_text_from_the_first_line() {
+        use bifrost_app::kit::{Font, Ui};
+        let assets = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets");
+        let data: &'static [u8] = Box::leak(std::fs::read(format!("{assets}/SFUI.ttf")).unwrap().into_boxed_slice());
+        for scale in [1.0, 1.25, 1.5625, 2.0] {
+            let ui = Ui::new(Font::parse(data).unwrap(), scale);
+            let mut notes = Board::default();
+            StickiesApp::add_welcome_note(&mut notes, &ui, 0);
+            let note = &notes.notes[0];
+            assert_eq!((note.caret, note.anchor), (0, 0), "the caret is at the start");
+            assert_eq!(note.w, WELCOME_SIZE_PT.0);
+            assert!(note.h >= WELCOME_SIZE_PT.1);
+            let m = board::body_metrics(&ui, note);
+            let lines = board::body_lines(&ui, note, &m);
+            let rows = board::visible_rows(&ui, note, &m);
+            assert!(lines.len() <= rows, "{} lines in {rows} rows at scale {scale}", lines.len());
+            assert_eq!(board::first_line(&ui, note, &m, &lines), 0, "no more-text mark above the first line");
+        }
     }
 
     fn focused(app: &StickiesApp) -> &Note {
