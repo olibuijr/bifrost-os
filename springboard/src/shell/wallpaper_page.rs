@@ -501,6 +501,9 @@ pub struct WallpaperPage {
     /// each Show On choice's name, in the label colour and in white for the selected plate
     show_on_labels: Vec<(Image, Image)>,
     add_labels: Vec<Image>,
+    /// How far (px, never above zero in practice) the content is moved from the single-column layout, whose bar ends at
+    /// `nav_bottom`: the split layout's toolbar is shorter, and the first row starts under it as a list pane's does.
+    dy: f32,
 }
 
 impl WallpaperPage {
@@ -516,7 +519,7 @@ impl WallpaperPage {
                 (wp.id.clone(), thumb, label)
             })
             .collect();
-        WallpaperPage { current: wallpapers.iter().position(|wp| wp.id == current), items, empty: ui.text("No wallpapers packed", 17.0, Weight::Regular, SECONDARY), dynamic_label: ui.text("Dynamic Wallpaper", 17.0, Weight::Regular, LABEL.now()), preview: None, dim, dynamic: false, look: Look::Still, look_labels: Look::ALL.iter().map(|l| (ui.text(l.label(), LABEL_PT, Weight::Regular, LABEL.now()), ui.text(l.label(), LABEL_PT, Weight::Semibold, WHITE))).collect(), aspect, sources: wallpapers.iter().map(|wp| wp.thumb.clone()).collect(), desktop: false, show_on: ShowOn::All, show_on_labels: Vec::new(), add_labels: Vec::new() }
+        WallpaperPage { current: wallpapers.iter().position(|wp| wp.id == current), items, empty: ui.text("No wallpapers packed", 17.0, Weight::Regular, SECONDARY), dynamic_label: ui.text("Dynamic Wallpaper", 17.0, Weight::Regular, LABEL.now()), preview: None, dim, dynamic: false, look: Look::Still, look_labels: Look::ALL.iter().map(|l| (ui.text(l.label(), LABEL_PT, Weight::Regular, LABEL.now()), ui.text(l.label(), LABEL_PT, Weight::Semibold, WHITE))).collect(), aspect, sources: wallpapers.iter().map(|wp| wp.thumb.clone()).collect(), desktop: false, show_on: ShowOn::All, show_on_labels: Vec::new(), add_labels: Vec::new(), dy: 0.0 }
     }
 
     /// Switches to the desktop layout (click to apply, Show On, Add Photo… and Add Folder…).
@@ -532,6 +535,17 @@ impl WallpaperPage {
         self.desktop
     }
 
+    /// Puts the content under a bar that ends `top_pt` from the pane's top (its status bar and navigation bar, the
+    /// `Pane` the bar was built with), so the first row is as far under the toolbar as a list pane's first group.
+    pub fn set_top(&mut self, ui: &Ui, top_pt: f32) {
+        self.dy = ui.pt(top_pt) - nav_bottom(ui);
+    }
+
+    /// A rect of the single-column layout (`dynamic_row`, `look_segment`, ...) where this page draws and hits it.
+    pub(super) fn placed(&self, (x, y, w, h): (f32, f32, f32, f32)) -> (f32, f32, f32, f32) {
+        (x, y + self.dy, w, h)
+    }
+
     pub fn show_on(&self) -> ShowOn {
         self.show_on
     }
@@ -542,7 +556,7 @@ impl WallpaperPage {
 
     /// Where the grid starts in this layout.
     fn grid_y(&self, ui: &Ui) -> f32 {
-        if self.desktop { desktop_grid_top(ui) } else { grid_top(ui) }
+        self.dy + if self.desktop { desktop_grid_top(ui) } else { grid_top(ui) }
     }
 
     /// Thumbnail rect of item `i` in this layout.
@@ -620,10 +634,11 @@ impl WallpaperPage {
 
     /// (w, h, x, y) of the preview image: half the free height, in the screen's aspect.
     fn preview_rect(&self, ui: &Ui, w: i32, h: i32) -> (f32, f32, f32, f32) {
-        let free = h as f32 - home_zone(ui) - grid_top(ui);
+        let top = grid_top(ui) + self.dy;
+        let free = h as f32 - home_zone(ui) - top;
         let ph = (free * 0.45).floor();
         let pw = (ph / self.aspect).floor();
-        (pw, ph, ((w as f32 - pw) / 2.0).floor(), grid_top(ui))
+        (pw, ph, ((w as f32 - pw) / 2.0).floor(), top)
     }
 
     /// The dim switch row (x, y, w, h).
@@ -642,17 +657,17 @@ impl WallpaperPage {
     pub fn tap(&self, ui: &Ui, w: i32, h: i32, x: f32, y: f32) -> Option<Tap> {
         let inside = |(rx, ry, rw, rh): (f32, f32, f32, f32)| x >= rx && x < rx + rw && y >= ry && y < ry + rh;
         let Some(p) = &self.preview else {
-            if inside(dynamic_row(ui, w)) {
+            if inside(self.placed(dynamic_row(ui, w))) {
                 return Some(Tap::Dynamic);
             }
-            if let Some(l) = Look::ALL.iter().enumerate().find(|&(i, _)| inside(look_segment(ui, w, i))).map(|(_, &l)| l) {
+            if let Some(l) = Look::ALL.iter().enumerate().find(|&(i, _)| inside(self.placed(look_segment(ui, w, i)))).map(|(_, &l)| l) {
                 return Some(Tap::Look(l));
             }
             if self.desktop {
-                if let Some(o) = ShowOn::ALL.iter().enumerate().find(|&(i, _)| inside(show_on_segment(ui, w, i))).map(|(_, &o)| o) {
+                if let Some(o) = ShowOn::ALL.iter().enumerate().find(|&(i, _)| inside(self.placed(show_on_segment(ui, w, i)))).map(|(_, &o)| o) {
                     return Some(Tap::ShowOn(o));
                 }
-                if let Some(k) = Import::ALL.iter().enumerate().find(|&(i, _)| inside(add_button(ui, w, i))).map(|(_, &k)| k) {
+                if let Some(k) = Import::ALL.iter().enumerate().find(|&(i, _)| inside(self.placed(add_button(ui, w, i)))).map(|(_, &k)| k) {
                     return Some(Tap::Add(k));
                 }
             }
@@ -697,14 +712,14 @@ impl WallpaperPage {
             }
             return;
         }
-        let (x, y, rw, rh) = dynamic_row(ui, w);
+        let (x, y, rw, rh) = self.placed(dynamic_row(ui, w));
         s.fill_rrect(x, y, rw, rh, ui.pt(CELL_RADIUS_PT), CARD_BG.now());
         s.blit(&self.dynamic_label, (x + ui.pt(16.0)) as i32, (y + (rh - self.dynamic_label.h as f32) / 2.0) as i32, 255, 255);
         draw_switch(s, ui, x + rw - ui.pt(16.0) - ui.pt(SWITCH_W_PT), y + (rh - ui.pt(SWITCH_H_PT)) / 2.0, if self.dynamic { 1.0 } else { 0.0 });
-        let (x, y, rw, rh) = look_row(ui, w);
+        let (x, y, rw, rh) = self.placed(look_row(ui, w));
         s.fill_rrect(x, y, rw, rh, ui.pt(CELL_RADIUS_PT), CARD_BG.now());
         for (i, (look, (plain, white))) in Look::ALL.iter().zip(&self.look_labels).enumerate() {
-            let (sx, sy, sw, sh) = look_segment(ui, w, i);
+            let (sx, sy, sw, sh) = self.placed(look_segment(ui, w, i));
             let on = *look == self.look;
             if on {
                 s.fill_rrect(sx, sy, sw, sh, ui.pt(CELL_RADIUS_PT) - ui.pt(SEGMENT_INSET_PT) / 2.0, BLUE);
@@ -713,10 +728,10 @@ impl WallpaperPage {
             centred(s, label, (sx + sw / 2.0) as i32, (sy + (sh - label.h as f32) / 2.0) as i32);
         }
         if self.desktop {
-            let (x, y, rw, rh) = show_on_row(ui, w);
+            let (x, y, rw, rh) = self.placed(show_on_row(ui, w));
             s.fill_rrect(x, y, rw, rh, ui.pt(CELL_RADIUS_PT), CARD_BG.now());
             for (i, (o, (plain, white))) in ShowOn::ALL.iter().zip(&self.show_on_labels).enumerate() {
-                let (sx, sy, sw, sh) = show_on_segment(ui, w, i);
+                let (sx, sy, sw, sh) = self.placed(show_on_segment(ui, w, i));
                 let on = *o == self.show_on;
                 if on {
                     s.fill_rrect(sx, sy, sw, sh, ui.pt(CELL_RADIUS_PT) - ui.pt(SEGMENT_INSET_PT) / 2.0, BLUE);
@@ -725,7 +740,7 @@ impl WallpaperPage {
                 centred(s, label, (sx + sw / 2.0) as i32, (sy + (sh - label.h as f32) / 2.0) as i32);
             }
             for (i, label) in self.add_labels.iter().enumerate() {
-                let (bx, by, bw, bh) = add_button(ui, w, i);
+                let (bx, by, bw, bh) = self.placed(add_button(ui, w, i));
                 s.fill_rrect(bx, by, bw, bh, BUTTON_RADIUS.min(bh / 2.0), FIELD_BG.now());
                 centred(s, label, (bx + bw / 2.0) as i32, (by + (bh - label.h as f32) / 2.0) as i32);
             }
@@ -882,6 +897,46 @@ mod tests {
         page.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 1200, 1920, None);
         let (x, y, w, _) = show_on_segment(&ui, 1200, 1);
         assert_eq!(buf[(y + 2.0) as usize * 1200 + (x + w / 2.0) as usize], BLUE, "the chosen Show On plate is tinted");
+    }
+
+    /// E2E rev 9: in the split layout the pane's content started under the single-column bar (the status bar and a
+    /// 44 pt bar), not under the pane's own toolbar. Every row, button and thumbnail moves with the bar it is under.
+    #[test]
+    fn the_content_starts_under_the_bar_the_pane_was_given() {
+        let ui = ui();
+        let mut page = WallpaperPage::new(&ui, 1200, 9.0 / 16.0, &wallpapers(3), "wp0", true);
+        page.set_desktop(&ui, true);
+        let (_, phone_y, _, _) = page.placed(dynamic_row(&ui, 1200));
+        assert!((phone_y - (nav_bottom(&ui) + ui.pt(GROUP_GAP_PT))).abs() < 0.01, "single column: one group gap under its bar");
+        let phone_cell = page.cell(&ui, 1200, 1);
+        let top_pt = 30.0;
+        page.set_top(&ui, top_pt);
+        let d = ui.pt(top_pt) - nav_bottom(&ui);
+        assert!(d < 0.0, "a shorter bar: the content moves up");
+        let (x, y, w, _) = page.placed(dynamic_row(&ui, 1200));
+        assert!((y - (ui.pt(top_pt) + ui.pt(GROUP_GAP_PT))).abs() < 0.01, "one group gap under the pane's bar, as a list pane's first group");
+        assert_eq!(page.tap(&ui, 1200, 1920, x + w / 2.0, y + 1.0), Some(Tap::Dynamic));
+        assert_eq!(page.tap(&ui, 1200, 1920, x + w / 2.0, y - 1.0), None, "above the row is the bar's");
+        for (i, l) in Look::ALL.into_iter().enumerate() {
+            let (x, y, w, h) = page.placed(look_segment(&ui, 1200, i));
+            assert_eq!(page.tap(&ui, 1200, 1920, x + w / 2.0, y + h / 2.0), Some(Tap::Look(l)));
+        }
+        for (i, o) in ShowOn::ALL.into_iter().enumerate() {
+            let (x, y, w, _) = page.placed(show_on_segment(&ui, 1200, i));
+            assert_eq!(page.tap(&ui, 1200, 1920, x + w / 2.0, y + 1.0), Some(Tap::ShowOn(o)));
+        }
+        for (i, k) in Import::ALL.into_iter().enumerate() {
+            let (x, y, w, _) = page.placed(add_button(&ui, 1200, i));
+            assert_eq!(page.tap(&ui, 1200, 1920, x + w / 2.0, y + 1.0), Some(Tap::Add(k)));
+        }
+        let (cx, cy, cw, ch) = page.cell(&ui, 1200, 1);
+        assert!((cx, cw, ch) == (phone_cell.0, phone_cell.2, phone_cell.3) && (cy - (phone_cell.1 + d)).abs() < 0.01, "the grid moves with the rows");
+        assert_eq!(page.tap(&ui, 1200, 1920, cx + cw / 2.0, cy + 1.0), Some(Tap::Thumb(1)));
+        // and it is drawn there: the chosen Show On plate is tinted where the page says the segment is
+        let mut buf = vec![0u32; 1200 * 1920];
+        page.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 1200, 1920, None);
+        let (x, y, w, _) = page.placed(show_on_segment(&ui, 1200, 0));
+        assert_eq!(buf[(y + 2.0) as usize * 1200 + (x + w / 2.0) as usize], BLUE, "the chosen Show On plate is drawn under the pane's bar");
     }
 
     #[test]
