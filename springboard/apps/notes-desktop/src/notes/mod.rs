@@ -490,6 +490,8 @@ pub struct Notes {
     editor_w: f32,
     /// `LABEL` when the rows and the editor text were last coloured (Light/Dark)
     appearance: u32,
+    /// `time_zone::conventions_revision` when the rows' dates and the editor's date line were last written
+    conventions: u32,
     view: View,
     prefs: store::Prefs,
     /// the Notes settings pane's values (text size, new note start, dark background)
@@ -824,6 +826,7 @@ impl Notes {
             sidebar_hidden: false,
             editor_w: 0.0,
             appearance: LABEL.now(),
+            conventions: bifrost_app::time_zone::conventions_revision(),
             view: View::All,
             prefs,
             folds,
@@ -1153,7 +1156,7 @@ impl Notes {
             .notes
             .iter()
             .map(|n| {
-                let date = ui.text(&store::list_date(n.modified, now, self.wall.offset), MAC_SUBHEAD_PT, Weight::Regular, LABEL.now());
+                let date = ui.text(&store::list_date_now(n.modified, now), MAC_SUBHEAD_PT, Weight::Regular, LABEL.now());
                 let snippet_w = text_w - date.w as f32 - ui.pt(SPACE_S);
                 // Recently Deleted rows say when the note goes for good
                 let snippet = if self.loc_of(&n.id) == folders::TRASH { store::trash_caption(n.modified, now) } else { n.row_snippet() };
@@ -1162,7 +1165,7 @@ impl Notes {
                     date,
                     snippet: ui.text(&ui.fit(&snippet, MAC_SUBHEAD_PT, snippet_w), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now()),
                     title_text: ui.fit(&n.plain_title(), MAC_BODY_PT, text_w),
-                    date_text: store::list_date(n.modified, now, self.wall.offset),
+                    date_text: store::list_date_now(n.modified, now),
                     snippet_text: ui.fit(&snippet, MAC_SUBHEAD_PT, snippet_w),
                 }
             })
@@ -1766,7 +1769,7 @@ impl Notes {
     fn refresh_date(&mut self, ui: &Ui) {
         if let Screen::Editor(i) = self.screen {
             let words = md::word_count(&self.notes[i].text);
-            let mut label = format!("{} - {} word{}", store::long_date(self.notes[i].modified, self.wall.offset), words, if words == 1 { "" } else { "s" });
+            let mut label = format!("{} - {} word{}", store::long_date_now(self.notes[i].modified), words, if words == 1 { "" } else { "s" });
             // The note's language, when its text has letters to judge by (Edit > Language is detected, not set).
             if let Some(name) = parity::language_label(&self.notes[i].text) {
                 label.push_str(" - ");
@@ -4279,6 +4282,18 @@ impl Notes {
         self.remake_editor(ui, t);
     }
 
+    /// After Settings > Date & Time changed the clock style or the zone (the runtime repaints then): the dates of the
+    /// cached rows and the editor's date line are written again.
+    fn follow_conventions(&mut self, ui: &Ui, t: f64) {
+        let revision = bifrost_app::time_zone::conventions_revision();
+        if revision == self.conventions {
+            return;
+        }
+        self.conventions = revision;
+        self.refresh_date(ui);
+        self.rebuild(ui, t);
+    }
+
     /// The editor laid out again with the current text size and ink (Settings changes and Light/Dark switches). The
     /// text, caret, focus and highlights are kept.
     fn remake_editor(&mut self, ui: &Ui, t: f64) {
@@ -4584,6 +4599,7 @@ impl Notes {
         self.dirty = false;
         self.sync_width(ui);
         self.follow_appearance(ui, t);
+        self.follow_conventions(ui, t);
         self.draw_background(s);
         self.draw_list(s, ui);
         self.draw_editor(s, ui, t);
