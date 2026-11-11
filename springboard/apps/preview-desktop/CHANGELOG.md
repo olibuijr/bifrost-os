@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.26
+
+- A page fitted to the window keeps an even margin on all four sides, so a tall or turned page no longer sits flush under the toolbar and on the window's bottom edge, where it looked cut off.
+- "Saved" leaves the status line at the next edit, and after five seconds in any case, instead of staying beside a title that already says "Edited".
+- The toolbar fits the window as it opens: the sidebar button, the pages, the zoom, Fit and Rotate are on the bar, and the markup tools and the colour adjustments are behind a Markup and an Adjust button. Actual Size and Rotate Left show while there is room. The window has a minimum size the bar fits in.
+- Choosing an item from a toolbar menu (Markup, Adjust, and the » menu of a narrow window) does what it says; the » menu listed the buttons but a choice did nothing.
+- Closing the window or quitting with unsaved changes asks whether to save them: Save, Don't Save or Cancel.
+- While a file is being saved the zoom, Fit, the sidebar and dragging the page still work; only edits wait for the save.
+- A save the system never answers fails after ten seconds with the usual alert, instead of leaving the window unresponsive.
+- The message about a save cut off by a quit is an alert, and stays up when Viewer was started by opening a file.
+
 ## 0.11.25
 
 - Quitting while a save is under way lets the save finish: the file is written before Viewer leaves. A save that could not finish in time is kept in Viewer's own copy and opened as an edited document at the next launch, with a message.
