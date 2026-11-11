@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.10.55 — 2026-11-11
+
+What the test of 0.10.54 found.
+
+- Screenshots: a capture that cannot be taken or saved shows a "Screenshot Not Taken" notice and logs the reason; it used to fail silently.
+- Settings: Escape closes an open pop-up menu and changes nothing; the arrow keys, Return and Space work in a pop-up menu opened with the pointer. Screen Saver has its own sidebar icon. The Wallpaper pane's content starts under the toolbar at the height of every other pane.
+- Terminal: a secondary click opens a context menu with Copy, Paste, Select All and Clear.
+- Save and open sheets: no darker rectangle behind the sheet. A share menu an app opens on the press stays open at the release.
+- Control Center: the output menu and the Up Next picker are opaque. Assistant: the panel leaves no stale glass plate behind when its answer gets shorter or it closes.
+- The last British spellings in the system's text and in 25 apps are en_US (Color, Favorites, Canceled, Auto-Capitalization, Grayscale). Saved settings, app ids and file keys keep their names.
+- Files 1.34.24: Share and Tags open on the press; a new window shows the home folder; Go to Folder starts with its path selected and takes Select All, Cut, Copy, Paste and Undo.
+- Viewer 0.11.29: the status line is wrapped on an opaque strip, so the note about a copy is whole and not drawn over the picture.
+- Reminders 1.20.17 and Activity Monitor 0.10.13: a context menu on a row. Activity Monitor shows no user name and a dash for the CPU share until it knows them. Sticky Notes 0.10.12: drawn chevrons, a welcome note that fits its text. Fonts 0.6.17: samples wrap; kit buttons and tabs. Photo Booth 0.5.14: the shutter is dim and does nothing without a camera. Maps 0.7.12: metric unless Miles is chosen.
+
 ## 0.10.54 — 2026-11-11
 
 What the test of 0.10.53 found.
