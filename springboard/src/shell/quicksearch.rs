@@ -940,7 +940,8 @@ enum OnDisk {
     File(i64),
     /// nothing is there any more: the file was deleted, moved or renamed since it was indexed
     Gone,
-    /// a file Search does not list: one in a folder Settings > Search excludes, or any file while the Files section is off
+    /// a file Search does not list: one in a folder Settings > Search excludes, one outside the home folder, the Files
+    /// root and the mounted volumes, or any file while the Files section is off
     Hidden,
     /// something Search cannot say more about (a folder, a path that could not be looked at): the item stays as it is
     Unknown,
@@ -1201,7 +1202,11 @@ impl QuickSearch {
             self.start_run(&query);
         }
         let (top, sections, files) = self.run_groups();
-        let (documents, files, gone) = fold_indexed_files(indexed_groups(&query, &self.opens), files, top.as_ref(), indexed_file_on_disk);
+        // a file the Files app indexed when it was opened there is a file row only in the places Search lists files
+        // from; one opened anywhere else on the disk (E2E7 2: /usr/share/cups/ipptool/color.jpg) is no result
+        let roots = &self.file_roots;
+        let on_disk = |path: &Path| if files_walk::in_listed_place(path, roots) { indexed_file_on_disk(path) } else { OnDisk::Hidden };
+        let (documents, files, gone) = fold_indexed_files(indexed_groups(&query, &self.opens), files, top.as_ref(), on_disk);
         // a query is merged again for every answer that streams in: each stale id is handed over once
         let gone: Vec<String> = gone.into_iter().filter(|id| !self.forgotten.contains(id)).collect();
         self.forgotten.extend(gone.iter().cloned());
@@ -1485,7 +1490,10 @@ pub struct QuickSearch {
     files: Vec<crate::files::fs::Entry>,
     files_folded: Vec<String>,
     /// the background file scan started at open, until its result is taken
-    files_rx: Option<std::sync::mpsc::Receiver<Vec<crate::files::fs::Entry>>>,
+    files_rx: Option<std::sync::mpsc::Receiver<(Vec<PathBuf>, Vec<crate::files::fs::Entry>)>>,
+    /// the folders the last file scan walked (`files_walk::roots`): a document of the Files app outside them and outside
+    /// the mounted volumes is not listed as a file (`files_walk::in_listed_place`)
+    file_roots: Vec<PathBuf>,
     /// the background read of the contacts and Deildu titles, until its result is taken
     sources_rx: Option<std::sync::mpsc::Receiver<SourcesRead>>,
     /// the root the file list was scanned under, and when that scan finished
@@ -1625,6 +1633,7 @@ impl QuickSearch {
             files: vec![],
             files_folded: vec![],
             files_rx: None,
+            file_roots: vec![],
             sources_rx: None,
             files_root: None,
             files_at: None,
@@ -1832,7 +1841,7 @@ impl QuickSearch {
                 let home = home.or_else(files_walk::search_home);
                 let roots = files_walk::roots(&root, home.as_deref());
                 let files: Vec<crate::files::fs::Entry> = files_walk::walk(&roots, files_walk::LIMIT, files_walk::VISIT_BUDGET).into_iter().filter(|e| !excluded.folder_excluded(&e.path)).collect();
-                let _ = tx.send(files);
+                let _ = tx.send((roots, files));
             });
             self.files_rx = Some(rx);
         }
@@ -1873,7 +1882,8 @@ impl QuickSearch {
     fn take_files(&mut self) -> bool {
         let Some(rx) = &self.files_rx else { return false };
         match rx.try_recv() {
-            Ok(files) => {
+            Ok((roots, files)) => {
+                self.file_roots = roots;
                 self.set_files(files);
                 self.files_rx = None;
                 self.files_at = Some(std::time::Instant::now());

@@ -18,8 +18,9 @@
 //!
 //! Filters (see [`parse_query`]): a word naming a file type ("pdf", "photos") keeps only items whose content URL has
 //! that type (`bifrost_ui::uttype`); a time phrase ("last week", "yesterday", "this month", "past 3 days") keeps only
-//! items indexed in that window (`bifrost_ui::metaquery` predicates). A query of filters alone lists the matching
-//! items, newest first. Dates are UTC and weeks start on Monday.
+//! items indexed in that window (`bifrost_ui::metaquery` predicates). A type word filters only beside a word or a
+//! time phrase; alone it is text ("pictures" finds the name, not every picture). A query of a time phrase, with or
+//! without type words, lists the matching items, newest first. Dates are UTC and weeks start on Monday.
 //!
 //! Bounds: `MAX_PER_APP` items per app (the oldest are dropped first), at most `MAX_APPS` apps, and every field is
 //! already cut by the wire codec, so one app cannot grow the index without limit.
@@ -861,9 +862,14 @@ pub struct Filters {
 /// Splits a Search query into words, file type filters and a time window. `now` is the current Unix time in seconds.
 /// Time phrases: "today", "yesterday", "this|last week|month|year" (calendar periods), "past week|month|year" and
 /// "last|past N days|weeks" (rolling). A lead word before a phrase ("from last week") is dropped with it.
+///
+/// A type word filters only beside a word or a time phrase ("trip photos", "pdf from last week"). A query of type
+/// words alone is those words as text: "pictures" finds what is named Pictures, not every picture any app indexed
+/// (E2E7 2: it listed "color.jpg", an image with nothing of the query in its name or text).
 pub fn parse_query(query: &str, now: u64) -> Filters {
     let tokens: Vec<String> = lexical_tags::words(query).into_iter().map(|(w, _)| w.to_lowercase()).collect();
     let mut f = Filters::default();
+    let mut type_words: Vec<String> = vec![];
     let mut i = 0;
     while i < tokens.len() {
         if let Some((n, window)) = time_phrase(&tokens[i..], now) {
@@ -878,6 +884,7 @@ pub fn parse_query(query: &str, now: u64) -> Filters {
         }
         match kind_word(t) {
             Some(k) => {
+                type_words.push(tokens[i].clone());
                 if !f.kinds.contains(&k) {
                     f.kinds.push(k);
                 }
@@ -885,6 +892,10 @@ pub fn parse_query(query: &str, now: u64) -> Filters {
             None => f.words.push(tokens[i].clone()),
         }
         i += 1;
+    }
+    if f.words.is_empty() && f.window.is_none() {
+        f.kinds.clear();
+        f.words = type_words;
     }
     f
 }
@@ -1709,6 +1720,22 @@ mod tests {
         assert_eq!(f.window, None);
     }
 
+    /// E2E7 2: "pictures" listed every indexed picture ("color.jpg"), whatever it was called.
+    #[test]
+    fn a_type_word_alone_is_text_not_a_filter() {
+        let f = filters("pictures");
+        assert_eq!(f.words, vec!["pictures"]);
+        assert!(f.kinds.is_empty() && f.window.is_none());
+        let f = filters("PDF documents");
+        assert_eq!(f.words, vec!["pdf", "documents"]);
+        assert!(f.kinds.is_empty());
+        let mut ix = Index::default();
+        ix.index_at("a", vec![with_url("c", "color.jpg", "file:///usr/share/cups/ipptool/color.jpg")], NOW - DAY);
+        ix.index_at("a", vec![with_url("p", "My pictures of Hekla", "file:///home/me/hekla.txt")], NOW - DAY);
+        assert_eq!(ids_at(&ix, "pictures"), ["p"], "found by its name; the picture named otherwise is not");
+        assert_eq!(ids_at(&ix, "pictures this week"), ["c"], "beside a time phrase the word filters by type");
+    }
+
     #[test]
     fn calendar_and_rolling_time_phrases() {
         let window = |q: &str| filters(q).window;
@@ -1741,11 +1768,11 @@ mod tests {
         ix.index_at("a", vec![with_url("a", "Q1 report", "file:///r.pdf")], NOW - 2 * DAY);
         ix.index_at("a", vec![with_url("c", "Holiday", "file:///p.png")], NOW - DAY);
         ix.index_at("a", vec![with_url("d", "Notes", "file:///n.txt")], NOW - DAY);
-        assert_eq!(ids_at(&ix, "pdf"), ["a", "b"]);
+        assert_eq!(ids_at(&ix, "pdf this year"), ["a", "b"]);
         assert_eq!(ids_at(&ix, "pdf from last week"), ["b"]);
-        assert_eq!(ids_at(&ix, "photos"), ["c"]);
-        assert_eq!(ids_at(&ix, "txt"), ["d"]);
-        assert_eq!(ids_at(&ix, "documents"), ["d", "a", "b"], "a text file and a PDF are documents, a picture is not");
+        assert_eq!(ids_at(&ix, "photos this year"), ["c"]);
+        assert_eq!(ids_at(&ix, "txt this year"), ["d"]);
+        assert_eq!(ids_at(&ix, "documents this year"), ["d", "a", "b"], "a text file and a PDF are documents, a picture is not");
         assert_eq!(ids_at(&ix, "this week"), ["d", "c", "a"], "the item of last week is out");
         assert_eq!(ids_at(&ix, "notes this week"), ["d"], "a word and a filter both have to hold");
         assert!(ids_at(&ix, "").is_empty());
