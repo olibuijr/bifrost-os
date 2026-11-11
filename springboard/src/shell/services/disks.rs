@@ -700,7 +700,7 @@ mod tests {
         assert_eq!(s.connected.iter().map(|d| d.bsd_name.as_str()).collect::<Vec<_>>(), vec!["sdb"], "the arrival waits");
         s.tick(&mut sh, 6_000.0);
         s.tick(&mut sh, 60_000.0);
-        assert_eq!(notices(&sh), vec![], "nothing is said on the lock screen, however long it stays locked");
+        assert!(notices(&sh).is_empty(), "nothing is said on the lock screen, however long it stays locked");
         // the unlock: the waiting mount starts (a test runs none, so it has ended at once) and the notice follows it
         sh.screen = crate::shell::Screen::Home;
         s.tick(&mut sh, 61_000.0);
@@ -725,7 +725,7 @@ mod tests {
         s.auto.set_running(rx);
         sh.screen = crate::shell::Screen::Home;
         s.tick(&mut sh, 10_000.0);
-        assert_eq!(notices(&sh), vec![], "the notice waits for the mount");
+        assert!(notices(&sh).is_empty(), "the notice waits for the mount");
         assert_eq!(s.connected.len(), 1);
         let failed = volume_mount::Outcome { device: "sdb1".into(), name: "Stick".into(), done: Done::Failed("It may be damaged. The details are in the log.".into()) };
         tx.send(volume_mount::Report { volumes: vec![failed], removed: Vec::new() }).unwrap();
@@ -755,11 +755,11 @@ mod tests {
         fs::remove_dir_all(sys.join("sdb")).unwrap();
         s.tick(&mut sh, 6_000.0);
         assert!(s.connected.is_empty() && s.held.is_empty() && s.failed.is_empty(), "what waited for the disk left with it");
-        assert_eq!(notices(&sh), vec![]);
+        assert!(notices(&sh).is_empty());
         sh.screen = crate::shell::Screen::Home;
         s.tick(&mut sh, 9_000.0);
         s.tick(&mut sh, 12_000.0);
-        assert_eq!(notices(&sh), vec![], "nothing after the unlock either");
+        assert!(notices(&sh).is_empty(), "nothing after the unlock either");
     }
 
     #[test]
@@ -770,7 +770,7 @@ mod tests {
         sh.screen = crate::shell::Screen::Lock;
         let fresh = vec![("sdb".to_string(), "Disk Not Readable", "Flash Disk (sdb1) uses a format this computer cannot read.".to_string())];
         s.post_notices(&mut sh, true, true, fresh);
-        assert_eq!(notices(&sh), vec![]);
+        assert!(notices(&sh).is_empty());
         assert_eq!(s.held.len(), 1);
         s.post_notices(&mut sh, false, false, Vec::new());
         assert_eq!(notices(&sh).len(), 1, "posted at the unlock, whether or not a mount is still at work");
