@@ -3519,6 +3519,41 @@ mod tests {
         cleanup(&v);
     }
 
+    /// Rotate and Crop change the page's shape; the view keeps the zoom mode the person chose. In Fit (the mode a
+    /// document opens in) the new shape is fitted again; at a chosen level the level stays and the page is centred.
+    #[test]
+    fn a_change_of_the_pages_shape_keeps_the_zoom_mode() {
+        let mut v = viewer_with(Image { w: 400, h: 200, px: vec![0xff00_00ff; 400 * 200] });
+        let lay = Layout::bare(300, 300);
+        let p = v.placed(&lay).expect("a picture");
+        assert_eq!((p.x, p.y, p.w, p.h), (0, 75, 300, 150), "a landscape picture fits the width");
+        v.rotate(1);
+        assert_eq!(v.view.zoom, Zoom::Fit);
+        let p = v.placed(&lay).expect("a picture");
+        assert_eq!((p.x, p.y, p.w, p.h), (75, 0, 150, 300), "turned, it fits the height: nothing is cut off");
+        // a chosen level stays, and the turned page is centred whatever the pan was
+        v.view.zoom = Zoom::Factor(2.0);
+        v.view.pan = (40.0, -30.0);
+        v.rotate(1);
+        assert_eq!((v.view.zoom, v.view.pan), (Zoom::Factor(2.0), (0.0, 0.0)));
+        let p = v.placed(&lay).expect("a picture");
+        assert_eq!((p.w, p.h), (800, 400));
+        assert_eq!((p.x + p.w as i32 / 2, p.y + p.h as i32 / 2), (150, 150));
+        // a crop: the level stays and the smaller page is centred
+        v.view.pan = (40.0, 0.0);
+        v.selection = Some((0, Norm { x: 0.0, y: 0.0, w: 0.5, h: 1.0 }));
+        v.crop();
+        assert_eq!(v.doc.as_ref().unwrap().sizes, [(200, 200)]);
+        assert_eq!((v.view.zoom, v.view.pan), (Zoom::Factor(2.0), (0.0, 0.0)));
+        // and in Fit the cropped page is fitted again
+        v.view.zoom = Zoom::Fit;
+        v.selection = Some((0, Norm { x: 0.0, y: 0.0, w: 1.0, h: 0.25 }));
+        v.crop();
+        let p = v.placed(&lay).expect("a picture");
+        assert_eq!((v.view.zoom, p.w, p.h), (Zoom::Fit, 200, 50));
+        cleanup(&v);
+    }
+
     #[test]
     fn search_results_list_the_hits_and_the_find_commands_step_through_them() {
         let mut v = Viewer::new();

@@ -179,17 +179,19 @@ impl Document {
         self.sizes.get(self.source_of(page)?).copied()
     }
 
-    /// The box the thumbnail of shown page `page` fits, turned with the page, known without drawing it. The sidebar lays
-    /// rows out from this.
+    /// The box the thumbnail of shown page `page` takes, known without drawing it; the sidebar lays rows out from this.
+    /// It is the page as it is shown (turned) that is fitted into the tile, so a turned page is never wider than
+    /// `THUMB_W`: fitting the unturned page and turning the result made a turned portrait page twice as wide as its tile.
     pub fn thumb_box(&self, page: usize) -> Option<(usize, usize)> {
-        let (w, h) = self.thumb_fit(page)?;
-        Some(model::turn_size(w, h, self.turn_of(page)))
+        let (w, h) = self.page_size(page)?;
+        let (tw, th) = model::turn_size(w, h, self.turn_of(page));
+        Some(fit_box(tw, th, THUMB_W, 2 * THUMB_W))
     }
 
-    /// The box the unturned thumbnail of shown page `page` is fitted into.
+    /// The size the unturned thumbnail of shown page `page` is drawn at: turned, it fills `thumb_box`.
     fn thumb_fit(&self, page: usize) -> Option<(usize, usize)> {
-        let (w, h) = self.page_size(page)?;
-        Some(fit_box(w, h, THUMB_W, 2 * THUMB_W))
+        let (w, h) = self.thumb_box(page)?;
+        Some(model::turn_size(w, h, self.turn_of(page)))
     }
 
     /// The quarter turns of shown page `page`.
@@ -613,12 +615,31 @@ mod tests {
     fn thumbnails_turn_with_their_page() {
         let mut doc = picture_doc(400, 200);
         doc.set_turn(0, 1);
-        assert_eq!(doc.thumb_box(0), Some((66, THUMB_W)));
+        assert_eq!(doc.thumb_box(0), Some((THUMB_W, 2 * THUMB_W)));
         let t = doc.thumb(0).expect("a thumbnail");
-        assert_eq!((t.w, t.h), (66, THUMB_W));
+        assert_eq!((t.w, t.h), (THUMB_W, 2 * THUMB_W));
         doc.set_turn(0, 0);
         let t = doc.thumb(0).expect("a thumbnail");
         assert_eq!((t.w, t.h), (THUMB_W, 66));
+    }
+
+    /// A portrait picture turned on its side (a saved rotation, then Rotate again) is a landscape page: its thumbnail
+    /// is fitted as one, not drawn twice the tile's width.
+    #[test]
+    fn a_turned_thumbnail_is_never_wider_than_its_tile() {
+        for (w, h) in [(200, 400), (400, 200), (300, 300), (90, 1000), (1000, 90)] {
+            let mut doc = picture_doc(w, h);
+            for quarters in 0..4 {
+                doc.set_turn(0, quarters);
+                let (bw, bh) = doc.thumb_box(0).expect("a box");
+                assert!(bw <= THUMB_W && bh <= 2 * THUMB_W, "{w}x{h} turned {quarters}: {bw}x{bh}");
+                let t = doc.thumb(0).expect("a thumbnail");
+                assert_eq!((t.w, t.h), (bw, bh), "{w}x{h} turned {quarters}: the thumbnail fills its box");
+            }
+        }
+        let mut doc = picture_doc(200, 400);
+        doc.set_turn(0, 1);
+        assert_eq!(doc.thumb_box(0), Some((THUMB_W, 66)));
     }
 
     #[test]

@@ -1359,6 +1359,15 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     }
 }
 
+/// Where a thumbnail `width` pixels wide is drawn in a sidebar `side` wide whose tiles are inset by `pad`: its left
+/// edge, the column of the thumbnail the drawing starts at, and how many columns are drawn. A thumbnail that fits is
+/// centred whole; a wider one is cut to the tile on both sides, so nothing is drawn past the sidebar's edge.
+pub fn thumb_span(side: i32, pad: i32, width: usize) -> (i32, usize, usize) {
+    let room = (side - 2 * pad).max(0) as usize;
+    let shown = width.min(room);
+    ((side - shown as i32) / 2, (width - shown) / 2, shown)
+}
+
 fn draw_pages(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Document) {
     let rows = rows(ui, doc);
     let pad = ui.pt(ui::SPACE_S) as i32;
@@ -1375,12 +1384,17 @@ fn draw_pages(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Docum
         let (bw, bh) = doc.thumb_box(i).unwrap_or((THUMB_W, (THUMB_W as f32 * 1.3) as usize));
         match doc.thumb(i) {
             Some(t) => {
-                let x = (lay.side - t.w as i32) / 2;
-                s.blit(&t, x, y + pad, 255, 255);
+                // a thumbnail wider than its tile (a narrow window's sidebar) shows its middle and stays inside the tile
+                let (x, skip, w) = thumb_span(lay.side, pad, t.w);
+                if w == t.w {
+                    s.blit(&t, x, y + pad, 255, 255);
+                } else if w > 0 {
+                    s.blit(&t.crop(skip, 0, w, t.h), x, y + pad, 255, 255);
+                }
             }
             None => {
-                let x = (lay.side - bw as i32) / 2;
-                fill(s, x, y + pad, bw as i32, bh as i32, ui::CARD_BG.now());
+                let (x, _, w) = thumb_span(lay.side, pad, bw);
+                fill(s, x, y + pad, w as i32, bh as i32, ui::CARD_BG.now());
             }
         }
         let box_h = bh as i32;
@@ -1548,6 +1562,18 @@ mod tests {
         // a point at the top-left of the turned canvas is the bottom-left of the source page for one turn
         let (u, v) = to_source(&p, 1, p.x as f32, p.y as f32);
         assert!((u - 0.0).abs() < 1e-5 && (v - 1.0).abs() < 1e-5, "got {u} {v}");
+    }
+
+    #[test]
+    fn a_thumbnail_is_drawn_inside_its_tile() {
+        // it fits: centred whole
+        assert_eq!(thumb_span(200, 8, 132), (34, 0, 132));
+        // wider than the tile: its middle, from the tile's left edge to its right edge
+        let (x, skip, shown) = thumb_span(200, 8, 264);
+        assert_eq!((x, skip, shown), (8, 40, 184));
+        assert!(x >= 0 && x + shown as i32 <= 200);
+        // a sidebar with no room draws nothing
+        assert_eq!(thumb_span(10, 8, 132).2, 0);
     }
 
     #[test]
