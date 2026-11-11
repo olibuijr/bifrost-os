@@ -17,6 +17,16 @@ pub(crate) const PROMPT_BUTTONS: [(&str, Resolution, f32, f32); 3] = [
 
 pub(crate) const PROMPT_ALL_X: f32 = 544.;
 
+/// The shade over the folder view while the conflict prompt is up: premultiplied black at this alpha (of 255). The
+/// view stays drawn under it, icons and names alike, and reads as set back behind the prompt.
+pub(crate) const PROMPT_SHADE_ALPHA: u32 = 115;
+
+/// The prompt's card, in points: (x, y, w, h) for a window `w` wide with the content starting at `side`.
+pub(crate) fn prompt_frame(w: f32, side: f32) -> (f32, f32, f32, f32) {
+    let x = side + 16.;
+    (x, 72., w - x - 16., 170.)
+}
+
 /// An item to select, and perhaps rename, once the open folder has been read again: the one a rename just named, or
 /// the folder New Folder just made (`Files::apply_pending`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -345,6 +355,7 @@ impl Files {
         if !paths.is_empty() {
             self.sys.effects.push(Effect::CopyToBoard(paths.clone()));
             self.clip = Some((paths, cut));
+            self.fx.clip_rev += 1;
         }
     }
     pub(crate) fn start_job(&mut self, title: &str, kind: JobKind, sources: Vec<PathBuf>, dest: PathBuf) {
@@ -717,8 +728,12 @@ impl Files {
     pub(crate) fn paint_prompt(&self, ui: &Ui, s: &mut Surface) {
         let w = self.w;
         if let Some(name) = self.work.as_ref().and_then(|w| w.conflict.clone()) {
-            let (x, y) = (self.side() + 16., 72.);
-            rect(s, ui, x, y, w - x - 16., 170., CARD_BG.now());
+            // the whole folder view is shaded, not only the part under the card: the card used to cover the first
+            // line's icons and leave their names, and every line below, at full strength right under it
+            let top = self.body_top();
+            rect(s, ui, self.side(), top, w - self.side(), (self.bottom() - top).max(0.), PROMPT_SHADE_ALPHA << 24);
+            let (x, y, card_w, card_h) = prompt_frame(w, self.side());
+            rect(s, ui, x, y, card_w, card_h, CARD_BG.now());
             text(s, ui, &format!("“{name}” already exists here"), 17., LABEL.now(), x + 20., y + 18., w - x - 56.);
             text(s, ui, "Keep both numbers the new copy. Replace overwrites it. Skip leaves it alone.", 13., LABEL_2.now(), x + 20., y + 52., w - x - 56.);
             for (label, _, left, _) in PROMPT_BUTTONS {

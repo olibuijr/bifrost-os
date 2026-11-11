@@ -492,7 +492,9 @@ impl Files {
             self.sidebar().hit(self.sidebar_bounds(), self.sidebar_scroll(), x, y).and_then(|id| self.sidebar_path(id))
         } else {
             match self.item_at(x, y) {
-                Some(i) => Some(i).filter(|i| !self.selection.contains(i) && self.rows[*i].is_dir && !self.fx.drag_paths.contains(&self.rows[*i].path)).map(|i| self.rows[i].path.clone()),
+                // a selected folder is one of the dragged items in this window's own drag; under a drag from another
+                // window the selection here is not what is dragged
+                Some(i) => Some(i).filter(|i| (self.dnd.foreign.is_some() || !self.selection.contains(i)) && self.rows[*i].is_dir && !self.fx.drag_paths.contains(&self.rows[*i].path)).map(|i| self.rows[i].path.clone()),
                 // the view's background is the open folder itself: where a drop goes after a folder sprang open
                 // under the drag, and where files from another window go
                 None => return self.background_target(x, y),

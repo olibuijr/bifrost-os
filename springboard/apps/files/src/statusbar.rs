@@ -48,7 +48,12 @@ impl Files {
             // a drag from another app copies its items; a drag of this window's items moves them unless Option copies
             // the dragged items, not the selection: a folder that sprang open under the drag has none selected
             let own = if self.fx.drag_paths.is_empty() { self.selection.len() } else { self.fx.drag_paths.len() };
-            let (n, copying) = if self.dnd.foreign.is_some() { (self.dnd.foreign_items, true) } else { (own, self.fx.copy_drag) };
+            // another Files window's items move here as this window's own do (`DragOut::sibling` says when they copy)
+            let (n, copying) = match self.dnd.sibling {
+                Some(copy) => (own, copy),
+                None if self.dnd.foreign.is_some() => (self.dnd.foreign_items, true),
+                None => (own, self.fx.copy_drag),
+            };
             let line = match &self.drop_target {
                 Some(target) => format!("{} {} to {}", if copying { "Copy" } else { "Move" }, if n == 1 { "1 item".to_string() } else { format!("{n} items") }, target.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Computer".into())),
                 None => "Drag onto a folder or a sidebar place to move; Option copies".into(),
