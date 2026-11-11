@@ -262,3 +262,23 @@ fn a_long_hold_released_over_no_item_closes_the_menu_and_a_later_press_is_not_th
     let _ = sh.desktop_bar_event(Event::Down(x, y), 1010.);
     assert_eq!(sh.desktop_menu_press, None);
 }
+
+/// E2E7: the Files File menu showed the quick-look key as "Spac e": the label was cut before its last character,
+/// whatever the key was called.
+#[test]
+fn a_key_with_a_name_is_drawn_whole_after_its_modifiers() {
+    assert_eq!(shortcut_spaced("Space"), "Space", "a word key alone is not cut");
+    assert_eq!(shortcut_spaced("\u{2318}I"), "\u{2318} I");
+    assert_eq!(shortcut_spaced("\u{21e7}\u{2318}Z"), "\u{21e7}\u{2318} Z");
+    assert_eq!(shortcut_spaced("\u{2325}Space"), "\u{2325} Space");
+    assert_eq!(shortcut_spaced("\u{2303}\u{2318}F5"), "\u{2303}\u{2318} F5", "a function key keeps its number");
+    assert_eq!(shortcut_spaced("\u{2318}\u{232b}"), "\u{2318} \u{232b}", "a glyph key (Delete) as before");
+    for glyph in ["\u{21a9}", "\u{238b}", "\u{21e5}", "\u{2190}", "F12", "A"] {
+        assert_eq!(shortcut_spaced(glyph), glyph, "a key without a modifier stands alone");
+    }
+    // the rows carry `KeyCombo`'s text: every named key comes out whole
+    for (combo, shown) in [("space", "Space"), ("cmd+space", "\u{2318} Space"), ("return", "\u{21a9}"), ("cmd+delete", "\u{2318} \u{232b}"), ("escape", "\u{238b}"), ("shift+tab", "\u{21e7} \u{21e5}"), ("cmd+left", "\u{2318} \u{2190}"), ("alt+f5", "\u{2325} F5")] {
+        let text = bifrost_ui::keys::KeyCombo::parse(combo).unwrap_or_else(|| panic!("{combo} parses")).to_string();
+        assert_eq!(shortcut_spaced(&text), shown, "{combo}");
+    }
+}

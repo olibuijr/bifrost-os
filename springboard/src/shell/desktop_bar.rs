@@ -191,9 +191,16 @@ const MENU_ART_PT:f32=40.;
 /// The gap between the menu bar and an open menu (Golden Gate).
 #[cfg(feature = "desktop-wayland")]
 const MENU_GAP_PT:f32=6.;
-/// A shortcut as Golden Gate menus show it: modifier glyphs, a space, then the key ("⌘ ,", "⇧⌘ Z").
+/// A shortcut as Golden Gate menus show it: modifier glyphs, a space, then the key ("⌘ ,", "⇧⌘ Z"). The key is
+/// everything after the modifier glyphs of `KeyCombo`'s notation, so a key with a name of several letters stays
+/// whole ("Space", "⌘ F5", "⌥ Space"): it was cut before its last letter ("Spac e", E2E7). The label is drawn
+/// right-aligned (`draw_desktop_popup`), so a word key ends in the column the single-glyph keys end in.
 #[cfg(feature = "desktop-wayland")]
-fn shortcut_spaced(k:&str)->String {let mut c:Vec<char>=k.chars().collect();match c.pop(){Some(last) if !c.is_empty()=>format!("{} {last}",c.into_iter().collect::<String>()),_=>k.to_string()}}
+fn shortcut_spaced(k:&str)->String {
+    let at=k.char_indices().find(|(_,c)|!matches!(c,'\u{2303}'|'\u{2325}'|'\u{21e7}'|'\u{2318}')).map_or(k.len(),|(i,_)|i);
+    let (mods,key)=k.split_at(at);
+    if mods.is_empty()||key.is_empty() {k.to_string()} else {format!("{mods} {key}")}
+}
 /// The screen rectangle (x, y, w, h in px) an open desktop popup owes a repaint: the popup and its shadow
 /// `reach` px out on the sides and bottom, and `reach` px up on top, clamped to the bottom of the menu bar
 /// (the bar repaints its own strip). The shadow above the popup lies in the gap under the bar, so a
