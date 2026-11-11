@@ -1868,7 +1868,7 @@ impl Weather {
                 match column {
                     Column::Hour(i) => {
                         let hr = &f.hours[i];
-                        let label = if i == 0 { "Now".to_string() } else { hr.label.clone() };
+                        let label = if i == 0 { "Now".to_string() } else { insights::hour_text(&hr.label) };
                         self.put(&mut ss, ui, &label, MAC_BODY_PT, Weight::Medium, WHITE, Align::Centre, mid, ui.pt(SPACE_M));
                         glyph::draw(&mut ss, Sky::from_code(hr.code), hr.day, (mid, ui.pt(SPACE_HUGE)), ui.pt(SPACE_L));
                         if let Some(chance) = insights::chance_text(hr.precip_prob) {
@@ -1881,7 +1881,7 @@ impl Weather {
                             let name = if event.rise { "Sunrise" } else { "Sunset" };
                             self.put(&mut ss, ui, name, MAC_BODY_PT, Weight::Medium, WHITE, Align::Centre, mid, ui.pt(SPACE_M));
                             glyph::draw(&mut ss, Sky::Clear, true, (mid, ui.pt(SPACE_HUGE)), ui.pt(SPACE_M));
-                            self.put(&mut ss, ui, &event.time, MAC_BODY_PT, Weight::Semibold, WHITE, Align::Centre, mid, ui.pt(88.0));
+                            self.put(&mut ss, ui, &insights::clock_text(&event.time), MAC_BODY_PT, Weight::Semibold, WHITE, Align::Centre, mid, ui.pt(88.0));
                         }
                     }
                 }
@@ -1931,7 +1931,8 @@ impl Weather {
             8..=10 => "Very High",
             _ => "Extreme",
         };
-        let sun = |d: Option<&data::Day>, rise: bool| d.map(|d| if rise { d.sunrise.clone() } else { d.sunset.clone() }).filter(|s| !s.is_empty()).unwrap_or_else(|| "--:--".into());
+        // sunrise and sunset in the person's clock style (the forecast gives them as "07:41", in the place's own time)
+        let sun = |d: Option<&data::Day>, rise: bool| d.map(|d| if rise { d.sunrise.as_str() } else { d.sunset.as_str() }).filter(|s| !s.is_empty()).map_or_else(|| "--:--".to_string(), insights::clock_text);
         let delta = f.current.feels.round() - f.current.temp.round();
         let feels_note = if delta.abs() < 1.0 { "Similar to the actual temperature" } else if delta < 0.0 { "Wind makes it feel colder" } else { "Humidity makes it feel warmer" };
         let next_24h_mm: f64 = f.hours.iter().map(|h| h.precip_mm).sum();
@@ -2066,7 +2067,7 @@ impl Weather {
                 let (x1, _) = plot.position((n - 1) as f64, scale.lo);
                 let label_y = p(CHART_TOP + CHART_PLOT_TOP + CHART_PLOT_H + 14.0);
                 self.put(&mut c, ui, "Now", MAC_CAPTION1_PT, Weight::Regular, dim, Align::Left, card_x + ui.pt(x0 as f32), label_y);
-                self.put(&mut c, ui, &f.hours[n - 1].label, MAC_CAPTION1_PT, Weight::Regular, dim, Align::Right, card_x + ui.pt(x1 as f32), label_y);
+                self.put(&mut c, ui, &insights::hour_text(&f.hours[n - 1].label), MAC_CAPTION1_PT, Weight::Regular, dim, Align::Right, card_x + ui.pt(x1 as f32), label_y);
             }
         }
         // map: a coordinate grid around the place with a centre mark and a scale bar; no map tiles are loaded

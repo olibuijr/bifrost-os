@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.10
+
+- With Settings > Date & Time > 24-Hour Time off, the hourly forecast reads "1 PM" instead of "13", and sunrise and sunset read "7:41 AM" and "6:17 PM", at once when the setting changes. With it on nothing changes. The times stay in the time of the place the forecast is for.
+
 ## 1.9.9
 
 - Compliance: the My Location row uses a named constant; no change in behaviour.
