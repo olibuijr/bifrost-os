@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.10.51 — 2026-11-11
+
+What the test of 0.10.50 found, and what the first tests with a USB stick and a finger found.
+
+- Removable volumes are mounted when they are plugged in: USB disks, memory cards and disks the kernel marks removable, under `/run/media/<account>/`, with `nosuid,nodev,noexec`. Nothing is mounted while the screen is locked; it follows at unlock. Boot, recovery and hidden partitions, encrypted volumes and swap are left alone. An ejected volume stays unmounted until it is plugged in again; a disk pulled out is unmounted and its folder removed. Before, nothing mounted a stick at all.
+- Search: files come from the account's home folder. The shell runs as a service without `HOME`, so on an installed computer no file under the home folder was ever found. A document the Files app indexed is a file row like the others, with Show in Folder; Return opens a file in its default app; a failed reveal says so; file rows show the document icon of their type.
+- Files 1.34.19: every window lists, follows its folder and the mount table, and can start a drag, paste and eject (a New Window window did none of these). The sidebar shows a volume as soon as it is mounted. A drop on the background of a folder that sprang open moves the items there, and a drag given up returns to the folder it began in; a folder springs open after one second. The dragged item's image is drawn at the icon's own size. Eject returns to the folder shown before the volume.
+- Files: the gallery preview stays between the toolbar and the strip; the columns highlight stays in its column and the open column has a scroll knob; lists end with the last row on the bottom edge; dates are in the local time zone and follow 24-Hour Time (they were in UTC).
+- Viewer 0.11.24: Save says "Saving name…" at once and encodes a picture off the app's loop. A second Save while one is under way no longer replaces the document and loses the edits. The toolbar's buttons keep their places when the title says Edited. The changed-file alert offers Revert. Insert Page from File no longer writes over a working copy of the same name.
+- Browser 0.17.16: a tab waiting for its frame shows its page's background; a private copy says why it cannot be bookmarked, never shows its path as a title and leaves no line in the saved tabs.
+- The built-in Files pages write dates in the chosen clock style.
+- Compliance gate: app Edit menus merge with the shell's, permission names are read from the shell's source, and the keychain is recognised through the notes sync. 69 apps, no findings.
+
 ## 0.10.50 — 2026-11-10
 
 What the test of 0.10.49 on the lab PC found.

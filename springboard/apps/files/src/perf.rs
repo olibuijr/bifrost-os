@@ -158,9 +158,17 @@ pub(crate) fn unseen(replay: Replay) -> Option<Vec<WatchEvent>> {
 
 impl Files {
     /// Writes a batch of watch events into the journal.
+    #[cfg(test)]
     pub(crate) fn record_events(&mut self, events: Vec<WatchEvent>) {
         for e in events {
             self.journal.record(e);
+        }
+    }
+    /// Writes the events of a shared batch that are about this window's folder into its journal. The one stream
+    /// watches every window's folder, and another window's busy folder must not push this one's events out.
+    pub(crate) fn record_own(&mut self, events: &[WatchEvent]) {
+        for e in events.iter().filter(|e| concerns(&self.path, &e.path)) {
+            self.journal.record(e.clone());
         }
     }
     /// Applies the journal events the open folder has not applied yet. While the folder is loading (or a recents or
@@ -174,8 +182,148 @@ impl Files {
         match unseen(replay) {
             Some(events) => self.fold_events(events),
             None => {
-                let dir = self.path.clone();
-                self.navigate(dir, false);
+                self.relist();
+                true
+            }
+        }
+    }
+}
+
+/// How long a batch of folder events matures before it is handed over.
+const WATCH_LATENCY: Duration = Duration::from_millis(120);
+/// The mount table is read at most this often on the loop's turns, and this often for `MOUNT_SETTLE` after a disk or
+/// a media folder changed (the mount itself follows the folder or the disk by a moment).
+pub(crate) const MOUNT_CHECK_EVERY: Duration = Duration::from_secs(1);
+pub(crate) const MOUNT_SETTLE: Duration = Duration::from_secs(4);
+
+/// Whether an event at `event` is about the folder `dir`: the folder itself or an item directly in it.
+pub(crate) fn concerns(dir: &Path, event: &Path) -> bool {
+    event == dir || event.parent() == Some(dir)
+}
+
+/// The folders volumes are mounted in for the account whose home is `home`, with the folders above them (the
+/// account's media folder is made when its first volume is mounted).
+pub(crate) fn media_folders(home: &Path) -> Vec<PathBuf> {
+    let mut out = vec![PathBuf::from("/run/media"), PathBuf::from("/media")];
+    if let Some(user) = home.file_name() {
+        out.insert(0, Path::new("/run/media").join(user));
+    }
+    out
+}
+
+/// The folders one stream watches: the data folder, each window's open folder once, and the media folders that are
+/// there. The order is fixed, so the same windows give the same list.
+pub(crate) fn watch_roots(data: PathBuf, open: impl Iterator<Item = PathBuf>, media: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut roots = vec![data];
+    for dir in open.chain(media.into_iter().filter(|m| m.is_dir())) {
+        if !roots.contains(&dir) {
+            roots.push(dir);
+        }
+    }
+    roots
+}
+
+impl Files {
+    /// The folder this window wants watched: the open one when it is a real folder. None for a Get Info window and
+    /// for the stand-in listings.
+    pub(crate) fn watch_root(&self) -> Option<PathBuf> {
+        (!self.info_window && !self.in_recents() && !self.in_bin() && self.path.is_dir()).then(|| self.path.clone())
+    }
+    /// Builds the one watch stream again when the folders to watch changed: the data folder (Show in Files), the open
+    /// folder of this window and of every New Window window, and the media folders. One stream means one descriptor
+    /// for the loop to wait on (`App::wake_fd`) and no thread. A stream that is replaced while a batch of its events
+    /// is still maturing is kept until that batch is handed over, so no window loses a change to another's navigation.
+    pub(crate) fn sync_watch(&mut self) {
+        let mut stale = std::mem::take(&mut self.fx.watch_stale);
+        for e in &mut self.windows {
+            stale |= std::mem::take(&mut e.files.fx.watch_stale);
+        }
+        let Some(data) = self.data_dir.clone() else { return };
+        if !stale {
+            return;
+        }
+        let open = self.watch_root().into_iter().chain(self.windows.iter().filter_map(|e| e.files.watch_root()));
+        let roots = watch_roots(data, open, media_folders(&self.home));
+        if roots == self.fx.watched && self.watch.is_some() {
+            return;
+        }
+        let now = Instant::now();
+        if let Some(mut old) = self.watch.take() {
+            let events = old.poll(now);
+            self.spread_events(events);
+            if old.next_deadline(now).is_some() {
+                self.fx.retiring.push(old);
+            }
+        }
+        // only the folders themselves: a recursive stream would walk `/` or the home tree on the UI thread
+        let flags = WatchStreamFlags::FILE_EVENTS.union(WatchStreamFlags::SHALLOW);
+        let mut w = WatchStream::new(&roots, WATCH_LATENCY, flags);
+        self.watch = if w.start() { Some(w) } else { None };
+        self.fx.watched = roots;
+    }
+    /// The events the streams have ready, for `tick`: the live one's and those of the streams being retired.
+    pub(crate) fn poll_watch(&mut self, now: Instant) -> Vec<WatchEvent> {
+        let mut events = self.watch.as_mut().map(|w| w.poll(now)).unwrap_or_default();
+        for old in &mut self.fx.retiring {
+            events.extend(old.poll(now));
+        }
+        self.fx.retiring.retain(|w| w.next_deadline(now).is_some());
+        events
+    }
+    /// When the next batch of folder events matures, from `now`.
+    pub(crate) fn watch_deadline(&self, now: Instant) -> Option<Duration> {
+        self.watch.iter().chain(self.fx.retiring.iter()).filter_map(|w| w.next_deadline(now)).min()
+    }
+    /// Hands a batch of events to the windows: each journal takes the events about its own folder, and a change in a
+    /// media folder starts the looks at the mount table.
+    pub(crate) fn spread_events(&mut self, events: Vec<WatchEvent>) {
+        if events.is_empty() {
+            return;
+        }
+        let media = media_folders(&self.home);
+        if events.iter().any(|e| e.path.parent().is_some_and(|p| media.iter().any(|m| m == p))) {
+            self.expect_mounts(Instant::now());
+        }
+        for e in &mut self.windows {
+            e.files.record_own(&events);
+        }
+        self.record_own(&events);
+    }
+    /// A disk or a media folder changed: the mount table is looked at now and every second for a while.
+    pub(crate) fn expect_mounts(&mut self, now: Instant) {
+        self.fx.mounts_until = Some(now + MOUNT_SETTLE);
+        self.fx.mounts_checked = None;
+    }
+    /// Looks at the mount table, at most once a second unless `force`: when the mounted volumes changed, every
+    /// window's sidebar is drawn again with the volumes there are now, and the windows leave the folders of a volume
+    /// that is gone. True when they changed. Under the test pin the sidebar lists no volumes, and nothing is read.
+    pub(crate) fn follow_mounts(&mut self, now: Instant, force: bool) -> bool {
+        if bifrost_app::testing::pinned() {
+            return false;
+        }
+        if self.fx.mounts_until.is_some_and(|until| now >= until) {
+            self.fx.mounts_until = None;
+        }
+        if !force && self.fx.mounts_checked.is_some_and(|at| now.saturating_duration_since(at) < MOUNT_CHECK_EVERY) {
+            return false;
+        }
+        self.fx.mounts_checked = Some(now);
+        let mounts = springboard::files::volumes::mounted().into_iter().map(|v| v.mount).collect();
+        self.mounts_are(mounts)
+    }
+    /// The mount points read from the mount table. True when they differ from the last ones (not for the first look).
+    pub(crate) fn mounts_are(&mut self, mounts: Vec<PathBuf>) -> bool {
+        match self.fx.mounts.replace(mounts) {
+            None => false,
+            Some(before) if Some(&before) == self.fx.mounts.as_ref() => false,
+            Some(_) => {
+                self.leave_lost_volumes();
+                self.revision += 1;
+                for e in &mut self.windows {
+                    e.files.revision += 1;
+                }
+                // a media folder that was not there before can be watched now
+                self.fx.watch_stale = true;
                 true
             }
         }
@@ -183,17 +331,14 @@ impl Files {
 }
 
 impl Files {
-    /// Points the stream at the data folder (Show in Files) and, for a real folder, the open one.
+    /// The open folder changed: the stream is pointed at it. The main window builds the stream at once, before the
+    /// folder's listing is read; a New Window window only says so, and the main window's next `tick` builds it
+    /// (`sync_watch`), because the one stream is the main window's.
     pub(crate) fn rewatch(&mut self) {
-        let Some(data) = self.data_dir.clone() else { return };
-        let mut roots = vec![data];
-        if !self.in_recents() && !self.in_bin() && self.path.is_dir() {
-            roots.push(self.path.clone());
+        self.fx.watch_stale = true;
+        if !self.fx.extra_window {
+            self.sync_watch();
         }
-        // only the open folder: a recursive stream would walk `/` or the home tree on the UI thread
-        let flags = WatchStreamFlags::FILE_EVENTS.union(WatchStreamFlags::SHALLOW);
-        let mut w = WatchStream::new(&roots, Duration::from_millis(120), flags);
-        self.watch = if w.start() { Some(w) } else { None };
     }
     /// Folds a batch of events into the open folder without listing it again.
     pub(crate) fn fold_events(&mut self, events: Vec<WatchEvent>) -> bool {
@@ -206,7 +351,7 @@ impl Files {
         let dir = self.path.clone();
         match apply_events(&mut self.listing, &dir, &events) {
             None => {
-                self.navigate(dir, false);
+                self.relist();
                 true
             }
             Some(false) => false,
@@ -329,6 +474,128 @@ mod tests {
         assert!(App::ticks_in_background(&files));
         let _ = std::fs::remove_file(std::env::temp_dir().join(format!("files-moved-{}", std::process::id())));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn one_stream_watches_every_windows_folder_and_each_journal_takes_its_own_events() {
+        let root = std::env::temp_dir().join(format!("files-shared-watch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for d in ["data", "a", "b"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        let window = |dir: &str| {
+            let mut f = crate::tests::fixture(vec![]);
+            f.home = root.clone();
+            f.path = root.join(dir);
+            f.fx.extra_window = true;
+            f
+        };
+        let mut main = crate::tests::fixture(vec![]);
+        main.home = root.clone();
+        main.path = root.join("a");
+        main.data_dir = Some(root.join("data"));
+        main.windows.push(crate::windows::ExtraWindow::new(WindowId(1), Box::new(window("b"))));
+        main.windows.push(crate::windows::ExtraWindow::new(WindowId(2), Box::new(window("a"))));
+        main.rewatch();
+        assert!(main.watch.is_some(), "the main window owns the stream");
+        assert_eq!(main.fx.watched[..3], [root.join("data"), root.join("a"), root.join("b")], "each folder once");
+        assert!(main.windows.iter().all(|e| e.files.watch.is_none()), "no stream, and no descriptor, per window");
+        // a window that opens another folder only says so; the main window's next look builds the stream again
+        main.windows[0].files.path = root.join("data");
+        main.windows[0].files.rewatch();
+        assert!(main.windows[0].files.watch.is_none() && main.windows[0].files.fx.watch_stale);
+        main.sync_watch();
+        assert_eq!(main.fx.watched[..2], [root.join("data"), root.join("a")]);
+        assert!(!main.windows[0].files.fx.watch_stale);
+        // a batch goes to the windows it is about, and to no other journal
+        let ev = |p: PathBuf| WatchEvent { path: p, flags: WatchEventFlags::CREATED };
+        main.spread_events(vec![ev(root.join("a/new.txt")), ev(root.join("data/x")), ev(root.join("b/other"))]);
+        assert_eq!(main.journal.latest_id(), 1);
+        assert_eq!(main.windows[0].files.journal.latest_id(), 1, "the window showing the data folder");
+        assert_eq!(main.windows[1].files.journal.latest_id(), 1, "the second window on the same folder as the main one");
+        assert!(concerns(&root.join("a"), &root.join("a")) && !concerns(&root.join("a"), &root.join("a/sub/deep")));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_change_in_a_new_window_folder_reaches_that_window() {
+        let root = std::env::temp_dir().join(format!("files-window-watch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("data")).unwrap();
+        std::fs::create_dir_all(root.join("shown")).unwrap();
+        let mut second = crate::tests::fixture(vec![]);
+        second.home = root.clone();
+        second.path = root.join("shown");
+        second.fx.extra_window = true;
+        let mut main = crate::tests::fixture(vec![]);
+        main.home = root.clone();
+        main.data_dir = Some(root.join("data"));
+        main.windows.push(crate::windows::ExtraWindow::new(WindowId(1), Box::new(second)));
+        main.rewatch();
+        std::fs::write(root.join("shown/new.txt"), "x").unwrap();
+        // the kernel's event matures over the stream's latency
+        let mut seen = false;
+        for _ in 0..200 {
+            let events = main.poll_watch(Instant::now());
+            main.spread_events(events);
+            if main.windows[0].files.catch_up() {
+                seen = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(seen, "the second window heard of the new file");
+        assert_eq!(main.windows[0].files.rows.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(), ["new.txt"]);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_relist_keeps_the_scroll_and_the_selection() {
+        let dir = std::env::temp_dir().join(format!("files-relist-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut files = crate::tests::fixture((0..200).map(|i| Entry { path: dir.join(format!("f{i:03}")), ..entry(i) }).collect());
+        files.home = dir.clone();
+        files.path = dir.clone();
+        files.grid = false;
+        files.select_only(150);
+        files.reveal_comfortably(150);
+        let place = files.scroll;
+        assert!(place > 0., "the revealed row is far down the list");
+        files.relist();
+        assert_eq!(files.scroll, 0., "the folder is being read again");
+        assert_eq!(files.fx.relist, Some((place, vec![dir.join("f150")])));
+        // the listing lands with the same rows
+        files.listing = (0..200).map(|i| Entry { path: dir.join(format!("f{i:03}")), ..entry(i) }).collect();
+        files.loading = false;
+        files.refresh_rows();
+        files.restore_place();
+        assert_eq!(files.scroll, place, "the view is where it was");
+        assert_eq!(files.selected_paths(), vec![dir.join("f150")]);
+        // going somewhere else forgets the place
+        files.relist();
+        files.navigate(dir.join("gone"), true);
+        assert!(files.fx.relist.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_changed_mount_table_redraws_every_window_and_the_first_look_does_not() {
+        let mut files = crate::tests::fixture(vec![]);
+        files.windows.push(crate::windows::ExtraWindow::new(WindowId(1), Box::new(crate::tests::fixture(vec![]))));
+        let (rev, win_rev) = (files.revision, files.windows[0].files.revision);
+        assert!(!files.mounts_are(vec![]), "the first look only remembers");
+        assert!(!files.mounts_are(vec![]), "nothing changed");
+        assert_eq!(files.revision, rev);
+        assert!(files.mounts_are(vec![PathBuf::from("/run/media/me/STICK")]), "a volume was mounted");
+        assert!(files.revision > rev && files.windows[0].files.revision > win_rev, "every sidebar is drawn again");
+        assert!(files.fx.watch_stale, "its media folder is watched from now on");
+        assert!(files.mounts_are(vec![]), "and it went away");
+        // a disk event starts a few looks a second apart
+        let now = Instant::now();
+        files.expect_mounts(now);
+        assert_eq!(files.fx.mounts_until, Some(now + MOUNT_SETTLE));
+        assert_eq!(media_folders(Path::new("/home/me"))[0], PathBuf::from("/run/media/me"));
     }
 
     fn bench(name: &str, runs: usize, mut f: impl FnMut()) {

@@ -1180,6 +1180,11 @@ pub enum ToShell {
     DragPerformed { session: u32, accepted: bool },
     /// The source gives the session up.
     DragCancel { session: u32 },
+    /// The drag image of the session just begun at device pixels (`rich::MAX_DRAG_IMAGE` a side at most), drawn as
+    /// it is instead of the small `preview` scaled up. The pixels are too many for a packet: they travel in a
+    /// descriptor (`rich::drag_image_fd`, read with `rich::drag_image_read`), so `rgba` is empty in a decoded
+    /// message until the receiver has read them.
+    DragImage { session: u32, w: u32, h: u32, rgba: Vec<u8> },
 }
 
 pub const MAX_APP_MENUS: usize = 8;
@@ -2431,7 +2436,7 @@ impl ToShell {
             m @ ToShell::AxActions(_) => axaction::encode_shell(m, &mut b),
             m @ ToShell::GuidedAccessRequest { .. } => guided::encode_shell(m, &mut b),
             m @ ToShell::PointerInterest { .. } => pointer::encode_shell(m, &mut b),
-            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifyPresentDelegate { .. } | ToShell::NotifyPresentReply { .. } | ToShell::NotifySchedule { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::SelectionReply { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich::encode_shell(m, &mut b),
+            m @ (ToShell::NotifyCategories(_) | ToShell::NotifyRequest { .. } | ToShell::NotifyRemove { .. } | ToShell::NotifyQuery { .. } | ToShell::NotifySettings { .. } | ToShell::NotifyAuthorize { .. } | ToShell::NotifyPresentDelegate { .. } | ToShell::NotifyPresentReply { .. } | ToShell::NotifySchedule { .. } | ToShell::Share { .. } | ToShell::DistPost { .. } | ToShell::ServiceCall { .. } | ToShell::SelectionReply { .. } | ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. } | ToShell::DragImage { .. }) => rich::encode_shell(m, &mut b),
             ToShell::ControlsTree(list) => {
                 u32_(&mut b, tag::CONTROLS_TREE);
                 let n = list.len().min(MAX_NODE_EXT);

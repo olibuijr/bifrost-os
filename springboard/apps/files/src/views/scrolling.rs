@@ -4,9 +4,6 @@ use super::column::ROW_H;
 use crate::*;
 use bifrost_app::controls::scroll::{indicator, INDICATOR_INSET_PT, INDICATOR_MIN_PT, INDICATOR_W_PT};
 
-/// Room kept under the last line when the view is scrolled to its end (points).
-const END_ROOM: f32 = 70.;
-
 impl Files {
     /// The lines of the view that scrolls: the first line's top at scroll 0, the line pitch and the items on a line.
     /// None for the gallery, whose strip follows the focused item instead of scrolling.
@@ -21,15 +18,24 @@ impl Files {
             Some((self.rows_top(), 32., 1))
         }
     }
-    /// How far a view of `count` items scrolls: until the last line has `END_ROOM` under it.
+    /// How far a view of `count` items scrolls: until the bottom of the last line meets the bottom of the view, which
+    /// is the top of the footer when the status bar is shown. Nothing is kept under the last line.
     pub(crate) fn scroll_range(&self, count: usize) -> f32 {
-        let Some((_, step, per)) = self.lines() else { return 0. };
-        let total = count.div_ceil(per) as f32 * step;
-        (total - (self.h - self.rows_top() - END_ROOM)).max(0.)
+        let Some((top, step, per)) = self.lines() else { return 0. };
+        let end = top + count.div_ceil(per) as f32 * step;
+        (end - self.bottom()).max(0.)
     }
     /// How far the shown view scrolls.
     pub(crate) fn scroll_max(&self) -> f32 {
         self.scroll_range(self.visible().len())
+    }
+    /// Keeps the scroll inside its range. The range shrinks without a scroll gesture when the window grows, the folder
+    /// loses items, a search narrows the rows or the status bar goes away: the view would otherwise stay scrolled past
+    /// its end, with empty space under the last line. `render` calls it before every frame.
+    pub(crate) fn clamp_scroll(&mut self) {
+        if self.scroll > 0. {
+            self.scroll = self.scroll.min(self.scroll_max());
+        }
     }
     /// The scroll that brings a line (its top at scroll 0 and its height) fully into view by the shortest way, from
     /// `scroll`: unchanged when the line is in view already.
@@ -66,7 +72,7 @@ impl Files {
         }
         let middle = (self.rows_top() + self.bottom()) / 2.;
         let wanted = (top + height / 2. - middle).clamp(0., self.scroll_max());
-        // a view shorter than its scroll range's end room: the row is in view whatever else
+        // a view too short for the middle to hold the whole row: the row is in view whatever else
         self.scroll = self.nearest(wanted, top, height, gap);
     }
     /// The first item that is fully in view, when the view has been scrolled: where a view switch keeps its place.
@@ -106,17 +112,20 @@ impl Files {
         }
         self.revision += 1;
     }
-    /// The scroll knob of the list and icon views (x, y, width, length in points), while there is more than fits.
+    /// The scroll knob of the view (x, y, width, length in points), while there is more than fits. The list and icon
+    /// views have it at the window's trailing edge. The columns view has it at the trailing edge of the open folder's
+    /// column, the one that scrolls, left of the divider: the preview beside it is not what scrolls.
     pub(crate) fn scroll_knob(&self, count: usize) -> Option<(f32, f32, f32, f32)> {
-        if self.columns || self.vo.gallery {
+        if self.vo.gallery {
             return None;
         }
         let top = (if self.grid { self.body_top() } else { self.rows_top() }) + INDICATOR_INSET_PT;
         let track = self.bottom() - INDICATOR_INSET_PT - top;
         let (y, len) = indicator(track, self.scroll_range(count), self.scroll, INDICATOR_MIN_PT)?;
-        Some((self.w - INDICATOR_INSET_PT - INDICATOR_W_PT, top + y, INDICATOR_W_PT, len))
+        let edge = if self.columns { self.open_column().1.min(self.w) } else { self.w };
+        Some((edge - INDICATOR_INSET_PT - INDICATOR_W_PT, top + y, INDICATOR_W_PT, len))
     }
-    /// Draws the scroll knob over the trailing edge of the list or icon view.
+    /// Draws the scroll knob over the trailing edge of the list or icon view, or of the open folder's column.
     pub(crate) fn paint_scroll_knob(&self, ui: &Ui, s: &mut Surface, count: usize) {
         if let Some((x, y, w, len)) = self.scroll_knob(count) {
             s.fill_rrect(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(len), ui.pt(w / 2.), LABEL_2.now());
@@ -157,11 +166,63 @@ mod tests {
         let seen = files.scroll;
         files.reveal_comfortably(61);
         assert_eq!(files.scroll, seen, "a neighbour that is in view does not move it");
-        // the last row cannot reach the middle: it lands as far up as the list scrolls, whole and above the bottom edge
+        // the last row cannot reach the middle: it lands as far up as the list scrolls, whole and on the bottom edge
         files.reveal_comfortably(99);
         assert_eq!(files.scroll, files.scroll_max());
         assert!(fully_in_view(&files, 99));
-        assert!(files.bottom() - on_screen(&files, 99).1 > 0., "not on the last pixel row");
+        assert!((files.bottom() - on_screen(&files, 99).1).abs() < 0.01, "with nothing under it");
+    }
+
+    #[test]
+    fn the_scroll_range_ends_with_the_last_line_on_the_bottom_edge_of_the_view() {
+        // (grid, columns): icon, list and columns views, without and with the status bar
+        for (grid, columns) in [(true, false), (false, false), (false, true)] {
+            for status_bar in [false, true] {
+                let mut files = items(100);
+                (files.grid, files.columns, files.status_bar) = (grid, columns, status_bar);
+                files.scroll = files.scroll_max();
+                assert!(files.scroll > 0.);
+                let (top, bottom) = on_screen(&files, 99);
+                assert!((bottom - files.bottom()).abs() < 0.01, "the last line ends at {bottom}, the view at {} (grid {grid}, columns {columns}, status bar {status_bar})", files.bottom());
+                assert!(top > files.rows_top(), "and it is whole");
+                // the first line starts where the view does when it is scrolled back
+                files.scroll = 0.;
+                let lead = if grid { 16. } else { 0. };
+                assert_eq!(on_screen(&files, 0).0, files.rows_top() + lead);
+            }
+        }
+        // a folder that fits does not scroll, and one line more than fits scrolls by what is cut off
+        let mut files = items(3);
+        files.grid = false;
+        assert_eq!(files.scroll_max(), 0.);
+        let rows = ((files.bottom() - files.rows_top()) / 32.).floor() as usize;
+        let files = { let mut f = items(rows + 1); f.grid = false; f };
+        let cut = files.rows_top() + (rows + 1) as f32 * 32. - files.bottom();
+        assert!((files.scroll_max() - cut).abs() < 0.01 && cut <= 32.);
+    }
+
+    #[test]
+    fn a_scroll_past_the_end_is_brought_back_when_the_window_grows_or_the_folder_shrinks() {
+        let mut files = items(100);
+        files.grid = false;
+        files.scroll = files.scroll_max();
+        let before = files.scroll;
+        // the window grows by five rows: the list follows its end instead of leaving five rows of nothing
+        files.h += 5. * 32.;
+        files.clamp_scroll();
+        assert!((files.scroll - (before - 5. * 32.)).abs() < 0.01);
+        assert!((on_screen(&files, 99).1 - files.bottom()).abs() < 0.01);
+        // the folder loses most of its items: what is left fits, so the list is back at its top
+        files.rows.truncate(4);
+        files.listing.truncate(4);
+        files.clamp_scroll();
+        assert_eq!(files.scroll, 0.);
+        // a scroll inside the range is left alone
+        let mut files = items(100);
+        files.grid = false;
+        files.scroll = 64.;
+        files.clamp_scroll();
+        assert_eq!(files.scroll, 64.);
     }
 
     #[test]
@@ -256,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn the_scroll_knob_shows_only_while_the_list_or_icon_view_scrolls() {
+    fn the_scroll_knob_shows_only_while_the_view_scrolls() {
         let mut files = items(3);
         files.grid = false;
         assert!(files.scroll_knob(3).is_none(), "everything fits: no knob");
@@ -272,8 +333,18 @@ mod tests {
             let (_, y, _, len) = files.scroll_knob(200).unwrap();
             assert!(y + len <= files.bottom() && y + len > files.bottom() - 8., "at the end it reaches the bottom of the view");
         }
+        // the columns view: the knob belongs to the open folder's column and stays left of its divider
         files.grid = false;
         files.columns = true;
-        assert!(files.scroll_knob(200).is_none(), "the columns view has no knob");
+        files.scroll = 0.;
+        let (left, right) = files.open_column();
+        let (x, y, w, len) = files.scroll_knob(200).expect("the open column scrolls");
+        assert!(x > left && x + w < right, "inside the column: {x} in {left}..{right}");
+        assert!(right - (x + w) <= INDICATOR_INSET_PT + 0.01, "at its trailing edge");
+        assert!(right < files.w, "the column is not the window: the preview has the rest");
+        assert!(y >= files.rows_top() && len >= INDICATOR_MIN_PT);
+        assert!(items(3).scroll_knob(3).is_none());
+        files.set_gallery();
+        assert!(files.scroll_knob(200).is_none(), "the gallery has no scroll");
     }
 }

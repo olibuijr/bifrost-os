@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.23.1
+
+- Upstream effectcraft v0.23.1.
+  ## What's Changed
+  * Preview: the window stays smooth while lanes render on the GPU (#3345) by @arnav-hiwarkar in https://github.com/storytold/effectcraft/pull/3355
+  * #3357: avoid whole-layer cover for Drop Shadow by @FredApps in https://github.com/storytold/effectcraft/pull/3360
+  * GPU render speed: footage uploaded once per frame, single-copy readback, Render Queue picks the faster renderer (2.6× on a 1080p EXR job) by @vangel76 in https://github.com/storytold/effectcraft/pull/3336
+  * #3357: release retired GPU resources before CPU fallback by @FredApps in https://github.com/storytold/effectcraft/pull/3363
+
 ## 0.23.0
 
 - Upstream effectcraft v0.23.0.

@@ -6,12 +6,27 @@ impl Browser {
         let ui = &ctx.ui;
         let (w, h) = (ctx.cfg.w, ctx.cfg.h);
         let wpt = w as f32 / Self::pt(ui);
-        let has_full_web = self.pool.as_ref().is_some_and(|p| p.has_frame()) && self.dev.responsive.is_none() && self.error.is_none();
+        let has_frame = self.pool.as_ref().is_some_and(|p| p.has_frame());
+        let has_full_web = has_frame && self.dev.responsive.is_none() && self.error.is_none();
         if !has_full_web {
+            // the window content colour of the current appearance, behind everything
             s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
+            // a tab whose frame has not arrived yet (just selected, or coming back from being discarded) shows the
+            // background its page had, so a light page is not preceded by a dark area (placeholder.rs)
+            let known = self.view().and_then(|v| self.backgrounds.get(v)).filter(|_| !has_frame && self.error.is_none() && self.dev.responsive.is_none());
+            if let (Some(colour), Some((x, y, fw, fh))) = (known, self.pool.as_ref().map(|p| p.frame())) {
+                s.fill_rect(x.max(0) as usize, y.max(0) as usize, fw as usize, fh as usize, colour);
+            }
         }
         if let Some(p) = &mut self.pool {
             p.draw(s);
+        }
+        if has_full_web && !self.start_visible() {
+            if let (Some(view), Some(p)) = (self.view(), self.pool.as_ref()) {
+                // the part of the frame rectangle the frame's pixels cover (they differ for a moment after a resize)
+                let ((x, y, fw, fh), (pw, ph)) = (p.frame(), p.pixels_size());
+                self.backgrounds.note(view, placeholder::sample(s, (x, y, fw.min(pw as u32), fh.min(ph as u32))));
+            }
         }
         self.draw_start_page(ctx, s);
         self.inspector.draw(ctx, s, self.view());
@@ -116,7 +131,7 @@ impl Browser {
                     glyphs::glyph(s, ui, "xmark", Self::close_rect(r), LABEL_2.now());
                 }
                 let st = self.pool.as_ref().and_then(|p| p.state(self.tabs.get(i)?.view));
-                let title = st.map(|s| if s.title.is_empty() { self.shown_url(&s.url) } else { s.title.clone() }).unwrap_or_default();
+                let title = st.map(|s| if s.title.is_empty() { self.shown_url(&s.url) } else { self.shown_title(&s.title, &s.url) }).unwrap_or_default();
                 let title = if title.is_empty() || title == START { "New Tab".to_string() } else { title };
                 // site icon (16 pt) left of the title; the pair is centred (Browser)
                 let icon_px = ui.pt(favicon::ICON_PT).round() as usize;
@@ -148,7 +163,7 @@ impl Browser {
                 .iter()
                 .map(|t| {
                     let st = self.pool.as_ref().and_then(|p| p.state(t.view));
-                    (st.map(|s| s.title.clone()).unwrap_or_default(), st.map(|s| self.shown_url(&s.url)).unwrap_or_default())
+                    (st.map(|s| self.shown_title(&s.title, &s.url)).unwrap_or_default(), st.map(|s| self.shown_url(&s.url)).unwrap_or_default())
                 })
                 .collect();
             self.overview.draw(s, ui, wpt, self.content_top(), &tabs, self.current);

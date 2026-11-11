@@ -564,9 +564,20 @@ impl Files {
                 let name = self.places().into_iter().find(|p| p.eject.as_deref() == Some(target.as_str())).map(|p| p.label).unwrap_or(target);
                 self.notice = Some(springboard::files::volumes::eject_notice(&name, &error, &[]));
             }
-            // a disk appeared, went away or changed (`disk_appeared`, `disk_disappeared`, `disk_description_changed`,
-            // sent to the apps that may hear the `disks` service): a volume may have been unmounted elsewhere
-            _ => return self.leave_lost_volumes(),
+            // a volume was mounted or unmounted (`volume_mounted`, `volume_unmounted`, sent to the apps that hold
+            // `storage`), or a disk appeared, went away or changed (`disk_appeared`, `disk_disappeared`,
+            // `disk_description_changed`). Every window's sidebar is built again from the mount table, and the windows
+            // leave the folders of a volume that is gone. The table is read again for a moment after: a disk appears
+            // before its volume is mounted. Mounts made by other means are found by `follow_mounts` on the loop's turns
+            _ => {
+                let now = std::time::Instant::now();
+                self.expect_mounts(now);
+                self.follow_mounts(now, true);
+                self.leave_lost_volumes();
+                for e in &mut self.windows {
+                    e.files.revision += 1;
+                }
+            }
         }
         // the sidebar lists the volumes mounted now
         self.revision += 1;
@@ -1022,7 +1033,15 @@ mod tests {
         let busy = parse(r#"{"target":"/dev/loop0","ok":false,"error":"target is busy"}"#).unwrap();
         assert!(f.image_event(disk_image::E_DETACHED, &busy));
         assert_eq!(f.notice.as_deref(), Some("\u{201C}/dev/loop0\u{201D} could not be ejected: target is busy"));
-        assert!(!f.image_event("disk_appeared", &Json::Null));
+        // a volume mounted or unmounted, or a disk that came or went: every window's sidebar is built again, and
+        // the mount table is read again for a moment (the mount follows its disk)
+        f.windows.push(crate::windows::ExtraWindow::new(WindowId(1), Box::new(crate::tests::fixture(vec![]))));
+        for event in ["volume_mounted", "volume_unmounted", "disk_appeared"] {
+            let (rev, win_rev) = (f.revision, f.windows[0].files.revision);
+            assert!(f.image_event(event, &Json::Null), "{event} asks for a frame");
+            assert!(f.revision > rev && f.windows[0].files.revision > win_rev, "{event} redraws every sidebar");
+            assert!(f.fx.mounts_until.is_some());
+        }
     }
 
     #[test]

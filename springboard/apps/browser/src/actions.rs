@@ -14,7 +14,7 @@ impl Browser {
                 self.downloads.open = false;
                 if let Some(s) = self.view().and_then(|v| self.pool.as_ref()?.state(v)) {
                     let (u, t) = (s.url.clone(), s.title.clone());
-                    if self.private_copy(&u) {
+                    if self.refuse_bookmark(&u) {
                         return true;
                     }
                     let r = self.address_rect(&ctx.ui, ctx.cfg.w);

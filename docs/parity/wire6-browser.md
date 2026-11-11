@@ -22,6 +22,10 @@ already holds the standard items, so an app's own Edit would be a second one. On
 Find is therefore in View, after the zoom items. This is a placement choice; a shell-level Find in Edit would be the
 reference layout and is listed under gaps.
 
+Since 0.10.50 this no longer holds: the shell merges an app menu titled Edit into its own (its standard items first,
+the app's after a separator), CHR-01 reports only `MenuEntry::edit_menu()`, and the Browser declares the Find items
+in an Edit menu (`menus.rs`).
+
 ### Compliance
 
 `python3 tools/check-app-compliance.py --app browser` reports 0 findings. Two findings were fixed on the way: the Edit

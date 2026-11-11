@@ -59,8 +59,7 @@ impl Files {
                 .map(|(s, _)| s.chars().take(4000).collect())
                 .unwrap_or_else(|e| e.to_string())
         } else {
-            let wall = Wall::sample(bifrost_app::proto::sys::now_ms());
-            let rows = springboard::files::info::rows(&e, None, springboard::files::info::created_at(&e.path), &self.tag_index, wall.unix, wall.offset);
+            let rows = info_rows(&e, None, springboard::files::info::created_at(&e.path), &self.tag_index);
             let mut lines: Vec<String> = rows.iter().map(|(k, v)| format!("{k}: {v}")).collect();
             lines.push(String::new());
             lines.push("Press Enter to open with its desktop application.".into());

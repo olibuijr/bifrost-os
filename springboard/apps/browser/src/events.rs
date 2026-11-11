@@ -71,6 +71,7 @@ impl Browser {
                     self.favicons.forget(v);
                     self.autofill.forget(v);
                     self.themes.forget(v);
+                    self.backgrounds.forget(v);
                     if self.pool.as_ref().is_none_or(|p| p.state(v).is_none()) && !self.tabs.iter().any(|t| t.view == v) {
                         continue;
                     }
@@ -83,6 +84,7 @@ impl Browser {
                     self.session.dirty = true;
                     self.inspector.clear_all();
                     self.themes.clear();
+                    self.backgrounds.clear();
                     let urls: Vec<String> = self
                         .tabs
                         .iter()

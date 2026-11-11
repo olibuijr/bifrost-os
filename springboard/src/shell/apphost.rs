@@ -1598,6 +1598,13 @@ impl AppHost {
                     None => eprintln!("springboard: app {} sent a pasteboard write without its descriptor", self.id),
                 }
             }
+            // a drag image comes with its pixels in a descriptor; one that cannot be read is dropped, and the session
+            // keeps the preview it began with
+            ToShell::DragImage { session, w, h, .. } => {
+                if let Some(Ok(rgba)) = fds.first().map(|fd| bifrost_proto::rich::drag_image_read(fd, w, h)) {
+                    out.requests.push(ToShell::DragImage { session, w, h, rgba });
+                }
+            }
             other => out.requests.push(other),
         }
     }
@@ -2202,7 +2209,7 @@ impl Shell {
                 }
             }
             m @ (ToShell::WorkspaceRequest { .. } | ToShell::WorkspaceSubscribe { .. }) => self.workspace_msg(slot, m, t),
-            m @ (ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => self.dnd_msg(slot, m),
+            m @ (ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. } | ToShell::DragImage { .. }) => self.dnd_msg(slot, m),
             m @ (ToShell::LoginItem { .. } | ToShell::StatusItemSet { .. } | ToShell::StatusItemRemove { .. }) => self.extras_msg(slot, m),
             other => self.usernotif_msg(slot, other, t),
         }
@@ -2876,7 +2883,7 @@ impl Shell {
                     ToShell::OpenUrl { url } if open_url_allowed(fg == Some(slot as u8), &mut h.last_open_url, t) => open_url=Some(url),
                     ToShell::PlaySystemSound { name } => queue_system_sound(name),
                     r @ ToShell::Share { .. } if fg == Some(slot as u8) => rich_msgs.push((slot as u8, r)),
-                    r @ (ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. }) => rich_msgs.push((slot as u8, r)),
+                    r @ (ToShell::DragBegin { .. } | ToShell::DragRegister { .. } | ToShell::DragReply { .. } | ToShell::DragPerformed { .. } | ToShell::DragCancel { .. } | ToShell::DragImage { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::LoginItem { .. } | ToShell::StatusItemSet { .. } | ToShell::StatusItemRemove { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ (ToShell::QuickSearchIndex(_) | ToShell::QuickSearchDelete { .. }) => rich_msgs.push((slot as u8, r)),
                     r @ ToShell::DistPost { .. } => rich_msgs.push((slot as u8, r)),

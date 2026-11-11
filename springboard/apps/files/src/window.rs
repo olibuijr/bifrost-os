@@ -72,6 +72,8 @@ impl Files {
             }
         }
         self.revision += 1;
+        // a place kept for a relist belongs to the folder it was kept in (`relist` sets it again after this)
+        self.fx.relist = None;
         self.path = path.clone();
         // the extensions that watch the folder hear that it is shown
         self.ext.borrow_mut().show(&path);
@@ -143,6 +145,25 @@ impl Files {
         } else {
             DispatchQueue::global(Qos::Utility).async_(work);
         }
+    }
+    /// Lists the open folder again in place (the watch lost events, or says the folder must be read again). The view
+    /// keeps its scroll and its selection: the listing puts them back when it lands (`tick_view`), so an item that
+    /// was just revealed (Show in Files) stays in view instead of the list jumping to its top.
+    pub(crate) fn relist(&mut self) {
+        let dir = self.path.clone();
+        let keep = (self.scroll, self.selected_paths());
+        self.navigate(dir.clone(), false);
+        if self.path == dir {
+            self.fx.relist = Some(keep);
+        }
+    }
+    /// The listing of a folder read again in place has landed: the scroll and the selection it had come back.
+    pub(crate) fn restore_place(&mut self) {
+        let Some((scroll, selected)) = self.fx.relist.take() else { return };
+        if self.selection.is_empty() {
+            self.reselect(&selected);
+        }
+        self.scroll = scroll.clamp(0., self.scroll_max());
     }
     pub(crate) fn in_bin(&self) -> bool {
         self.path == self.bin()
@@ -470,15 +491,19 @@ impl Files {
         let target = if x < self.side() {
             self.sidebar().hit(self.sidebar_bounds(), self.sidebar_scroll(), x, y).and_then(|id| self.sidebar_path(id))
         } else {
-            self.item_at(x, y)
-                .filter(|i| !self.selection.contains(i) && self.rows[*i].is_dir && !self.fx.drag_paths.contains(&self.rows[*i].path))
-                .map(|i| self.rows[i].path.clone())
+            match self.item_at(x, y) {
+                Some(i) => Some(i).filter(|i| !self.selection.contains(i) && self.rows[*i].is_dir && !self.fx.drag_paths.contains(&self.rows[*i].path)).map(|i| self.rows[i].path.clone()),
+                // the view's background is the open folder itself: where a drop goes after a folder sprang open
+                // under the drag, and where files from another window go
+                None => return self.background_target(x, y),
+            }
         }?;
         // never into the bin (use Delete), the stand-in listings, or the folder already open
         let blocked = target == self.bin() || target == self.path || target == Path::new(fs::RECENTS) || target.starts_with(TAGGED) || smart::folder_index(&target).is_some() || applications::is_store_dir(&target);
         (!blocked).then_some(target)
     }
     pub(crate) fn render(&mut self, ui: &Ui, s: &mut Surface) -> Damage {
+        self.clamp_scroll(); // a resize or a shorter folder can leave the view scrolled past its end
         let state = format!("{}:{}:{}:{:?}:{}:{}:{:?}:{:?}:{}:{}:{}:{}:{}:{:?}:{:?}:{:?}:{:?}:{}",
             self.revision, self.grid, self.scroll, self.sort, format!("{}:{}:{:?}:{:?}",self.query,self.query.caret(),self.query.selection(),self.controls.focused().map(|n|n.id)), self.searching,
             self.preview, self.error, self.loading, self.w, self.h, ui.s, self.show_hidden,

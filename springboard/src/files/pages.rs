@@ -219,14 +219,15 @@ impl DirPage {
     }
 
     /// The label of entry `i`, rendered on first use.
-    pub fn label(&self, ui: &Ui, w: i32, i: usize, now: i64, offset: i32) -> Ref<'_, Label> {
+    /// `h24` is 24-Hour Time of Settings > Date & Time: the dates are written as the user's clocks are.
+    pub fn label(&self, ui: &Ui, w: i32, i: usize, now: i64, offset: i32, h24: bool) -> Ref<'_, Label> {
         if self.labels.borrow()[i].is_none() {
             let e = &self.entries[i];
             let items = |n: usize| format!("{n} item{}", if n == 1 { "" } else { "s" });
             let sub = match (e.is_dir, e.items) {
-                (true, Some(n)) => format!("{} · {}", fs::date_text(e.mtime, now, offset), items(n)),
-                (true, None) => fs::date_text(e.mtime, now, offset),
-                (false, _) => format!("{} · {}", fs::date_text(e.mtime, now, offset), fs::size_text(e.size)),
+                (true, Some(n)) => format!("{} · {}", fs::date_text_in(e.mtime, now, offset, h24), items(n)),
+                (true, None) => fs::date_text_in(e.mtime, now, offset, h24),
+                (false, _) => format!("{} · {}", fs::date_text_in(e.mtime, now, offset, h24), fs::size_text(e.size)),
             };
             let grid_sub = match (e.is_dir, e.items) {
                 (true, Some(n)) => items(n),
@@ -429,11 +430,11 @@ impl PreviewPage {
     }
 
     /// The info sheet rows for an entry.
-    pub fn info_rows(ui: &Ui, w: i32, e: &Entry, kind: Kind, now: i64, offset: i32) -> Vec<(Image, Image)> {
+    pub fn info_rows(ui: &Ui, w: i32, e: &Entry, kind: Kind, (now, offset, h24): (i64, i32, bool)) -> Vec<(Image, Image)> {
         let value_w = w as f32 - 2.0 * ui.pt(MARGIN_PT) - ui.pt(140.0);
         let size = if e.is_dir { e.items.map_or(String::from("—"), |n| format!("{n} items")) } else { fs::size_text(e.size) };
         let where_ = e.path.parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
-        [("Name", e.name.clone()), ("Kind", fs::kind_description(&e.name, e.is_dir, kind).to_string()), ("Size", size), ("Modified", fs::date_text(e.mtime, now, offset)), ("Where", where_)]
+        [("Name", e.name.clone()), ("Kind", fs::kind_description(&e.name, e.is_dir, kind).to_string()), ("Size", size), ("Modified", fs::date_text_in(e.mtime, now, offset, h24)), ("Where", where_)]
             .into_iter()
             .map(|(k, v)| (ui.text(k, 17.0, Weight::Regular, WHITE), ui.text(&ui.fit(&v, 17.0, value_w), 17.0, Weight::Regular, SECONDARY)))
             .collect()
@@ -564,7 +565,7 @@ mod tests {
         assert_eq!(d.hit(&ui, 1200, false, bottom, sx + sw + 20.0, sy + sh / 2.0), Some(Target::SearchCancel));
         assert_eq!(d.hit(&ui, 1200, false, bottom, sx + sw - 10.0, sy + sh / 2.0), Some(Target::SearchClear));
         {
-            let l = d.label(&ui, 1200, 0, 0, 0);
+            let l = d.label(&ui, 1200, 0, 0, 0, true);
             assert!(l.name.w > 0 && l.sub.w > 0 && l.grid_name.w > 0 && l.grid_sub.w > 0);
         }
         d.set_error(&ui, "Permission denied");
@@ -593,7 +594,7 @@ mod tests {
         let e = entry("a.bin", false, 1234);
         let mut p = PreviewPage::new(&ui, &e);
         assert!(matches!(p.body, Body::Loading));
-        let rows = PreviewPage::info_rows(&ui, 1200, &e, Kind::Other, 0, 0);
+        let rows = PreviewPage::info_rows(&ui, 1200, &e, Kind::Other, (0, 0, true));
         assert_eq!(rows.len(), 5);
         p.body = Body::Info(rows);
         p.fit_scroll(&ui, 1800.0);

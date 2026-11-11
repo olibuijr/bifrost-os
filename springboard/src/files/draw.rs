@@ -271,7 +271,7 @@ impl Files {
         for k in d.visible(ui, w, self.grid, bottom) {
             let i = d.shown[k];
             let e = &d.entries[i];
-            let label = d.label(ui, w, i, self.now, self.offset);
+            let label = d.label(ui, w, i, self.now, self.offset, self.h24);
             let (rx, ry, rw, rh) = d.item_rect(ui, w, self.grid, k);
             let (rx, ry) = (rx + ox, ry);
             let marked = self.selecting && self.picker.is_none() && self.selected.contains(&e.path);

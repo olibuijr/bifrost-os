@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.19
+
+- The gallery's preview stays inside its card: an upright page or picture no longer covers the toolbar and the strip. In the columns view the selected row's highlight ends at its column, and a long column shows its scroll knob. The list, icon and columns views scroll until the last line reaches the bottom edge, with no blank band under it, and follow the window when it grows or the folder gets shorter. Dates in the list, the gallery, the preview and Get Info are in the system's time zone and follow Date & Time > 24-Hour Time.
+
 ## 1.34.18
 
 - Show in Files scrolls the item into the middle of the view in the list, icon and columns views. The list view shows a row that only partly fits instead of leaving a gap under the header. Switching the view keeps the selection and the place. The columns view scrolls a long folder. The list and icon views show a scroll knob while there is more than fits.

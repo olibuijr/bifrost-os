@@ -234,6 +234,7 @@ pub mod wake;
 pub mod desktop_network;
 pub mod disk_image;
 pub mod volume_eject;
+pub mod volume_mount;
 mod desktop_bar;
 mod tablet_gestures;
 #[cfg(feature = "desktop-wayland")]
@@ -2405,6 +2406,7 @@ impl Shell {
         }
         if let Some(f) = &mut self.files {
             f.set_wall(unix, offset);
+            f.set_clock_24h(self.clock_style.use_24h);
         }
     }
 
@@ -4968,6 +4970,8 @@ impl Shell {
                     self.draw_cc(s, t);
                 }
                 if self.quicksearch.active() {
+                    #[cfg(feature = "desktop-wayland")]
+                    self.quicksearch_file_icons();
                     self.quicksearch.draw(s, &self.ui, self.w, self.h, t);
                     if self.quicksearch.animating() {
                         damage.all();

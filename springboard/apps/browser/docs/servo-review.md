@@ -101,16 +101,17 @@ removal fails, and reports that failure; a stopped engine cannot make the clear 
   and neither `components/layout` nor `components/paint` ever emits a backdrop filter, although the bundled
   WebRender (0.70) has `DisplayListBuilder::push_backdrop_filter`. The embedder cannot switch it on:
   `Preferences::layout_unimplemented` would only make the declaration parse, and would also enable every other
-  unimplemented property, with nothing drawn for this one. The engine is the unmodified release, so nothing is patched
-  here. What it would take: Servo layout builds the stacking context's backdrop filter list into the display list
+  unimplemented property, with nothing drawn for this one. The engine's one patch (`engine/patches/0001-page-color-scheme.patch`) does not
+  touch this, so nothing is patched here. What it would take: Servo layout builds the stacking context's backdrop filter list into the display list
   (`push_backdrop_filter` with the border-box clip, after the content behind it is painted), stylo enables the
   property for Servo (`layout.css.backdrop-filter.enabled`), and the engine pin (`engine.json`) moves to a release
   that has both; then re-check the compat page list in the README. `filter` itself is supported. Until then a site
   can keep its header legible with `@supports not (backdrop-filter: blur(1px))` and an opaque or near-opaque
   background (that query is false here); bifrost.olibuijr.com does this since 2026-10-19 (`site/style.css`, `.nav`
   falls back to the solid page colour).
-  Why it is not patched in the engine (reviewed 2026-10-27): the engine is one extra workspace member added to an
-  unmodified Servo checkout (`tools/build-webview-engine.sh`), so there is no patch set to extend. Drawing the filter
+  Why it is not patched in the engine (reviewed 2026-10-27): the engine was one extra workspace member added to an
+  unmodified Servo checkout (`tools/build-webview-engine.sh`) with no patch set; it now carries one small patch
+  (`engine/patches/`), and this one is of another size. Drawing the filter
   needs changes in three places the embedder does not own: (1) stylo, a crates.io dependency (`stylo` 0.22,
   `properties/longhands.toml`, `[backdrop-filter]`, `servo_pref = "layout.unimplemented"`) that would have to be forked
   and wired in with a `[patch.crates-io]` entry; (2) `components/layout`, which has to carry the computed

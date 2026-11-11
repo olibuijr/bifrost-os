@@ -70,7 +70,7 @@ RULES = {
     'RES-02': ('warning', 'CTL-04', 'polling next_wake with a worker thread', 'finish work on the main queue (DispatchQueue::main().async_) or wake_fd; return None from next_wake when idle'),
     'RES-03': ('warning', 'CTL-04', 'no ctx.enable_sudden_termination() but no unsaved state', 'call ctx.enable_sudden_termination() once in configure (docs/bifrost-ui.md "Sudden termination")'),
     'SDK-01': ('error', 'CTL-01', 'deprecated SDK API', 'use the replacement named at the item (#[deprecated] note) or in docs/bifrost-ui.md'),
-    'CHR-01': ('error', 'CHR-07', 'app menu repeats the shell Edit menu', 'an app menu titled File, View, Window or Help merges into the shell menu of that name (its items lead); the shell Edit already holds the standard items, so route them through the shell instead of a second Edit'),
+    'CHR-01': ('error', 'CHR-07', 'app menu repeats the shell Edit menu', 'an app menu titled File, Edit, View, Window or Help merges into the shell menu of that name (in Edit the shell\'s Undo, Cut, Copy, Paste and Select All stay first and the app\'s items follow); MenuEntry::edit_menu() declares those standard items a second time, so declare an Edit menu with only the app\'s own items'),
     'CHR-02': ('warning', 'CHR-02', 'hand-built standard Edit items', 'standard Cut/Copy/Paste/Undo come from the shell Edit menu and ctx commands; do not rebuild them'),
     'TST-01': ('error', 'APP-02', 'tests/compliance.rs missing', 'python3 tools/check-app-compliance.py --gen-tests --write'),
     'TST-02': ('warning', 'APP-02', 'tests/compliance.rs differs from the template', 'python3 tools/check-app-compliance.py --gen-tests --write (keep KNOWN_GAPS)'),
@@ -82,7 +82,8 @@ FIXED = ['SECONDARY', 'FILL', 'FILL_PRESSED', 'FILL_GRAY', 'FILL_TERTIARY', 'SID
 SPACING = {'2': 'SPACE_XXS', '4': 'SPACE_XS', '8': 'SPACE_S', '12': 'SPACE_M', '16': 'SPACE_L',
            '20': 'SPACE_XL', '24': 'SPACE_XXL', '32': 'SPACE_XXXL', '40': 'SPACE_HUGE'}
 RESOLUTIONS = '480|600|640|720|768|800|900|960|1000|1024|1080|1200|1280|1366|1440|1600|1920|2560'
-KNOWN_PERMS = {'network', 'storage', 'audio', 'camera', 'screen', 'notifications', 'documents', 'keychain', 'remote-desktop'}
+# The shell's own list of manifest permissions; KNOWN_PERMS is read from it below, so the two cannot drift.
+APP_POLICY = SB / 'src/bare/app_policy.rs'
 PERM_APP = {'camera': 'photobooth-desktop', 'screen': 'colormeter-desktop'}
 # permission -> code that shows it is used
 PERM_USE = {
@@ -92,7 +93,10 @@ PERM_USE = {
     'camera': r'\b(v4l2::|Device::open|CameraInfo|camera_path|camera)\b',
     'screen': r'\b(screen_sample|Media::Screen|require_screen_recording)\b',
     'notifications': r'\b(notify|usernotif|set_badge|notification|notification_schedule)\b',
-    'keychain': r'\bkeychain\b',
+    # The SDK reaches the keychain for the app in the keychain modules, the passwords store (a keychain group) and
+    # exchange_notes::Sync, which asks the passwords store for the account's password; the plain exchange_notes
+    # request builders take an Authorization value and touch no secret.
+    'keychain': r'\bkeychain(?:_\w+)?\b|\bpasswords::|\bexchange_notes::(?:Sync\b|\{[^}]*\bSync\b)',
     'storage': r'\b(data_dir|std::fs|fs::|File::|UserDefaults|defaults|store)\b',
 }
 UNSAVED = re.compile(r'\b(save_document|commit_document|set_document_edited|doc_edited|dirty|unsaved|autosave|modified)\b', re.I)
@@ -115,9 +119,11 @@ BG_FILL = re.compile(r'\b(?:fill\w*|clear|set_background|background)\s*\([^;]*\b
 BG_PACK = re.compile(r'\bpack\(\s*(?:255\s*,\s*255\s*,\s*255|0\s*,\s*0\s*,\s*0)\b')
 FIXED_RES = re.compile(r'\b(?:w|h|width|height|screen|size|res)\w*[^;]*\b(' + RESOLUTIONS + r')(?:\.0*)?\b(?![\d.])', re.I)
 THREAD_SPAWN = re.compile(r'\bthread::(?:spawn|Builder)\b')
-SHELL_MENU_TITLES = 'File|Edit|View|Window|Help'
-MENU_DECL = re.compile(r'(?:\btitle:\s*|\(\s*)"(' + SHELL_MENU_TITLES + r')"(?:\.into\(\)|\.to_string\(\)|\.to_owned\(\))?\s*(?:,|\))')
-EDIT_MENU_CALL = re.compile(r'\bedit_menu\s*\(\s*\)')
+# The shell merges an app menu titled Edit into its own (springboard/src/shell/desktop_bar.rs, `shell_menu` and the
+# merge in the menu rows: the shell's standard items first, a separator, then the app's). So an Edit menu is not a
+# finding. The SDK helper below is: it returns Undo, Redo, Cut, Copy, Paste and Select All, which would follow the
+# shell's own copies. Standard items an app spells out itself are CHR-02, one finding per item.
+SDK_EDIT_MENU = re.compile(r'\bMenuEntry::edit_menu\s*\(\s*\)')
 STD_EDIT_ITEM = re.compile(r'(?:AppMenuItem|MenuEntry)::new\([^"]*"(Undo|Redo|Cut|Copy|Paste|Select All)"')
 KIT = {
     'sidebar': re.compile(r'\bsource_list\(|\bSourceList\b|\bSidebarItem\b|\bsidebar_list\b'),
@@ -171,6 +177,49 @@ def rust_function_body(lines, start):
         if opened and depth == 0:
             break
     return '\n'.join(body)
+
+
+def manifest_permissions(source):
+    """Permission names the shell accepts in a manifest: the match arms of `Policy::from_permissions` in `source`
+    (the text of app_policy.rs). An arm is a string literal or a `&str` constant of the same file."""
+    lines = source.splitlines()
+    start = next((i for i, l in enumerate(lines) if re.search(r'\bfn\s+from_permissions\b', l)), None)
+    if start is None:
+        raise ValueError('app_policy.rs: fn from_permissions not found')
+    names = set()
+    for literal, const in re.findall(r'^\s*(?:"([a-z0-9-]+)"|([A-Z][A-Z0-9_]*))\s*(?:if\b[^\n]*?)?=>', rust_function_body(lines, start), re.M):
+        if const:
+            value = re.search(r'\bconst\s+' + const + r'\s*:\s*&str\s*=\s*"([^"]+)"', source)
+            if value is None:
+                raise ValueError(f'app_policy.rs: constant {const} of from_permissions is not a string in this file')
+            literal = value.group(1)
+        names.add(literal)
+    if not names:
+        raise ValueError('app_policy.rs: from_permissions names no permission')
+    return names
+
+
+KNOWN_PERMS = manifest_permissions(APP_POLICY.read_text())
+
+
+def permission_findings(perms, app_name, code_all):
+    """APP-06 messages for a manifest's permissions against the app's code (comments already removed)."""
+    out = []
+    for pm in sorted(perms):
+        if pm not in KNOWN_PERMS:
+            out.append(f'unknown permission {pm!r}')
+        elif pm in PERM_APP and app_name != PERM_APP[pm]:
+            out.append(f'permission {pm!r} is restricted to {PERM_APP[pm]}')
+        elif pm in PERM_USE and not re.search(PERM_USE[pm], code_all):
+            out.append(f'permission {pm!r} requested but no code uses it')
+    return out
+
+
+def chr01(code):
+    """The CHR-01 message for one line of code, or None. An app menu titled Edit is merged by the shell and is fine."""
+    if SDK_EDIT_MENU.search(code):
+        return 'MenuEntry::edit_menu() repeats the standard items of the shell Edit'
+    return None
 
 
 def res02_required(next_wake_body, code_all, spawn_sites):
@@ -361,13 +410,8 @@ def check_app(app):
     if m is not None and m.get('window') != 'full-size' and m.get('kind', '') in ('', 'app'):
         findings.append(('GG-01', f'{rel(app / "manifest.toml")}:1', f"window = {m.get('window', '(absent)')!r}"))
     perms = set((m or {}).get('permissions', []))
-    for pm in sorted(perms):
-        if pm not in KNOWN_PERMS:
-            findings.append(('APP-06', f'{rel(app / "manifest.toml")}:1', f'unknown permission {pm!r}'))
-        elif pm in PERM_APP and app.name != PERM_APP[pm]:
-            findings.append(('APP-06', f'{rel(app / "manifest.toml")}:1', f'permission {pm!r} is restricted to {PERM_APP[pm]}'))
-        elif pm in PERM_USE and not re.search(PERM_USE[pm], code_all):
-            findings.append(('APP-06', f'{rel(app / "manifest.toml")}:1', f'permission {pm!r} requested but no code uses it'))
+    for msg in permission_findings(perms, app.name, code_all):
+        findings.append(('APP-06', f'{rel(app / "manifest.toml")}:1', msg))
 
     hand_seen, spawn_sites, next_wake_site = set(), [], None
     for p, (raw, lines) in files.items():
@@ -418,10 +462,8 @@ def check_app(app):
             if re.search(r'\bfn\s+next_wake\b', code):
                 body = rust_function_body(lines, i)
                 next_wake_site = (p, i, raw, body)
-            if MENU_DECL.search(code) and MENU_DECL.search(code).group(1) == 'Edit' and re.search(r'AppMenu|MenuEntry|set_menus|main_menu', '\n'.join(lines[max(0, i - 3):i + 1]) + code):
-                add(p, i, 'CHR-01', f'menu "{MENU_DECL.search(code).group(1)}" duplicates the shell bar', raw)
-            elif EDIT_MENU_CALL.search(code):
-                add(p, i, 'CHR-01', 'edit_menu() adds a second Edit menu next to the shell Edit', raw)
+            if chr01(code):
+                add(p, i, 'CHR-01', chr01(code), raw)
             if STD_EDIT_ITEM.search(code):
                 add(p, i, 'CHR-02', f'hand-built "{STD_EDIT_ITEM.search(code).group(1)}" item', raw)
             if not is_use:

@@ -264,6 +264,50 @@ pub struct DragPreview {
 
 pub const MAX_PREVIEW: u32 = 32;
 
+/// The most pixels a side of a device-resolution drag image has (`ToShell::DragImage`): an icon of 64 points on a
+/// display of scale 2.
+pub const MAX_DRAG_IMAGE: u32 = 128;
+
+/// Whether `w` by `h` is a size a device-resolution drag image may have.
+pub fn drag_image_size_ok(w: u32, h: u32) -> bool {
+    (1..=MAX_DRAG_IMAGE).contains(&w) && (1..=MAX_DRAG_IMAGE).contains(&h)
+}
+
+/// Writes the straight RGBA pixels of a `w` by `h` drag image into a new memfd, the descriptor `ToShell::DragImage`
+/// travels with. Fails for a size over the limit or a buffer that is not `w * h * 4` bytes.
+pub fn drag_image_fd(w: u32, h: u32, rgba: &[u8]) -> std::io::Result<crate::sys::Owned> {
+    use std::os::fd::FromRawFd;
+    use std::os::unix::fs::FileExt;
+    if !drag_image_size_ok(w, h) || rgba.len() != (w * h * 4) as usize {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a drag image"));
+    }
+    let fd = crate::sys::shm_create("drag-image", rgba.len())?;
+    // SAFETY: the descriptor stays owned by `fd`; `ManuallyDrop` keeps the `File` from closing it.
+    let file = std::mem::ManuallyDrop::new(unsafe { std::fs::File::from_raw_fd(fd.0) });
+    file.write_all_at(rgba, 0)?;
+    Ok(fd)
+}
+
+/// Reads the pixels of a `w` by `h` drag image from the descriptor it came with. Fails for a size over the limit or a
+/// descriptor shorter than the image; reads with `pread`, so a sender that shortens the file afterwards cannot fault
+/// the reader.
+pub fn drag_image_read(fd: &crate::sys::Owned, w: u32, h: u32) -> std::io::Result<Vec<u8>> {
+    use std::os::fd::FromRawFd;
+    use std::os::unix::fs::FileExt;
+    if !drag_image_size_ok(w, h) {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a drag image"));
+    }
+    let bytes = (w * h * 4) as usize;
+    if crate::sys::shm_len(fd)? < bytes {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "the drag image descriptor is shorter than the image"));
+    }
+    // SAFETY: the descriptor stays owned by `fd`; `ManuallyDrop` keeps the `File` from closing it.
+    let file = std::mem::ManuallyDrop::new(unsafe { std::fs::File::from_raw_fd(fd.0) });
+    let mut rgba = vec![0u8; bytes];
+    file.read_exact_at(&mut rgba, 0)?;
+    Ok(rgba)
+}
+
 impl DragPreview {
     pub fn valid(&self) -> bool {
         self.w <= MAX_PREVIEW && self.h <= MAX_PREVIEW && self.rgba.len() == (self.w * self.h * 4) as usize
@@ -665,6 +709,7 @@ pub(crate) mod tag {
     pub const DRAG_REPLY: u32 = 0x147;
     pub const DRAG_PERFORMED: u32 = 0x148;
     pub const DRAG_CANCEL: u32 = 0x149;
+    pub const DRAG_IMAGE: u32 = 0x14f;
     pub const DIST_POST: u32 = 0x1d0;
     pub const DIST_NOTIFY: u32 = 0x1d1;
     pub const SERVICE_CALL: u32 = 0x1d2;
@@ -915,6 +960,13 @@ pub(crate) fn encode_shell(m: &ToShell, b: &mut Vec<u8>) {
             u32_(b, tag::DRAG_CANCEL);
             u32_(b, *session);
         }
+        // the pixels travel in the descriptor sent with the packet, never in it
+        ToShell::DragImage { session, w, h, .. } => {
+            u32_(b, tag::DRAG_IMAGE);
+            u32_(b, *session);
+            u32_(b, *w);
+            u32_(b, *h);
+        }
         _ => {}
     }
 }
@@ -988,6 +1040,14 @@ pub(crate) fn decode_shell(t: u32, r: &mut Reader) -> Result<ToShell, DecodeErro
         }
         tag::DRAG_PERFORMED => ToShell::DragPerformed { session: r.u32()?, accepted: flag(r)? },
         tag::DRAG_CANCEL => ToShell::DragCancel { session: r.u32()? },
+        tag::DRAG_IMAGE => {
+            let session = r.u32()?;
+            let (w, h) = (r.u32()?, r.u32()?);
+            if !drag_image_size_ok(w, h) {
+                return Err(DecodeError::BadValue);
+            }
+            ToShell::DragImage { session, w, h, rgba: Vec::new() }
+        }
         t => return Err(DecodeError::UnknownTag(t)),
     })
 }
@@ -1221,6 +1281,17 @@ mod tests {
         shell_rt(ToShell::DragReply { session: 1, op: 0 });
         shell_rt(ToShell::DragPerformed { session: 1, accepted: true });
         shell_rt(ToShell::DragCancel { session: 1 });
+        // a device-resolution drag image: the packet carries the size, the descriptor the pixels
+        shell_rt(ToShell::DragImage { session: 1, w: 128, h: 96, rgba: Vec::new() });
+        let image = ToShell::DragImage { session: 1, w: 2, h: 1, rgba: vec![1, 2, 3, 4, 5, 6, 7, 8] };
+        assert_eq!(ToShell::decode(&image.encode()), Ok(ToShell::DragImage { session: 1, w: 2, h: 1, rgba: Vec::new() }));
+        for (w, h) in [(0, 4), (4, 0), (MAX_DRAG_IMAGE + 1, 4)] {
+            assert_eq!(ToShell::decode(&ToShell::DragImage { session: 1, w, h, rgba: Vec::new() }.encode()), Err(DecodeError::BadValue));
+        }
+        let fd = drag_image_fd(2, 1, &[1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+        assert_eq!(drag_image_read(&fd, 2, 1).unwrap(), vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert!(drag_image_read(&fd, 2, 2).is_err(), "a descriptor shorter than the image is refused");
+        assert!(drag_image_fd(2, 1, &[0; 7]).is_err() && drag_image_fd(MAX_DRAG_IMAGE + 1, 1, &[]).is_err());
         for phase in [DragPhase::Entered, DragPhase::Updated, DragPhase::Exited, DragPhase::Perform] {
             app_rt(ToApp::DragDest { session: 1, phase, x: 10.5, y: 4.0, allowed: dragop::ALL, items: items.clone() });
         }
