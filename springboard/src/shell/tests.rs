@@ -680,7 +680,7 @@
         let body=sh.desk.as_ref().unwrap().wins[i].body(&m);
         assert_eq!((body.x-body_before.x,body.y-body_before.y),(52,-21),"the body, which menus are placed from, moved with it");
         // a context menu the app asks for at (40, 30) in its body opens at that point on the screen
-        sh.desktop_context=Some(ContextMenu{slot:0,x:(body.x+40) as f32,y:(body.y+30) as f32,items:vec![bifrost_proto::ContextItem::new(1,"Open")]});
+        sh.desktop_context=Some(ContextMenu{slot:0,window:0,x:(body.x+40) as f32,y:(body.y+30) as f32,items:vec![bifrost_proto::ContextItem::new(1,"Open")]});
         sh.desktop_menu=Some(Menu::Context);
         let (px,py,_,_)=sh.desktop_popup_rect().unwrap();
         assert_eq!((px as i32,py as i32),(body.x+40,body.y+30),"top-left at the pointer");

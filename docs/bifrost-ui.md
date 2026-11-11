@@ -747,6 +747,25 @@ by hand keep working unchanged; they just show no keys and no separators. Gaps a
 no checked-state column (a check mark goes in the title), no icons, no `NSMenuDelegate` and no alternate (Option)
 items in context menus.
 
+Click to open (after system 0.10.52): a menu an app opens on a press (a pop-up button, a toolbar's overflow button)
+follows the menu rule (`desktop_bar::opening_release`). The release of the press that opened it leaves it open when
+it is a click (released within the double-click time, or without moving off the spot); press, drag onto an item and
+release chooses the item; a press held past that time and let go over no item closes the menu. While that press is
+down its moves highlight the rows, and the window below gets neither the moves nor the release. The shell knows the
+press because it is still down in a window of the app when `ContextMenu` arrives (`Shell::ext_context_menu`,
+`desktop_menu_press`); nothing on the wire says how a menu was opened. A menu opened by a secondary click, a bar menu
+and the Dock's menu have no opening press and behave as before (a bar menu stays open after the click on its title
+because that release is on the bar).
+
+Windows (after system 0.10.52): `ToApp::Context` and `ToApp::ContextAction` end with a window (a `u32`: 0 the main
+window, else the id of `WindowOpen`; absent from a shell up to 0.10.52, which only tells the main window). A secondary
+click goes to the window under the pointer: the main window gets the point in surface pixels as before, an extra window
+in its own points, as `WindowTouch` gives them. `ToShell::ContextMenu` names no window: the menu opens for the app's
+window the pointer last pressed or secondary-clicked in (`AppHost::pointer_window`, the main window when that one has
+closed), its point is read in that window's units, and the choice goes back with that window. The Dock menu's choice
+carries window 0. The field is the last one on the wire and optional: an app built before it reads the messages as it
+always did.
+
 ## Uniform type identifiers (`UniformTypeIdentifiers`, 0.4.69)
 
 `uttype` is now the one table of file types: 58 types with identifier, parents, extensions, MIME type and

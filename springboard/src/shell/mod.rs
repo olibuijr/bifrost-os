@@ -1114,6 +1114,14 @@ pub struct Shell {
     /// The time of the last `draw`: `needs_frame` (which gets no time) checks the timed desktop effects against it.
     desk_t:f64,
     desktop_context:Option<desktop_bar::ContextMenu>,
+    /// The primary press that is down in an app window's content: where it went down (screen px) and when (ms). The
+    /// desk sets it on the press and clears it on the release (`desk_event`).
+    desktop_press:Option<(f32,f32,f64)>,
+    /// The press that was still down when the app's menu opened (`ext_context_menu`): its release is the end of the
+    /// click that opened the menu, not a choice in it (`desktop_bar::opening_release`). None for a menu opened any
+    /// other way, and once that press is released or another one goes down.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    desktop_menu_press:Option<(f32,f32,f64)>,
     /// the open or save panel an app asked for (`docpanel`), shown as `desktop_menu = Document`
     #[cfg(feature = "desktop-wayland")]
     doc_panel:Option<docpanel::Panel>,
@@ -1477,7 +1485,7 @@ impl Shell {
             ext_frame: false,
             wayland: std::env::var_os("SPRINGBOARD_WAYLAND").is_some(),
             overview:Default::default(),
-            desktop_menu:None,desktop_menu_scroll:Default::default(),desktop_flyout:Default::default(),defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
+            desktop_menu:None,desktop_menu_scroll:Default::default(),desktop_flyout:Default::default(),defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,desktop_press:None,desktop_menu_press:None,
             #[cfg(feature = "desktop-wayland")]
             desktop_menu_row:None,
             #[cfg(feature = "desktop-wayland")]

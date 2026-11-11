@@ -173,7 +173,7 @@ impl super::Shell {
         let body = self.desk.as_ref().and_then(|d| d.index_of(super::AppId::External(slot)).map(|i| d.wins[i].body(&self.desk_metrics())));
         let Some(body) = body else { return self.share_finish(slot, request, "") };
         let (x, y) = (anchor.x + body.x as f32, anchor.y + anchor.h + body.y as f32);
-        self.desktop_context = Some(super::desktop_bar::ContextMenu { slot, x, y, items: menu(&list) });
+        self.desktop_context = Some(super::desktop_bar::ContextMenu { slot, window: 0, x, y, items: menu(&list) });
         self.desktop_menu = Some(super::desktop_bar::Menu::Context);
         #[cfg(feature = "desktop-wayland")]
         {
