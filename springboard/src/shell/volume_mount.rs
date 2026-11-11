@@ -622,6 +622,12 @@ impl Auto {
         self.due.filter(|_| !locked).map(|due| due.max(t))
     }
 
+    /// A test's stand-in for a pass at work: its report comes through `rx`.
+    #[cfg(test)]
+    pub fn set_running(&mut self, rx: Receiver<Report>) {
+        self.running = Some(rx);
+    }
+
     /// Collects the pass that ended, if one did. Runs on the service's tick, before the device scan.
     pub fn finish(&mut self) -> Option<Report> {
         let ended = match self.running.as_ref().map(Receiver::try_recv) {

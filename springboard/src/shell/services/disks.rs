@@ -47,7 +47,9 @@
 //! Settings. The notice is for the arrival only: the disk's partitions and the eject that follows get no notice. It
 //! waits for the mount that follows the arrival, and is left out when a volume of the disk did not mount: that disk
 //! gets the one "Disk Could Not Be Opened" notice and not a "ready to use" beside it ([`announced`]). While the
-//! screen is locked nothing is mounted, so the notice does not wait.
+//! screen is locked nothing is mounted and nothing is said: no notice about a disk is posted behind a locked screen
+//! (it would name the device on the lock screen and call a disk "ready" that is not mounted). The notices wait for
+//! the unlock and the mount that follows it; a disk attached and pulled out again while locked leaves none.
 //!
 //! The same arrival starts a probe on a thread (`bifrost_core::disk_magic`): the first sectors of each partition (or
 //! of the disk itself when it has none) are read and matched against the filesystems the system mounts. When a
@@ -111,12 +113,15 @@ pub struct Disks {
     /// The arrived disks whose notice waits for the mount that follows, and the volumes that did not mount.
     connected: Vec<Disk>,
     failed: Vec<String>,
+    /// The notices that came up while the screen was locked, posted at the unlock: the disk's kernel name (empty
+    /// when the notice is about several), the title and the sentence.
+    held: Vec<(String, &'static str, String)>,
     /// When the newest app request started, in shell milliseconds.
     job_from: f64,
     /// where the device nodes are (`/dev`)
     dev: PathBuf,
-    /// the probes running for arrived disks: each sends the disk's label and a verdict per volume
-    probes: Vec<Receiver<(String, Vec<(String, Verdict)>)>>,
+    /// the probes running for arrived disks: each sends the disk's kernel name, its label and a verdict per volume
+    probes: Vec<Receiver<(String, String, Vec<(String, Verdict)>)>>,
     /// the disk image attach and detach requests still running
     images: crate::shell::disk_image::Jobs,
     /// the mounting of removable volumes as they arrive
@@ -142,6 +147,7 @@ impl Disks {
             arrivals: Vec::new(),
             connected: Vec::new(),
             failed: Vec::new(),
+            held: Vec::new(),
             job_from: 0.0,
             dev: PathBuf::from("/dev"),
             probes: Vec::new(),
@@ -158,20 +164,21 @@ impl Disks {
         }
         let label = if disk.model.is_empty() { disk.bsd_name.clone() } else { disk.model.clone() };
         let dev = self.dev.clone();
+        let name = disk.bsd_name.clone();
         let (tx, rx) = channel();
         std::thread::spawn(move || {
             let results = volumes.into_iter().filter_map(|v| disk_magic::classify(&dev.join(&v)).map(|verdict| (v, verdict))).collect();
-            let _ = tx.send((label, results));
+            let _ = tx.send((name, label, results));
         });
         self.probes.push(rx);
     }
 
-    /// The finished probes' sentences for volumes that cannot be read.
-    fn unreadable_notices(&mut self) -> Vec<String> {
+    /// The finished probes' sentences for volumes that cannot be read, each with its disk's kernel name.
+    fn unreadable_notices(&mut self) -> Vec<(String, String)> {
         let mut out = Vec::new();
         self.probes.retain(|rx| match rx.try_recv() {
-            Ok((label, results)) => {
-                out.extend(disk_magic::unreadable_notice(&label, &results));
+            Ok((name, label, results)) => {
+                out.extend(disk_magic::unreadable_notice(&label, &results).map(|body| (name, body)));
                 false
             }
             Err(TryRecvError::Empty) => true,
@@ -213,14 +220,61 @@ impl Disks {
     fn scan(&mut self, changes: &[Change]) -> Vec<Event> {
         let before: BTreeSet<String> = self.session.disks().iter().map(|d| d.bsd_name.clone()).collect();
         let events = self.rescan();
+        // a disk that left takes the notices still waiting for it along
+        for event in &events {
+            if let Some(name) = (event.event == disk_wire::DISAPPEARED).then(|| event.body.str_field("bsd_name")).flatten() {
+                self.forget(&name);
+            }
+        }
         for change in changes {
             match change {
-                Change::Removed(name) if before.contains(name) => self.auto.unplugged(name),
-                Change::Added(name) if self.session.disks().iter().any(|d| d.bsd_name == *name) => self.auto.plugged(name),
+                Change::Removed(name) if before.contains(name) => {
+                    self.auto.unplugged(name);
+                    self.forget(name);
+                }
+                Change::Added(name) => {
+                    let Some(disk) = self.session.disks().iter().find(|d| d.bsd_name == *name).cloned() else { continue };
+                    self.auto.plugged(name);
+                    // pulled and plugged in again between two reads: the list shows no arrival, and this is one
+                    let again = before.contains(name) && disk.removable && self.sys_block.join(name).is_dir();
+                    if again && !self.connected.iter().chain(&self.arrivals).any(|d| d.bsd_name == *name) {
+                        self.connected.push(disk);
+                    }
+                }
                 _ => {}
             }
         }
         events
+    }
+
+    /// The disk `name` left: the notices waiting for it (its arrival, a volume of it that cannot be read) are dropped.
+    fn forget(&mut self, name: &str) {
+        self.connected.retain(|d| d.bsd_name != name);
+        self.held.retain(|(disk, _, _)| disk != name);
+        self.failed.retain(|f| !on_disk(f, name));
+    }
+
+    /// Posts the notices that are due. Behind a locked screen none is: nothing is mounted there, and a notice would
+    /// show the device's name on the lock screen. They wait in `held` and `connected` for the unlock. Unlocked, the
+    /// held ones go out at once and an arrival's "ready to use" once the mount that follows it has ended (`settled`),
+    /// left out for a disk with a volume that did not mount.
+    fn post_notices(&mut self, shell: &mut Shell, locked: bool, settled: bool, fresh: Vec<(String, &'static str, String)>) {
+        self.held.extend(fresh);
+        if locked {
+            return;
+        }
+        let now = crate::bare::sys::wall_time().0;
+        for (_, title, body) in std::mem::take(&mut self.held) {
+            shell.notify(Notification::new(AppId::Settings, title, body, now));
+        }
+        if settled {
+            let arrived = std::mem::take(&mut self.connected);
+            for disk in announced(&arrived, &self.failed) {
+                let label = if disk.model.is_empty() { disk.bsd_name.clone() } else { disk.model.clone() };
+                shell.notify(Notification::new(AppId::Settings, "USB Disk Connected", format!("{label} is ready to use"), now));
+            }
+            self.failed.clear();
+        }
     }
 
     /// Answers one call from `app`.
@@ -309,6 +363,7 @@ impl SystemService for Disks {
         // a finished pass over the removable volumes: its mounts and unmounts go to the apps that show volumes, and
         // what did not mount is one notice
         let report = self.auto.finish();
+        let mut fresh: Vec<(String, &'static str, String)> = Vec::new();
         if let Some(report) = &report {
             let sent = volume_mount::events(report);
             if !sent.is_empty() {
@@ -316,7 +371,7 @@ impl SystemService for Disks {
                 events.extend(sent.iter().flat_map(|(event, body)| listeners.iter().map(move |app| Event { app: Some(app.clone()), event: event.to_string(), body: body.clone() })));
             }
             if let Some(body) = volume_mount::failure_notice(report) {
-                shell.notify(Notification::new(AppId::Settings, "Disk Could Not Be Opened", body, crate::bare::sys::wall_time().0));
+                fresh.push((String::new(), "Disk Could Not Be Opened", body));
             }
             self.failed.extend(report.volumes.iter().filter(|v| matches!(v.done, Done::Failed(_))).map(|v| v.device.clone()));
         }
@@ -344,22 +399,10 @@ impl SystemService for Disks {
         }
         let locked = shell.is_locked();
         self.auto.start(t, locked);
-        let now = || crate::bare::sys::wall_time().0;
         // the arrival's notice waits for the mount that follows it, so a disk that did not open is not "ready to use"
         let settled = !self.auto.mount_waiting();
-        if !self.connected.is_empty() && (locked || settled) {
-            let arrived = std::mem::take(&mut self.connected);
-            for disk in announced(&arrived, &self.failed) {
-                let label = if disk.model.is_empty() { disk.bsd_name.clone() } else { disk.model.clone() };
-                shell.notify(Notification::new(AppId::Settings, "USB Disk Connected", format!("{label} is ready to use"), now()));
-            }
-        }
-        if settled {
-            self.failed.clear();
-        }
-        for body in self.unreadable_notices() {
-            shell.notify(Notification::new(AppId::Settings, "Disk Not Readable", body, now()));
-        }
+        fresh.extend(self.unreadable_notices().into_iter().map(|(disk, body)| (disk, "Disk Not Readable", body)));
+        self.post_notices(shell, locked, settled, fresh);
         events
     }
 
@@ -516,7 +559,7 @@ mod tests {
         s.probe(&disk);
         let mut notices = Vec::new();
         for _ in 0..200 {
-            notices = s.unreadable_notices();
+            notices = s.unreadable_notices().into_iter().map(|(_, body)| body).collect::<Vec<_>>();
             if !s.probes.is_empty() {
                 std::thread::sleep(std::time::Duration::from_millis(10));
             } else {
@@ -631,6 +674,108 @@ mod tests {
         // an app without the storage permission that is no system app does not get that far
         assert!(s.call(&mut sh, "com.example.other", volume_mount::M_MOUNT, &target("/dev/sdzz9"), 0.0).unwrap_err().contains("system apps"));
         assert!(!s.images.busy(), "nothing was started");
+    }
+
+    /// A service on the fixture whose probes read nothing of the machine the test runs on.
+    fn quiet(sys: &PathBuf, mounts: &PathBuf) -> Disks {
+        let mut s = Disks::at(sys, mounts);
+        s.dev = sys.parent().unwrap().join("no-dev");
+        s
+    }
+
+    /// The notices in the shell's store: (title, body).
+    fn notices(sh: &Shell) -> Vec<(String, String)> {
+        sh.notify.store().groups().iter().flat_map(|g| g.items.iter().map(|n| (n.title.clone(), n.body.clone()))).collect()
+    }
+
+    #[test]
+    fn a_stick_attached_behind_a_locked_screen_is_announced_once_after_the_unlock() {
+        let (sys, mounts) = fixture("locked-arrival");
+        let mut s = quiet(&sys, &mounts);
+        let mut sh = crate::shell::tests::shell();
+        sh.screen = crate::shell::Screen::Lock;
+        s.tick(&mut sh, 0.0);
+        add_disk(&sys, "sdb", "1", "2000");
+        s.tick(&mut sh, 3_000.0);
+        assert_eq!(s.connected.iter().map(|d| d.bsd_name.as_str()).collect::<Vec<_>>(), vec!["sdb"], "the arrival waits");
+        s.tick(&mut sh, 6_000.0);
+        s.tick(&mut sh, 60_000.0);
+        assert_eq!(notices(&sh), vec![], "nothing is said on the lock screen, however long it stays locked");
+        // the unlock: the waiting mount starts (a test runs none, so it has ended at once) and the notice follows it
+        sh.screen = crate::shell::Screen::Home;
+        s.tick(&mut sh, 61_000.0);
+        assert_eq!(notices(&sh), vec![("USB Disk Connected".to_string(), "Flash Disk is ready to use".to_string())]);
+        s.tick(&mut sh, 64_000.0);
+        s.tick(&mut sh, 67_000.0);
+        assert_eq!(notices(&sh).len(), 1, "once");
+        assert!(s.connected.is_empty() && s.held.is_empty());
+    }
+
+    #[test]
+    fn a_stick_that_does_not_mount_after_the_unlock_gets_the_failure_notice_and_no_ready_notice() {
+        let (sys, mounts) = fixture("locked-failure");
+        let mut s = quiet(&sys, &mounts);
+        let mut sh = crate::shell::tests::shell();
+        sh.screen = crate::shell::Screen::Lock;
+        s.tick(&mut sh, 0.0);
+        add_disk(&sys, "sdb", "1", "2000");
+        s.tick(&mut sh, 3_000.0);
+        // the unlock starts the pass; while it is at work nothing is said yet
+        let (tx, rx) = channel();
+        s.auto.set_running(rx);
+        sh.screen = crate::shell::Screen::Home;
+        s.tick(&mut sh, 10_000.0);
+        assert_eq!(notices(&sh), vec![], "the notice waits for the mount");
+        assert_eq!(s.connected.len(), 1);
+        let failed = volume_mount::Outcome { device: "sdb1".into(), name: "Stick".into(), done: Done::Failed("It may be damaged. The details are in the log.".into()) };
+        tx.send(volume_mount::Report { volumes: vec![failed], removed: Vec::new() }).unwrap();
+        s.tick(&mut sh, 10_100.0);
+        let got = notices(&sh);
+        assert_eq!(got.len(), 1, "{got:?}");
+        assert_eq!(got[0].0, "Disk Could Not Be Opened");
+        assert!(got[0].1.contains("Stick"), "{got:?}");
+        s.tick(&mut sh, 13_000.0);
+        assert_eq!(notices(&sh).len(), 1, "and no \"ready to use\" after it");
+        assert!(s.connected.is_empty() && s.failed.is_empty());
+    }
+
+    #[test]
+    fn a_stick_attached_and_pulled_out_behind_a_locked_screen_leaves_no_notice() {
+        let (sys, mounts) = fixture("locked-gone");
+        let mut s = quiet(&sys, &mounts);
+        let mut sh = crate::shell::tests::shell();
+        sh.screen = crate::shell::Screen::Lock;
+        s.tick(&mut sh, 0.0);
+        add_disk(&sys, "sdb", "1", "2000");
+        s.tick(&mut sh, 3_000.0);
+        assert_eq!(s.connected.len(), 1);
+        // its probe found a volume it cannot read: that notice waits too, and a failure of another disk stays
+        s.held.push(("sdb".into(), "Disk Not Readable", "Flash Disk (sdb1) uses a format this computer cannot read.".into()));
+        s.failed.push("sdb1".into());
+        fs::remove_dir_all(sys.join("sdb")).unwrap();
+        s.tick(&mut sh, 6_000.0);
+        assert!(s.connected.is_empty() && s.held.is_empty() && s.failed.is_empty(), "what waited for the disk left with it");
+        assert_eq!(notices(&sh), vec![]);
+        sh.screen = crate::shell::Screen::Home;
+        s.tick(&mut sh, 9_000.0);
+        s.tick(&mut sh, 12_000.0);
+        assert_eq!(notices(&sh), vec![], "nothing after the unlock either");
+    }
+
+    #[test]
+    fn a_notice_about_a_disk_that_cannot_be_read_waits_for_the_unlock() {
+        let (sys, mounts) = fixture("locked-unreadable");
+        let mut s = quiet(&sys, &mounts);
+        let mut sh = crate::shell::tests::shell();
+        sh.screen = crate::shell::Screen::Lock;
+        let fresh = vec![("sdb".to_string(), "Disk Not Readable", "Flash Disk (sdb1) uses a format this computer cannot read.".to_string())];
+        s.post_notices(&mut sh, true, true, fresh);
+        assert_eq!(notices(&sh), vec![]);
+        assert_eq!(s.held.len(), 1);
+        s.post_notices(&mut sh, false, false, Vec::new());
+        assert_eq!(notices(&sh).len(), 1, "posted at the unlock, whether or not a mount is still at work");
+        assert_eq!(notices(&sh)[0].0, "Disk Not Readable");
+        assert!(s.held.is_empty());
     }
 
     #[test]
