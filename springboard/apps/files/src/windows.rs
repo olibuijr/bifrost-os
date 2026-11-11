@@ -120,6 +120,23 @@ impl Files {
         }
     }
 
+    /// Shares what any window copied or cut since the last look, on whatever way it did (a key, a menu item, the
+    /// context menu, a control call): the windows are compared by their copy counts, so no route has to remember to
+    /// share. The newest copy wins when two windows copied since.
+    pub(crate) fn share_clips(&mut self) {
+        if self.fx.clip_rev != self.fx.clip_shared {
+            self.fx.clip_shared = self.fx.clip_rev;
+            self.share_clip(None);
+        }
+        for i in 0..self.windows.len() {
+            let fx = &mut self.windows[i].files.fx;
+            if fx.clip_rev != fx.clip_shared {
+                fx.clip_shared = fx.clip_rev;
+                self.share_clip(Some(i));
+            }
+        }
+    }
+
     /// Drops the state of a window the shell or the app closed. Returns true when one was dropped.
     pub(crate) fn close_extra(&mut self, window: WindowId) -> bool {
         let before = self.windows.len();
@@ -211,6 +228,32 @@ mod tests {
         assert_eq!(surface_pt(900, 600, 1.0), (900.0, 600.0));
         let (w, h) = surface_pt(100, 50, 0.0);
         assert!(w.is_finite() && h.is_finite(), "a zero scale divides by nothing");
+    }
+
+    /// A copy that did not come through a window's own input (the control socket, a menu item) stayed in the window
+    /// that made it until the next keyboard copy.
+    #[test]
+    fn a_copy_made_on_any_way_reaches_every_window() {
+        let mut main = two_windows();
+        // the main window copies outside `event` (what a control call or a menu item does)
+        main.selection = vec![0];
+        main.copy_selected(false);
+        assert_eq!(main.windows[0].files.clip, None, "not shared yet");
+        main.share_clips();
+        let copied = Some((vec![PathBuf::from("/fixture/a")], false));
+        assert_eq!(main.windows[0].files.clip, copied);
+        // nothing new: a second look changes nothing, and a window's own later state is not overwritten
+        main.windows[0].files.clip = None;
+        main.share_clips();
+        assert_eq!(main.windows[0].files.clip, None);
+        // an extra window cuts: the main window and the others take it
+        main.windows.push(ExtraWindow::new(WindowId(5), Box::new(fixture(vec![]))));
+        main.windows[0].files.selection = vec![1];
+        main.windows[0].files.copy_selected(true);
+        main.share_clips();
+        let cut = Some((vec![PathBuf::from("/fixture/b")], true));
+        assert_eq!(main.clip, cut);
+        assert_eq!(main.windows[1].files.clip, cut);
     }
 
     #[test]

@@ -43,6 +43,8 @@ pub(crate) struct FileManagerState {
     pub(crate) extra_window: bool,
     /// Counts this window's Copy and Cut: when it moves, the other windows take the copied items (`share_clip`).
     pub(crate) clip_rev: u64,
+    /// The `clip_rev` the other windows have taken (`Files::share_clips`).
+    pub(crate) clip_shared: u64,
     /// The folders the main window's stream watches now.
     pub(crate) watched: Vec<PathBuf>,
     /// Streams replaced while a batch of theirs was still maturing: polled until it is handed over.

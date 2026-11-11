@@ -460,7 +460,10 @@ impl App for Files {
         self.ctl_methods()
     }
     fn rpc(&mut self, _ctx: Option<&Ctx>, _data_dir: &Path, method: &str, params: &bifrost_core::json::Json) -> Result<bifrost_core::json::Json, bifrost_app::control::RpcError> {
-        self.ctl_rpc(method, params)
+        let reply = self.ctl_rpc(method, params);
+        // what a control call copied or cut is what a paste in any window takes
+        self.share_clips();
+        reply
     }
     fn controls(&self, _: &Ctx)->Vec<Node> {let mut nodes=self.controls.nodes().to_vec();for n in &mut nodes {if n.id==4{n.value=self.query.to_string();}}nodes}
     /// The Edit menu follows the key window: Copy and Cut need a selection in the window that has the keys. The
@@ -473,12 +476,9 @@ impl App for Files {
         self.window_files(ctx.key_window()).edit_undo_titles()
     }
     fn event(&mut self, ctx: &Ctx, input: Input) -> bool {
-        let copies = self.fx.clip_rev;
         let handled = self.window_input_event(ctx, input);
         // what this window copied or cut is what a paste in any window takes
-        if self.fx.clip_rev != copies {
-            self.share_clip(None);
-        }
+        self.share_clips();
         handled
     }
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
@@ -545,13 +545,10 @@ impl App for Files {
         if files.info_window && !touch {
             return false;
         }
-        let copies = files.fx.clip_rev;
         // an extra window's touches arrive in window points (`WindowTouch`); the handlers take px, as the main window's
         let ev = if touch { bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0)) } else { ev };
         let changed = files.window_input_event(ctx, ev);
-        if files.fx.clip_rev != copies {
-            self.share_clip(Some(at));
-        }
+        self.share_clips();
         // a window that window opened (Get Info, New Window) is drawn and closed from here, with the others
         self.adopt_opened(at);
         changed
@@ -616,6 +613,9 @@ impl App for Files {
             changed = true;
         }
         self.ctl_tick();
+        // a copy or a cut made on a way that is not a window's own input (a menu item, a control call, a service
+        // reply) reaches the other windows here at the latest
+        self.share_clips();
         // a badge an extension answered with is drawn on this frame
         if self.poll_extensions() {
             changed = true;
