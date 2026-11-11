@@ -867,7 +867,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-news"
-version = "1.6.14"
+version = "1.6.15"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

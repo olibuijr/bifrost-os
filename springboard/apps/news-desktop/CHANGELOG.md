@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.15
+
+- Article dates follow Settings > Date & Time: the list and the article show the day and the time in the system's time zone and in the chosen clock style ("Today at 08:15", "5 Oct 2026 at 8:15 AM") instead of the feed's own text, a feed that writes its dates in another zone is read at the right instant, and Today is the day of the system's zone.
+
 ## 1.6.14
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

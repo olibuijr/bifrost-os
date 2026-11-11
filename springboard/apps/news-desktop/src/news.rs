@@ -126,6 +126,9 @@ pub struct News {
     rows: HashMap<usize, springboard::gfx::Image>,
     /// the card colour the cached rows were drawn with; a scheme change redraws them
     row_bg: u32,
+    /// the date and time conventions and the day the cached rows were drawn under: a change of 24-Hour Time or of
+    /// the zone, or midnight ("Today at 08:15" is then yesterday), redraws them
+    row_time: (u64, i64),
     /// the toolbar as last drawn, for hits and the published controls
     bar: Option<ToolbarLayout>,
     /// the saved pages, kept in the app's data directory
@@ -203,6 +206,7 @@ impl News {
             pic_skipped: HashSet::new(),
             rows: HashMap::new(),
             row_bg: 0,
+            row_time: (0, 0),
             bar: None,
             reading,
             facts: String::new(),
@@ -256,7 +260,10 @@ impl News {
         self.rows.clear();
         self.list = match self.tab {
             // Today: the day's headlines from every feed, newest first
-            0 => feed::today_list(&self.items, (services::now_secs() / 86_400.0).floor() as i64),
+            0 => {
+                let (day, offset) = local_day(services::now_secs() as i64);
+                feed::today_list(&self.items, day, offset / 60)
+            }
             READING_TAB => wire::rows(&self.reading),
             tab => self.items.get(tab - FEED_TAB).cloned().unwrap_or_default(),
         };
@@ -360,7 +367,7 @@ impl News {
             let source = ui.fit(&item.source, MAC_FOOTNOTE_PT, text_w * 0.5);
             self.put(&mut c, ui, &source, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), false, ui.pt(INSET), ui.pt(SPACE_XL));
             let sw = ui.measure(&source, MAC_FOOTNOTE_PT, Weight::Semibold);
-            let date = ui.fit(&item.date, MAC_FOOTNOTE_PT, (text_w - sw - ui.pt(SPACE_S)).max(0.0));
+            let date = ui.fit(&feed::date_text(&item.date, services::now_secs() as i64), MAC_FOOTNOTE_PT, (text_w - sw - ui.pt(SPACE_S)).max(0.0));
             self.put(&mut c, ui, &date, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), false, ui.pt(INSET) + sw + ui.pt(SPACE_S), ui.pt(SPACE_XL));
             let lines = ui.wrap(&item.title, MAC_BODY_PT, Weight::Semibold, text_w);
             for (n, line) in lines.iter().take(3).enumerate() {
@@ -794,6 +801,11 @@ impl News {
             self.row_bg = CARD_BG.now();
             self.rows.clear();
         }
+        let row_time = (bifrost_app::time_zone::conventions_revision(), local_day(services::now_secs() as i64).0);
+        if self.row_time != row_time {
+            self.row_time = row_time;
+            self.rows.clear();
+        }
         let list = std::mem::take(&mut self.list);
         {
             let mut c = s.rows(top, bottom);
@@ -885,7 +897,7 @@ impl News {
                 self.put(&mut c, ui, line, MAC_TITLE1_PT, Weight::Bold, LABEL.now(), false, x, y + ui.pt(SPACE_XL));
                 y += ui.pt(36.0);
             }
-            let source = format!("{}  {}", item.source, item.date);
+            let source = format!("{}  {}", item.source, feed::date_text(&item.date, services::now_secs() as i64));
             let meta = match (source.trim(), self.facts.as_str()) {
                 ("", facts) => facts.to_string(),
                 (source, "") => source.to_string(),
@@ -931,6 +943,13 @@ impl News {
             self.draw_list(s, ui);
         }
     }
+}
+
+/// The day of `now` (Unix seconds) in the system's zone, as days since 1970-01-01, and the zone's offset from UTC
+/// then, in seconds.
+fn local_day(now: i64) -> (i64, i64) {
+    let offset = i64::from(bifrost_app::time_zone::TimeZone::auto_updating_current().seconds_from_gmt(bifrost_app::coding::Date(now as f64)));
+    ((now + offset).div_euclid(86_400), offset)
 }
 
 /// Whether feeds may be fetched: the shell's network path, except under the testing kit (`BIFROST_TEST_PIN=1`), where the
