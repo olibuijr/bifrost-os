@@ -6,10 +6,23 @@
 //! let london = TimeZone::new("Europe/London").unwrap();
 //! london.seconds_from_gmt(Date(1_782_864_000.0)); // 3600 in summer
 //! ```
+//!
+//! The person's date and time conventions come from the shell (`ToApp::DateTime`, on start and on every change in
+//! Settings > Date & Time): the system zone behind [`TimeZone::current`] and the clock style, 24-hour or with AM and
+//! PM. An app writes a time with [`time_text`] or [`time_text_at`] and never formats hours and minutes itself, so it
+//! reads as the menu bar does. The runtime repaints the app's windows when either changes (`App::configure`, then a
+//! whole frame); an app that caches formatted dates keys the cache on [`conventions_revision`].
+//!
+//! ```ignore
+//! time_zone::uses_24_hour_clock();              // Date & Time > 24-Hour Time
+//! time_zone::time_text(14, 5);                  // "14:05", or "2:05 PM" with it off
+//! time_zone::time_text_at(Date(1_782_864_000.0)); // that instant's time of day in the system zone
+//! ```
 
 use crate::coding::Date;
 use crate::locale::Locale;
 use springboard::bare::timezone::{self as tzdb, Zone};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 const DAY: i64 = 86_400;
 /// `TimeZone(secondsFromGMT:)` takes offsets from -18 to +18 hours.
@@ -17,8 +30,65 @@ const MAX_FIXED_SECONDS: i32 = 18 * 3600;
 /// How far `next_daylight_saving_time_transition` looks ahead, in days (four years covers every rule in the database).
 const LOOKAHEAD_DAYS: i64 = 4 * 366;
 /// The name the system posts a notification under when its zone changes. Bifrost publishes nothing under this
-/// name yet: `bare::timezone::set` changes the zone without broadcasting it, so apps read `TimeZone::current()` again.
+/// name: the shell sends the new zone to every app (`ToApp::DateTime`), the runtime makes it the zone of
+/// `TimeZone::current()` and repaints the app, and [`conventions_revision`] changes.
 pub const SYSTEM_TIME_ZONE_DID_CHANGE: &str = "systemTimeZoneDidChange";
+
+/// Date & Time > 24-Hour Time is off, as the shell last said. 24-hour time until it says so (an older shell never does).
+static CLOCK_12_HOUR: AtomicBool = AtomicBool::new(false);
+/// Counts the changes of the clock style and of the system zone.
+static REVISION: AtomicU32 = AtomicU32::new(0);
+
+/// Whether times are written in 24-hour style ("14:05") instead of with AM and PM ("2:05 PM"): Settings > Date & Time
+/// > 24-Hour Time, as the shell told this app at start and on every change. True on a shell that does not say (and
+/// so in a test, where no shell speaks).
+pub fn uses_24_hour_clock() -> bool {
+    !CLOCK_12_HOUR.load(Ordering::Relaxed)
+}
+
+/// A time of day in the person's clock style, as the menu bar writes it: "02:08", or "2:08 AM" with 24-Hour Time off.
+pub fn time_text(hour: i32, minute: i32) -> String {
+    springboard::status::clock_in(hour, minute, uses_24_hour_clock())
+}
+
+/// The time of day of `date` in the system zone ([`TimeZone::current`]), in the person's clock style.
+pub fn time_text_at(date: Date) -> String {
+    let local = unix(date) + i64::from(TimeZone::current().seconds_from_gmt(date));
+    let secs = local.rem_euclid(DAY);
+    time_text((secs / 3600) as i32, (secs % 3600 / 60) as i32)
+}
+
+/// Changes whenever the clock style or the system zone does. An app that keeps formatted dates compares it with the
+/// value it formatted them at.
+pub fn conventions_revision() -> u32 {
+    REVISION.load(Ordering::Relaxed)
+}
+
+/// Makes the machine's zone (the `/etc/localtime` link, which an app's sandbox can read) the zone of
+/// `TimeZone::current()`. The runtime calls it once at start, so the zone is right before the shell's first
+/// `ToApp::DateTime` and on a shell that sends none; without it every app told the time in the built-in default zone.
+pub(crate) fn adopt_system_zone() {
+    if bifrost_core::pin::pinned() {
+        return;
+    }
+    if let Some(name) = tzdb::system_name() {
+        tzdb::set(&name);
+    }
+}
+
+/// Applies the shell's `ToApp::DateTime`: the clock style from `flags` (`proto::date_time` bits) and the system zone
+/// by name (an empty or unknown name keeps the zone in use). True when something changed, so the runtime repaints.
+pub(crate) fn apply_system(flags: u32, zone: &str) -> bool {
+    let twelve = flags & crate::proto::date_time::CLOCK_12_HOUR != 0;
+    let mut changed = CLOCK_12_HOUR.swap(twelve, Ordering::Relaxed) != twelve;
+    if !zone.is_empty() && zone != tzdb::current_name() {
+        changed |= tzdb::set(zone);
+    }
+    if changed {
+        REVISION.fetch_add(1, Ordering::Relaxed);
+    }
+    changed
+}
 
 /// `TimeZone.NameStyle`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -389,6 +459,29 @@ mod tests {
         assert_eq!(ny.next_daylight_saving_time_transition(spring), Some(fall));
         assert_eq!(ny.identifier(), "America/New_York");
         assert_eq!(TimeZone::from_posix_rule("X", "EST5EDT,J60,J300"), None);
+    }
+
+    /// The clock style arrives from the shell; the zone is left alone here (an empty name keeps it), so the tests
+    /// that read the current zone are not disturbed.
+    #[test]
+    fn the_clock_style_follows_what_the_shell_said() {
+        use crate::proto::date_time::CLOCK_12_HOUR as TWELVE;
+        assert!(uses_24_hour_clock(), "24-hour time until the shell says otherwise");
+        assert_eq!(time_text(14, 5), "14:05");
+        let before = conventions_revision();
+        assert!(apply_system(TWELVE, ""), "the style changed");
+        assert!(!uses_24_hour_clock());
+        assert_eq!((time_text(14, 5), time_text(0, 8), time_text(12, 0)), ("2:05 PM".into(), "12:08 AM".into(), "12:00 PM".into()));
+        assert_eq!(conventions_revision(), before + 1);
+        assert!(!apply_system(TWELVE | 0x8000_0000, ""), "said again, with a bit this SDK does not know: no change");
+        assert!(!apply_system(TWELVE, "Mars/Olympus_Mons"), "an unknown zone keeps the one in use");
+        assert_eq!(conventions_revision(), before + 1);
+        // an instant's time of day is read in the system zone
+        let noon = utc(2026, 7, 1, 12, 0);
+        let local = 12 * 3600 + i64::from(TimeZone::current().seconds_from_gmt(noon));
+        assert_eq!(time_text_at(noon), time_text((local.rem_euclid(DAY) / 3600) as i32, (local.rem_euclid(DAY) % 3600 / 60) as i32));
+        assert!(apply_system(0, ""), "24-Hour Time turned on again");
+        assert_eq!(time_text(14, 5), "14:05");
     }
 
     #[test]

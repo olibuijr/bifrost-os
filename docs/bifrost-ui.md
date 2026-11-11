@@ -2814,7 +2814,42 @@ for a fixed offset). `TimeZone::known_time_zone_identifiers()` lists the databas
 returns English names: short forms are the abbreviation in force (the `DateFormatter` letters `z`, `zz` and `zzz` instead follow the reference en_US data: UTC and North American abbreviations, otherwise the short GMT form such as `GMT+1`), long forms come from a built-in table of common
 abbreviations (GMT, BST, CET, EST, PST, JST, AEST, NZST, ...) and are None for anything else. The data is the shell's
 `springboard/src/bare/timezone.rs` (TZif v1/v2 files, POSIX footer rules, abbreviations); `SYSTEM_TIME_ZONE_DID_CHANGE`
-names the zone-change notification, which nothing publishes yet.
+names the zone-change notification, which nothing publishes: a zone change reaches an app as described below.
+
+### The person's clock style and zone (`Locale.hourCycle`, `TimeZone.current` parity)
+
+An app must not read the shell's settings file to learn how the person writes times: its sandbox does not show
+`settings.ini` (only `account/` of the shell's folder is bound), so such a reader always gets its default. Files did
+this in 1.34.19 and kept "Today at 01:18" with 24-Hour Time off. The shell tells every app instead:
+
+- Wire: `ToApp::DateTime { flags, zone }`, tag `0x166`, sent on first contact and whenever Settings > Date & Time
+  changes the clock style or the zone (`AppHost::sync_date_time`, next to `sync_appearance`). `flags` are
+  `proto::date_time` bits (`CLOCK_12_HOUR` = 1; unknown bits are ignored), `zone` is the tz database name the shell
+  tells the time in (empty: not said). An app built before the message ignores the unknown tag. An app on a shell
+  that does not send it keeps 24-hour time and the machine's zone, which the runtime reads from `/etc/localtime` at
+  start (`/etc` and `/usr/share/zoneinfo` are visible in the sandbox). Before this, `TimeZone::current()` in an app was
+  always the built-in default zone, because only the shell process set one.
+- API (`bifrost_app::time_zone`): `uses_24_hour_clock()` (Date & Time > 24-Hour Time), `time_text(hour, minute)` and
+  `time_text_at(Date)` (a time of day as the menu bar writes it, `ClockStyle::time_text`: "14:05" or "2:05 PM"; the
+  second reads the instant in the system zone), and `conventions_revision()`, which changes with either setting, for
+  an app that keeps formatted dates. `TimeZone::current()` is the zone the shell named.
+- Change: the runtime applies the message, calls `App::configure` and sends a whole frame (also for a background
+  window), as for an appearance change. An app that formats its dates when it paints needs no code for a change.
+- Files (1.34.20) is the first user: the list, the columns preview, the gallery, Get Info, the preview panel and the
+  control `get_info` rows write dates with `views/options.rs` `date_text`, in the shell's form (`fs::date_text_in`:
+  "Today at 2:05 PM", "4 Oct 2026 at 00:22").
+
+Gaps: the date order, the first weekday and the region are not sent yet (`flags` has room). `Locale::current()` still
+reads the region from the shell's `settings.ini`, which a sandboxed app cannot see, so it falls back to `BIFROST_REGION`
+or `LANG` there; it should move to this message. Not yet checked on Midget.
+
+Apps that still write hours and minutes themselves (`{:02}:{:02}`), always 24-hour whatever the setting, and should
+move to `time_zone::time_text`: Calendar (`calendar.rs`, `calendar/connect.rs`), Clock (`system.rs`,
+`clock/map.rs`, `clock/intent.rs`, `clock/mod.rs`), Maps (`transit.rs`), Notes (`notes/store.rs`), Printers
+(`model.rs`), Reminders (`model.rs`), Mail (`message.rs`, the time of day), Keychain Access (`model.rs`) and Stickies
+(`dates.rs`). Mail and Printers also take one offset from `TimeZone::current()` for every date (wrong across a daylight
+saving change). The same pattern in Assistant, the browser's inspector, ColorSync Utility, Console, Photo Booth's
+trash, Wireless Diagnostics and Mail's message headers is a machine or log format and stays as it is.
 
 Gaps: Gregorian instants only; no names in languages other than English; the World Clock still uses its fixed city table
 (`shell/clock/tz.rs`) rather than `TimeZone`; apps have not moved to the SDK type. Tests live in `sdk/src/time_zone.rs`

@@ -651,6 +651,8 @@ pub fn run<A: App>(app: A) {
     let data = PathBuf::from(std::env::var("BIFROST_DATA").unwrap_or_else(|_| ".".into()));
     let shell_dir = std::env::var("BIFROST_SHELL_DIR").unwrap_or_else(|_| "/var/lib/springboard".into());
     let _ = std::fs::create_dir_all(&data);
+    // the machine's time zone, until the shell names it (`ToApp::DateTime`)
+    crate::time_zone::adopt_system_zone();
     run_on(Channel::from_fd(fd), app, data, &shell_dir);
 }
 
@@ -1044,6 +1046,19 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     need_frame = true;
                     // a background window is still on screen on the desktop: repaint it once even while suspended
                     repaint_suspended = true;
+                }
+                // Settings > Date & Time: the clock style and the system zone (`time_zone::uses_24_hour_clock`,
+                // `TimeZone::current`). Every date on screen is written again, so the app is repainted whole, as for an
+                // appearance change, also while it is in the background.
+                ToApp::DateTime { flags, zone } => {
+                    if crate::time_zone::apply_system(flags, &zone) {
+                        if let Some(c) = &ctx {
+                            app.configure(c);
+                        }
+                        first_frame = true;
+                        need_frame = true;
+                        repaint_suspended = true;
+                    }
                 }
                 // the main window's composition takes the same route as an extra window's (`window_text_input`)
                 m @ (ToApp::SetMarkedText { .. } | ToApp::UnmarkText { .. } | ToApp::DeleteSurrounding { .. } | ToApp::AccentHold { .. }) => {
