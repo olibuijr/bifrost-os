@@ -11,6 +11,7 @@ architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
 handles = ["public.png:owner", "public.jpeg:owner", "com.compuserve.gif:owner", "public.webp:owner", "public.tiff:owner", "com.microsoft.bmp:owner", "com.microsoft.ico:owner", "public.svg-image:owner", "public.image:default", "com.adobe.pdf:owner"]
 window = "full-size"
+min_size = "720x420"
 
 [[service]]
 title = "Open Images in Viewer"

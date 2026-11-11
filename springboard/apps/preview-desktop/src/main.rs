@@ -2625,13 +2625,15 @@ impl Viewer {
             self.slide_by(1);
             return true;
         }
-        // the `»` button lists the buttons the bar has no room for; a choice comes back as that button's action
-        if let Some((at, hidden)) = canvas::overflow_hit(ui, lay, self.doc.is_some(), &self.window_title(), self.tool, self.side, x, y) {
-            let items = hidden.into_iter().map(|(action, enabled)| ContextItem::new(action.id(), action.label()).enabled(enabled)).collect();
+        // The Markup and Adjust buttons open their menus, and the `»` button lists the buttons the bar has no room
+        // for. The menu is asked for here, once, by the press: a move or the release asks for nothing. A choice comes
+        // back as its action (`Input::ContextAction`).
+        if let Some((at, listed)) = canvas::menu_hit(ui, lay, self.doc.is_some(), &self.window_title(), self.tool, x, y) {
+            let items = listed.into_iter().map(|(action, enabled)| ContextItem::new(action.id(), action.label()).enabled(enabled)).collect();
             self.menu_request = Some((at.0, at.1, items));
             return true;
         }
-        if let Some(action) = canvas::button_hit(ui, lay, self.doc.is_some(), &self.window_title(), self.tool, self.side, x, y) {
+        if let Some(action) = canvas::button_hit(ui, lay, self.doc.is_some(), &self.window_title(), self.tool, x, y) {
             return self.act(ui, lay, action);
         }
         // the signature picker takes the clicks on its side; a click on a signature places it on the shown page
@@ -3383,7 +3385,7 @@ impl App for Viewer {
         // While a save is being written the document is what the save holds: keys, menu commands and presses are
         // ignored until it has ended (the status line says "Saving"), so no edit is made that the saved document
         // would then replace. A file sent to the app still opens; the save ends for the document it was started for.
-        if self.saving() && matches!(ev, Input::Key(_) | Input::Activate(_) | Input::Touch { .. }) {
+        if self.saving() && matches!(ev, Input::Key(_) | Input::Activate(_) | Input::ContextAction(_) | Input::Touch { .. }) {
             return false;
         }
         match ev {
@@ -3396,6 +3398,8 @@ impl App for Viewer {
             },
             Input::Key(key) => self.key(ctx, key),
             Input::Activate(id) => self.track(|viewer| viewer.menu_action(ctx, id as u32)),
+            // a choice from a toolbar menu (Markup, Adjust, the `»` button): the action the row stands for
+            Input::ContextAction(id) => self.track(|viewer| viewer.menu_action(ctx, id)),
             Input::Touch { kind, x, y, .. } => {
                 let (w, h) = self.size(ctx);
                 let changed = self.touch(&ctx.ui, w, h, kind, x, y);
@@ -3413,7 +3417,7 @@ impl App for Viewer {
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
         let lay = self.layout(&ctx.ui, ctx.cfg.w as i32, ctx.cfg.h as i32);
         let title = self.window_title();
-        let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, self.doc.is_some(), &title, self.tool, self.side);
+        let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, self.doc.is_some(), &title, self.tool);
         // the `»` button, when the bar has no room for every button
         let more = layout.overflow_button.map(|bounds| Node {
             id: canvas::OVERFLOW_ID as u64,
@@ -4161,57 +4165,159 @@ mod tests {
     fn the_title_leads_the_toolbar_and_is_no_button() {
         let ctx = menu_ctx();
         let lay = Layout::new(&ctx.ui, 2400, 800);
-        let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, true, "b.png", Tool::Pan, Side::Pages);
+        let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, true, "b.png", Tool::Pan);
         assert_eq!(bar.items[0].id, canvas::TITLE_ID);
         let (id, slot) = layout.visible[0];
         assert_eq!(id, canvas::TITLE_ID);
         assert!(slot.w > 0.0 && layout.visible.iter().skip(1).all(|(_, r)| r.x >= slot.x + slot.w), "the buttons follow the title");
         let k = ctx.ui.pt(1.0);
         let at = ((slot.x + slot.w / 2.0) * k, (slot.y + slot.h / 2.0) * k);
-        assert_eq!(canvas::button_hit(&ctx.ui, &lay, true, "b.png", Tool::Pan, Side::Pages, at.0, at.1), None, "a press on the title does nothing");
+        assert_eq!(canvas::button_hit(&ctx.ui, &lay, true, "b.png", Tool::Pan, at.0, at.1), None, "a press on the title does nothing");
         // a long name takes a bounded slot, so it cannot push every button off the bar
         let long = "a very long file name that goes on and on and on and on and on and on.png";
-        let (_, wide) = canvas::toolbar(&ctx.ui, &lay, true, long, Tool::Pan, Side::Pages);
+        let (_, wide) = canvas::toolbar(&ctx.ui, &lay, true, long, Tool::Pan);
         assert!(wide.visible[0].1.w < lay.w as f32 / k / 2.0 && wide.visible.len() > 1);
         // with no document there is no title and the bar is as before
-        let (bar, _) = canvas::toolbar(&ctx.ui, &lay, false, "", Tool::Pan, Side::Pages);
+        let (bar, _) = canvas::toolbar(&ctx.ui, &lay, false, "", Tool::Pan);
         assert!(bar.items.iter().all(|item| item.id != canvas::TITLE_ID));
     }
 
     /// A bar too narrow for every button shows the kit's `»` button; a press on it asks for a menu of the buttons that
-    /// are not on the bar, so none is left out without a sign.
+    /// are not on the bar, so none is left out without a sign. A pull-down button that has no room is listed with the
+    /// entries of its own menu.
     #[test]
     fn buttons_that_do_not_fit_are_listed_behind_the_overflow_button() {
         let ctx = menu_ctx();
         let mut v = viewer_with(Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] });
         let title = v.window_title();
-        let lay = v.layout(&ctx.ui, 900, 800);
-        let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, true, &title, Tool::Pan, Side::Pages);
-        let button = layout.overflow_button.expect("a 900 px bar has no room for every button");
-        assert!(!layout.overflow.is_empty());
+        let lay = v.layout(&ctx.ui, 420, 800);
+        let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, true, &title, Tool::Pan);
+        let button = layout.overflow_button.expect("a 420 px window has no room for every button");
+        assert!(layout.overflow.contains(&canvas::ADJUST_MENU_ID), "the last button is the first to go: {:?}", layout.overflow);
         let on_bar = layout.visible.iter().filter(|(id, _)| *id != canvas::TITLE_ID).count();
-        assert_eq!(on_bar + layout.overflow.len(), Action::toolbar().len(), "every button is on the bar or in the menu");
-        assert_eq!(bar.items.len(), Action::toolbar().len() + 1, "the bar's model holds every button and the title");
+        assert_eq!(on_bar + layout.overflow.len() + 1, bar.items.len(), "every button is on the bar or in the menu");
+        assert!(bar.items.iter().all(|item| item.id != Action::ActualSize.id() && item.id != Action::RotateLeft.id()), "the bar gave up what the View menu has before it left a button out");
         let k = ctx.ui.pt(1.0);
         let at = ((button.x + button.w / 2.0) * k, (button.y + button.h / 2.0) * k);
-        assert_eq!(canvas::button_hit(&ctx.ui, &lay, true, &title, Tool::Pan, Side::Pages, at.0, at.1), None, "it is no action itself");
-        assert!(v.touch(&ctx.ui, 900, 800, TouchKind::Down, at.0, at.1));
+        assert_eq!(canvas::button_hit(&ctx.ui, &lay, true, &title, Tool::Pan, at.0, at.1), None, "it is no action itself");
+        assert!(v.touch(&ctx.ui, 420, 800, TouchKind::Down, at.0, at.1));
         let (x, y, items) = v.menu_request.take().expect("the press asks for the menu");
-        assert_eq!(items.iter().map(|i| i.id).collect::<Vec<_>>(), layout.overflow, "the hidden buttons, in bar order");
+        let listed: Vec<Action> = canvas::overflow_actions(&bar, &layout).into_iter().map(|(action, _)| action).collect();
+        assert_eq!(items.iter().map(|i| Action::from_id(i.id)).collect::<Vec<_>>(), listed.iter().copied().map(Some).collect::<Vec<_>>(), "the hidden buttons, in bar order");
+        for adjustment in canvas::menu_actions(canvas::ADJUST_MENU_ID).unwrap() {
+            assert!(listed.contains(adjustment), "{adjustment:?} is reached through the menu");
+        }
         assert!(items.iter().all(|i| i.enabled && Action::from_id(i.id).is_some_and(|a| a.label() == i.label)));
         assert!(x <= at.0 && y > at.1, "the menu opens below the button");
         // the controls the shell is told of include the button
-        let ctx900 = {
+        let ctx420 = {
             let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
-            let cfg = bifrost_app::proto::Configure { w: 900, h: 800, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+            let cfg = bifrost_app::proto::Configure { w: 420, h: 800, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
             Ctx::testing(Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.0), cfg)
         };
-        assert!(v.controls(&ctx900).iter().any(|n| n.id == canvas::OVERFLOW_ID as u64 && n.label == canvas::OVERFLOW_LABEL));
+        assert!(v.controls(&ctx420).iter().any(|n| n.id == canvas::OVERFLOW_ID as u64 && n.label == canvas::OVERFLOW_LABEL));
         // a bar with room for everything has no such button, and a press there asks for nothing
         let wide = v.layout(&ctx.ui, 6000, 800);
-        let (_, layout) = canvas::toolbar(&ctx.ui, &wide, true, &title, Tool::Pan, Side::Pages);
+        let (bar, layout) = canvas::toolbar(&ctx.ui, &wide, true, &title, Tool::Pan);
         assert!(layout.overflow.is_empty() && layout.overflow_button.is_none());
-        assert_eq!(canvas::overflow_hit(&ctx.ui, &wide, true, &title, Tool::Pan, Side::Pages, at.0, at.1), None);
+        assert_eq!(bar.items.len(), Action::toolbar().len() + 3, "every button, the two pull-down buttons and the title");
+        assert_eq!(canvas::menu_hit(&ctx.ui, &wide, true, &title, Tool::Pan, at.0, at.1), None);
+        cleanup(&v);
+    }
+
+    /// The window as it opens (1200 px wide at the lab's scale and at the preview's, 768 points at the larger scale)
+    /// shows the sidebar button, the pages, the zoom, Fit, the turn and the Markup and Adjust buttons on the bar, with
+    /// no `»` button: whatever the document is called, with and without the sidebar, clean or edited.
+    #[test]
+    fn the_window_at_its_default_width_has_every_primary_button_on_the_bar() {
+        let ctx = menu_ctx();
+        let primary = [
+            Action::ToggleSidebar.id(),
+            Action::Previous.id(),
+            Action::Next.id(),
+            Action::ZoomOut.id(),
+            Action::ZoomIn.id(),
+            Action::FitWindow.id(),
+            Action::RotateRight.id(),
+            canvas::MARKUP_MENU_ID,
+            canvas::ADJUST_MENU_ID,
+        ];
+        let long = "a very long file name that goes on and on and on and on and on and on.png";
+        let edited = format!("wide.png{}", canvas::EDITED_SUFFIX);
+        for width in [720, 768, 960, 1200] {
+            for sidebar in [true, false] {
+                for title in ["wide.png", edited.as_str(), long] {
+                    let mut lay = Layout::new(&ctx.ui, width, 500);
+                    if !sidebar {
+                        lay.side = 0;
+                    }
+                    let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, true, title, Tool::Pan);
+                    assert!(layout.overflow.is_empty() && layout.overflow_button.is_none(), "{width} {sidebar} {title}: {:?}", layout.overflow);
+                    for id in primary {
+                        assert!(layout.rect_of(id).is_some(), "{width} {sidebar} {title}: {id:#x} is on the bar");
+                    }
+                    let right = layout.visible.iter().map(|(_, r)| r.x + r.w).fold(0.0, f32::max);
+                    assert!(right <= lay.w as f32 / ctx.ui.pt(1.0), "{width} {sidebar} {title}: nothing runs past the window");
+                    assert_eq!(bar.items[0].id, canvas::TITLE_ID);
+                }
+            }
+        }
+        // a bar with room to spare also shows what it gave up: Actual Size and Rotate Left
+        let (_, roomy) = canvas::toolbar(&ctx.ui, &Layout::new(&ctx.ui, 2400, 500), true, "wide.png", Tool::Pan);
+        assert!(roomy.rect_of(Action::ActualSize.id()).is_some() && roomy.rect_of(Action::RotateLeft.id()).is_some());
+        // the manifest keeps the window from being made narrower than the bar's primary buttons
+        let manifest = include_str!("../manifest.toml");
+        assert!(manifest.contains("min_size = \"720x420\""), "the least width the test above covers");
+    }
+
+    /// The Markup and Adjust buttons ask for their menu once, at the press, anchored under the button; the release and
+    /// a held pointer ask for nothing more. A choice from the menu arrives as `Input::ContextAction` and does what the
+    /// row says. The sidebar button shows and hides the sidebar.
+    #[test]
+    fn a_pull_down_button_asks_for_its_menu_once_and_the_choice_is_done() {
+        use bifrost_app::proto::ToShell;
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = bifrost_app::proto::Configure { w: 1200, h: 780, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        let ctx = Ctx::testing(Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.0), cfg);
+        let mut v = viewer_with(Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] });
+        let lay = v.layout(&ctx.ui, 1200, 780);
+        let (_, layout) = canvas::toolbar(&ctx.ui, &lay, true, &v.window_title(), Tool::Pan);
+        let touch = |kind: TouchKind, x: f32, y: f32| Input::Touch { kind, id: 0, x, y, t: 0.0, source: Default::default(), mods: Default::default() };
+        let markup = layout.rect_of(canvas::MARKUP_MENU_ID).expect("the Markup button");
+        let (x, y) = (markup.x + markup.w / 2.0, markup.y + markup.h / 2.0);
+        assert!(v.event(&ctx, touch(TouchKind::Down, x, y)));
+        let sent = ctx.take_sent();
+        let [ToShell::ContextMenu { x: mx, y: my, items }] = &sent[..] else { panic!("one menu is asked for: {sent:?}") };
+        assert_eq!(*mx, markup.x, "under the button's leading edge");
+        assert!(*my >= markup.y + markup.h && *my <= markup.y + markup.h + canvas::FIT_MARGIN_PT, "just below it");
+        assert!(items.iter().any(|i| i.id == Action::UseTool(Tool::Highlight).id() && i.label == "Highlight" && i.enabled));
+        // held, moved and released: nothing more is asked for
+        v.event(&ctx, touch(TouchKind::Move, x + 1.0, y));
+        v.event(&ctx, touch(TouchKind::Up, x + 1.0, y));
+        assert!(ctx.take_sent().iter().all(|m| !matches!(m, ToShell::ContextMenu { .. })), "once per press");
+        assert!(v.gesture.is_none() && v.tool == Tool::Pan, "the press itself chose nothing");
+        // the choice
+        assert!(v.event(&ctx, Input::ContextAction(Action::UseTool(Tool::Highlight).id())));
+        assert_eq!(v.tool, Tool::Highlight);
+        // Adjust: its menu, and a choice changes the picture's colour
+        let adjust = layout.rect_of(canvas::ADJUST_MENU_ID).expect("the Adjust button");
+        assert!(v.event(&ctx, touch(TouchKind::Down, adjust.x + 2.0, adjust.y + adjust.h / 2.0)));
+        let sent = ctx.take_sent();
+        let [ToShell::ContextMenu { x: mx, items, .. }] = &sent[..] else { panic!("one menu is asked for: {sent:?}") };
+        assert_eq!((*mx, items.len()), (adjust.x, 5));
+        v.event(&ctx, touch(TouchKind::Up, adjust.x + 2.0, adjust.y + adjust.h / 2.0));
+        assert!(v.event(&ctx, Input::ContextAction(Action::Brighter.id())));
+        assert_ne!(v.adjust, Adjust::default());
+        assert!(v.history.can_undo(), "a choice from the menu is an edit that Undo takes back");
+        // the sidebar button
+        let side = layout.rect_of(Action::ToggleSidebar.id()).expect("the sidebar button");
+        assert!(v.sidebar);
+        assert!(v.event(&ctx, touch(TouchKind::Down, side.x + side.w / 2.0, side.y + side.h / 2.0)));
+        assert!(!v.sidebar && ctx.take_sent().iter().all(|m| !matches!(m, ToShell::ContextMenu { .. })));
+        // with no document the buttons are greyed and open nothing
+        let mut empty = Viewer::new();
+        assert!(!empty.event(&ctx, touch(TouchKind::Down, x, y)) || empty.menu_request.is_none());
+        assert!(ctx.take_sent().iter().all(|m| !matches!(m, ToShell::ContextMenu { .. })));
         cleanup(&v);
     }
 
@@ -4398,8 +4504,8 @@ mod tests {
         for (w, name) in [(900, "pic.png"), (1200, "pic.png"), (2400, "pic.png"), (1200, "a long name that meets the cap of the title slot, and more.png")] {
             let lay = Layout::new(&ctx.ui, w, 800);
             let edited_title = format!("{name}{}", canvas::EDITED_SUFFIX);
-            let (clean_bar, clean) = canvas::toolbar(&ctx.ui, &lay, true, name, Tool::Pan, Side::Pages);
-            let (edited_bar, edited) = canvas::toolbar(&ctx.ui, &lay, true, &edited_title, Tool::Pan, Side::Pages);
+            let (clean_bar, clean) = canvas::toolbar(&ctx.ui, &lay, true, name, Tool::Pan);
+            let (edited_bar, edited) = canvas::toolbar(&ctx.ui, &lay, true, &edited_title, Tool::Pan);
             assert_eq!(clean, edited, "{name} at {w}: the same buttons in the same places");
             assert_eq!(clean_bar.items.len(), edited_bar.items.len(), "{name} at {w}");
         }
