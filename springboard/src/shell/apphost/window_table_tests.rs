@@ -379,3 +379,48 @@ fn custom_actions_are_kept_cleaned_and_replaced_by_the_next_list() {
     host.handle(ToShell::AxActions(Vec::new()), Vec::new(), &mut out);
     assert!(host.ax_actions.is_empty());
 }
+
+/// E2E7: an extra window that looks like the main one. The app says which controls of the window take a press and
+/// where its materials are (`WindowChrome`); the host keeps them with the window and asks for a desk frame only when
+/// they changed. A window this app does not have open is ignored, and nothing reaches the shell's request list.
+#[test]
+fn an_extra_windows_chrome_is_kept_with_the_window_and_an_unknown_window_is_ignored() {
+    use bifrost_proto::{Material, MaterialKind, UiRect};
+    assert_ne!(appearance_flags() & bifrost_proto::appearance::WINDOW_CHROME, 0, "the shell says it takes the message");
+    let (channel, _peer) = sys::socketpair_pair().unwrap();
+    let mut host = AppHost::with_channel("fixture", channel, None, cfg());
+    let mut out = Pumped::default();
+    let full = bifrost_proto::window_flags::FULL_SIZE;
+    host.handle(ToShell::WindowOpen { id: 3, title: "Files".into(), w: 900.0, h: 600.0, position: None, flags: full }, Vec::new(), &mut out);
+    let back = UiRect { x: 212.0, y: 12.0, w: 28.0, h: 28.0 };
+    let sidebar = Material::new(MaterialKind::Sidebar, UiRect { x: 0.0, y: 0.0, w: 200.0, h: 600.0 }, 0.0);
+    let mut out = Pumped::default();
+    host.handle(ToShell::WindowChrome { id: 3, press: vec![back], materials: vec![sidebar] }, Vec::new(), &mut out);
+    assert!(out.chrome && out.frame, "the desk draws again: its drag zone and the blur changed");
+    assert!(out.requests.is_empty(), "the host takes the message itself");
+    let held = |h: &AppHost| h.windows.get("fixture", 3).map(|w| (w.press.iter().map(|n| n.bounds).collect::<Vec<_>>(), w.materials.clone()));
+    assert_eq!(held(&host), Some((vec![back], vec![sidebar])));
+    // the same again asks for nothing
+    let mut out = Pumped::default();
+    host.handle(ToShell::WindowChrome { id: 3, press: vec![back], materials: vec![sidebar] }, Vec::new(), &mut out);
+    assert!(!out.chrome && !out.frame);
+    // other lists replace the old ones
+    let search = UiRect { x: 700.0, y: 12.0, w: 180.0, h: 28.0 };
+    host.handle(ToShell::WindowChrome { id: 3, press: vec![back, search], materials: vec![] }, Vec::new(), &mut out);
+    assert!(out.chrome);
+    assert_eq!(held(&host), Some((vec![back, search], vec![])));
+    // a window the app has not open, and the main window, are ignored
+    let mut out = Pumped::default();
+    host.handle(ToShell::WindowChrome { id: 9, press: vec![back], materials: vec![sidebar] }, Vec::new(), &mut out);
+    host.handle(ToShell::WindowChrome { id: 0, press: vec![back], materials: vec![sidebar] }, Vec::new(), &mut out);
+    assert!(!out.chrome && out.requests.is_empty());
+    assert_eq!(held(&host), Some((vec![back, search], vec![])));
+    // another app's host holds its own windows: the same id there is another window
+    let (channel, _peer2) = sys::socketpair_pair().unwrap();
+    let mut other = AppHost::with_channel("other", channel, None, cfg());
+    other.handle(ToShell::WindowChrome { id: 3, press: vec![back], materials: vec![sidebar] }, Vec::new(), &mut out);
+    assert!(other.windows.get("other", 3).is_none() && !out.chrome);
+    // the window closes: its chrome goes with it
+    host.handle(ToShell::WindowClose { id: 3 }, Vec::new(), &mut out);
+    assert_eq!(held(&host), None);
+}

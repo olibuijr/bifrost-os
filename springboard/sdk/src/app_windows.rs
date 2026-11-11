@@ -340,6 +340,36 @@ pub(crate) fn deliver_window<A: crate::App>(app: &mut A, ctx: &crate::Ctx, msg: 
     })
 }
 
+/// A secondary click (`ToApp::Context`) for the window the shell names. The main window (0, or no window from a shell
+/// built before the field) gets it through `App::event`, in surface pixels as always; an extra window through
+/// `App::window_event`, in the window's own points (as its touches, `ToApp::WindowTouch`). A click for a window that
+/// has closed is dropped, never sent to the main window. The registry is not borrowed while the app runs.
+pub(crate) fn deliver_context<A: crate::App>(app: &mut A, ctx: &crate::Ctx, x: f32, y: f32, window: Option<u32>) -> bool {
+    let input = crate::Input::Context { x, y };
+    match window {
+        None | Some(0) => app.event(ctx, input),
+        Some(id) => {
+            let routed = ctx.windows.borrow().route(WindowId(id));
+            match routed {
+                Some(window) => app.window_event(ctx, window, input),
+                None => false,
+            }
+        }
+    }
+}
+
+/// The chosen item of a context menu (`ToApp::ContextAction`) for the window the menu was opened in. An extra window
+/// gets it through `App::window_event`; the main window, no window, and a window that has closed since the menu
+/// opened get it through `App::event` (a Dock menu item and a menu of the main window arrive that way).
+pub(crate) fn deliver_context_action<A: crate::App>(app: &mut A, ctx: &crate::Ctx, id: u32, window: Option<u32>) -> bool {
+    let input = crate::Input::ContextAction(id);
+    let routed = window.filter(|w| *w != 0).and_then(|w| ctx.windows.borrow().route(WindowId(w)));
+    match routed {
+        Some(window) => app.window_event(ctx, window, input),
+        None => app.event(ctx, input),
+    }
+}
+
 /// What `App::window_input` does unless the app overrides it: keys and commands go to `window_event` of the window
 /// (as `Input::Key` and `Input::Command`); a text edit (marked text, unmark, delete surrounding, accent hold) goes to
 /// `window_text_input` of the window, as the `ToApp` message `text_input` takes; a menu item goes to the main window's
@@ -827,6 +857,66 @@ mod tests {
         let mut wheel_app = WheelFake::default();
         assert!(crate::App::window_pointer(&mut wheel_app, &ctx, WindowId::MAIN, &wheel));
         assert_eq!(wheel_app.log.len(), 1);
+    }
+
+    /// An app that logs the secondary clicks and menu choices of each window.
+    #[derive(Default)]
+    struct ContextFake {
+        log: Vec<String>,
+    }
+
+    impl ContextFake {
+        fn note(&mut self, place: &str, ev: crate::Input) {
+            match ev {
+                crate::Input::Context { x, y } => self.log.push(format!("click {x} {y} on {place}")),
+                crate::Input::ContextAction(id) => self.log.push(format!("choice {id} on {place}")),
+                _ => {}
+            }
+        }
+    }
+
+    impl crate::App for ContextFake {
+        fn id(&self) -> &str {
+            "is.test.context"
+        }
+        fn draw(&mut self, _: &crate::Ctx, s: &mut crate::kit::Surface, _: f64) -> crate::kit::Damage {
+            crate::kit::Damage::new(s.w, s.h)
+        }
+        fn event(&mut self, _: &crate::Ctx, ev: crate::Input) -> bool {
+            self.note("main", ev);
+            true
+        }
+        fn window_event(&mut self, ctx: &crate::Ctx, window: WindowId, ev: crate::Input) -> bool {
+            if window.is_main() {
+                return self.event(ctx, ev);
+            }
+            self.note(&window.0.to_string(), ev);
+            true
+        }
+    }
+
+    /// E2E7: a secondary click in a second window, and the item chosen from the menu it opened, reach that window.
+    #[test]
+    fn a_secondary_click_and_its_choice_reach_the_window_the_shell_names() {
+        let ctx = crate::runtime::test_ctx();
+        let mut app = ContextFake::default();
+        let id = ctx.open_window(WindowSpec::new("Second", 480.0, 560.0)).unwrap();
+        assert!(deliver_context(&mut app, &ctx, 10.0, 20.0, None), "a shell built before the field: the main window");
+        assert!(deliver_context(&mut app, &ctx, 11.0, 21.0, Some(0)));
+        assert!(deliver_context(&mut app, &ctx, 12.0, 22.0, Some(id.0)));
+        assert!(deliver_context_action(&mut app, &ctx, 7, None));
+        assert!(deliver_context_action(&mut app, &ctx, 8, Some(0)));
+        assert!(deliver_context_action(&mut app, &ctx, 9, Some(id.0)));
+        assert_eq!(
+            app.log,
+            vec!["click 10 20 on main", "click 11 21 on main", "click 12 22 on 1", "choice 7 on main", "choice 8 on main", "choice 9 on 1"]
+        );
+        // the window closes: a late click is dropped, a late choice falls back to the main window
+        app.log.clear();
+        ctx.close_window(id).unwrap();
+        assert!(!deliver_context(&mut app, &ctx, 1.0, 2.0, Some(id.0)));
+        assert!(deliver_context_action(&mut app, &ctx, 9, Some(id.0)));
+        assert_eq!(app.log, vec!["choice 9 on main"]);
     }
 
     fn over_the_wire_any<A: crate::App>(app: &mut A, ctx: &crate::Ctx, m: &ToApp) -> Option<bool> {

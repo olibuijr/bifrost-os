@@ -35,6 +35,24 @@ pub struct ExtraWindow {
     /// The app draws its own title row under the traffic lights (`window_flags::FULL_SIZE`): the desk draws no title
     /// bar for the window, as for a main window with `window = "full-size"`.
     pub full_size: bool,
+    /// The window's controls that take a press themselves (`ToShell::WindowChrome`), in window points, as button nodes:
+    /// the form the desk's drag zone takes the main window's `Controls` in. Empty until the app sends them: the whole
+    /// band of a full-size window then moves it.
+    pub press: Vec<bifrost_proto::Node>,
+    /// The window's vibrancy regions in window points (`ToShell::WindowChrome`), as `AppHost::materials` holds the main
+    /// window's.
+    pub materials: Vec<bifrost_proto::Material>,
+}
+
+/// `r` cut to a window of `w` x `h` points. None for a rectangle with a non-finite value or with nothing inside the
+/// window.
+fn clamp_rect(r: bifrost_proto::UiRect, w: f32, h: f32) -> Option<bifrost_proto::UiRect> {
+    if ![r.x, r.y, r.w, r.h].iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let (x0, y0) = (r.x.max(0.0), r.y.max(0.0));
+    let (x1, y1) = ((r.x + r.w).min(w), (r.y + r.h).min(h));
+    (x1 > x0 && y1 > y0).then_some(bifrost_proto::UiRect { x: x0, y: y0, w: x1 - x0, h: y1 - y0 })
 }
 
 /// The part of a title bar, in points, that stays reachable on screen: a window keeps this much of its width inside
@@ -106,6 +124,8 @@ impl WindowTable {
             title_double_click: false,
             cascade: false,
             full_size: false,
+            press: Vec::new(),
+            materials: Vec::new(),
         };
         let at = self.windows.iter().position(|x| x.app == app).unwrap_or(self.windows.len());
         self.windows.insert(at, window);
@@ -260,6 +280,40 @@ impl WindowTable {
         }
     }
 
+    /// Takes window `id`'s chrome (`ToShell::WindowChrome`): the rectangles of its press-taking controls and its
+    /// vibrancy regions, both in window points. Each rectangle is cut to the window; one that is not finite or lies
+    /// outside it is dropped, as is a material whose radius is not finite. True when what is held changed. An unknown
+    /// window (never opened by this app, or closed) is ignored. The lists go with the window when it closes.
+    pub fn set_chrome(&mut self, app: &str, id: u32, press: &[bifrost_proto::UiRect], materials: &[bifrost_proto::Material]) -> bool {
+        let Some(index) = self.index_of(app, id) else { return false };
+        let win = &mut self.windows[index];
+        let (w, h) = (win.w, win.h);
+        let press: Vec<bifrost_proto::Node> = press
+            .iter()
+            .filter_map(|r| clamp_rect(*r, w, h))
+            .take(bifrost_proto::MAX_WINDOW_PRESS)
+            .enumerate()
+            .map(|(i, bounds)| bifrost_proto::Node { id: i as u64 + 1, role: bifrost_proto::Role::Button, label: String::new(), value: String::new(), bounds, enabled: true })
+            .collect();
+        let materials: Vec<bifrost_proto::Material> = materials
+            .iter()
+            .filter(|m| m.radius.is_finite())
+            .filter_map(|m| clamp_rect(m.rect, w, h).map(|rect| bifrost_proto::Material { rect, ..*m }))
+            .take(bifrost_proto::MAX_MATERIALS)
+            .collect();
+        if win.press == press && win.materials == materials {
+            return false;
+        }
+        win.press = press;
+        win.materials = materials;
+        true
+    }
+
+    /// One open window of `app`.
+    pub fn get(&self, app: &str, id: u32) -> Option<&ExtraWindow> {
+        self.windows.iter().find(|x| x.app == app && x.id == id)
+    }
+
     pub fn of_app(&self, app: &str) -> Vec<&ExtraWindow> {
         self.windows.iter().filter(|x| x.app == app).collect()
     }
@@ -300,6 +354,44 @@ mod tests {
         assert_eq!(ids(&t, "is.olibuijr.contacts.desktop"), vec![2, 1]);
         let first = t.of_app("is.olibuijr.contacts.desktop")[0];
         assert_eq!((first.title.as_str(), first.w, first.h), ("Grace", 480.0, 560.0));
+    }
+
+    fn rect(x: f32, y: f32, w: f32, h: f32) -> bifrost_proto::UiRect {
+        bifrost_proto::UiRect { x, y, w, h }
+    }
+
+    #[test]
+    fn a_windows_chrome_is_kept_cut_to_the_window_and_goes_with_it() {
+        use bifrost_proto::{Material, MaterialKind};
+        let mut t = WindowTable::new();
+        t.open("a", 1, "Files", 900.0, 600.0).unwrap();
+        t.open("b", 1, "Other", 900.0, 600.0).unwrap();
+        let sidebar = Material::new(MaterialKind::Sidebar, rect(0.0, 0.0, 200.0, 700.0), 0.0);
+        let press = [rect(212.0, 12.0, 28.0, 28.0), rect(880.0, 12.0, 60.0, 28.0), rect(f32::NAN, 0.0, 1.0, 1.0), rect(950.0, 0.0, 10.0, 10.0), rect(-10.0, -10.0, 5.0, 5.0)];
+        assert!(t.set_chrome("a", 1, &press, &[sidebar, Material::new(MaterialKind::Sidebar, rect(0.0, f32::INFINITY, 1.0, 1.0), 0.0)]));
+        let w = t.get("a", 1).unwrap();
+        assert_eq!(w.press.iter().map(|n| n.bounds).collect::<Vec<_>>(), vec![rect(212.0, 12.0, 28.0, 28.0), rect(880.0, 12.0, 20.0, 28.0)], "cut to the window; broken and outside ones dropped");
+        assert!(w.press.iter().all(|n| n.role == bifrost_proto::Role::Button && n.enabled));
+        assert_eq!(w.materials.len(), 1);
+        assert_eq!(w.materials[0].rect, rect(0.0, 0.0, 200.0, 600.0));
+        assert!(t.get("b", 1).unwrap().press.is_empty() && t.get("b", 1).unwrap().materials.is_empty(), "another app's window with the same id is not touched");
+        // the same again changes nothing; other lists replace the old ones; empty lists clear them
+        assert!(!t.set_chrome("a", 1, &press, &[sidebar]));
+        assert!(t.set_chrome("a", 1, &[rect(300.0, 12.0, 28.0, 28.0)], &[]));
+        let w = t.get("a", 1).unwrap();
+        assert_eq!((w.press.len(), w.press[0].bounds.x, w.materials.len()), (1, 300.0, 0));
+        assert!(t.set_chrome("a", 1, &[], &[]));
+        assert!(!t.set_chrome("a", 1, &[], &[]));
+        // an unknown window, the main window and another app's id are ignored
+        assert!(!t.set_chrome("a", 7, &press, &[sidebar]));
+        assert!(!t.set_chrome("a", 0, &press, &[sidebar]));
+        assert!(!t.set_chrome("c", 1, &press, &[sidebar]));
+        // a closed window takes its chrome with it: one opened again with the id starts with none
+        t.set_chrome("a", 1, &press, &[sidebar]);
+        t.close("a", 1);
+        assert!(!t.set_chrome("a", 1, &press, &[sidebar]));
+        t.open("a", 1, "Files", 900.0, 600.0).unwrap();
+        assert!(t.get("a", 1).unwrap().press.is_empty() && t.get("a", 1).unwrap().materials.is_empty());
     }
 
     #[test]
