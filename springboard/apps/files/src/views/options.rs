@@ -81,16 +81,15 @@ impl Group {
     }
 }
 
-/// How long the zone and the clock style are kept before they are read again: a change in Settings > Date & Time
-/// reaches an open window within this time, and a repaint does not read them for every row.
-const CLOCK_KEPT: std::time::Duration = std::time::Duration::from_secs(5);
-
-/// What the dates are written with: the time zone the system uses (`TimeZone::current`, as Mail and Printers take
-/// it) and Date & Time > 24-Hour Time, the switch the menu bar clock follows.
+/// What the dates are written with: the system's time zone and Date & Time > 24-Hour Time, the switch the menu bar
+/// clock follows. Both come from the shell through the SDK (`bifrost_app::time_zone`); an app cannot read the shell's
+/// settings. They are read again when `conventions_revision` says one changed, and the runtime repaints the windows
+/// then, so a repaint does not read them for every row.
 pub(crate) struct Clock {
     zone: TimeZone,
     pub(crate) h24: bool,
-    read: std::time::Instant,
+    /// `time_zone::conventions_revision` when the two were read
+    revision: u32,
 }
 
 thread_local! {
@@ -99,15 +98,12 @@ thread_local! {
 
 impl Clock {
     fn read() -> Clock {
-        let read = std::time::Instant::now();
+        let revision = bifrost_app::time_zone::conventions_revision();
         // snapshot tests pin the clock: UTC and 24-hour time, whatever the machine they run on is set to
         if bifrost_core::pin::pinned() {
-            return Clock { zone: TimeZone::utc(), h24: true, read };
+            return Clock { zone: TimeZone::utc(), h24: true, revision };
         }
-        // the shell keeps the switch in its settings, where `Locale::current` reads the region; on unless turned off
-        let dir = std::env::var("BIFROST_SHELL_DIR").unwrap_or_else(|_| bifrost_app::service_client::DEFAULT_ROOT.into());
-        let h24 = springboard::shell::prefs::Prefs::load(Path::new(&dir).join("settings.ini")).get_bool("clock_24h", true);
-        Clock { zone: TimeZone::current(), h24, read }
+        Clock { zone: TimeZone::current(), h24: bifrost_app::time_zone::uses_24_hour_clock(), revision }
     }
     /// Now, in Unix seconds: the pinned instant in a snapshot test.
     pub(crate) fn now(&self) -> i64 {
@@ -126,7 +122,7 @@ impl Clock {
 pub(crate) fn with_clock<R>(f: impl FnOnce(&Clock) -> R) -> R {
     CLOCK.with(|slot| {
         let mut slot = slot.borrow_mut();
-        if slot.as_ref().is_some_and(|c| c.read.elapsed() >= CLOCK_KEPT) {
+        if slot.as_ref().is_some_and(|c| c.revision != bifrost_app::time_zone::conventions_revision()) {
             *slot = None;
         }
         f(slot.get_or_insert_with(Clock::read))
@@ -156,22 +152,15 @@ pub(crate) fn date_bucket(mtime: i64) -> (u8, &'static str) {
     })
 }
 
-/// `date_text` for local readings `at` and `now`, with the time in 24-hour style or with AM and PM.
+/// `date_text` for local readings `at` and `now` (each already carries its own offset, so a file from the other side
+/// of a daylight saving change keeps its hour), with the time in 24-hour style or with AM and PM. The form is the
+/// shell's own (`fs::date_text_in`, what its search and file panels write), so a date reads the same in every view
+/// and in Get Info.
 fn date_text_at(at: i64, now: i64, h24: bool) -> String {
-    let (y, m, d, hour, min) = fs::civil(at);
-    // the time as every clock of the system writes it: 14:05, or 2:05 PM with 24-Hour Time off
-    let clock = springboard::status::clock_in(hour as i32, min as i32, h24);
-    match bucket_at(at, now) {
-        (0, _) => format!("Today at {clock}"),
-        (1, _) => format!("Yesterday at {clock}"),
-        _ => {
-            const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            format!("{} {d}, {y}", MONTHS[(m as usize + 11) % 12])
-        }
-    }
+    fs::date_text_in(at, now, 0, h24)
 }
 
-/// "Today at 14:05", "Yesterday at 09:30" or "Oct 11, 2026", in the system's time zone; the time follows
+/// "Today at 14:05", "Yesterday at 09:30" or "4 Oct 2026 at 00:22", in the system's time zone; the time follows
 /// Date & Time > 24-Hour Time ("Today at 2:05 PM" with it off).
 pub(crate) fn date_text(mtime: i64) -> String {
     if mtime <= 0 {
@@ -183,14 +172,23 @@ pub(crate) fn date_text(mtime: i64) -> String {
     })
 }
 
-/// The rows of Get Info and of the preview of a file without a picture, with their dates in the system's time zone
-/// and the user's clock style, as the views write theirs.
+/// The label of the row of `info_rows` that holds the creation date, and of the one with the modification date.
+pub(crate) const CREATED_ROW: &str = "Created";
+pub(crate) const MODIFIED_ROW: &str = "Modified";
+
+/// The rows of Get Info and of the preview of a file without a picture. The two dates are written by `date_text`,
+/// as the views write theirs: in the system's time zone and the user's clock style.
 pub(crate) fn info_rows(entry: &Entry, summary: Option<springboard::files::info::Summary>, created: Option<i64>, tags: &TagIndex) -> Vec<(&'static str, String)> {
-    let (now, offset, h24) = with_clock(|c| {
-        let now = c.now();
-        (now, c.offset(now), c.h24)
-    });
-    springboard::files::info::rows_in(entry, summary, created, tags, now, offset as i32, h24)
+    let now = with_clock(|c| c.now());
+    let mut rows = springboard::files::info::rows(entry, summary, created, tags, now, 0);
+    for (label, value) in &mut rows {
+        match (*label, created) {
+            (CREATED_ROW, Some(at)) => *value = date_text(at),
+            (MODIFIED_ROW, _) => *value = date_text(entry.mtime),
+            _ => {}
+        }
+    }
+    rows
 }
 
 /// A small solid triangle drawn from rects (no glyph needed): `dir` 0 points right, 1 down, 2 up.
@@ -740,8 +738,9 @@ mod date_tests {
         assert_eq!(date_text_at(NOW - 3600 + west, NOW + west, false), "Today at 6:22 PM");
         assert_eq!(date_text_at(NOW + 12 * 3600, NOW + 13 * 3600, false), "Today at 12:22 PM", "noon is 12 PM");
         // an older file shows its local date
-        assert_eq!(date_text_at(NOW - 40 * 86_400, NOW, true), "Aug 25, 2026");
-        assert_eq!(date_text_at(NOW - 40 * 86_400 + west, NOW + west, true), "Aug 24, 2026", "the day is the zone's too");
+        assert_eq!(date_text_at(NOW - 40 * 86_400, NOW, true), "25 Aug 2026 at 00:22");
+        assert_eq!(date_text_at(NOW - 40 * 86_400, NOW, false), "25 Aug 2026 at 12:22 AM");
+        assert_eq!(date_text_at(NOW - 40 * 86_400 + west, NOW + west, true), "24 Aug 2026 at 19:22", "the day is the zone's too");
         assert_eq!(date_text(0), "—");
     }
 
@@ -761,13 +760,41 @@ mod date_tests {
     fn the_clock_gives_the_zones_offset_at_the_time_asked_for() {
         // a zone with daylight saving time: one hour east in winter, two in summer
         let zone = TimeZone::from_posix_rule("Test/Zone", "CET-1CEST,M3.5.0,M10.5.0/3").unwrap();
-        let clock = Clock { zone, h24: false, read: std::time::Instant::now() };
+        let clock = Clock { zone, h24: false, revision: 0 };
         let (january, july) = (1_767_268_800, 1_782_907_200); // 2026-01-01 and 2026-07-01, 12:00 UTC
         assert_eq!(clock.offset(january), 3600);
         assert_eq!(clock.offset(july), 7200);
-        assert_eq!(date_text_at(july + clock.offset(july), NOW + clock.offset(NOW), clock.h24), "Jul 1, 2026");
+        assert_eq!(date_text_at(july + clock.offset(july), NOW + clock.offset(NOW), clock.h24), "1 Jul 2026 at 2:00 PM");
         // a file written at 12:00 UTC that July day reads 2:00 PM there
         assert_eq!(date_text_at(july + clock.offset(july), july + 60 + clock.offset(july), clock.h24), "Today at 2:00 PM");
+    }
+
+    /// Get Info wrote "4 Oct 2026 at 00:22" where the list wrote "Oct 4, 2026": both are `date_text` now, and the
+    /// shell's form (`fs::date_text_in`).
+    #[test]
+    fn get_info_writes_its_dates_as_the_views_do() {
+        let at = 1_782_907_200; // 2026-07-01 12:00 UTC, long before any test runs
+        let entry = Entry { kind: Kind::Other, name: "f".into(), path: PathBuf::from("/tmp/f"), is_dir: false, size: 5, mtime: at, items: None };
+        let rows = info_rows(&entry, None, Some(at - 86_400), &TagIndex::default());
+        let value = |label: &str| rows.iter().find(|(l, _)| *l == label).map(|(_, v)| v.clone());
+        assert_eq!(value(MODIFIED_ROW), Some(date_text(at)));
+        assert_eq!(value(CREATED_ROW), Some(date_text(at - 86_400)));
+        let shell_form = with_clock(|c| fs::date_text_in(at, c.now(), c.offset(at) as i32, c.h24));
+        assert_eq!(date_text(at), shell_form);
+    }
+
+    /// The clock is read again when the SDK says the clock style or the zone changed, not on a timer.
+    #[test]
+    fn the_clock_is_read_again_only_when_the_conventions_change() {
+        let revision = bifrost_app::time_zone::conventions_revision();
+        // a clock from an earlier revision, with a style the system does not have now
+        let stale = !bifrost_app::time_zone::uses_24_hour_clock();
+        CLOCK.with(|slot| *slot.borrow_mut() = Some(Clock { zone: TimeZone::utc(), h24: stale, revision: revision.wrapping_sub(1) }));
+        assert_eq!(with_clock(|c| c.h24), !stale, "read again");
+        // one of this revision is kept
+        CLOCK.with(|slot| *slot.borrow_mut() = Some(Clock { zone: TimeZone::utc(), h24: stale, revision }));
+        assert_eq!(with_clock(|c| c.h24), stale, "kept");
+        CLOCK.with(|slot| *slot.borrow_mut() = None);
     }
 
     #[test]

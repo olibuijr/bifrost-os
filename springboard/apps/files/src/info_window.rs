@@ -65,7 +65,7 @@ mod tests {
     use super::*;
 
     fn info(rows: usize) -> Info {
-        Info { name: "Report.pdf".into(), rows: (0..rows).map(|i| ("Row", i.to_string())).collect(), path: PathBuf::from("/tmp/Report.pdf"), mode: Some(0o644), editable: true }
+        Info { name: "Report.pdf".into(), rows: (0..rows).map(|i| ("Row", i.to_string())).collect(), dates: Vec::new(), path: PathBuf::from("/tmp/Report.pdf"), mode: Some(0o644), editable: true }
     }
 
     #[test]
