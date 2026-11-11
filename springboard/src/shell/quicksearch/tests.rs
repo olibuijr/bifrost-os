@@ -684,7 +684,9 @@ fn quicksearch_refreshes_saved_contacts_and_opens_the_selected_person() {
     sh.go_home(t + 1000.0);
     settle(&mut sh, t + 1000.0);
     let t = open(&mut sh, t + 2000.0);
+    // no frames between the typing and the look: the query waits for every source in tests (`RUN_GRACE`). With the
+    // panel's 4 ms the Contacts source was sometimes not in yet on a busy machine, and the first row was the Terminal's
     type_text(&mut sh, "5551234", t);
-    assert!(matches!(sh.quicksearch.top_hit(), Some(Hit::Contact { id: 42, .. })));
+    assert!(matches!(sh.quicksearch.top_hit(), Some(Hit::Contact { id: 42, .. })), "{:?}", sh.quicksearch.rows());
     let _ = std::fs::remove_dir_all(dir);
 }

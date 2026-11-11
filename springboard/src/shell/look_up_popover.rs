@@ -237,7 +237,7 @@ fn title_of(hit: &Hit) -> Option<String> {
         Hit::App(id) => super::apps::apps().iter().find(|a| a.id == *id)?.name.to_string(),
         Hit::Settings(p) | Hit::City(p) => p.to_string(),
         Hit::Deildu(t) | Hit::Answer(t) => t.clone(),
-        Hit::Contact { name, .. } | Hit::File { name, .. } => name.clone(),
+        Hit::Contact { name, .. } | Hit::File { name, .. } | Hit::Folder { name, .. } => name.clone(),
         Hit::Shortcut { title, .. } | Hit::Indexed { title, .. } | Hit::Event { title } => title.clone(),
         Hit::SettingsIntent { title, .. } => title.to_string(),
         Hit::SettingsAction { title, .. } | Hit::MediaTransport { title, .. } => title.clone(),
