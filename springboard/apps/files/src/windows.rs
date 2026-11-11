@@ -1,6 +1,8 @@
 //! New Files Window (⌘N, or File > New Window in the empty-area menu): a second Files window with its own folder
 //! view. The window is a whole `Files` of its own, so its folder, selection and view never move the main window's.
-//! Keys and menus stay with the main window; a new window takes touches, draws, and is dropped when the shell closes it.
+//! A new window takes its touches and, while it is the key window, the keys, the Edit commands and the File menu
+//! (`App::window_event`, `window_input`, `menus_for` in main.rs); it draws, and is dropped when the shell closes it.
+//! What one window copies or cuts, every window pastes (`share_clip`).
 use crate::*;
 use bifrost_app::app_windows::{WindowId, WindowSpec};
 
@@ -33,6 +35,12 @@ impl ExtraWindow {
     }
 }
 
+/// Whether ⌘W in an extra window closes the window: always a Get Info window, and a browser window that has no
+/// second tab to close (with tabs, ⌘W closes the open tab) and no name being typed.
+pub(crate) fn closes_window(info_window: bool, tabs: usize, typing: bool) -> bool {
+    info_window || (tabs < 2 && !typing)
+}
+
 impl Files {
     /// New Window (⌘N): opens a window at the home folder. Returns false when the shell refuses the window.
     pub(crate) fn new_window(&mut self, ctx: &Ctx) -> bool {
@@ -45,9 +53,56 @@ impl Files {
         files.fx.watch_stale = true;
         files.w = w;
         files.h = h;
+        // what was copied or cut before the window opened can be pasted in it
+        files.clip = self.clip.clone();
         files.update_controls();
         self.windows.push(ExtraWindow::new(id, files));
         true
+    }
+
+    /// The folder view of `window`: this one for the main window, else the New Window or Get Info window of that id
+    /// (this one again when no such window is open).
+    pub(crate) fn window_files(&self, window: WindowId) -> &Files {
+        if window.is_main() {
+            return self;
+        }
+        self.windows.iter().find(|e| e.id == window).map_or(self, |e| &*e.files)
+    }
+
+    /// The windows the extra window at `at` opened (Get Info, New Window) join the main window's list: they are
+    /// drawn, ticked and closed from there, with the others.
+    pub(crate) fn adopt_opened(&mut self, at: usize) {
+        let Some(e) = self.windows.get_mut(at) else { return };
+        let mut opened = std::mem::take(&mut e.files.windows);
+        // a window opened from a New Window window pastes what the others do
+        let clip = self.clip.clone();
+        for w in &mut opened {
+            if !w.files.info_window {
+                w.files.clip = clip.clone();
+            }
+        }
+        self.windows.extend(opened);
+    }
+
+    /// One window copied or cut (`from`: the extra window at that place, or None for this, the main window): every
+    /// other window takes the same items for its Paste. Without it a Cut in one window was pasted as a copy in
+    /// another, because only the window that cut knew the items were cut.
+    pub(crate) fn share_clip(&mut self, from: Option<usize>) {
+        let clip = match from {
+            Some(i) => match self.windows.get(i) {
+                Some(e) => e.files.clip.clone(),
+                None => return,
+            },
+            None => self.clip.clone(),
+        };
+        if from.is_some() {
+            self.clip = clip.clone();
+        }
+        for (i, e) in self.windows.iter_mut().enumerate() {
+            if Some(i) != from && !e.files.info_window {
+                e.files.clip = clip.clone();
+            }
+        }
     }
 
     /// Drops the state of a window the shell or the app closed. Returns true when one was dropped.
@@ -63,6 +118,98 @@ impl Files {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::{fixture, folder};
+
+    /// A main window with one New Window window (id 4), each showing the folders `a` and `b`.
+    fn two_windows() -> Files {
+        let mut main = fixture(vec![folder("a"), folder("b")]);
+        let second = fixture(vec![folder("a"), folder("b")]);
+        main.windows.push(ExtraWindow::new(WindowId(4), Box::new(second)));
+        main
+    }
+
+    #[test]
+    fn the_edit_and_file_menus_follow_the_window_that_has_the_keys() {
+        let mut main = two_windows();
+        // an item is selected in the second window only
+        main.windows[0].files.selection = vec![1];
+        assert!(!main.window_files(WindowId::MAIN).edit_commands().supports(Command::Copy), "nothing selected in the main window");
+        let second = main.window_files(WindowId(4));
+        assert!(second.edit_commands().supports(Command::Copy) && second.edit_commands().supports(Command::Cut));
+        assert!(second.edit_commands().supports(Command::Paste));
+        let enabled = |files: &Files, id: u32| files.file_menu_items().iter().find(|i| i.id == id).is_some_and(|i| i.enabled);
+        assert!(enabled(main.window_files(WindowId(4)), MENU_DUPLICATE) && enabled(main.window_files(WindowId(4)), MENU_INFO));
+        assert!(!enabled(main.window_files(WindowId::MAIN), MENU_DUPLICATE) && !enabled(main.window_files(WindowId::MAIN), MENU_INFO));
+        // a window that is gone falls back to the main window
+        assert!(!main.window_files(WindowId(9)).edit_commands().supports(Command::Copy));
+        // a Get Info window has nothing the menus act on
+        main.windows[0].files.info_window = true;
+        assert!(!main.window_files(WindowId(4)).edit_commands().supports(Command::SelectAll));
+        assert!(main.window_files(WindowId(4)).file_menu_items().iter().all(|i| !i.enabled));
+    }
+
+    #[test]
+    fn a_command_acts_on_the_window_it_was_sent_to() {
+        let mut main = two_windows();
+        main.windows[0].files.selection = vec![1];
+        // Copy in the second window (what `window_event` routes there) copies its selection, not the main window's
+        main.windows[0].files.copy_selected(false);
+        assert_eq!(main.windows[0].files.clip, Some((vec![PathBuf::from("/fixture/b")], false)));
+        assert_eq!(main.clip, None);
+        // Select All and the view keys change that window alone
+        main.windows[0].files.select_all();
+        assert!(main.windows[0].files.chord(3, CHORD_META), "⌘2: the list view");
+        assert_eq!(main.windows[0].files.selection.len(), 2);
+        assert!(!main.windows[0].files.grid && main.grid);
+        assert!(main.selection.is_empty());
+    }
+
+    #[test]
+    fn what_one_window_copies_or_cuts_every_window_pastes() {
+        let mut main = two_windows();
+        main.windows.push(ExtraWindow::new(WindowId(5), Box::new(fixture(vec![]))));
+        let mut info = fixture(vec![]);
+        info.info_window = true;
+        main.windows.push(ExtraWindow::new(WindowId(6), Box::new(info)));
+        // a cut in the second window
+        main.windows[0].files.selection = vec![0];
+        main.windows[0].files.copy_selected(true);
+        main.share_clip(Some(0));
+        let cut = Some((vec![PathBuf::from("/fixture/a")], true));
+        assert_eq!(main.clip, cut, "the main window pastes it as a move");
+        assert_eq!(main.windows[1].files.clip, cut);
+        assert_eq!(main.windows[2].files.clip, None, "a Get Info window pastes nothing");
+        // then a copy in the main window replaces it everywhere
+        main.selection = vec![1];
+        main.copy_selected(false);
+        main.share_clip(None);
+        let copied = Some((vec![PathBuf::from("/fixture/b")], false));
+        assert_eq!(main.windows[0].files.clip, copied);
+        assert_eq!(main.windows[1].files.clip, copied);
+        main.share_clip(Some(9));
+        assert_eq!(main.clip, copied, "an unknown window changes nothing");
+    }
+
+    #[test]
+    fn cmd_w_closes_an_extra_window_that_has_no_tab_to_close() {
+        assert!(closes_window(true, 1, false), "a Get Info window");
+        assert!(closes_window(true, 3, true));
+        assert!(closes_window(false, 1, false), "a browser window with its one tab");
+        assert!(!closes_window(false, 2, false), "with tabs the key closes the open tab");
+        assert!(!closes_window(false, 1, true), "not while a name is typed");
+    }
+
+    #[test]
+    fn windows_an_extra_window_opened_join_the_main_list() {
+        let mut main = two_windows();
+        main.clip = Some((vec![PathBuf::from("/fixture/a")], false));
+        main.windows[0].files.windows.push(ExtraWindow::new(WindowId(7), Box::new(fixture(vec![]))));
+        main.adopt_opened(0);
+        assert!(main.windows[0].files.windows.is_empty());
+        assert_eq!(main.windows.iter().map(|e| e.id).collect::<Vec<_>>(), vec![WindowId(4), WindowId(7)]);
+        assert_eq!(main.windows[1].files.clip, main.clip, "the new window pastes what the others do");
+        main.adopt_opened(9);
+    }
 
     #[test]
     fn a_closed_extra_window_is_dropped_once() {

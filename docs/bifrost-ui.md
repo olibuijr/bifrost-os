@@ -1088,11 +1088,22 @@ the menu is a plain context menu (no icons, no "More..."), and Copy of a file co
   also the immediate answer when the shell refuses: another session runs, the app is not in front, no items).
   The preview is in points: the shell scales it by the UI scale (nearest), so on a display of scale 2 it is at most
   32 pt of blocky pixels. `dnd::set_image(ctx, session, w, h, rgba)`, called right after `begin`, gives the session an
-  image at device pixels instead (`ToShell::DragImage`, at most `proto::rich::MAX_DRAG_IMAGE` = 128 px a side, its
-  pixels in a memfd because they do not fit a packet); the shell draws it one to one, centred on the pointer. Draw it
-  at the item's size in points times `ctx.ui.s`. Files sends the lifted item's icon this way. The message is new after
-  system 0.10.50: an app that sends it to an older shell is stopped as incompatible, so such an app's manifest needs
-  the `min_shell` of the first release that has it.
+  image at device pixels instead (`ToShell::DragImage`, at most `proto::rich::MAX_DRAG_IMAGE` = 512 px a side, its
+  pixels in a memfd because they do not fit a packet, 1 MiB at the limit); the shell draws it one to one, centred on
+  the pointer. Draw it at the item's size in points times `ctx.ui.s`. Files sends the lifted item's icon this way. The
+  message is new after system 0.10.50: an app that sends it to an older shell is stopped as incompatible, so such an
+  app's manifest needs the `min_shell` of the first release that has it. The limit was 128 px up to system 0.10.51
+  (it shrank an icon of more than 64 pt at scale 2); a shell of that age refuses a larger image as a packet it cannot
+  decode, so an app that sends more than 128 px needs `min_shell = "0.10.52"`.
+- **Windows**: from system 0.10.52 every `ToApp::DragDest` ends with the app's window the pointer is over (a `u32`: 0
+  the main window, else the id of `WindowOpen`), and its point is in that window's pixels. Moving from one window of
+  an app to another sends `Exited` for the first and `Entered` for the second. `App::window_drag(ctx, window, ev)`
+  gets the destination events with the window (`Some(id)`; `None` from a shell up to 0.10.51, which targets the app
+  as a whole); its default calls `App::drag`, so an app with one drop window changes nothing. The field is the last
+  one on the wire and optional: an app built before it ignores it. A `Perform` for a window the app has closed is
+  answered by the runtime (`performed(false)`). Files uses it to drop into the window under the pointer.
+- **Desktop**: files dropped on the desktop move there when they are on the Desktop folder's volume and the source
+  allows the move (Option copies, as the narrowed mask says); from another volume they are copied.
 - **Perform**: on release over a window that replied with an operation the shell first hands the files over, each as a fresh
   **read-only** grant made from the source's grant (`Broker::transfer`, a `DocBatch` and `DocGranted` with `request == session`),
   then sends `Perform` with the items; file items carry the new grant ids and a file that could not be handed over is dropped.

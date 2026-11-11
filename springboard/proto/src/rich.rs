@@ -264,9 +264,11 @@ pub struct DragPreview {
 
 pub const MAX_PREVIEW: u32 = 32;
 
-/// The most pixels a side of a device-resolution drag image has (`ToShell::DragImage`): an icon of 64 points on a
-/// display of scale 2.
-pub const MAX_DRAG_IMAGE: u32 = 128;
+/// The most pixels a side of a device-resolution drag image has (`ToShell::DragImage`): the largest icon a view
+/// draws (160 points) on a display of scale 3, with room to spare. The pixels travel in a descriptor, 1 MiB at this
+/// size. It was 128 up to 0.10.51, which shrank an icon of more than 64 points on a display of scale 2; a shell of
+/// that age refuses a larger image and keeps the session's small preview.
+pub const MAX_DRAG_IMAGE: u32 = 512;
 
 /// Whether `w` by `h` is a size a device-resolution drag image may have.
 pub fn drag_image_size_ok(w: u32, h: u32) -> bool {
@@ -783,7 +785,7 @@ pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
             put(b, event, MAX_SERVICE_NAME);
             put(b, fit_body(body, "{\"error\":\"body too large\"}"), MAX_SERVICE_BODY);
         }
-        ToApp::DragDest { session, phase, x, y, allowed, items } => {
+        ToApp::DragDest { session, phase, x, y, allowed, items, window } => {
             u32_(b, tag::DRAG_DEST);
             u32_(b, *session);
             b.push(*phase as u8);
@@ -791,6 +793,10 @@ pub(crate) fn encode_app(m: &ToApp, b: &mut Vec<u8>) {
             f32_(b, *y);
             b.push(*allowed);
             put_items(b, items);
+            // the window comes last: a reader built before it stops after the items
+            if let Some(window) = window {
+                u32_(b, *window);
+            }
         }
         ToApp::SelectionRequest { request } => {
             u32_(b, tag::SELECTION_REQUEST);
@@ -848,7 +854,8 @@ pub(crate) fn decode_app(t: u32, r: &mut Reader) -> Result<ToApp, DecodeError> {
             if allowed & !dragop::ALL != 0 {
                 return Err(DecodeError::BadValue);
             }
-            ToApp::DragDest { session, phase, x, y, allowed, items: get_items(r)? }
+            let items = get_items(r)?;
+            ToApp::DragDest { session, phase, x, y, allowed, items, window: r.tail_u32()? }
         }
         tag::DRAG_ENDED => {
             let session = r.u32()?;
@@ -1283,6 +1290,8 @@ mod tests {
         shell_rt(ToShell::DragCancel { session: 1 });
         // a device-resolution drag image: the packet carries the size, the descriptor the pixels
         shell_rt(ToShell::DragImage { session: 1, w: 128, h: 96, rgba: Vec::new() });
+        shell_rt(ToShell::DragImage { session: 1, w: MAX_DRAG_IMAGE, h: MAX_DRAG_IMAGE, rgba: Vec::new() });
+        assert!(MAX_DRAG_IMAGE >= 160 * 3, "the largest icon of a view on a display of scale 3");
         let image = ToShell::DragImage { session: 1, w: 2, h: 1, rgba: vec![1, 2, 3, 4, 5, 6, 7, 8] };
         assert_eq!(ToShell::decode(&image.encode()), Ok(ToShell::DragImage { session: 1, w: 2, h: 1, rgba: Vec::new() }));
         for (w, h) in [(0, 4), (4, 0), (MAX_DRAG_IMAGE + 1, 4)] {
@@ -1293,8 +1302,19 @@ mod tests {
         assert!(drag_image_read(&fd, 2, 2).is_err(), "a descriptor shorter than the image is refused");
         assert!(drag_image_fd(2, 1, &[0; 7]).is_err() && drag_image_fd(MAX_DRAG_IMAGE + 1, 1, &[]).is_err());
         for phase in [DragPhase::Entered, DragPhase::Updated, DragPhase::Exited, DragPhase::Perform] {
-            app_rt(ToApp::DragDest { session: 1, phase, x: 10.5, y: 4.0, allowed: dragop::ALL, items: items.clone() });
+            // from a shell that names the window (0 the main one), and from one built before the field
+            for window in [Some(0), Some(7), None] {
+                app_rt(ToApp::DragDest { session: 1, phase, x: 10.5, y: 4.0, allowed: dragop::ALL, items: items.clone(), window });
+            }
         }
+        // the window is the last field: without it the packet is the one a shell up to 0.10.51 sends, byte for byte,
+        // and a reader built before the field stops after the items of a packet that has it
+        let with = ToApp::DragDest { session: 1, phase: DragPhase::Updated, x: 1.0, y: 2.0, allowed: dragop::COPY, items: vec![], window: Some(7) }.encode();
+        let without = ToApp::DragDest { session: 1, phase: DragPhase::Updated, x: 1.0, y: 2.0, allowed: dragop::COPY, items: vec![], window: None }.encode();
+        assert_eq!(with[..without.len()], without[..]);
+        assert_eq!(with[without.len()..], 7u32.to_le_bytes());
+        // a window cut short is not a window
+        assert_eq!(ToApp::decode(&with[..with.len() - 2]), Err(DecodeError::Truncated));
         app_rt(ToApp::DragEnded { session: 1, op: dragop::LINK });
     }
 
@@ -1311,7 +1331,7 @@ mod tests {
         let mut mask = ToApp::DragEnded { session: 1, op: 0 }.encode();
         *mask.last_mut().unwrap() = 8;
         assert_eq!(ToApp::decode(&mask), Err(DecodeError::BadValue));
-        let nan = ToApp::DragDest { session: 1, phase: DragPhase::Updated, x: f32::NAN, y: 0.0, allowed: 1, items: vec![] };
+        let nan = ToApp::DragDest { session: 1, phase: DragPhase::Updated, x: f32::NAN, y: 0.0, allowed: 1, items: vec![], window: None };
         assert_eq!(ToApp::decode(&nan.encode()), Err(DecodeError::BadValue));
         // a packet with every field at its cap still fits
         let full = ToApp::DragDest {
@@ -1321,6 +1341,7 @@ mod tests {
             y: 0.0,
             allowed: 7,
             items: (0..MAX_ITEMS).map(|_| DragItem { types: (0..MAX_ITEM_TYPES).map(|_| "u".repeat(MAX_UTI)).collect(), payload: Payload::Text("t".repeat(MAX_PAYLOAD_TEXT)) }).collect(),
+            window: Some(u32::MAX),
         };
         assert!(full.encode().len() < crate::MAX_PACKET);
         let full_begin = ToShell::DragBegin { session: 1, allowed: 7, items: (0..MAX_ITEMS).map(|_| DragItem { types: (0..MAX_ITEM_TYPES).map(|_| "u".repeat(MAX_UTI)).collect(), payload: Payload::Text("t".repeat(MAX_PAYLOAD_TEXT)) }).collect(), preview: DragPreview { w: 32, h: 32, rgba: vec![1; 4096] } };
