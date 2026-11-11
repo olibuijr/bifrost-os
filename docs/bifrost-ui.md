@@ -1500,6 +1500,13 @@ the windows behind the window. Ours, end to end:
   window) and a blurred sidebar; `app_windows::shell_takes_window_chrome()` tells an app whether to ask for one.
   Without the bit the runtime paints an extra window with vibrancy off (materials draw `solid()`), because
   nothing would blur what is behind it. Files' New Window uses this (1.34.21).
+  Shell half: `appearance_flags` always sets the bit; `AppHost::handle` keeps the lists with the window in its table
+  (`WindowTable::set_chrome`: only a window this app has open, each rectangle cut to the window, non-finite ones
+  dropped, a desk frame only when the lists changed, gone when the window closes). The desk reads them through
+  `desk::press_controls` (the press holes of `drag_zone` for the window server's move and for the shell's own press)
+  and `desk::window_materials` (`take_wayland_materials`, under the window's own frame id, `win_id`). An extra window
+  that sends no controls keeps its whole band as the drag zone. Every extra window of an app built with this SDK now
+  declares its materials on such a shell (a document app's second window gets the blur its main window has).
 - Version guard: an app whose SDK protocol differs from the shell's (`Hello`, or packets that do not decode) is
   stopped, logged, and its window shows "This app needs an update" instead of black (`AppHost::incompatible`).
 - Shell: `AppHost::materials` holds the list; `Shell::take_wayland_materials` turns it into window px with a

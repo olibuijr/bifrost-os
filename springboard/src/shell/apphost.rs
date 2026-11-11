@@ -1631,6 +1631,13 @@ impl AppHost {
             ToShell::WindowBuffers { id, w, h, generation } => self.window_buffers(id, w, h, generation, fds),
             ToShell::WindowFrame { id, buf, damage } => self.window_frame_arrived(id, buf, damage, out),
             ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.chrome();}},
+            // an extra window's toolbar controls and vibrancy regions: kept with the window in the table (an id this app
+            // has not open is ignored there), and the desk reads them for its drag zone and its materials
+            ToShell::WindowChrome { id, press, materials } => {
+                if self.windows.set_chrome(&self.id, id, &press, &materials) {
+                    out.chrome();
+                }
+            }
             ToShell::Commands(commands) => {if self.commands!=commands {self.commands=commands;out.chrome();}},
             ToShell::UndoTitles { undo, redo } => {if self.undo_titles!=(undo.clone(),redo.clone()) {self.undo_titles=(undo,redo);out.chrome();}},
             ToShell::Log { text } => bifrost_core::log::shell_logger("apphost").info(format!("app {}: {text}", self.id)),
@@ -2160,7 +2167,7 @@ pub fn date_time_flags(clock_24h: bool) -> u32 {
 pub fn appearance_flags() -> u32 {
     use bifrost_proto::appearance::*;
     use super::accessibility as a11y;
-    [(a11y::increase_contrast(), INCREASE_CONTRAST), (a11y::reduce_transparency(), REDUCE_TRANSPARENCY), (a11y::button_shapes(), SHOW_BORDERS), (a11y::bold_text(), BOLD_TEXT), (bifrost_render::appearance::target_is_light(), LIGHT), (vibrancy_available(), VIBRANCY), (vibrancy_available(), MATERIALS)]
+    [(a11y::increase_contrast(), INCREASE_CONTRAST), (a11y::reduce_transparency(), REDUCE_TRANSPARENCY), (a11y::button_shapes(), SHOW_BORDERS), (a11y::bold_text(), BOLD_TEXT), (bifrost_render::appearance::target_is_light(), LIGHT), (vibrancy_available(), VIBRANCY), (vibrancy_available(), MATERIALS), (true, WINDOW_CHROME)]
         .into_iter()
         .fold(0, |f, (on, bit)| if on { f | bit } else { f })
         | (bifrost_render::appearance::accent().to_wire() << ACCENT_SHIFT)
