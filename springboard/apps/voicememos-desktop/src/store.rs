@@ -350,6 +350,27 @@ pub fn save(dir: &Path, stamp: &str, wav: &[u8], unix: i64) -> std::io::Result<P
     Ok(path)
 }
 
+/// The system zone's seconds east of UTC at `unix`, with daylight saving as it was at that instant: the zone the
+/// shell tells the app (`bifrost_app::time_zone`), read when called, so a recording's day and time follow a change of
+/// the zone. UTC under the test pin, as the pinned clock is.
+pub fn zone_offset(unix: i64) -> i32 {
+    if bifrost_core::pin::pinned() {
+        return 0;
+    }
+    bifrost_app::time_zone::TimeZone::auto_updating_current().seconds_from_gmt(bifrost_app::coding::Date(unix as f64))
+}
+
+/// The time of day a recording was made, in the person's clock style (Settings > Date & Time > 24-Hour Time, which
+/// the shell tells the app): "00:23", or "12:23 AM" with the switch off.
+pub fn time_title(hour: u32, min: u32) -> String {
+    time_title_in(hour, min, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `time_title` in a given clock style, written by the formatter of `time_zone::time_text`.
+pub fn time_title_in(hour: u32, min: u32, h24: bool) -> String {
+    springboard::status::clock_in(hour as i32, min as i32, h24)
+}
+
 /// `m:ss` for a duration.
 pub fn clock(ms: u64) -> String {
     let s = ms / 1000;
@@ -875,6 +896,16 @@ mod tests {
         std::fs::write(&other, wav_bytes(&pcm16(16000, 1), &vec![0i16; 100])).unwrap();
         assert!(save_replaced(&memo, 0.25, 0.5, &other).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_recording_time_follows_the_clock_style() {
+        // a morning, noon, an afternoon and midnight
+        let times = |h24: bool| [(8, 5), (12, 0), (15, 58), (0, 23)].map(|(h, m)| time_title_in(h, m, h24));
+        assert_eq!(times(true), ["08:05", "12:00", "15:58", "00:23"]);
+        assert_eq!(times(false), ["8:05 AM", "12:00 PM", "3:58 PM", "12:23 AM"]);
+        // no shell speaks in a test, so the style is 24-hour: the same text as `time_zone::time_text`
+        assert_eq!(time_title(14, 5), bifrost_app::time_zone::time_text(14, 5));
     }
 
     #[test]

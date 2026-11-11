@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.10
+
+- The time a recording was made follows Settings > Date & Time > 24-Hour Time ("00:23", or "12:23 AM" with the switch off), at once when it changes. The day and time of a recording are read at the time zone's offset when it was made, so a recording from before a daylight saving change keeps its time. Durations are unchanged.
+
 ## 1.11.9
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
