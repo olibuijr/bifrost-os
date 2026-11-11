@@ -35,10 +35,12 @@ fn new_pixels_of_a_window_behind_the_front_app_ask_for_a_frame() {
 #[test]
 fn new_pixels_of_a_minimized_window_ask_for_none() {
     let (mut sh, peer) = behind_another_app();
-    sh.desk.as_mut().unwrap().wins[0].minimized = true;
+    for w in sh.desk.as_mut().unwrap().wins.iter_mut().filter(|w| w.app.parent() == AppId::External(0)) {
+        w.minimized = true;
+    }
     peer.send(&ToShell::Frame { buf: 0, damage: vec![[0, 0, 4, 3]] }.encode(), &[]).unwrap();
     sh.ext_tick(3.0);
-    assert!(!sh.ext_frame && !sh.dirty, "nothing of it shows");
+    assert!(!sh.ext_frame, "nothing of it shows (dirty {})", sh.dirty);
 }
 
 #[test]

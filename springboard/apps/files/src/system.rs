@@ -225,6 +225,7 @@ pub(crate) struct SystemState {
 
 impl SystemState {
     /// Sends the queued calls. Each call that expects a reply is remembered by its request id.
+    #[cfg(test)]
     pub(crate) fn flush(&mut self, ctx: &Ctx) {
         self.flush_for(ctx, false);
     }

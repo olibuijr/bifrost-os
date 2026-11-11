@@ -1479,7 +1479,7 @@ mod tests {
         let a = dir.join("a.txt");
         files.toggle_tag(Tag::Red);
         files.toggle_tag(Tag::Blue);
-        assert_eq!(files.file_undo_titles().0, "Undo Tags");
+        assert_eq!(files.file_undo_titles().0, "Undo Tags of “a.txt”");
         // Cmd+Z takes Blue off again, then Red; the sidecar follows
         files.undo_file_op();
         assert_eq!(files.tag_index.tags(&a), vec![Tag::Red]);

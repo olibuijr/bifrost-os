@@ -136,7 +136,7 @@ mod tests {
         sh.notify(Notification::new(AppId::Settings, "Wi-Fi", "Disconnected", 2));
         assert!(sh.notify.banner().is_some(), "new notifications deliver after Focus ends");
         sh.event(Event::Power, 2000.0);
-        sh.notify(Notification::new(AppId::Settings, "Wi-Fi", "Connected", 3));
+        sh.notify(Notification::new(AppId::Settings, "Wi-Fi", "Connected again", 3));
         assert_eq!(sh.notify.next_wake(2100.0), Some(2100.0));
         sh.set_dnd(true);
         assert_eq!(sh.notify.next_wake(2100.0), None);

@@ -108,7 +108,7 @@ const WIFI_DROP_MS: f64 = 8000.0;
 
 /// Everything the shell keeps about notifications.
 pub struct Notify {
-    store: Store,
+    pub(super) store: Store,
     wall: Wall,
     /// the last tick's time
     pub(super) t: f64,

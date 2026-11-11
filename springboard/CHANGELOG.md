@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.10.53 — 2026-11-11
+
+What the test of 0.10.52 found.
+
+- Search: the blur of a longer list of results no longer stays behind as a pale plate below a shorter one. A file the Files app once opened is listed only when it lies in the home folder, the Files folder or on a mounted volume. The Documents, Desktop and Downloads importer is removed: it never ran on an installed computer, and the search of the home folder finds those files by name.
+- Lock screen: the notifications end above the account picture; what does not fit is counted in one line. Nothing about a disk is said behind a locked screen; "ready to use" follows after the unlock, once the disk is mounted. A notification repeated with the same title and text is one entry, and a stack keeps its newest twenty.
+- A menu an app opens from a press stays open when the button is let go at once; pressing, moving to an item and letting go chooses it. Before, such a menu closed with the release.
+- A secondary click in a second window of an app reaches that window, and so does the choice from its menu.
+- A second window of an app can have its toolbar in the title bar and blurred materials like the first (`ToShell::WindowChrome`).
+- New pixels of a window behind the front app are shown at once; they waited for the next redraw (an open Files window followed the 24-Hour Time switch seconds late).
+- A drop on the desktop says where the files went ("Moved to Desktop"), and a click on that notice shows them in Files. The desktop itself draws no icons.
+- Menus: a key with a name is written whole in a shortcut ("Space", not "Spac e").
+- Files 1.34.21: a second window looks like the first. Undo after a paste, a copying drop and Duplicate. New Window and New Tab in the File menu. A change of view starts at the top. A context menu in a second window opens at the pointer and acts there.
+- Viewer 0.11.26: a fitted page keeps a margin; Markup and Adjust are two buttons with menus, so the toolbar fits the window; closing or quitting with unsaved changes asks; "Saved" leaves the status line at the next change.
+
 ## 0.10.52 — 2026-11-11
 
 What the test of 0.10.51 found.
