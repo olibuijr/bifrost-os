@@ -158,6 +158,7 @@ pub(crate) fn unseen(replay: Replay) -> Option<Vec<WatchEvent>> {
 
 impl Files {
     /// Writes a batch of watch events into the journal.
+    #[cfg(test)]
     pub(crate) fn record_events(&mut self, events: Vec<WatchEvent>) {
         for e in events {
             self.journal.record(e);
