@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.17
+
+- A right click on a reminder opens its menu: Show Details, Mark as Completed, Flag, Mark as Urgent and Delete Reminder, for the reminder under the pointer (which it selects). Only lists in the sidebar and Recently Deleted rows had a menu before.
+
 ## 1.20.16
 
 - Due times follow Settings > Date & Time > 24-Hour Time, at once when it changes: the rows, the All-Day Reminders Alert At setting, the Today widget and the alert texts read "09:05" with the switch on (they always read "9:05 AM" before). Pending alerts are sent again when the setting changes, so their text matches.

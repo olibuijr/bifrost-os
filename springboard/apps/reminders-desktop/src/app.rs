@@ -247,6 +247,12 @@ pub const CTX_LIST_INFO: u32 = 1;
 pub const CTX_PIN: u32 = 2;
 pub const CTX_NEW_SECTION: u32 = 3;
 pub const CTX_DELETE_LIST: u32 = 4;
+/// The rows of a reminder's menu (a right click on its row). 5 to 7 are the Recently Deleted menu's (`purge.rs`).
+pub const CTX_ITEM_DETAILS: u32 = 8;
+pub const CTX_ITEM_COMPLETE: u32 = 9;
+pub const CTX_ITEM_FLAG: u32 = 10;
+pub const CTX_ITEM_URGENT: u32 = 11;
+pub const CTX_ITEM_DELETE: u32 = 12;
 
 struct UndoBar {
     label: String,
@@ -385,6 +391,8 @@ pub struct Reminders {
     /// A menu for the shell to show (window pixels and rows), and the list or smart list its choice acts on.
     menu_request: Option<(f32, f32, Vec<bifrost_proto::ContextItem>)>,
     menu_view: Option<View>,
+    /// The reminder whose menu the shell shows (a right click on its row); its choice acts on this one.
+    menu_item: Option<u64>,
     title: TextField,
     title_hint: &'static str,
     title_max: usize,
@@ -542,6 +550,7 @@ impl Reminders {
             list_edit: None,
             menu_request: None,
             menu_view: None,
+            menu_item: None,
             title: mk_field(ui, "Reminder", model::MAX_TITLE, ""),
             title_hint: "Reminder",
             title_max: model::MAX_TITLE,
@@ -2446,13 +2455,68 @@ impl Reminders {
         }
     }
 
-    /// A right click at window pixel (x, y): the menu of the list or custom smart list under it in the sidebar, if any.
+    /// The rows of the menu of reminder `id`: what its row, its circle, its swipe buttons and the Reminders menu do.
+    fn item_menu(&self, id: u64) -> Vec<bifrost_proto::ContextItem> {
+        use bifrost_proto::ContextItem as Item;
+        let (completed, flagged, urgent) = self.data.items.iter().find(|r| r.id == id).map(|r| (r.completed, r.flagged, r.urgent)).unwrap_or_default();
+        vec![
+            Item::new(CTX_ITEM_DETAILS, "Show Details"),
+            Item::separator(),
+            Item::new(CTX_ITEM_COMPLETE, if completed { "Mark as Incomplete" } else { "Mark as Completed" }),
+            Item::new(CTX_ITEM_FLAG, if flagged { "Unflag" } else { "Flag" }),
+            Item::new(CTX_ITEM_URGENT, if urgent { "Remove Urgent Mark" } else { "Mark as Urgent" }),
+            Item::separator(),
+            Item::new(CTX_ITEM_DELETE, "Delete Reminder").key("cmd+backspace"),
+        ]
+    }
+
+    /// Runs row `id` of the menu of reminder `item`, which the right click selected. None for a row that is not this
+    /// menu's; otherwise whether something changed. A reminder that left the list on screen meanwhile is left alone.
+    fn item_action(&mut self, ui: &Ui, item: u64, id: u32, t: f64) -> Option<bool> {
+        if !(CTX_ITEM_DETAILS..=CTX_ITEM_DELETE).contains(&id) {
+            return None;
+        }
+        if self.has_draft() || self.selected_item() != Some(item) {
+            return Some(false);
+        }
+        Some(match id {
+            CTX_ITEM_DETAILS => {
+                self.open_editor(ui, Some(item), t);
+                true
+            }
+            CTX_ITEM_COMPLETE => self.toggle_selected(ui),
+            // as the swipe's Flag button: on the undo history under the reminder's name
+            CTX_ITEM_FLAG => match self.rows.iter().position(|row| matches!(row, Row::Item { idx, .. } if self.data.items.get(*idx).is_some_and(|r| r.id == item))) {
+                Some(row) => {
+                    self.activate(ui, Target::SwipeFlag(row), t);
+                    true
+                }
+                None => false,
+            },
+            CTX_ITEM_URGENT => self.toggle_urgent_selected(ui),
+            _ => self.delete_selected(ui, t),
+        })
+    }
+
+    /// A right click at window pixel (x, y): the menu of the reminder under it, or of the list or custom smart list
+    /// under it in the sidebar, if any.
     pub fn context_menu_at(&mut self, ui: &Ui, x: f32, y: f32) -> Option<Vec<bifrost_proto::ContextItem>> {
         if self.has_draft() {
             return None;
         }
         self.layout_columns(ui);
+        self.menu_item = None;
         let view = match self.hit(ui, x - self.x0, y)? {
+            // a reminder: the right click selects it, then its menu shows
+            Target::Row(row) | Target::Circle(row) | Target::Info(row) | Target::Collapse(row) => {
+                let id = self.item_id(row)?;
+                self.selected = Some(id);
+                self.menu_view = None;
+                self.menu_kept = false;
+                self.menu_item = Some(id);
+                self.dirty = true;
+                return Some(self.item_menu(id));
+            }
             // a kept reminder on Recently Deleted: the right click selects it, then its menu shows
             Target::KeptRow(id) | Target::Restore(id) => {
                 self.kept_selected = Some(id);
@@ -2493,6 +2557,10 @@ impl Reminders {
 
     /// Runs the row `id` chosen from a list's menu. True when something changed.
     pub fn context_action(&mut self, ui: &Ui, id: u32, t: f64) -> bool {
+        if let Some(done) = self.menu_item.take().and_then(|item| self.item_action(ui, item, id, t)) {
+            self.dirty = true;
+            return done;
+        }
         if std::mem::take(&mut self.menu_kept) {
             let changed = self.deleted.is_some() && self.kept_action(ui, id);
             self.dirty = true;
