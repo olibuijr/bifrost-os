@@ -1168,6 +1168,24 @@ mod tests {
         assert_eq!(at(&after, x + card_w - 6., y + 6.), CARD_BG.now());
         assert_eq!(at(&after, 8., 400.), at(&before, 8., 400.));
     }
+    /// A change of the clock style or the zone repaints a window whatever kind it is: the conventions are part of
+    /// what a paint depends on (the main window alone hears `configure`).
+    #[test]
+    fn the_painted_state_follows_the_date_conventions() {
+        let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let ui = Ui::new(font, 1.0);
+        let mut files = fixture(vec![folder("a")]);
+        files.fx.extra_window = true;
+        let (w, h) = (960, 630);
+        let mut pixels = vec![0; w * h];
+        assert!(files.render(&ui, &mut Surface { w, h, stride: w, px: &mut pixels, y0: 0 }).is_all());
+        assert!(files.painted_state.ends_with(&format!(":{}", bifrost_app::time_zone::conventions_revision())));
+        // painted under other conventions: everything is painted again
+        let stale = format!(":{}", bifrost_app::time_zone::conventions_revision().wrapping_add(1));
+        let at = files.painted_state.rfind(':').unwrap();
+        files.painted_state.replace_range(at.., &stale);
+        assert!(files.render(&ui, &mut Surface { w, h, stride: w, px: &mut pixels, y0: 0 }).is_all());
+    }
     #[test]
     fn partial_selection_matches_full_repaint_in_both_views() {
         let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();

@@ -30,9 +30,24 @@ impl ExtraWindow {
         if self.drawn != Some((s.w, s.h)) {
             self.files.painted_state.clear();
             self.drawn = Some((s.w, s.h));
+            // the window lays itself out for the surface it is given: the desk sizes the body after the window opens and
+            // on every resize, and a layout kept at the size asked for left the toolbar, the scroll range and the click
+            // targets where a window of another size has them
+            let (w, h) = surface_pt(s.w, s.h, ctx.ui.s);
+            if (w, h) != (self.files.w, self.files.h) {
+                self.files.w = w;
+                self.files.h = h;
+                self.files.update_controls();
+            }
         }
         self.files.draw(ctx, s, t)
     }
+}
+
+/// A surface's size in points at `scale` px per point, as `App::configure` gives the main window its size.
+pub(crate) fn surface_pt(w: usize, h: usize, scale: f32) -> (f32, f32) {
+    let k = scale.max(0.01);
+    (w as f32 / k, h as f32 / k)
 }
 
 /// Whether ⌘W in an extra window closes the window: always a Get Info window, and a browser window that has no
@@ -188,6 +203,14 @@ mod tests {
         assert_eq!(main.windows[1].files.clip, copied);
         main.share_clip(Some(9));
         assert_eq!(main.clip, copied, "an unknown window changes nothing");
+    }
+
+    #[test]
+    fn a_window_is_laid_out_for_the_surface_it_draws_into() {
+        assert_eq!(surface_pt(1200, 800, 1.25), (960.0, 640.0));
+        assert_eq!(surface_pt(900, 600, 1.0), (900.0, 600.0));
+        let (w, h) = surface_pt(100, 50, 0.0);
+        assert!(w.is_finite() && h.is_finite(), "a zero scale divides by nothing");
     }
 
     #[test]

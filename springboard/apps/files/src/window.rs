@@ -518,6 +518,10 @@ impl Files {
         let state = format!("{state}:{:?}:{}", self.fx.goto.as_ref().map(|f| (f.to_string(), f.caret())), self.fx.copy_drag);
         let vo = &self.vo;
         let state = format!("{state}:{}:{}:{:?}:{}:{}:{}:{:?}:{}", vo.gallery, vo.asc, vo.group, vo.icon, vo.text, vo.col_w, vo.show, vo.expanded.len());
+        // the clock style and the time zone the dates are written with: a change repaints every window that shows
+        // dates. `App::configure` is told of one for the main window only, so a New Window or Get Info window kept the
+        // old form until something else changed in it
+        let state = format!("{state}:{}", bifrost_app::time_zone::conventions_revision());
         let mut damage = Damage::new(s.w,s.h);
         if state != self.painted_state {
             damage.all();
