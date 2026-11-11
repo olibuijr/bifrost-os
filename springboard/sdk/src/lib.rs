@@ -765,6 +765,12 @@ pub trait App {
     }
     /// Semantic controls in logical points; sent only when they change.
     fn controls(&self, _ctx: &Ctx) -> Vec<controls::Node> {Vec::new()}
+    /// The controls of one of the app's extra windows, in that window's points. The shell takes the ones that handle a
+    /// press themselves (buttons, fields, switches): in a full-size window (`WindowSpec::full_size_content`) a press on
+    /// one inside the title and toolbar band reaches the app instead of moving the window, as for the main window's
+    /// `controls`. Asked for after the window drew, on a shell that takes them
+    /// (`app_windows::shell_takes_window_chrome`). The default names none: the whole band then moves the window.
+    fn window_controls(&self, _ctx: &Ctx, _window: app_windows::WindowId) -> Vec<controls::Node> {Vec::new()}
     /// Parent/child relations and focus/checked state for the nodes `controls` returns (`NativeAccessibility` hierarchy).
     /// Sent only when they change; the default (empty) leaves every node a direct child of the window.
     fn controls_tree(&self, _ctx: &Ctx) -> Vec<crate::proto::NodeExt> {Vec::new()}

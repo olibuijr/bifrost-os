@@ -163,7 +163,7 @@ fn window_look() -> u64 {
 
 /// Two title-bar presses this close (ms) are a double-click, which zooms the window as Golden Gate does. The gap is
 /// the Settings > Mouse > Double-Click Speed choice (`pointer_prefs`).
-fn double_click_ms() -> f64 {
+pub(super) fn double_click_ms() -> f64 {
     crate::bare::pointer_prefs::get().double_click_ms as f64
 }
 
@@ -545,6 +545,30 @@ pub fn reveal_hit(w: &Win, m: &Metrics, rv: Reveal, x: f32, y: f32) -> Option<Re
         _ if w.is_full_size() => RevealHit::App(y - rv.top as f32 + w.r.y as f32),
         _ => RevealHit::Bar,
     })
+}
+
+/// The vibrancy regions (window points) of the window `app` of the app `host` runs: the main window's
+/// (`ToShell::Materials`), or the ones an extra window sent for itself (`ToShell::WindowChrome`). None for an extra
+/// window that sent none or has closed, and never another window's.
+pub(super) fn window_materials(host: &apphost::AppHost, app: AppId) -> &[bifrost_proto::Material] {
+    match app {
+        AppId::External(_) => &host.materials,
+        AppId::ExternalWindow(_, id) => host.windows.get(&host.id, u32::from(id)).map_or(&[][..], |w| &w.materials[..]),
+        _ => &[],
+    }
+}
+
+/// The controls of the window of `app` that take a press, in window points, for `drag_zone`: an installed app's main
+/// window publishes them (`ToShell::Controls`, always the main window's own, whichever window of the app is key), and
+/// an extra window sends its own (`ToShell::WindowChrome`, kept in the app host's window table). None for a built-in
+/// app (`drag_zone` knows those) and for an extra window that sent none: its whole band then moves it, as before.
+pub(super) fn press_controls(ext: &[Option<apphost::AppHost>], app: AppId) -> &[bifrost_proto::Node] {
+    let (AppId::External(slot) | AppId::ExternalWindow(slot, _)) = app else { return &[] };
+    let Some(host) = ext.get(slot as usize).and_then(Option::as_ref) else { return &[] };
+    match app {
+        AppId::ExternalWindow(_, id) => host.windows.get(&host.id, u32::from(id)).map_or(&[][..], |w| &w.press[..]),
+        _ => &host.controls,
+    }
 }
 
 pub fn drag_zone(w: &Win, m: &Metrics, controls: &[bifrost_proto::Node]) -> (i32, Vec<[i32; 4]>) {
@@ -1146,6 +1170,14 @@ impl Desk {
     }
 
     /// The frontmost visible window hit at (x, y).
+    /// The window whose content a press is down in (the app holds the touch until it lifts), if any.
+    pub fn content_press(&self) -> Option<AppId> {
+        match self.grab {
+            Some(Grab::Content(app, _)) => Some(app),
+            _ => None,
+        }
+    }
+
     pub fn pick(&self, m: &Metrics, x: f32, y: f32) -> Option<(usize, Hit)> {
         self.wins.iter().enumerate().rev().filter(|(_, w)| !w.minimized && !self.unmapped.contains(&w.app))
             // a shaped (borderless) window is hit only where it drew: the rest belongs to the window below (W2-22)
@@ -1648,8 +1680,7 @@ impl Shell {
             // a covered window has no cache entry by design (see `hidden_ids`); anything else without one needs a full draw
             if !desk.window_cache.contains_key(&id) && !desk.hidden_ids.contains(&id) {return false;}
             frames.push(crate::bare::wayland::WindowFrame {id,title:frame_title(id),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,fullscreen:w.full,title_height,drag_height:0,no_drag:Vec::new(),floating:false,fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_)),origin:None,position:None,min_size:(0,0),input:None});
-            let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
-            let (dh,nd)=drag_zone(w,&m,controls);
+            let (dh,nd)=drag_zone(w,&m,press_controls(ext,w.app));
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
         }
         desk.frames=frames;
@@ -1678,14 +1709,17 @@ impl Shell {
         let corner = self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
         let mut out = Vec::new();
         for w in desk.wins.iter().filter(|w| !w.minimized) {
-            let Some(id) = apps().iter().position(|a| a.id == w.app).map(|i| i as u32 + 1) else { continue };
+            // the window's own id for the presenter: an extra window has one of its own (`win_id`)
+            let Some(id) = win_id(w.app) else { continue };
             let top = w.title_h(&m) as f32;
             let mut rects: Vec<(f32, f32, f32, f32, f32, bifrost_render::glass::Kind, Option<bool>, Option<bifrost_render::glass::Detail>)> = Vec::new();
             if vibrant {
                 match w.app {
-                    AppId::External(slot) => {
+                    // an app's main window (`ToShell::Materials`), and each extra window with the regions it sent for
+                    // itself (`ToShell::WindowChrome`): a second window's sidebar is blurred like the first's
+                    AppId::External(slot) | AppId::ExternalWindow(slot, _) => {
                         if let Some(h) = self.ext.get(slot as usize).and_then(Option::as_ref).filter(|h| h.running()) {
-                            for mat in h.materials.iter().take(bifrost_proto::MAX_MATERIALS) {
+                            for mat in window_materials(h, w.app).iter().take(bifrost_proto::MAX_MATERIALS) {
                                 let b = mat.rect;
                                 let req = mat.request();
                                 let c = req.corners();
@@ -3594,9 +3628,10 @@ impl Shell {
                     hit = Hit::Title;
                 }
                 if hit == Hit::Title {
-                    if let AppId::External(slot) = app {
-                        let controls = self.ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..], |h| &h.controls[..]);
-                        let (_, holes) = drag_zone(&w, &m, controls);
+                    // a press on a toolbar control of a full-size window is the app's: the main window's controls, or
+                    // the ones an extra window sent for itself (`press_controls`)
+                    if matches!(app, AppId::External(_) | AppId::ExternalWindow(..)) {
+                        let (_, holes) = drag_zone(&w, &m, press_controls(&self.ext, app));
                         let (lx, ly) = ((x - w.r.x as f32) as i32, (y - w.r.y as f32) as i32);
                         if w.is_full_size() && holes.iter().skip(1).any(|r| lx >= r[0] && lx < r[0] + r[2] && ly >= r[1] && ly < r[1] + r[3]) {
                             hit = Hit::Content;
@@ -3632,6 +3667,18 @@ impl Shell {
                     Hit::Edge(edges) => Grab::Resize { edges, start: w.r, x, y, app },
                     Hit::Content => {
                         self.desk.as_mut()?.grab = Some(Grab::Content(app, dy));
+                        // the press and its window: a menu the app opens on it stays open when the click ends
+                        // (`ext_context_menu`), and belongs to this window
+                        self.desktop_press = Some((x, y, t));
+                        if let AppId::External(slot) | AppId::ExternalWindow(slot, _) = app {
+                            if let Some(Some(host)) = self.ext.get_mut(slot as usize) {
+                                host.pointer_window = match app { AppId::ExternalWindow(_, id) => u32::from(id), _ => 0 };
+                            }
+                        }
+                        // the click that activates a window is a click in it: the window was raised above, it is its
+                        // app's key window before the press arrives (not a tick later, between the press and its
+                        // release), and the press and release go to the app as any other (click-through)
+                        self.sync_key_windows();
                         let b = w.body(&m);
                         let fx = self.with_size(b.w, b.h, |sh| sh.app_touch_single(app, Event::Down(x - b.x as f32, y - dy - b.y as f32), t));
                         return Some(fx);
@@ -3685,6 +3732,7 @@ impl Shell {
             }
             Event::Up(x, y) => {
                 let grab = self.desk.as_mut()?.grab.take();
+                self.desktop_press = None;
                 self.dirty = true;
                 match grab {
                     Some(Grab::Content(app, dy)) => {
@@ -4158,10 +4206,7 @@ impl Shell {
                     // input/focus changes always bypass this cache.
                     _ => !focused && cached.as_ref().is_some_and(|c| t - c.drawn < 1000.),
                 } && !self.keyboard.shown() && !self.keyboard.animating();
-                let (drag_height,no_drag)={
-                    let controls=match w.app {AppId::External(slot)=>self.ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
-                    drag_zone(w,&m,controls)
-                };
+                let (drag_height,no_drag)=drag_zone(w,&m,press_controls(&self.ext,w.app));
                 let corner=self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
                 // shell-drawn content is opaque (no vibrancy, see `take_wayland_materials`); a client's may not be
                 let opaque=!matches!(w.app.parent(),AppId::External(_));
@@ -4584,6 +4629,10 @@ mod w4_window_tests;
 
 #[cfg(all(test, feature = "desktop-wayland"))]
 mod launch_front_tests;
+
+/// The click that activates a window is delivered to it (click-through); a title bar press is the shell's.
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod activating_click_tests;
 
 /// E2E6 Search: whatever Search, the Apps grid, the Dock or `open-app` opens is the front window and keeps the
 /// keyboard, whatever focus the window server gives other windows on its own while the app maps (`FrontIntent`).

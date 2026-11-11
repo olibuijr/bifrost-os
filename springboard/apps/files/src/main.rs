@@ -332,7 +332,11 @@ impl Files {
         } else {
             bifrost_app::AppMenuItem::new(MENU_TRASH, "Move to Trash").key("cmd+backspace").enabled(has && !typing)
         };
+        // File > New Window (⌘N) and New Tab (⌘T) come first, as in the reference file manager's File menu: both had
+        // their keys and no menu item
         let mut items = vec![
+            bifrost_app::AppMenuItem::new(MENU_NEW_WINDOW, "New Window").key("cmd+n").enabled(!typing && !self.searching),
+            bifrost_app::AppMenuItem::new(MENU_NEW_TAB, "New Tab").key("cmd+t").enabled(!typing),
             new_folder,
             bifrost_app::AppMenuItem::separator(),
             open,
@@ -389,6 +393,10 @@ impl Files {
             return false;
         }
         match id {
+            // the window is opened by the window that has the keys; an extra window's new window joins the main
+            // window's list (`adopt_opened`)
+            MENU_NEW_WINDOW => return self.new_window(ctx),
+            MENU_NEW_TAB if self.naming.is_none() => self.new_tab(),
             MENU_OPEN => if let Some(i) = self.focus() { self.open(i) },
             MENU_QUICK_LOOK => self.quick_look(),
             MENU_NEW_FOLDER if !self.in_recents() && !self.in_bin() => self.new_folder(),
@@ -437,6 +445,11 @@ impl App for Files {
     }
     fn configure(&mut self, ctx: &Ctx) {
         self.painted_state.clear();
+        // the appearance or the date conventions changed: the other windows are painted again too (only the main
+        // window was, so a New Window window kept the old scheme until something changed in it)
+        for e in &mut self.windows {
+            e.files.painted_state.clear();
+        }
         // files from any app can be dropped on the folder listing (`dragout`)
         bifrost_app::dnd::register_types(ctx, &["public.data"]);
         if self.data_dir.is_none() {
@@ -452,7 +465,13 @@ impl App for Files {
         self.ctl_methods()
     }
     fn rpc(&mut self, _ctx: Option<&Ctx>, _data_dir: &Path, method: &str, params: &bifrost_core::json::Json) -> Result<bifrost_core::json::Json, bifrost_app::control::RpcError> {
-        self.ctl_rpc(method, params)
+        let reply = self.ctl_rpc(method, params);
+        // what a control call copied or cut is what a paste in any window takes
+        self.share_clips();
+        reply
+    }
+    fn window_controls(&self, _: &Ctx, window: WindowId) -> Vec<Node> {
+        self.window_nodes(window)
     }
     fn controls(&self, _: &Ctx)->Vec<Node> {let mut nodes=self.controls.nodes().to_vec();for n in &mut nodes {if n.id==4{n.value=self.query.to_string();}}nodes}
     /// The Edit menu follows the key window: Copy and Cut need a selection in the window that has the keys. The
@@ -465,12 +484,9 @@ impl App for Files {
         self.window_files(ctx.key_window()).edit_undo_titles()
     }
     fn event(&mut self, ctx: &Ctx, input: Input) -> bool {
-        let copies = self.fx.clip_rev;
         let handled = self.window_input_event(ctx, input);
         // what this window copied or cut is what a paste in any window takes
-        if self.fx.clip_rev != copies {
-            self.share_clip(None);
-        }
+        self.share_clips();
         handled
     }
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
@@ -537,13 +553,12 @@ impl App for Files {
         if files.info_window && !touch {
             return false;
         }
-        let copies = files.fx.clip_rev;
-        // an extra window's touches arrive in window points (`WindowTouch`); the handlers take px, as the main window's
-        let ev = if touch { bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0)) } else { ev };
+        // an extra window's touches and its secondary click arrive in window points (`WindowTouch`, `Context` with a
+        // window); the handlers take px, as the main window's. The menu a secondary click or a toolbar pull-down opens
+        // is this window's, and its choice (`ContextAction`) comes back here, for this window's selection and folder.
+        let ev = windows::window_input_in_px(ev, ctx.ui.pt(1.0));
         let changed = files.window_input_event(ctx, ev);
-        if files.fx.clip_rev != copies {
-            self.share_clip(Some(at));
-        }
+        self.share_clips();
         // a window that window opened (Get Info, New Window) is drawn and closed from here, with the others
         self.adopt_opened(at);
         changed
@@ -608,6 +623,9 @@ impl App for Files {
             changed = true;
         }
         self.ctl_tick();
+        // a copy or a cut made on a way that is not a window's own input (a menu item, a control call, a service
+        // reply) reaches the other windows here at the latest
+        self.share_clips();
         // a badge an extension answered with is drawn on this frame
         if self.poll_extensions() {
             changed = true;
@@ -1168,6 +1186,44 @@ mod tests {
         assert_eq!(at(&after, x + card_w - 6., y + 6.), CARD_BG.now());
         assert_eq!(at(&after, 8., 400.), at(&before, 8., 400.));
     }
+    /// A change of the clock style or the zone repaints a window whatever kind it is: the conventions are part of
+    /// what a paint depends on (the main window alone hears `configure`).
+    #[test]
+    fn the_painted_state_follows_the_date_conventions() {
+        let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let ui = Ui::new(font, 1.0);
+        let mut files = fixture(vec![folder("a")]);
+        files.fx.extra_window = true;
+        let (w, h) = (960, 630);
+        let mut pixels = vec![0; w * h];
+        assert!(files.render(&ui, &mut Surface { w, h, stride: w, px: &mut pixels, y0: 0 }).is_all());
+        assert!(files.painted_state.ends_with(&format!(":{}", bifrost_app::time_zone::conventions_revision())));
+        // painted under other conventions: everything is painted again
+        let stale = format!(":{}", bifrost_app::time_zone::conventions_revision().wrapping_add(1));
+        let at = files.painted_state.rfind(':').unwrap();
+        files.painted_state.replace_range(at.., &stale);
+        assert!(files.render(&ui, &mut Surface { w, h, stride: w, px: &mut pixels, y0: 0 }).is_all());
+    }
+    #[test]
+    fn the_file_menu_starts_with_new_window_and_new_tab() {
+        let mut files = fixture(vec![folder("a")]);
+        let items = files.file_menu_items();
+        let head: Vec<(&str, &str, bool)> = items.iter().take(3).map(|i| (i.title.as_str(), i.key.as_str(), i.enabled)).collect();
+        assert_eq!(head, vec![("New Window", "cmd+n", true), ("New Tab", "cmd+t", true), ("New Folder", "cmd+shift+n", true)]);
+        // Preview's key equivalent is the bare space bar, a name the shell's key parser knows
+        let preview = items.iter().find(|i| i.id == MENU_QUICK_LOOK).unwrap();
+        assert_eq!(preview.key, "space");
+        assert_eq!(bifrost_app::controls::keys::KeyCombo::parse(&preview.key).map(|c| c.to_string()).as_deref(), Some("Space"));
+        assert_eq!((items[0].id, items[1].id), (MENU_NEW_WINDOW, MENU_NEW_TAB));
+        // while a name is typed the chords are the field's
+        files.naming = Some((PathBuf::from("/fixture/a"), TextField::new()));
+        let typing = files.file_menu_items();
+        assert!(typing.iter().filter(|i| i.id == MENU_NEW_WINDOW || i.id == MENU_NEW_TAB).all(|i| !i.enabled));
+        // a Get Info window offers neither
+        files.naming = None;
+        files.info_window = true;
+        assert!(files.file_menu_items().iter().all(|i| !i.enabled));
+    }
     #[test]
     fn partial_selection_matches_full_repaint_in_both_views() {
         let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
@@ -1423,7 +1479,7 @@ mod tests {
         let a = dir.join("a.txt");
         files.toggle_tag(Tag::Red);
         files.toggle_tag(Tag::Blue);
-        assert_eq!(files.file_undo_titles().0, "Undo Tags");
+        assert_eq!(files.file_undo_titles().0, "Undo Tags of “a.txt”");
         // Cmd+Z takes Blue off again, then Red; the sidecar follows
         files.undo_file_op();
         assert_eq!(files.tag_index.tags(&a), vec![Tag::Red]);

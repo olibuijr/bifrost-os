@@ -68,7 +68,9 @@ fn headless_the_store_keeps_only_the_newest_entries_up_to_its_limit() {
     let mut store = Store::memory();
     let total = KEEP as u64 + 5;
     for i in 1..=total {
-        store.push(Notification::new(AppId::Terminal, format!("n{i}"), "", i as i64));
+        // three apps in turn: one app's stack has its own, smaller bound
+        let app = [AppId::Terminal, AppId::Settings, AppId::Files][(i % 3) as usize];
+        store.push(Notification::new(app, format!("n{i}"), "", i as i64));
     }
     assert_eq!(store.len(), KEEP);
     assert!(store.get(1).is_none(), "the oldest entries are evicted first");

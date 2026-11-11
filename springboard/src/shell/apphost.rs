@@ -604,6 +604,37 @@ pub(super) const WHEEL_DRAG_MS: f64 = 250.0;
 
 /// Counts one plain touch at `t` ms against the drag emulated for a wheel event (`left` touches, until `until`): true
 /// while the down, the move and the up of that drag are still due.
+/// Whether new pixels from the app in `slot`, which is not the app in front, are on screen: the desktop shows a
+/// window of it (its main window or an extra one) that is not minimized. Elsewhere only the front app is drawn.
+fn background_frame_shows(desk: Option<&super::desk::Desk>, slot: u8) -> bool {
+    desk.is_some_and(|d| d.wins.iter().any(|w| w.app.parent() == super::AppId::External(slot) && !w.minimized))
+}
+
+/// The window a context menu of the app in `slot` opens for, from the window the pointer last used there (`asked`):
+/// the desk window, its id for the app (0 the main window) and the pixels per unit of the point the app gave (1 for
+/// the main window, whose point is in surface pixels; `pt` for an extra window, whose point is in window points).
+/// An extra window that has closed since (`open` says no) leaves the main window.
+fn context_menu_window(slot: u8, asked: u32, open: impl Fn(u16) -> bool, pt: f32) -> (super::AppId, u32, f32) {
+    match u16::try_from(asked).ok().filter(|&id| id != 0 && open(id)) {
+        Some(id) => (super::AppId::ExternalWindow(slot, id), u32::from(id), pt),
+        None => (super::AppId::External(slot), 0, 1.0),
+    }
+}
+
+/// The secondary click an installed app hears for a click at (x, y) px inside the body of its window `app`, with the
+/// app's slot: the main window gets the point in surface pixels (as always), an extra window in its own points (as
+/// `WindowTouch`), and both are told which window it is. None for a window of a built-in app.
+pub(super) fn context_click(app: super::AppId, x: f32, y: f32, pt: f32) -> Option<(u8, ToApp)> {
+    match app {
+        super::AppId::External(slot) => Some((slot, ToApp::Context { x, y, window: Some(0) })),
+        super::AppId::ExternalWindow(slot, id) => {
+            let k = pt.max(f32::EPSILON);
+            Some((slot, ToApp::Context { x: x / k, y: y / k, window: Some(u32::from(id)) }))
+        }
+        _ => None,
+    }
+}
+
 fn wheel_drag_touch((left, until): &mut (u8, f64), t: f64) -> bool {
     if *left == 0 || t > *until {
         (*left, *until) = (0, 0.0);
@@ -669,6 +700,10 @@ pub struct AppHost {
     /// the app's Edit menu titles for Undo and Redo (empty: the plain words)
     pub undo_titles: (String, String),
     pub controls: Vec<bifrost_proto::Node>,
+    /// The app's window the pointer last pressed or secondary-clicked in (0 the main window, else an extra window's
+    /// id). A context menu the app asks for (`ToShell::ContextMenu`, which names no window) is opened for this window:
+    /// its point is in that window, and the chosen item goes back with it (`ToApp::ContextAction`).
+    pub pointer_window: u32,
     /// The app's own main-menu items (`ToShell::AppMenus`), shown by the desktop bar while the app is in front.
     pub app_menus: Vec<bifrost_proto::AppMenu>,
     /// Hierarchy and state beside `controls` (`ToShell::ControlsTree`); empty means a flat list.
@@ -871,6 +906,7 @@ impl AppHost {
             commands: bifrost_proto::Commands::default(),
             undo_titles: Default::default(),
             controls: Vec::new(),
+            pointer_window: 0,
             app_menus: Vec::new(),
             controls_tree: Vec::new(),
             ax_text: Vec::new(),
@@ -1595,6 +1631,13 @@ impl AppHost {
             ToShell::WindowBuffers { id, w, h, generation } => self.window_buffers(id, w, h, generation, fds),
             ToShell::WindowFrame { id, buf, damage } => self.window_frame_arrived(id, buf, damage, out),
             ToShell::Materials(list) => {if self.materials!=list {self.materials=list;out.chrome();}},
+            // an extra window's toolbar controls and vibrancy regions: kept with the window in the table (an id this app
+            // has not open is ignored there), and the desk reads them for its drag zone and its materials
+            ToShell::WindowChrome { id, press, materials } => {
+                if self.windows.set_chrome(&self.id, id, &press, &materials) {
+                    out.chrome();
+                }
+            }
             ToShell::Commands(commands) => {if self.commands!=commands {self.commands=commands;out.chrome();}},
             ToShell::UndoTitles { undo, redo } => {if self.undo_titles!=(undo.clone(),redo.clone()) {self.undo_titles=(undo,redo);out.chrome();}},
             ToShell::Log { text } => bifrost_core::log::shell_logger("apphost").info(format!("app {}: {text}", self.id)),
@@ -2124,7 +2167,7 @@ pub fn date_time_flags(clock_24h: bool) -> u32 {
 pub fn appearance_flags() -> u32 {
     use bifrost_proto::appearance::*;
     use super::accessibility as a11y;
-    [(a11y::increase_contrast(), INCREASE_CONTRAST), (a11y::reduce_transparency(), REDUCE_TRANSPARENCY), (a11y::button_shapes(), SHOW_BORDERS), (a11y::bold_text(), BOLD_TEXT), (bifrost_render::appearance::target_is_light(), LIGHT), (vibrancy_available(), VIBRANCY), (vibrancy_available(), MATERIALS)]
+    [(a11y::increase_contrast(), INCREASE_CONTRAST), (a11y::reduce_transparency(), REDUCE_TRANSPARENCY), (a11y::button_shapes(), SHOW_BORDERS), (a11y::bold_text(), BOLD_TEXT), (bifrost_render::appearance::target_is_light(), LIGHT), (vibrancy_available(), VIBRANCY), (vibrancy_available(), MATERIALS), (true, WINDOW_CHROME)]
         .into_iter()
         .fold(0, |f, (on, bit)| if on { f | bit } else { f })
         | (bifrost_render::appearance::accent().to_wire() << ACCENT_SHIFT)
@@ -2495,6 +2538,29 @@ impl Shell {
         self.ext.get(slot).and_then(Option::as_ref).is_some_and(|h| h.frame().is_some())
     }
 
+    /// Opens the context menu the app in `slot` asked for (`ToShell::ContextMenu`) at (x, y) of the window that asked.
+    /// The message names no window, so it is the one the pointer last pressed or secondary-clicked in
+    /// (`AppHost::pointer_window`), the main window when that one has closed: the point is in the main window's
+    /// surface pixels, or in an extra window's points (as `WindowTouch`), and the chosen item goes back with the
+    /// window. A menu opened while a press is still down in a window of the app remembers that press
+    /// (`desktop_menu_press`): its release ends the click that opened the menu and leaves it open.
+    pub(super) fn ext_context_menu(&mut self, slot: u8, x: f32, y: f32, items: Vec<bifrost_proto::ContextItem>) {
+        let Some(d) = &self.desk else { return };
+        let asked = self.ext.get(slot as usize).and_then(Option::as_ref).map_or(0, |h| h.pointer_window);
+        let (app, window, k) = context_menu_window(slot, asked, |id| d.index_of(super::AppId::ExternalWindow(slot, id)).is_some(), self.ui.pt(1.0));
+        let Some(i) = d.index_of(app) else { return };
+        let b = d.wins[i].body(&self.desk_metrics());
+        let held = d.content_press().is_some_and(|a| a.parent() == super::AppId::External(slot));
+        self.desktop_menu_press = if held { self.desktop_press } else { None };
+        self.desktop_context = Some(super::desktop_bar::ContextMenu { slot, window, x: x * k + b.x as f32, y: y * k + b.y as f32, items });
+        self.desktop_menu = Some(super::desktop_bar::Menu::Context);
+        #[cfg(feature = "desktop-wayland")]
+        {
+            self.desktop_menu_row = None;
+        }
+        self.dirty = true;
+    }
+
     pub(super) fn ext_touch(&mut self, slot: usize, ev: Event, t: f64) {
         // the drag emulated for a wheel event the app took (`pointer`) is not a touch
         if let Some(Some(h)) = self.ext.get_mut(slot) {
@@ -2853,6 +2919,12 @@ impl Shell {
                     // new pixels alone: the desktop republishes the windows, nothing else is drawn again
                     self.ext_frame = true;
                 }
+            } else if p.frame && background_frame_shows(self.desk.as_ref(), slot as u8) {
+                // an app behind the front one drew again (it was told a new clock style, time zone or appearance, or
+                // its window was resized): its window is on screen, so the pixels go up now. They used to wait for
+                // the next frame something else caused, seconds later (E2E7: Files behind Settings kept the 12-hour
+                // times after the menu bar had changed)
+                self.ext_frame = true;
             }
             for r in p.requests {
                 match r {
@@ -2981,7 +3053,7 @@ impl Shell {
         self.usernotif_tick(t);
         for notification in notifications { self.notify(notification); }
         if let Some(url)=open_url{if let Err(e)=self.desktop_open_url(&url,t){eprintln!("BifrOSt web link: {e}");}}
-        if let Some((slot,x,y,items))=context {if let Some(d)=&self.desk {if let Some(i)=d.index_of(super::AppId::External(slot)){let b=d.wins[i].body(&self.desk_metrics());self.desktop_context=Some(super::desktop_bar::ContextMenu{slot,x:x+b.x as f32,y:y+b.y as f32,items});self.desktop_menu=Some(super::desktop_bar::Menu::Context);#[cfg(feature="desktop-wayland")] {self.desktop_menu_row=None;}self.dirty=true;}}}
+        if let Some((slot,x,y,items))=context {self.ext_context_menu(slot,x,y,items);}
         if let Some((text, private)) = clip {
             if private {
                 super::clipboard::set_text_volatile(&text);
@@ -3248,6 +3320,12 @@ mod badge_tests;
 
 #[cfg(test)]
 mod route_tests;
+
+#[cfg(test)]
+mod context_window_tests;
+
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod background_frame_tests;
 
 #[cfg(test)]
 mod service_manifest_tests;

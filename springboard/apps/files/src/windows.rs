@@ -30,9 +30,51 @@ impl ExtraWindow {
         if self.drawn != Some((s.w, s.h)) {
             self.files.painted_state.clear();
             self.drawn = Some((s.w, s.h));
+            // the window lays itself out for the surface it is given: the desk sizes the body after the window opens and
+            // on every resize, and a layout kept at the size asked for left the toolbar, the scroll range and the click
+            // targets where a window of another size has them
+            let (w, h) = surface_pt(s.w, s.h, ctx.ui.s);
+            if (w, h) != (self.files.w, self.files.h) {
+                self.files.w = w;
+                self.files.h = h;
+                self.files.update_controls();
+            }
         }
         self.files.draw(ctx, s, t)
     }
+}
+
+/// What New Window asks the shell for. The window is the main window again: its content runs under the title bar
+/// (the manifest's `window = "full-size"` for the main one), so the traffic lights sit over the sidebar and the
+/// toolbar row is the title row, with no second title bar above it. That needs a shell that takes the window's toolbar
+/// controls and blurs behind its sidebar (`chrome`, `shell_takes_window_chrome`); on any other shell the window keeps
+/// the shell's title bar, where every press in the toolbar still reaches the app. Either way it is cascaded from the
+/// app's windows instead of covering the one it was opened from.
+pub(crate) fn new_window_spec(w: f32, h: f32, chrome: bool) -> WindowSpec {
+    let spec = WindowSpec::new("Files", w, h).cascaded();
+    if chrome { spec.full_size_content() } else { spec }
+}
+
+/// A surface's size in points at `scale` px per point, as `App::configure` gives the main window its size.
+pub(crate) fn surface_pt(w: usize, h: usize, scale: f32) -> (f32, f32) {
+    let k = scale.max(0.01);
+    (w as f32 / k, h as f32 / k)
+}
+
+/// An extra window's input as the handlers written for the main window take it: a touch and a secondary click arrive
+/// in the window's points (`ToApp::WindowTouch`, `ToApp::Context` with a window) and are hit-tested in px.
+pub(crate) fn window_input_in_px(ev: Input, px_per_pt: f32) -> Input {
+    match ev {
+        Input::Context { x, y } => Input::Context { x: x * px_per_pt, y: y * px_per_pt },
+        other => bifrost_app::app_windows::window_touch_in_px(other, px_per_pt),
+    }
+}
+
+/// Where a window asks the shell to open a menu (`Ctx::context_menu`) for the point (x, y) of its own points: the
+/// main window names it in surface pixels, an extra window in its points (the shell reads the point in the units of
+/// the window the pointer last used, as it sends that window's touches).
+pub(crate) fn menu_point(extra_window: bool, x: f32, y: f32, px_per_pt: f32) -> (f32, f32) {
+    if extra_window { (x, y) } else { (x * px_per_pt, y * px_per_pt) }
 }
 
 /// Whether ⌘W in an extra window closes the window: always a Get Info window, and a browser window that has no
@@ -45,7 +87,7 @@ impl Files {
     /// New Window (⌘N): opens a window at the home folder. Returns false when the shell refuses the window.
     pub(crate) fn new_window(&mut self, ctx: &Ctx) -> bool {
         let (w, h) = NEW_WINDOW_PT;
-        let Ok(id) = ctx.open_window(WindowSpec::new("Files", w, h)) else { return false };
+        let Ok(id) = ctx.open_window(new_window_spec(w, h, bifrost_app::app_windows::shell_takes_window_chrome())) else { return false };
         let mut files = Box::new(Files::new());
         files.data_dir = Some(ctx.data_dir.clone());
         // its folder is watched by the main window's stream, and the main window's `tick` runs its share
@@ -67,6 +109,15 @@ impl Files {
             return self;
         }
         self.windows.iter().find(|e| e.id == window).map_or(self, |e| &*e.files)
+    }
+
+    /// The controls of the New Window window `window`, in its points, for the shell's drag band (`App::window_controls`):
+    /// the toolbar buttons and the search field take their presses. None for a Get Info window or a window that is gone.
+    pub(crate) fn window_nodes(&self, window: WindowId) -> Vec<Node> {
+        match self.windows.iter().find(|e| e.id == window) {
+            Some(e) if !e.files.info_window => e.files.controls.nodes().to_vec(),
+            _ => Vec::new(),
+        }
     }
 
     /// The windows the extra window at `at` opened (Get Info, New Window) join the main window's list: they are
@@ -101,6 +152,23 @@ impl Files {
         for (i, e) in self.windows.iter_mut().enumerate() {
             if Some(i) != from && !e.files.info_window {
                 e.files.clip = clip.clone();
+            }
+        }
+    }
+
+    /// Shares what any window copied or cut since the last look, on whatever way it did (a key, a menu item, the
+    /// context menu, a control call): the windows are compared by their copy counts, so no route has to remember to
+    /// share. The newest copy wins when two windows copied since.
+    pub(crate) fn share_clips(&mut self) {
+        if self.fx.clip_rev != self.fx.clip_shared {
+            self.fx.clip_shared = self.fx.clip_rev;
+            self.share_clip(None);
+        }
+        for i in 0..self.windows.len() {
+            let fx = &mut self.windows[i].files.fx;
+            if fx.clip_rev != fx.clip_shared {
+                fx.clip_shared = fx.clip_rev;
+                self.share_clip(Some(i));
             }
         }
     }
@@ -188,6 +256,148 @@ mod tests {
         assert_eq!(main.windows[1].files.clip, copied);
         main.share_clip(Some(9));
         assert_eq!(main.clip, copied, "an unknown window changes nothing");
+    }
+
+    fn ctx_at(scale: f32) -> Ctx {
+        use bifrost_app::kit::{Font, Ui};
+        let font = Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let cfg = bifrost_app::proto::Configure { w: 1920, h: 1260, scale, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(font, scale), cfg)
+    }
+
+    fn menu_sent(ctx: &Ctx) -> Option<(f32, f32, Vec<ContextItem>)> {
+        ctx.take_sent().into_iter().find_map(|m| match m {
+            bifrost_app::proto::ToShell::ContextMenu { x, y, items } => Some((x, y, items)),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn a_menu_point_is_in_pixels_for_the_main_window_and_in_points_for_an_extra_one() {
+        assert_eq!(menu_point(false, 100.0, 40.0, 2.0), (200.0, 80.0));
+        assert_eq!(menu_point(true, 100.0, 40.0, 2.0), (100.0, 40.0));
+        assert!(matches!(window_input_in_px(Input::Context { x: 100.0, y: 40.0 }, 2.0), Input::Context { x, y } if (x, y) == (200.0, 80.0)));
+        assert!(matches!(window_input_in_px(Input::ContextAction(7), 2.0), Input::ContextAction(7)));
+    }
+
+    /// E2E7: a secondary click in a second Files window did nothing. It selects the item under the pointer in that
+    /// window, opens that window's menu at the pointer, and the choice acts on that window's selection.
+    #[test]
+    fn a_secondary_click_in_a_second_window_opens_its_menu_and_the_choice_acts_there() {
+        let ctx = ctx_at(2.0);
+        let mut main = two_windows();
+        main.windows[0].files.fx.extra_window = true;
+        main.selection = vec![0];
+        // a point on the second item of the second window, in its points
+        let second = &main.windows[0].files;
+        let at = (0..150).flat_map(|i| (0..100).map(move |j| (i as f32 * 6.0, j as f32 * 6.0))).find(|&(x, y)| second.item_at(x, y) == Some(1));
+        let (x, y) = at.expect("the second item is in the window");
+        assert!(main.window_event(&ctx, WindowId(4), Input::Context { x, y }));
+        let (mx, my, items) = menu_sent(&ctx).expect("the window asks for its menu");
+        assert_eq!((mx, my), (x, y), "at the pointer, in the window's points");
+        assert!(items.iter().any(|i| i.id == MENU_COPY), "the item menu");
+        assert_eq!(main.windows[0].files.selection, vec![1], "the item under the pointer, in that window");
+        assert_eq!(main.selection, vec![0], "the main window's selection is its own");
+        // the choice comes back for that window: Copy copies its item, not the main window's
+        main.window_event(&ctx, WindowId(4), Input::ContextAction(MENU_COPY));
+        assert_eq!(main.clip, Some((vec![PathBuf::from("/fixture/b")], false)), "what it copied every window pastes");
+        // a choice for a window that is gone acts nowhere
+        assert!(!main.window_event(&ctx, WindowId(9), Input::ContextAction(MENU_COPY)));
+        // the same click in the main window is in pixels, and so is the point of its menu
+        main.selection.clear();
+        assert!(main.window_event(&ctx, WindowId::MAIN, Input::Context { x: x * 2.0, y: y * 2.0 }));
+        let (mx, my, _) = menu_sent(&ctx).expect("the main window's menu");
+        assert_eq!((mx, my), (x * 2.0, y * 2.0));
+        assert_eq!(main.selection, vec![1]);
+    }
+
+    /// A toolbar pull-down opened in a second window opens under that window's button, and its choice sorts that
+    /// window alone.
+    #[test]
+    fn a_toolbar_menu_of_a_second_window_opens_in_its_points_and_its_choice_acts_there() {
+        let ctx = ctx_at(2.0);
+        let mut main = two_windows();
+        main.windows[0].files.fx.extra_window = true;
+        main.windows[0].files.update_controls();
+        main.update_controls();
+        // where the menu was queued for: under the button, in the window's points
+        let queued = |files: &Files| match files.sys.effects.last() {
+            Some(Effect::PopUp(x, y, _)) => (*x, *y),
+            _ => panic!("the Sort button queues its menu"),
+        };
+        main.windows[0].files.bar_action(BAR_SORT);
+        let want = queued(&main.windows[0].files);
+        main.windows[0].files.flush_services(&ctx);
+        let (x, y, _) = menu_sent(&ctx).expect("the second window's Sort menu");
+        assert_eq!((x, y), want, "an extra window names the point in its points");
+        main.bar_action(BAR_SORT);
+        let want = queued(&main);
+        main.flush_services(&ctx);
+        let (x, y, _) = menu_sent(&ctx).expect("the main window's Sort menu");
+        assert_eq!((x, y), (want.0 * 2.0, want.1 * 2.0), "the main window in pixels");
+        main.window_event(&ctx, WindowId(4), Input::ContextAction(MENU_SORT_SIZE));
+        assert!(matches!(main.windows[0].files.sort, Sort::Size), "the window the menu was opened in");
+        assert!(matches!(main.sort, Sort::Name), "the main window keeps its order");
+    }
+
+    #[test]
+    fn a_new_window_is_a_full_size_window_where_the_shell_gives_it_the_main_windows_chrome() {
+        let spec = new_window_spec(900.0, 600.0, true);
+        assert!(spec.full_size && spec.cascade);
+        assert_eq!((spec.title.as_str(), spec.width, spec.height), ("Files", 900.0, 600.0));
+        // a shell that does not: the shell's title bar stays, and the toolbar keeps its presses
+        let spec = new_window_spec(900.0, 600.0, false);
+        assert!(!spec.full_size && spec.cascade);
+    }
+
+    #[test]
+    fn the_toolbar_controls_of_an_extra_window_are_its_own() {
+        let mut main = two_windows();
+        main.windows[0].files.w = 700.;
+        main.windows[0].files.update_controls();
+        main.update_controls();
+        let own: Vec<_> = main.windows[0].files.controls.nodes().iter().map(|n| (n.id, n.bounds)).collect();
+        let told: Vec<_> = main.window_nodes(WindowId(4)).iter().map(|n| (n.id, n.bounds)).collect();
+        assert!(!told.is_empty(), "the toolbar buttons");
+        assert_eq!(told, own);
+        assert!(main.window_nodes(WindowId(9)).is_empty(), "a window that is gone has none");
+        // a Get Info window keeps the shell's title bar: it names no controls
+        main.windows[0].files.info_window = true;
+        assert!(main.window_nodes(WindowId(4)).is_empty());
+    }
+
+    #[test]
+    fn a_window_is_laid_out_for_the_surface_it_draws_into() {
+        assert_eq!(surface_pt(1200, 800, 1.25), (960.0, 640.0));
+        assert_eq!(surface_pt(900, 600, 1.0), (900.0, 600.0));
+        let (w, h) = surface_pt(100, 50, 0.0);
+        assert!(w.is_finite() && h.is_finite(), "a zero scale divides by nothing");
+    }
+
+    /// A copy that did not come through a window's own input (the control socket, a menu item) stayed in the window
+    /// that made it until the next keyboard copy.
+    #[test]
+    fn a_copy_made_on_any_way_reaches_every_window() {
+        let mut main = two_windows();
+        // the main window copies outside `event` (what a control call or a menu item does)
+        main.selection = vec![0];
+        main.copy_selected(false);
+        assert_eq!(main.windows[0].files.clip, None, "not shared yet");
+        main.share_clips();
+        let copied = Some((vec![PathBuf::from("/fixture/a")], false));
+        assert_eq!(main.windows[0].files.clip, copied);
+        // nothing new: a second look changes nothing, and a window's own later state is not overwritten
+        main.windows[0].files.clip = None;
+        main.share_clips();
+        assert_eq!(main.windows[0].files.clip, None);
+        // an extra window cuts: the main window and the others take it
+        main.windows.push(ExtraWindow::new(WindowId(5), Box::new(fixture(vec![]))));
+        main.windows[0].files.selection = vec![1];
+        main.windows[0].files.copy_selected(true);
+        main.share_clips();
+        let cut = Some((vec![PathBuf::from("/fixture/b")], true));
+        assert_eq!(main.clip, cut);
+        assert_eq!(main.windows[1].files.clip, cut);
     }
 
     #[test]

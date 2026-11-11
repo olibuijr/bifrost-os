@@ -74,7 +74,34 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
 #[derive(Clone)] pub(super) enum Action {Submenu(Menu),Window(super::utility_window::Kind),Script(u8),Foreign(u32),Settings(&'static str),Desktop,Arrange(super::AppId,super::desk::Arrange),Close,Quit,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),QuickAction(u8,u8),AppMenu(u8,u32),Dock(super::desktop_dock::Change),DockMenu(u8,u32),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),InputMethod(String),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,OnScreenKeyboard,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop,Service(u8),Photo(super::photos::commands::PhotoCommand),PhotoEditWith(String),GameModeOff,LowPowerMode(bool),HelpItem(Menu,usize),HelpTopic(String,Option<String>),Help(String),About,AppSettings(u8),Hide,HideOthers,UnhideAll}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
-pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
+pub(super) struct ContextMenu {pub slot:u8,
+    /// the app's window the menu was opened for (0 its main window, else an extra window's id): the chosen item goes
+    /// back to the app with it (`ToApp::ContextAction`)
+    pub window:u32,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
+/// How far (pt) the pointer may wander between the press that opened a menu and its release and still count as a click.
+#[cfg(feature = "desktop-wayland")]
+const MENU_CLICK_SLOP_PT:f32=4.;
+/// What the release of the press that opened a menu does to it.
+#[cfg(feature = "desktop-wayland")]
+#[derive(Clone,Copy,Debug,PartialEq)]
+pub(super) enum OpeningRelease {
+    /// the click that opened the menu ends: the menu stays open, and the next click chooses in it or closes it
+    Stay,
+    /// the press was dragged onto an item, or held and let go: the release acts as any release on an open menu does
+    /// (the item under it is chosen; over no item the menu closes)
+    Act,
+}
+/// The menu rule for a menu an app opens on a press (a pop-up button, a toolbar's overflow button): a click leaves it
+/// open; press, drag to an item and release chooses the item; a press held past the click time and let go over no
+/// item closes it. `press` is where and when (ms) the opening press went down, `up` where it lifts at `t`, `slop`
+/// the px a click may wander, `click_ms` the longest click and `on_item` whether a choosable row is under the release.
+/// A release that has not moved never chooses: the menu may have opened under the pointer (flipped at a screen edge).
+#[cfg(feature = "desktop-wayland")]
+pub(super) fn opening_release(press:(f32,f32,f64),up:(f32,f32),t:f64,slop:f32,click_ms:f64,on_item:bool)->OpeningRelease {
+    let moved=(up.0-press.0).hypot(up.1-press.1)>slop;
+    if moved&&on_item {return OpeningRelease::Act;}
+    if t-press.2<=click_ms||(!moved&&on_item) {OpeningRelease::Stay} else {OpeningRelease::Act}
+}
 #[cfg(feature = "desktop-wayland")]
 pub(super) struct Row {pub(super) text:String,pub(super) action:Option<Action>,sep:bool,key:Option<String>,symbol:Option<crate::symbols::Symbol>,indent:bool,search:bool,header:bool,art:bool}
 /// How an app's menu extra (`NativeStatusItem`) shows on the bar.
@@ -164,9 +191,16 @@ const MENU_ART_PT:f32=40.;
 /// The gap between the menu bar and an open menu (Golden Gate).
 #[cfg(feature = "desktop-wayland")]
 const MENU_GAP_PT:f32=6.;
-/// A shortcut as Golden Gate menus show it: modifier glyphs, a space, then the key ("⌘ ,", "⇧⌘ Z").
+/// A shortcut as Golden Gate menus show it: modifier glyphs, a space, then the key ("⌘ ,", "⇧⌘ Z"). The key is
+/// everything after the modifier glyphs of `KeyCombo`'s notation, so a key with a name of several letters stays
+/// whole ("Space", "⌘ F5", "⌥ Space"): it was cut before its last letter ("Spac e", E2E7). The label is drawn
+/// right-aligned (`draw_desktop_popup`), so a word key ends in the column the single-glyph keys end in.
 #[cfg(feature = "desktop-wayland")]
-fn shortcut_spaced(k:&str)->String {let mut c:Vec<char>=k.chars().collect();match c.pop(){Some(last) if !c.is_empty()=>format!("{} {last}",c.into_iter().collect::<String>()),_=>k.to_string()}}
+fn shortcut_spaced(k:&str)->String {
+    let at=k.char_indices().find(|(_,c)|!matches!(c,'\u{2303}'|'\u{2325}'|'\u{21e7}'|'\u{2318}')).map_or(k.len(),|(i,_)|i);
+    let (mods,key)=k.split_at(at);
+    if mods.is_empty()||key.is_empty() {k.to_string()} else {format!("{mods} {key}")}
+}
 /// The screen rectangle (x, y, w, h in px) an open desktop popup owes a repaint: the popup and its shadow
 /// `reach` px out on the sides and bottom, and `reach` px up on top, clamped to the bottom of the menu bar
 /// (the bar repaints its own strip). The shadow above the popup lies in the gap under the bar, so a
@@ -1269,6 +1303,8 @@ impl Shell {
     }
     pub(super) fn desktop_bar_event(&mut self,event:Event,t:f64)->Option<Vec<Effect>> {
         if !self.desk_active()||self.is_locked(){return None;}
+        // a new press is never the one that opened the menu; nor is a release with no menu open
+        match event {Event::Down(..)=>self.desktop_menu_press=None,Event::Up(..) if self.desktop_menu.is_none()=>self.desktop_menu_press=None,_=>{}}
         // the preview panel takes the pointer inside its card while it is up
         match event {Event::Down(x,y)=>{if self.quick_look_pointer(x,y,false){return Some(vec![]);}},Event::Up(x,y)=>{if self.quick_look_pointer(x,y,true){return Some(vec![]);}},_=>{}}
         // an open or save panel is modal over the desktop: it takes the pointer, a press elsewhere does nothing
@@ -1299,7 +1335,18 @@ impl Shell {
             Event::Down(x,y) if self.desktop_menu==Some(Menu::Arrange)&&self.arrange_on_button(x,y)=>{self.desktop_menu=None;self.dirty=true;None},
             // a press inside any open level (a menu or a submenu cascading beside it) keeps the menus open
             Event::Down(x,y) if self.desktop_menu.is_some()=>{if self.menu_level_at(x,y).is_none(){self.desktop_menu=None;self.desktop_flyout=Flyout::default();self.dirty=true;}Some(vec![])},
-            Event::Up(x,y) if self.desktop_menu.is_some()=>{if y<self.desktop_bar_height() as f32{return Some(vec![]);}
+            // the press that opened the menu is still down: its moves light the rows up as a hover does (the window
+            // server sends no hover while a button is held), and do not drag in the window below
+            Event::Move(x,y) if self.desktop_menu.is_some()&&self.desktop_menu_press.is_some()=>{self.desktop_menu_hover_at(x,y,t);Some(vec![])},
+            Event::Up(x,y) if self.desktop_menu.is_some()=>{
+                // the release of the press that opened the menu (an app's pop-up or overflow button): a click leaves
+                // the menu open, a drag onto an item chooses it (`opening_release`). The app does not hear this
+                // release, as it never heard one that landed on a menu
+                if let Some(press)=self.desktop_menu_press.take() {
+                    let on_item=self.menu_level_at(x,y).and_then(|(_,menu,(_,top,_,_))|self.menu_row_at(menu,y-top as f32).and_then(|i|self.menu_rows(menu).get(i).map(|r|r.action.is_some()))).unwrap_or(false);
+                    if opening_release(press,(x,y),t,self.ui.pt(MENU_CLICK_SLOP_PT),super::desk::double_click_ms(),on_item)==OpeningRelease::Stay {return Some(vec![]);}
+                }
+                if y<self.desktop_bar_height() as f32{return Some(vec![]);}
                 if self.desktop_menu==Some(Menu::Help)&&self.help_field_at(x,y) {return Some(vec![]);}
                 // the release lands on a row of whichever level is under it: a parent's row as well as the submenu's
                 let action=self.menu_level_at(x,y).and_then(|(_,menu,(_,top,_,_))|self.menu_row_at(menu,y-top as f32).and_then(|i|self.menu_rows(menu).get(i).and_then(|r|r.action.clone())));
@@ -1521,12 +1568,12 @@ impl Shell {
     pub(super) fn run_menu_action(&mut self,action:Action,t:f64)->Vec<Effect> {
         let mut effects=Vec::new();match action {
                     Action::Settings(page)=>{self.desk_open(AppId::Settings,t);if !page.is_empty(){if let Some(st)=&mut self.settings {effects.extend(st.open_page(&self.ui,page,t));}}},
-                    Action::Context(slot,id)=>{if id>=super::sharing::MENU_BASE&&self.share_choose(id,t){self.desktop_context=None;}else if self.screen==Screen::App(AppId::External(slot)){if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::ContextAction(id));}}self.desktop_context=None;},
+                    Action::Context(slot,id)=>{if id>=super::sharing::MENU_BASE&&self.share_choose(id,t){self.desktop_context=None;}else if self.screen==Screen::App(AppId::External(slot)){let window=self.desktop_context.as_ref().map_or(0,|c|c.window);if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::ContextAction(id,Some(window)));}}self.desktop_context=None;},
                     Action::StatusItem(slot,item,id)=>{if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::StatusItemAction{item,id});}},
                     Action::AppMenu(slot,id)=>{if self.screen==Screen::App(AppId::External(slot)){if let Some(Some(h))=self.ext.get_mut(slot as usize){h.input(bifrost_proto::WindowInput::MenuAction(id));}}},
                     Action::Dock(change)=>effects.extend(self.dock_change(change,t)),
                     Action::QuickAction(slot,index)=>{if let Some(item)=self.quick_actions_for(slot as usize).get(index as usize).cloned(){self.record_quick_action(slot as usize,&item.kind);if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::QuickAction{kind:item.kind,user_info:item.user_info});}}},
-                    Action::DockMenu(slot,id)=>{if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::ContextAction(id));}},
+                    Action::DockMenu(slot,id)=>{if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::ContextAction(id,Some(0)));}},
                     Action::Arrange(app,what)=>self.desk_arrange(app,what,t),
                     Action::Tile(t)=>effects.extend(self.desk_tile_front(t)),
                     Action::RestoreSize=>effects.extend(self.desk_restore_front()),

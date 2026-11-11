@@ -747,6 +747,33 @@ by hand keep working unchanged; they just show no keys and no separators. Gaps a
 no checked-state column (a check mark goes in the title), no icons, no `NSMenuDelegate` and no alternate (Option)
 items in context menus.
 
+Click to open (after system 0.10.52): a menu an app opens on a press (a pop-up button, a toolbar's overflow button)
+follows the menu rule (`desktop_bar::opening_release`). The release of the press that opened it leaves it open when
+it is a click (released within the double-click time, or without moving off the spot); press, drag onto an item and
+release chooses the item; a press held past that time and let go over no item closes the menu. While that press is
+down its moves highlight the rows, and the window below gets neither the moves nor the release. The shell knows the
+press because it is still down in a window of the app when `ContextMenu` arrives (`Shell::ext_context_menu`,
+`desktop_menu_press`); nothing on the wire says how a menu was opened. A menu opened by a secondary click, a bar menu
+and the Dock's menu have no opening press and behave as before (a bar menu stays open after the click on its title
+because that release is on the bar).
+
+Windows (after system 0.10.52): `ToApp::Context` and `ToApp::ContextAction` end with a window (a `u32`: 0 the main
+window, else the id of `WindowOpen`; absent from a shell up to 0.10.52, which only tells the main window). A secondary
+click goes to the window under the pointer: the main window gets the point in surface pixels as before, an extra window
+in its own points, as `WindowTouch` gives them. `ToShell::ContextMenu` names no window: the menu opens for the app's
+window the pointer last pressed or secondary-clicked in (`AppHost::pointer_window`, the main window when that one has
+closed), its point is read in that window's units, and the choice goes back with that window. The Dock menu's choice
+carries window 0. The field is the last one on the wire and optional: an app built before it reads the messages as it
+always did.
+
+SDK side (`app_windows::deliver_context`, `deliver_context_action`): window 0 or no window is `App::event` as before;
+an extra window's click and choice are `App::window_event(ctx, window, Input::Context { x, y })` and
+`Input::ContextAction(id)`, the point in the window's points (an app that hit-tests in px multiplies by `ctx.ui.pt(1.0)`,
+and gives `Ctx::context_menu` a point in points for that window; Files: `windows::window_input_in_px`, `menu_point`).
+A click for a closed window is dropped, a choice for one falls back to `App::event`. Compatibility: an app whose
+`window_event` ignores these inputs for an extra window (the trait default) behaves as before, and an app built with
+this SDK on a shell up to 0.10.52 hears every click and choice in its main window, as it did.
+
 ## Uniform type identifiers (`UniformTypeIdentifiers`, 0.4.69)
 
 `uttype` is now the one table of file types: 58 types with identifier, parents, extensions, MIME type and
@@ -1104,6 +1131,10 @@ the menu is a plain context menu (no icons, no "More..."), and Copy of a file co
   answered by the runtime (`performed(false)`). Files uses it to drop into the window under the pointer.
 - **Desktop**: files dropped on the desktop move there when they are on the Desktop folder's volume and the source
   allows the move (Option copies, as the narrowed mask says); from another volume they are copied.
+  The desktop draws no icons for the folder's items (there is no desktop icon layer), so when the files have arrived
+  the shell says where they went: a banner from Files, "Moved to Desktop" or "Copied to Desktop" with the item's name
+  (or the count), and a click on it shows the item selected in Files (`dnd::desktop_drop_banner`,
+  `Shell::dnd_desktop_tick`, `dnd_desktop_reveal`). A drop that failed says so ("Not Moved to Desktop" with the reason).
 - **Perform**: on release over a window that replied with an operation the shell first hands the files over, each as a fresh
   **read-only** grant made from the source's grant (`Broker::transfer`, a `DocBatch` and `DocGranted` with `request == session`),
   then sends `Perform` with the items; file items carry the new grant ids and a file that could not be handed over is dropped.
@@ -1460,6 +1491,24 @@ the windows behind the window. Ours, end to end:
   sends each External window's material rects (`expand_material`, window radius growth on inner sides) as the
   `ext-background-effect` blur region, exactly as for built-in windows; apps need no extra call beyond
   `visual_effect` / `source_list`. Direct Wayland-surface apps do not send a region yet (gap).
+- Extra windows (`app_windows`): `ToShell::WindowChrome { id, press, materials }` (tag 0x25a) carries one extra
+  window's press-taking rectangles (window points, at most `MAX_WINDOW_PRESS` = 64; from `App::window_controls`,
+  the roles the shell treats as controls) and its material list (as `Materials` writes it). The runtime sends it
+  after the window drew, when either list changed, and only to a shell that set `appearance::WINDOW_CHROME`
+  (bit 7, 128): a shell without it cannot decode the tag and would stop the app. With the bit, a
+  `WindowSpec::full_size_content()` window has working toolbar buttons (the rest of its 52 pt band moves the
+  window) and a blurred sidebar; `app_windows::shell_takes_window_chrome()` tells an app whether to ask for one.
+  Without the bit the runtime paints an extra window with vibrancy off (materials draw `solid()`), because
+  nothing would blur what is behind it. Files' New Window uses this (1.34.21).
+  Shell half: `appearance_flags` always sets the bit; `AppHost::handle` keeps the lists with the window in its table
+  (`WindowTable::set_chrome`: only a window this app has open, each rectangle cut to the window, non-finite ones
+  dropped, a desk frame only when the lists changed, gone when the window closes). The desk reads them through
+  `desk::press_controls` (the press holes of `drag_zone` for the window server's move and for the shell's own press)
+  and `desk::window_materials` (`take_wayland_materials`, under the window's own frame id, `win_id`). An extra window
+  that sends no controls keeps its whole band as the drag zone. Every extra window of an app built with this SDK now
+  declares its materials on such a shell (a document app's second window gets the blur its main window has).
+  `ToShell::Controls` stays the main window's own list whichever window is key: `App::controls` plus the nodes the
+  kit recorded in the main window's draw; what an extra window's draw records is dropped (`draw_windows`).
 - Version guard: an app whose SDK protocol differs from the shell's (`Hello`, or packets that do not decode) is
   stopped, logged, and its window shows "This app needs an update" instead of black (`AppHost::incompatible`).
 - Shell: `AppHost::materials` holds the list; `Shell::take_wayland_materials` turns it into window px with a
@@ -2852,6 +2901,13 @@ this in 1.34.19 and kept "Today at 01:18" with 24-Hour Time off. The shell tells
   that does not send it keeps 24-hour time and the machine's zone, which the runtime reads from `/etc/localtime` at
   start (`/etc` and `/usr/share/zoneinfo` are visible in the sandbox). Before this, `TimeZone::current()` in an app was
   always the built-in default zone, because only the shell process set one.
+- Timing: the message goes to every running app, in front or not, in the tick that changes the setting
+  (`Shell::ext_tick` runs in every pass of the shell's loop, and the Settings click that flips the switch is such a
+  pass), and the app draws again at once, also while suspended. What was late up to 0.10.52 was the picture: new
+  pixels asked the shell for a frame only when they came from the app in front, so a window behind another app showed
+  its new times with the next frame something else caused, 5 to 20 s later. Now the pixels of any app with a window
+  on the desktop that is not minimized ask for a frame of the windows (`apphost::background_frame_shows`); no timer
+  was added.
 - API (`bifrost_app::time_zone`): `uses_24_hour_clock()` (Date & Time > 24-Hour Time), `time_text(hour, minute)` and
   `time_text_at(Date)` (a time of day as the menu bar writes it, `ClockStyle::time_text`: "14:05" or "2:05 PM"; the
   second reads the instant in the system zone), and `conventions_revision()`, which changes with either setting, for

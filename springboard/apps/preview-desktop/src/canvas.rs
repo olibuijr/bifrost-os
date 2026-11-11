@@ -309,8 +309,12 @@ pub const ACTIONS: &[Action] = &[
     Action::LiftSubject,
 ];
 
-/// The toolbar buttons, in order. The rest are in the menus only.
+/// The buttons that sit on the toolbar themselves, in order: the sidebar, the pages, the zoom and the turn. The markup
+/// tools and the colour adjustments follow them behind one pull-down button each (`MARKUP_MENU`, `ADJUST_MENU`); the
+/// rest are in the menus only. One button for each tool and adjustment needed far more than the default window's
+/// width, so most of them sat behind the bar's `»` button.
 const TOOLBAR: &[Action] = &[
+    Action::ToggleSidebar,
     Action::Previous,
     Action::Next,
     Action::ZoomOut,
@@ -319,20 +323,40 @@ const TOOLBAR: &[Action] = &[
     Action::ActualSize,
     Action::RotateLeft,
     Action::RotateRight,
+];
+
+/// The buttons the bar shows only while it has room for them, the first given up first: each is also a View menu
+/// item with a key, so a bar without them lacks nothing and needs no `»` button for them.
+const OPTIONAL: &[Action] = &[Action::ActualSize, Action::RotateLeft];
+
+/// The toolbar's Markup pull-down button among the window's controls, and what its menu lists. It is no `Action`.
+pub const MARKUP_MENU_ID: u32 = 0x4002;
+const MARKUP_MENU: &[Action] = &[
     Action::UseTool(Tool::Pan),
     Action::UseTool(Tool::Highlight),
+    Action::UseTool(Tool::Underline),
+    Action::UseTool(Tool::Strike),
     Action::UseTool(Tool::Note),
+    Action::UseTool(Tool::Text),
     Action::UseTool(Tool::Rect),
     Action::UseTool(Tool::Rounded),
+    Action::UseTool(Tool::Oval),
+    Action::UseTool(Tool::Line),
+    Action::UseTool(Tool::Arrow),
     Action::UseTool(Tool::Sign),
-    Action::ShowPages,
-    Action::ShowOutline,
-    Action::Brighter,
-    Action::Darker,
-    Action::Saturate,
-    Action::Desaturate,
-    Action::ResetColour,
 ];
+/// The toolbar's Adjust pull-down button, and the colour adjustments its menu lists.
+pub const ADJUST_MENU_ID: u32 = 0x4003;
+const ADJUST_MENU: &[Action] = &[Action::Brighter, Action::Darker, Action::Saturate, Action::Desaturate, Action::ResetColour];
+
+/// What the pull-down button `id` lists, or None when `id` is no pull-down button.
+pub fn menu_actions(id: u32) -> Option<&'static [Action]> {
+    match id {
+        MARKUP_MENU_ID => Some(MARKUP_MENU),
+        ADJUST_MENU_ID => Some(ADJUST_MENU),
+        _ => None,
+    }
+}
 
 impl Action {
     pub fn id(self) -> u32 {
@@ -464,7 +488,27 @@ impl Action {
         }
     }
 
-    /// The toolbar buttons, in order.
+    /// Whether the action only changes how the document is shown (the zoom, the sidebar, the Inspector, the
+    /// magnifier) and leaves the document as it is. These work while a save is under way; everything else waits.
+    pub fn view_only(self) -> bool {
+        matches!(
+            self,
+            Action::ZoomIn
+                | Action::ZoomOut
+                | Action::ActualSize
+                | Action::FitWindow
+                | Action::ToggleSidebar
+                | Action::ShowPages
+                | Action::ShowOutline
+                | Action::ShowNotes
+                | Action::ShowBookmarks
+                | Action::ShowSearch
+                | Action::Inspector
+                | Action::ToggleMagnifier
+        )
+    }
+
+    /// The buttons that sit on the toolbar themselves, in order.
     pub fn toolbar() -> &'static [Action] {
         TOOLBAR
     }
@@ -479,13 +523,30 @@ pub struct Layout {
     pub side: i32,
     /// The width of the Inspector along the right edge; 0 while it is hidden.
     pub inspector: i32,
+    /// The margin a page fitted to the window keeps to each edge of the canvas (`FIT_MARGIN_PT`), in pixels; 0 in the
+    /// slideshow, where the page has the whole screen.
+    pub margin: i32,
 }
+
+/// The margin Fit keeps between the page and each edge of the canvas, in points. Without it a page that fills the
+/// canvas's height sat flush against the toolbar and the window's bottom edge, under the window's rounded corners, and
+/// read as cut off.
+pub const FIT_MARGIN_PT: f32 = ui::SPACE_L;
 
 impl Layout {
     pub fn new(ui: &Ui, w: i32, h: i32) -> Layout {
         let bar = ui.pt(ui::SPACE_XXXL + ui::SPACE_L) as i32;
         let side = (ui.pt(ui::SPACE_XXXL * 5.0) as i32).min(w / 3).max(0);
-        Layout { w: w.max(1), h: h.max(1), bar, side, inspector: 0 }
+        Layout { w: w.max(1), h: h.max(1), bar, side, inspector: 0, margin: ui.pt(FIT_MARGIN_PT) as i32 }
+    }
+
+    /// The room a page fitted to the window is scaled into: the canvas less the margin on all four sides. The page is
+    /// centred in the canvas (`place`), so in Fit it keeps the margin to the toolbar, the sidebar, the right panel and
+    /// the window's edges alike, whatever its shape (at open, turned, cropped, a PDF page) and whatever the window's
+    /// size. A canvas smaller than two margins leaves one pixel.
+    pub fn fit_room(&self) -> (usize, usize) {
+        let (_, _, cw, ch) = self.canvas();
+        ((cw - 2 * self.margin).max(1) as usize, (ch - 2 * self.margin).max(1) as usize)
     }
 
     /// The canvas rectangle (x, y, w, h).
@@ -495,7 +556,7 @@ impl Layout {
 
     /// The window with the sidebar, toolbar and Inspector gone: the slideshow's layout.
     pub fn bare(w: i32, h: i32) -> Layout {
-        Layout { w: w.max(1), h: h.max(1), bar: 0, side: 0, inspector: 0 }
+        Layout { w: w.max(1), h: h.max(1), bar: 0, side: 0, inspector: 0, margin: 0 }
     }
 
     /// The width the Inspector takes when it is shown.
@@ -508,6 +569,8 @@ impl Layout {
 pub const TITLE_ID: u32 = 0x4000;
 /// The most room the window title takes on the toolbar; a longer one is cut with an ellipsis.
 const TITLE_MAX_PT: f32 = ui::SPACE_XXXL * 6.0;
+/// The least room the title keeps when the buttons leave it less: a few letters and the ellipsis.
+const TITLE_MIN_PT: f32 = ui::SPACE_XXXL * 2.0;
 
 /// What the window title carries after the document's name while it has unsaved changes.
 pub const EDITED_SUFFIX: &str = " \u{2013} Edited";
@@ -515,11 +578,13 @@ pub const EDITED_SUFFIX: &str = " \u{2013} Edited";
 /// The width of the title's slot in points: the width of the title as it reads with unsaved changes ("name – Edited"),
 /// up to `TITLE_MAX_PT`, and a gap after it. The room for "Edited" is kept while the document is clean too, so the
 /// buttons after the title stay where they are, and none drops off the end of the bar, when the document becomes
-/// edited or is saved.
-fn title_width(ui: &Ui, title: &str) -> f32 {
+/// edited or is saved. `most` is what the bar has left beside its buttons: a long name is cut (down to
+/// `TITLE_MIN_PT`) before it pushes a button behind the `»` button.
+fn title_width(ui: &Ui, title: &str, most: f32) -> f32 {
     let scale = ui.pt(1.0).max(0.001);
     let widest = if title.ends_with(EDITED_SUFFIX) { title.to_string() } else { format!("{title}{EDITED_SUFFIX}") };
-    (ui.measure(&widest, ui::MAC_BODY_PT, Weight::Semibold) / scale).ceil().min(TITLE_MAX_PT) + ui::SPACE_S
+    let natural = (ui.measure(&widest, ui::MAC_BODY_PT, Weight::Semibold) / scale).ceil().min(TITLE_MAX_PT) + ui::SPACE_S;
+    natural.min(most).max(TITLE_MIN_PT)
 }
 
 /// `title` cut with an ellipsis to fit `max_px` in the semibold face it is drawn in.
@@ -533,14 +598,23 @@ fn fit_title(ui: &Ui, title: &str, max_px: f32) -> String {
     ui.fit(title, ui::MAC_BODY_PT, max_px * regular / semibold.max(1.0))
 }
 
+/// The width `items` take on a bar with room for all of them, in points, with the gaps between them.
+fn buttons_width(ui: &Ui, items: &[ToolbarItem], bar_h: f32) -> f32 {
+    // laid out clear of the window controls, in a bar wide enough for anything, so nothing is moved or left out
+    let x = widgets::toolbar_lead_pt();
+    let probe = bifrost_app::controls::Rect { x, y: 0.0, w: f32::MAX / 8.0, h: bar_h };
+    let layout = widgets::toolbar_layout(ui, probe, &Toolbar::new(items.to_vec()));
+    layout.visible.iter().map(|(_, r)| r.x + r.w - x).fold(0.0, f32::max)
+}
+
 /// The shared Golden Gate toolbar model and the exact layout used to draw it and publish its controls. `title` is the
 /// window title (the document's name, with "Edited" while it has unsaved changes), empty with no document: the window
 /// is full-size, so the shell draws no title row and the title leads the toolbar, where the document apps show theirs.
-pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, side: Side) -> (Toolbar, ToolbarLayout) {
-    let mut items = toolbar_items(open, tool, side);
-    if !title.is_empty() {
-        items.insert(0, ToolbarItem::custom(TITLE_ID, "Title", title_width(ui, title)));
-    }
+///
+/// The room is given out in this order: the buttons every bar has (the sidebar, the pages, the zoom, Fit, the turn and
+/// the two pull-down buttons), then the title up to its own width, then the `OPTIONAL` buttons while they fit. A bar
+/// too narrow even for the first of these puts what is left behind the kit's `»` button.
+pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool) -> (Toolbar, ToolbarLayout) {
     let scale = ui.pt(1.0).max(0.001);
     let bounds = bifrost_app::controls::Rect {
         x: lay.side as f32 / scale,
@@ -548,11 +622,32 @@ pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, side:
         w: (lay.w - lay.side).max(0) as f32 / scale,
         h: lay.bar.max(0) as f32 / scale,
     };
+    let mut items = toolbar_items(open, tool);
+    let optional = |item: &ToolbarItem| OPTIONAL.iter().any(|a| a.id() == item.id);
+    let title_slot = (!title.is_empty()).then(|| {
+        let needed: Vec<ToolbarItem> = items.iter().filter(|item| !optional(item)).cloned().collect();
+        // what the kit lays the bar out in: a bar that starts under the window controls begins after them
+        let room = widgets::clear_of_traffic_lights(bounds).w;
+        // one gap between the title and the first button, and a point so that rounding leaves no button out
+        let most = room - buttons_width(ui, &needed, bounds.h) - widgets::TOOLBAR_GAP_PT - 1.0;
+        ToolbarItem::custom(TITLE_ID, "Title", title_width(ui, title, most))
+    });
     // The buttons a narrow bar has no room for are not dropped: the kit puts them behind its `»` button
-    // (`ToolbarLayout::overflow`), and `overflow_hit` lists them in the menu that button opens.
-    let bar = Toolbar::new(items);
-    let layout = widgets::toolbar_layout(ui, bounds, &bar);
-    (bar, layout)
+    // (`ToolbarLayout::overflow`), and `menu_hit` lists them in the menu that button opens.
+    let lay_out = |items: &[ToolbarItem]| {
+        let bar = Toolbar::new(title_slot.iter().cloned().chain(items.iter().cloned()).collect());
+        let layout = widgets::toolbar_layout(ui, bounds, &bar);
+        (bar, layout)
+    };
+    let mut out = lay_out(&items);
+    for given_up in OPTIONAL {
+        if out.1.overflow.is_empty() {
+            break;
+        }
+        items.retain(|item| item.id != given_up.id());
+        out = lay_out(&items);
+    }
+    out
 }
 
 /// The id of the toolbar's `»` button among the window's controls. It is no `Action`.
@@ -560,49 +655,57 @@ pub const OVERFLOW_ID: u32 = 0x4001;
 /// What the `»` button is called.
 pub const OVERFLOW_LABEL: &str = "More Toolbar Items";
 
-/// The buttons behind the toolbar's `»` button, in bar order, each with whether it is enabled.
+/// The buttons behind the toolbar's `»` button, in bar order, each with whether it is enabled. A pull-down button
+/// that has no room is there with everything its own menu lists.
 pub fn overflow_actions(bar: &Toolbar, layout: &ToolbarLayout) -> Vec<(Action, bool)> {
-    layout
-        .overflow
-        .iter()
-        .filter_map(|id| bar.items.iter().find(|item| item.id == *id))
-        .filter_map(|item| Action::from_id(item.id).map(|action| (action, item.enabled)))
-        .collect()
+    let mut out = Vec::new();
+    for item in layout.overflow.iter().filter_map(|id| bar.items.iter().find(|item| item.id == *id)) {
+        match menu_actions(item.id) {
+            Some(listed) => out.extend(listed.iter().map(|action| (*action, item.enabled))),
+            None => out.extend(Action::from_id(item.id).map(|action| (action, item.enabled))),
+        }
+    }
+    out
 }
 
-/// A press at window pixel `(x, y)` on the toolbar's `»` button: where its menu opens (the button's leading edge, just
-/// below it, in window pixels) and the buttons it lists. None when the press is elsewhere or every button is on the bar.
-#[allow(clippy::too_many_arguments)]
-pub fn overflow_hit(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, side: Side, x: f32, y: f32) -> Option<((f32, f32), Vec<(Action, bool)>)> {
-    let (bar, layout) = toolbar(ui, lay, open, title, tool, side);
+/// A press at window pixel `(x, y)` on a toolbar button that opens a menu: the Markup or the Adjust pull-down button,
+/// or the `»` button of a bar too narrow for every button. Where the menu opens (the button's leading edge, just below
+/// it, in window pixels) and what it lists, each with whether it is enabled. None when the press is elsewhere.
+pub fn menu_hit(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, x: f32, y: f32) -> Option<((f32, f32), Vec<(Action, bool)>)> {
+    let (bar, layout) = toolbar(ui, lay, open, title, tool);
     let scale = ui.pt(1.0).max(0.001);
-    let button = layout.overflow_button.filter(|r| r.contains(x / scale, y / scale))?;
-    Some(((button.x * scale, (button.y + button.h + ui::SPACE_XS) * scale), overflow_actions(&bar, &layout)))
+    let (px, py) = (x / scale, y / scale);
+    if let Some(button) = layout.overflow_button.filter(|r| r.contains(px, py)) {
+        return Some(((button.x * scale, (button.y + button.h + ui::SPACE_XS) * scale), overflow_actions(&bar, &layout)));
+    }
+    let id = layout.hit(px, py)?;
+    let listed = menu_actions(id)?;
+    // with no document the button is greyed and opens nothing
+    let item = bar.items.iter().find(|item| item.id == id && item.enabled)?;
+    let (ax, ay) = layout.menu_anchor(id, ui::SPACE_XS)?;
+    Some(((ax * scale, ay * scale), listed.iter().map(|action| (*action, item.enabled)).collect()))
 }
 
-/// The toolbar buttons with their glyphs, groups, enabled and selected state. Every button acts on the open document,
-/// so with none open they are all disabled and none shows the selected plate.
-fn toolbar_items(open: bool, tool: Tool, side: Side) -> Vec<ToolbarItem> {
-    Action::toolbar()
+/// The toolbar buttons with their glyphs, groups, enabled and selected state, and after them the Markup and Adjust
+/// pull-down buttons. Every button acts on the open document, so with none open they are all disabled and none shows
+/// the selected plate.
+fn toolbar_items(open: bool, tool: Tool) -> Vec<ToolbarItem> {
+    let mut items: Vec<ToolbarItem> = Action::toolbar()
         .iter()
         .copied()
         .map(|action| {
             let symbol = match action {
+                Action::ToggleSidebar => Some("sidebar.left"),
                 Action::Previous => Some("chevron.left"),
                 Action::Next => Some("chevron.right"),
-                Action::ZoomOut => Some("magnifyingglass"),
-                Action::ZoomIn => Some("plus"),
+                Action::ZoomOut => Some("minus.magnifyingglass"),
+                Action::ZoomIn => Some("plus.magnifyingglass"),
                 Action::RotateRight => Some("arrow.clockwise"),
-                Action::UseTool(Tool::Note) => Some("square.and.pencil"),
-                Action::UseTool(Tool::Sign) => Some("pencil"),
-                Action::ShowPages => Some("rectangle.grid.1x2"),
-                Action::ShowOutline => Some("list.bullet"),
                 _ => None,
             };
-            let mut item = symbol.map_or_else(
-                || ToolbarItem::button(action.id(), action.label()),
-                |symbol| ToolbarItem::icon(action.id(), action.label(), symbol),
-            );
+            // the sidebar button shows and hides it: its name does not depend on which it is now
+            let label = if action == Action::ToggleSidebar { "Sidebar" } else { action.label() };
+            let mut item = symbol.map_or_else(|| ToolbarItem::button(action.id(), label), |symbol| ToolbarItem::icon(action.id(), label, symbol));
             let group = match action {
                 Action::Previous | Action::Next => Some(1),
                 Action::ZoomOut | Action::ZoomIn => Some(2),
@@ -611,16 +714,13 @@ fn toolbar_items(open: bool, tool: Tool, side: Side) -> Vec<ToolbarItem> {
             if let Some(group) = group {
                 item = item.in_group(group);
             }
-            let selected = match action {
-                Action::UseTool(selected) => selected == tool,
-                Action::ShowPages => side == Side::Pages,
-                Action::ShowOutline => side == Side::Outline,
-                _ => false,
-            };
-            // a disabled button never shows the selected plate: with no document the bar must read as inactive
-            item.enabled(open).selected(selected && open)
+            item.enabled(open)
         })
-        .collect()
+        .collect();
+    // the Markup button shows the selected plate while a markup tool is chosen, as the tool's own button did
+    items.push(ToolbarItem::menu(MARKUP_MENU_ID, "Markup", Some("pencil")).enabled(open).selected(open && tool != Tool::Pan));
+    items.push(ToolbarItem::menu(ADJUST_MENU_ID, "Adjust", None).enabled(open));
+    items
 }
 
 /// The thumbnail rows in content coordinates: (top, height) for each page, with the gap before.
@@ -796,8 +896,8 @@ pub fn sidebar_hit(lay: &Layout, rows: &[(i32, i32)], scroll: f32, x: f32, y: f3
 }
 
 /// The toolbar action under a point, if any.
-pub fn button_hit(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, side: Side, x: f32, y: f32) -> Option<Action> {
-    let (bar, layout) = toolbar(ui, lay, open, title, tool, side);
+pub fn button_hit(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool, x: f32, y: f32) -> Option<Action> {
+    let (bar, layout) = toolbar(ui, lay, open, title, tool);
     let scale = ui.pt(1.0).max(0.001);
     let id = layout.hit(x / scale, y / scale)?;
     bar.items.iter().find(|item| item.id == id && item.enabled).and_then(|item| Action::from_id(item.id))
@@ -946,7 +1046,8 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
             if let (Some(src), Some((w, h))) = (doc.source_of(page_no), doc.page_size(page_no)) {
                 let q = scene.view.quarters;
                 let (rw, rh) = model::turn_size(w, h, q);
-                let scale = scene.view.zoom.scale(rw, rh, cw as usize, ch as usize);
+                let (fit_w, fit_h) = lay.fit_room();
+                let scale = scene.view.zoom.scale(rw, rh, fit_w, fit_h);
                 let target_w = ((rw as f32 * scale).round() as usize).max(1);
                 let target_h = ((rh as f32 * scale).round() as usize).max(1);
                 let p = place((cx, cy, cw, ch), rw, rh, scale, scene.view.pan);
@@ -1452,7 +1553,7 @@ fn draw_toolbar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
         ui,
         bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: lay.w as f32 / scale, h: lay.bar as f32 / scale },
     );
-    let (bar, _) = toolbar(ui, lay, scene.doc.is_some(), scene.title, scene.tool, scene.side);
+    let (bar, _) = toolbar(ui, lay, scene.doc.is_some(), scene.title, scene.tool);
     let layout = widgets::toolbar(
         s,
         ui,
@@ -1525,12 +1626,43 @@ mod tests {
 
     #[test]
     fn toolbar_is_inactive_until_a_document_is_open() {
-        let closed = toolbar_items(false, Tool::Pan, Side::Pages);
+        let closed = toolbar_items(false, Tool::Highlight);
         assert!(!closed.is_empty());
         assert!(closed.iter().all(|i| !i.enabled && !i.selected), "no control is live without a document");
-        let open = toolbar_items(true, Tool::Pan, Side::Pages);
-        assert!(open.iter().all(|i| i.enabled));
-        assert!(open.iter().any(|i| i.selected));
+        let open = toolbar_items(true, Tool::Pan);
+        assert!(open.iter().all(|i| i.enabled && !i.selected), "no markup tool is chosen");
+        // a markup tool shows on the Markup button, which stands for the tools' own buttons
+        let marking = toolbar_items(true, Tool::Highlight);
+        assert_eq!(marking.iter().filter(|i| i.selected).map(|i| i.id).collect::<Vec<_>>(), [MARKUP_MENU_ID]);
+    }
+
+    /// The markup tools and the colour adjustments are behind one pull-down button each, at the end of the bar; every
+    /// entry of their menus is an action the menu bar has too, and the buttons' ids are no action's.
+    #[test]
+    fn the_markup_tools_and_the_adjustments_are_behind_two_pull_down_buttons() {
+        let items = toolbar_items(true, Tool::Pan);
+        let menus: Vec<&ToolbarItem> = items.iter().filter(|i| i.menu).collect();
+        assert_eq!(menus.iter().map(|i| (i.id, i.label.as_str())).collect::<Vec<_>>(), [(MARKUP_MENU_ID, "Markup"), (ADJUST_MENU_ID, "Adjust")]);
+        assert_eq!(items.len(), Action::toolbar().len() + 2);
+        assert!(items[items.len() - 2..].iter().all(|i| i.menu), "they end the bar");
+        for id in [MARKUP_MENU_ID, ADJUST_MENU_ID, TITLE_ID, OVERFLOW_ID] {
+            assert_eq!(Action::from_id(id), None, "{id:#x} is no action");
+        }
+        let markup = menu_actions(MARKUP_MENU_ID).unwrap();
+        assert!(markup.iter().all(|a| matches!(a, Action::UseTool(_)) && ACTIONS.contains(a)));
+        for tool in [Tool::Pan, Tool::Highlight, Tool::Note, Tool::Rect, Tool::Rounded, Tool::Sign] {
+            assert!(markup.contains(&Action::UseTool(tool)), "{tool:?} was a button of its own");
+        }
+        assert_eq!(menu_actions(ADJUST_MENU_ID).unwrap(), [Action::Brighter, Action::Darker, Action::Saturate, Action::Desaturate, Action::ResetColour]);
+        assert_eq!(menu_actions(Action::FitWindow.id()), None);
+        // every glyph the bar names is one the kit draws
+        for item in &items {
+            if let Some(symbol) = &item.symbol {
+                assert!(bifrost_app::glyphs::has(symbol), "{symbol}");
+            }
+        }
+        // what the bar gives up first is on the bar, and is in the View menu with a key
+        assert!(OPTIONAL.iter().all(|a| Action::toolbar().contains(a)));
     }
 
     #[test]
@@ -1544,7 +1676,7 @@ mod tests {
     fn edit_and_go_actions_are_menu_only_and_keep_the_old_ids() {
         assert_eq!(Action::Print.id(), 31);
         assert_eq!(Action::Undo.id(), 32);
-        for a in [Action::Undo, Action::Redo, Action::GoBack, Action::GoToPage, Action::AddBookmark, Action::ToggleSidebar] {
+        for a in [Action::Undo, Action::Redo, Action::GoBack, Action::GoToPage, Action::AddBookmark] {
             assert!(!Action::toolbar().contains(&a), "{a:?}");
             assert_eq!(Action::from_id(a.id()), Some(a));
         }
@@ -1598,7 +1730,7 @@ mod tests {
 
     #[test]
     fn sidebar_hit_uses_scroll_and_ignores_the_toolbar() {
-        let lay = Layout { w: 600, h: 400, bar: 40, side: 150, inspector: 0 };
+        let lay = Layout { w: 600, h: 400, bar: 40, side: 150, inspector: 0, margin: 0 };
         let rows = vec![(8, 100), (116, 100)];
         assert_eq!(sidebar_hit(&lay, &rows, 0.0, 10.0, 60.0), Some(0));
         assert_eq!(sidebar_hit(&lay, &rows, 100.0, 10.0, 60.0), Some(1));
@@ -1609,7 +1741,7 @@ mod tests {
 
     #[test]
     fn the_inspector_takes_room_from_the_canvas_and_the_slideshow_takes_none() {
-        let lay = Layout { w: 800, h: 600, bar: 40, side: 150, inspector: 200 };
+        let lay = Layout { w: 800, h: 600, bar: 40, side: 150, inspector: 200, margin: 0 };
         assert_eq!(lay.canvas(), (150, 40, 450, 560));
         assert_eq!(Layout::bare(800, 600).canvas(), (0, 0, 800, 600));
     }

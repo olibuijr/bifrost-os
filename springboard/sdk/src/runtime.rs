@@ -879,9 +879,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     // showing its old size (black past it) until it comes to the front (0.10.39)
                     repaint_suspended |= !active;
                 }
-                ToApp::Context{x,y}=>{if let Some(ctx)=&ctx {need_frame|=app.event(ctx,Input::Context{x,y});}},
+                // a secondary click and the chosen item belong to the window the shell names (an older shell names none: the main window)
+                ToApp::Context{x,y,window}=>{if let Some(ctx)=&ctx {need_frame|=crate::app_windows::deliver_context(&mut app,ctx,x,y,window);}},
                 ToApp::MenuAction(id)=>{if let Some(ctx)=&ctx {need_frame|=app.menu_action(ctx,id);}},
-                ToApp::ContextAction(id)=>{if let Some(ctx)=&ctx {need_frame|=app.event(ctx,Input::ContextAction(id));}},
+                ToApp::ContextAction(id,window)=>{if let Some(ctx)=&ctx {need_frame|=crate::app_windows::deliver_context_action(&mut app,ctx,id,window);}},
                 ToApp::QuickAction { kind, user_info } => {
                     if let Some(c) = &ctx {
                         need_frame |= app.event(c, Input::QuickAction(crate::quick_actions::QuickActionPick { kind, user_info }));
@@ -1030,6 +1031,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     apply_appearance_prefs(flags);
                     let vibrant = flags & VIBRANCY != 0 && flags & REDUCE_TRANSPARENCY == 0;
                     crate::widgets::set_vibrancy(vibrant, flags & MATERIALS != 0);
+                    // whether the shell takes an extra window's controls and materials (`ToShell::WindowChrome`)
+                    crate::app_windows::set_shell_takes_window_chrome(flags & WINDOW_CHROME != 0);
                     if !vibrant {
                         materials.clear();
                     }
@@ -1539,6 +1542,10 @@ struct WindowPixels {
     last_all: bool,
     /// Something changed since the window last drew (an event, a resize, a new buffer set): draw it at the next turn.
     dirty: bool,
+    /// The vibrancy regions the window's draws declared, kept across partial redraws as the main window's are.
+    materials: Vec<crate::proto::Material>,
+    /// The press-taking rectangles and the materials the shell last got for the window (`ToShell::WindowChrome`).
+    chrome_sent: Option<(Vec<bifrost_ui::Rect>, Vec<crate::proto::Material>)>,
 }
 
 /// Records the shell's `Release` of one of a window's buffers. A release for another generation is stale and ignored.
@@ -1575,7 +1582,9 @@ fn draw_windows<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, pixels: &mut std
                 eprintln!("bifrost-app: cannot allocate frame buffers for window {id}");
                 continue;
             };
-            pixels.insert(id, WindowPixels { size, generation, slots, last: None, first: true, last_all: false, dirty: true });
+            // a resize keeps what the shell knows of the window: the next draw declares the regions at the new size
+            let (materials, chrome_sent) = pixels.remove(&id).map(|p| (p.materials, p.chrome_sent)).unwrap_or_default();
+            pixels.insert(id, WindowPixels { size, generation, slots, last: None, first: true, last_all: false, dirty: true, materials, chrome_sent });
         }
         let Some(p) = pixels.get_mut(&id) else { continue };
         if due {
@@ -1587,6 +1596,15 @@ fn draw_windows<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, pixels: &mut std
         let Some(i) = pick_free([p.slots[0].held, p.slots[1].held], p.last) else { continue };
         let first = p.first;
         let narrow = !first && p.last == Some(1 - i);
+        // An extra window's materials: on a shell that blurs behind them (`WindowChrome`) they are declared as the main
+        // window's are. On any other shell nothing would blur what is behind the window, so the translucent tint showed
+        // the windows under it: the window is painted without vibrancy, its materials in their opaque colours.
+        let chrome = crate::app_windows::shell_takes_window_chrome();
+        let vibrancy = crate::widgets::vibrancy_state();
+        if !chrome {
+            crate::widgets::set_vibrancy(false, vibrancy.1);
+        }
+        let _ = crate::widgets::take_frame_materials();
         let sent = paint_slot(
             chan,
             &mut p.slots,
@@ -1600,13 +1618,42 @@ fn draw_windows<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, pixels: &mut std
             |s| app.draw_window(ctx, crate::app_windows::WindowId(id), s, t),
             |buf, damage| ToShell::WindowFrame { id, buf, damage },
         );
+        crate::widgets::set_vibrancy(vibrancy.0, vibrancy.1);
+        let drawn = crate::widgets::take_frame_materials();
+        // The nodes the kit recorded while this window drew are not the main window's: `Controls` (and the tree and
+        // custom actions beside it) describe the main window alone, whichever window is key, and are taken right after
+        // its own draw. An extra window's controls go to the shell as `WindowChrome` (`App::window_controls`). Dropped
+        // here, or they pile up for as long as only extra windows draw.
+        bifrost_ui::ax::begin_frame();
         // a draw that changed nothing is done too: the window waits for the next event, not for a free slot
         p.first = false;
         p.dirty = false;
         if sent {
             p.last = Some(i);
         }
+        if chrome {
+            let reported = if sent { take_reported_damage() } else { Vec::new() };
+            fold_window_materials(&mut p.materials, drawn, sent && (first || p.last_all), &reported, scale);
+            let press = crate::app_windows::press_rects(&app.window_controls(ctx, crate::app_windows::WindowId(id)));
+            if p.chrome_sent.as_ref().is_none_or(|(a, b)| *a != press || *b != p.materials) {
+                let _ = chan.send(&ToShell::WindowChrome { id, press: press.clone(), materials: p.materials.clone() }.encode(), &[]);
+                p.chrome_sent = Some((press, p.materials.clone()));
+            }
+        }
     }
+}
+
+/// Folds the regions one draw of an extra window declared (`drawn`) into the window's list. A draw that painted
+/// everything (`all`) declared all there are; a partial one only those inside what it redrew (`damage`, px), so the
+/// regions outside it stay, as for the main window (`merge_materials`). A region declared twice (an app that paints
+/// its damage in bands declares its sidebar once per band) is kept once.
+fn fold_window_materials(stored: &mut Vec<crate::proto::Material>, drawn: Vec<crate::proto::Material>, all: bool, damage: &[Rect], scale: f32) {
+    let k = scale.max(0.01);
+    if all {
+        stored.clear();
+    }
+    let damage: Vec<(f32, f32, f32, f32)> = damage.iter().map(|r| (r[0] as f32 / k, r[1] as f32 / k, (r[0] + r[2]) as f32 / k, (r[1] + r[3]) as f32 / k)).collect();
+    merge_materials(stored, drawn, &damage, 1.0 / k);
 }
 
 /// Delivers the last of a run of moves of one touch (`t_ms` is the shell's stamp of that last sample).
@@ -2554,6 +2601,8 @@ mod window_pixel_tests {
         }
         fn draw_window(&mut self, _ctx: &Ctx, window: WindowId, s: &mut Surface, _t: f64) -> Damage {
             self.drawn.push(window.0);
+            // a kit control of this window records itself, as it does in the main window's draw
+            bifrost_ui::ax::record(bifrost_ui::Role::Button, "Back", "", bifrost_ui::Rect { x: 4.0, y: 4.0, w: 8.0, h: 8.0 }, true);
             let mut d = Damage::new(s.w, s.h);
             d.all();
             d
@@ -2607,6 +2656,8 @@ mod window_pixel_tests {
         draw_windows(&a, &mut app, &ctx, &mut pixels, 0.0, false);
         assert_eq!(app.drawn, vec![id.0]);
         assert_eq!(pixels[&id.0].size, (40, 30));
+        // what the window's draw recorded is not kept for the main window's `Controls`
+        assert!(bifrost_ui::ax::take_frame().is_empty(), "an extra window's nodes are not the main window's");
         // nothing changed and no frame is due: the window is not drawn again
         draw_windows(&a, &mut app, &ctx, &mut pixels, 1.0, false);
         assert_eq!(app.drawn.len(), 1);
@@ -2745,6 +2796,33 @@ mod publish_tests {
         // the damage is a hair smaller than the region once converted from px
         merge_materials(&mut stored, vec![], &[(0.0, 0.0, 199.7, 600.0)], 0.64);
         assert!(stored.is_empty());
+    }
+
+    /// An extra window's regions (`ToShell::WindowChrome`): a whole paint replaces them, a partial one keeps those it
+    /// did not redraw, and an app that paints in bands declares each region once.
+    #[test]
+    fn an_extra_windows_regions_follow_its_draws() {
+        use super::fold_window_materials;
+        let sidebar = mat(MaterialKind::Sidebar, 0.0, 0.0, 200.0, 600.0);
+        let toolbar = mat(MaterialKind::Titlebar, 200.0, 0.0, 700.0, 52.0);
+        let mut stored = Vec::new();
+        // the first paint, in two bands: both declare the sidebar
+        fold_window_materials(&mut stored, vec![sidebar, toolbar, sidebar], true, &[], 2.0);
+        assert_eq!(stored, vec![sidebar, toolbar]);
+        // two rows of the list redrawn (px at scale 2): nothing declared inside them, both regions stay
+        fold_window_materials(&mut stored, vec![sidebar], false, &[[400, 200, 1400, 64]], 2.0);
+        assert_eq!(stored, vec![sidebar, toolbar]);
+        // a draw that sent nothing leaves them too
+        fold_window_materials(&mut stored, Vec::new(), false, &[], 2.0);
+        assert_eq!(stored, vec![sidebar, toolbar]);
+        // the sidebar was hidden: the whole paint declares the toolbar alone, across the window
+        let wide = mat(MaterialKind::Titlebar, 0.0, 0.0, 900.0, 52.0);
+        fold_window_materials(&mut stored, vec![wide], true, &[], 2.0);
+        assert_eq!(stored, vec![wide]);
+        // a partial redraw of the sidebar column (px) with the sidebar gone drops it
+        let mut stored = vec![sidebar, toolbar];
+        fold_window_materials(&mut stored, Vec::new(), false, &[[0, 0, 400, 1200]], 2.0);
+        assert_eq!(stored, vec![toolbar]);
     }
 
     #[test]

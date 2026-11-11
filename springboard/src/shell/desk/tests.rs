@@ -99,6 +99,81 @@ fn a_full_size_extra_window_has_no_shell_title_row() {
     assert_eq!(extra_window_px(plain, false, (600.0, 400.0), 1.5, &m).1, 600 + m.title);
 }
 
+/// E2E7: a second window that looks like the main one. A full-size extra window's toolbar controls, sent by its app
+/// (`WindowChrome`), are press holes in its band: a press on one reaches the app, the empty band beside it still moves
+/// the window. A window that sent none keeps the whole band as its drag zone, as before.
+#[test]
+fn a_full_size_extra_window_keeps_its_toolbar_controls_out_of_its_drag_band() {
+    let mut sh = crate::shell::tests::desktop_shell();
+    sh.anim = None;
+    let (mine, _theirs) = bifrost_proto::sys::socketpair_pair().unwrap();
+    let cfg = bifrost_proto::Configure { w: 100, h: 100, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+    let mut host = apphost::AppHost::with_channel("fixture", mine, None, cfg);
+    for id in [2, 4] {
+        host.windows.open("fixture", id, "Files", 900.0, 600.0).unwrap();
+        assert!(host.windows.set_full_size("fixture", id, true));
+    }
+    // the main window's own controls: never an extra window's
+    host.controls = vec![bifrost_proto::Node { id: 1, role: bifrost_proto::Role::Button, label: "Main".into(), value: String::new(), bounds: bifrost_ui::Rect { x: 500.0, y: 12.0, w: 28.0, h: 28.0 }, enabled: true }];
+    let rect = |x: f32, y: f32, w: f32| bifrost_proto::UiRect { x, y, w, h: 28.0 };
+    let sidebar = bifrost_proto::Material::new(bifrost_proto::MaterialKind::Sidebar, bifrost_proto::UiRect { x: 0.0, y: 0.0, w: 200.0, h: 600.0 }, 0.0);
+    // window 2: a back button and a search field in the band, and a button in the content below it
+    assert!(host.windows.set_chrome("fixture", 2, &[rect(212.0, 12.0, 28.0), rect(700.0, 12.0, 180.0), rect(300.0, 200.0, 28.0)], &[sidebar]));
+    sh.ext.push(Some(host));
+    let slot = (sh.ext.len() - 1) as u8;
+    let (second, third) = (AppId::ExternalWindow(slot, 2), AppId::ExternalWindow(slot, 4));
+    sh.desk.as_mut().unwrap().wins.clear();
+    sh.desk_sync_extra_windows();
+    let m = sh.desk_metrics();
+    let d = sh.desk.as_ref().unwrap();
+    let w = d.wins[d.index_of(second).expect("the second window is on the desk")];
+    let plain = d.wins[d.index_of(third).expect("and the third")];
+    let (band, holes) = drag_zone(&w, &m, press_controls(&sh.ext, second));
+    assert_eq!(band, (UNIFIED_BAR_PT * m.pt).round() as i32);
+    assert_eq!(holes.len(), 3, "the lights and the two controls in the band; the one in the content is no hole: {holes:?}");
+    let moves = |holes: &[[i32; 4]], x: f32, y: f32| {
+        let (x, y) = ((x * m.pt) as i32, (y * m.pt) as i32);
+        y < band && !holes.iter().any(|r| x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3])
+    };
+    assert!(!moves(&holes, 226.0, 26.0), "a press on the back button reaches the app");
+    assert!(!moves(&holes, 790.0, 26.0), "and one in the search field");
+    assert!(moves(&holes, 400.0, 26.0), "the empty band beside them moves the window");
+    assert!(moves(&holes, 514.0, 26.0), "where the main window has a control, this window has none");
+    // a window that sent no chrome: its whole band past the lights moves it
+    let (band, holes) = drag_zone(&plain, &m, press_controls(&sh.ext, third));
+    assert_eq!((band, holes.len()), ((UNIFIED_BAR_PT * m.pt).round() as i32, 1));
+    assert!(moves(&holes, 226.0, 26.0));
+    // the main window's controls are its own, and a window that is not open has none
+    assert_eq!(press_controls(&sh.ext, AppId::External(slot)).iter().map(|n| n.label.as_str()).collect::<Vec<_>>(), vec!["Main"]);
+    assert!(press_controls(&sh.ext, AppId::ExternalWindow(slot, 9)).is_empty());
+    assert!(press_controls(&sh.ext, AppId::Settings).is_empty());
+    // the materials of each window are its own, for its own frame in the window server
+    let host = sh.ext[slot as usize].as_ref().unwrap();
+    assert_eq!(window_materials(host, second), &[sidebar][..]);
+    assert!(window_materials(host, third).is_empty(), "a window that sent none");
+    assert!(window_materials(host, AppId::External(slot)).is_empty(), "the main window declared none: it does not borrow the second's");
+    assert!(window_materials(host, AppId::ExternalWindow(slot, 9)).is_empty());
+    let ids = [win_id(AppId::External(slot)), win_id(second), win_id(third)];
+    assert!(ids[1].is_some() && ids[1] != ids[2] && ids[1] != ids[0], "each window has its own frame id: {ids:?}");
+}
+
+/// The press itself (the path without the window server's own move): on a control of a full-size extra window it is
+/// content, beside it it is the title band.
+#[test]
+fn a_press_on_a_toolbar_control_of_a_full_size_extra_window_is_not_a_window_move() {
+    let m = Metrics { pt: 1.5, ..metrics() };
+    let r = Rect { x: 100, y: 50, w: 900, h: 600 };
+    let w = Win { app: AppId::ExternalWindow(3, 2), r, maximized: false, minimized: false, full: false, restore: r, full_size: true };
+    let node = bifrost_proto::Node { id: 1, role: bifrost_proto::Role::Button, label: String::new(), value: String::new(), bounds: bifrost_ui::Rect { x: 220.0, y: 10.0, w: 64.0, h: 32.0 }, enabled: true };
+    let (band, holes) = drag_zone(&w, &m, &[node]);
+    assert_eq!(band, (UNIFIED_BAR_PT * 1.5).round() as i32, "an extra window that asked for full-size content has the unified band");
+    assert_eq!(holes.len(), 2);
+    assert_eq!(holes[1], [330, 15, 96, 48]);
+    // the same window without the flag: a title bar, and its controls are no holes
+    let titled = Win { full_size: false, ..w };
+    assert_eq!(drag_zone(&titled, &m, &[]).0, m.title);
+}
+
 /// E2E10: a full-size extra window takes its flag from its app host's window table when the desk opens it, so its
 /// unified title band (no shell title bar) is hit right away, before any later sync; a plain one keeps the title bar.
 #[test]

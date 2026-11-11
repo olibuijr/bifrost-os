@@ -199,3 +199,59 @@ fn an_app_opened_from_search_on_the_desktop_stays_in_front_when_search_closes() 
     assert!(!sh.quicksearch.active(), "Search closes as the app opens");
     assert_eq!(super::super::tests::hand_back_after_launch(&mut sh), (Some(AppId::External(0)), Screen::App(AppId::External(0))));
 }
+
+/// E2E7 1: a result list that got shorter left the blur of the taller one hanging under the card. The presenter drops
+/// a shape that is not declared again only when it lies wholly inside a region the frame redrew, and the panel's
+/// region is `desk_overlay`: every plate must be inside it at any height, also where the card sits on a fraction of a
+/// pixel (the test scale is 1.5625, so the card's top is 217.19 px).
+#[test]
+fn the_blur_of_a_taller_list_goes_when_the_list_shrinks() {
+    use bifrost_render::glass;
+    let mut sh = typed();
+    let h = sh.h;
+    let shapes = |sh: &Shell| -> Vec<glass::Rect> {
+        let qs = &sh.quicksearch;
+        let plates = qs.mac_plates(&sh.ui, qs.card(&sh.ui, sh.w));
+        plates.into_iter().flatten().map(|(x, y, w, h, r)| glass::Rect { x, y, w, h, r, ..Default::default() }).collect()
+    };
+    let region = |sh: &Shell| -> (f32, f32, f32, f32) {
+        let ((x, y, w, h), mask) = sh.quicksearch.desk_overlay(&sh.ui, sh.w).expect("Search shows on the desktop");
+        assert_eq!(mask.len(), w * h);
+        (x as f32, y as f32, (x + w) as f32, (y + h) as f32)
+    };
+    let mut before: Option<(Vec<glass::Rect>, (f32, f32, f32, f32))> = None;
+    for rows in [4.0, 3.0, 2.0, 1.0] {
+        for part in [0.0, 0.3, 0.6, 0.9] {
+            let floor = dock_for_rows(&sh, rows) + part;
+            sh.quicksearch.set_dock_top(&sh.ui, h, Some(floor));
+            let (fresh, now) = (shapes(&sh), region(&sh));
+            assert_eq!(fresh.len(), 2, "the capsule and the results card");
+            for s in &fresh {
+                assert!(s.x >= now.0 && s.y >= now.1 && s.x + s.w <= now.2 && s.y + s.h <= now.3, "the plate {s:?} is inside the panel's region {now:?}");
+            }
+            if let Some((mut stored, was)) = before.take() {
+                // the frame after the change: the regions of the last frame and of this one were redrawn
+                glass::merge(&mut stored, fresh.clone(), &[was, now]);
+                assert_eq!(stored, fresh, "only the shapes of the card on show are left");
+            }
+            before = Some((fresh, now));
+        }
+    }
+    // the mask keeps both plates and cuts the corners: all four of each plate are rounded
+    let ((_, y0, w, oh), mask) = sh.quicksearch.desk_overlay(&sh.ui, sh.w).unwrap();
+    assert_eq!(mask[0], 0, "the capsule's corner is cut");
+    assert_eq!(mask[(oh - 1) * w], 0, "the results card's bottom left corner is cut");
+    assert_eq!(mask[oh * w - 1], 0, "and its bottom right");
+    for s in shapes(&sh) {
+        let mid = ((s.y + s.h / 2.0) as usize - y0) * w + w / 2;
+        assert_eq!(mask[mid], 255, "the middle of a plate is kept");
+    }
+    // nothing typed: the capsule alone, and its region is its own bounds
+    sh.quicksearch.field.set_text(&sh.ui, "");
+    sh.quicksearch.search(&sh.ui, h);
+    let (fresh, now) = (shapes(&sh), region(&sh));
+    assert_eq!(fresh.len(), 1, "the empty field shows no results card");
+    let (mut stored, was) = before.unwrap();
+    glass::merge(&mut stored, fresh.clone(), &[was, now]);
+    assert_eq!(stored, fresh);
+}

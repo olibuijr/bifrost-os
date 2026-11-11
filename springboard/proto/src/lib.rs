@@ -685,8 +685,16 @@ pub enum ToApp {
     Quit,
     Command(Command),
     Activate(u64),
-    Context {x:f32,y:f32},
-    ContextAction(u32),
+    /// A secondary click in a window of the app. `window` is the window under the pointer (0 the main window, else
+    /// the id of `WindowOpen`): the point is in the main window's surface pixels, or in an extra window's points (as
+    /// `WindowTouch`). A shell built before the field (up to 0.10.52) leaves it out, it reads as `None`, and the click
+    /// is in the main window. It is the last field on the wire, so an app built before it reads the message as before.
+    Context {x:f32,y:f32,window:Option<u32>},
+    /// The item the person chose in the menu the app opened with `ToShell::ContextMenu` (or in its Dock menu), by the
+    /// id the app gave it. The second field is the window the menu was opened for (0 the main window, else the id of
+    /// `WindowOpen`; always 0 for the Dock menu); `None` from a shell built before the field (up to 0.10.52). It is
+    /// the last field on the wire, so an app built before it reads the message as before.
+    ContextAction(u32,Option<u32>),
     /// The user chose a Home Screen quick action: its type and the user info the app gave it.
     QuickAction { kind: String, user_info: Vec<(String, String)> },
     Open { url: String },
@@ -875,6 +883,11 @@ pub mod appearance {
     /// The shell decodes every `MaterialKind` and `MaterialState`. Without it an app sends only `Sidebar` and
     /// `Titlebar` with the default state (`MaterialKind::legacy`), which every shell with `VIBRANCY` decodes.
     pub const MATERIALS: u32 = 64;
+    /// The shell takes `ToShell::WindowChrome`: an extra window's press-taking controls (so a full-size extra window's
+    /// toolbar buttons are not part of its drag band) and its vibrancy regions (so its sidebar is blurred like the main
+    /// window's). Without it an app sends none, opens its extra windows with the shell's title bar and paints their
+    /// materials opaque.
+    pub const WINDOW_CHROME: u32 = 128;
     /// Bits 8 to 11: the user's accent colour (Settings > Appearance), as `Accent::to_wire` (the position in
     /// `Accent::ALL` plus one). Zero means the shell did not say, and the app keeps the system blue. Controls tinted
     /// by the accent (switches, checkmarks, the default button) follow it; links stay blue.
@@ -941,6 +954,8 @@ impl Material {
 
 /// At most this many material regions per window.
 pub const MAX_MATERIALS: usize = 16;
+/// The most press-taking rectangles one `ToShell::WindowChrome` carries.
+pub const MAX_WINDOW_PRESS: usize = 64;
 
 /// Hierarchy and state for one `Node` (`NativeAccessibility` parent/child and the state attributes), sent beside
 /// `ToShell::Controls` as `ToShell::ControlsTree`. A node with no entry, or `parent: None`, is a direct child of the
@@ -1114,6 +1129,15 @@ pub enum ToShell {
     /// (the reference window's make-key-and-order-front call), as the Window menu does. A document app opening a document that is already open
     /// raises its window. An unknown window is ignored. Tag 0x258.
     WindowRaise { window: u32 },
+    /// Several windows: what the shell needs to give extra window `id` the chrome the main window has. `press` are the
+    /// rectangles (window points) of the controls that take a press themselves, as `Controls` names them for the main
+    /// window: in a full-size window (`window_flags::FULL_SIZE`) a press on one inside the title and toolbar band
+    /// reaches the app instead of moving the window. `materials` are the window's vibrancy regions (window points), as
+    /// `Materials` carries the main window's: the shell blurs what is behind the window there. Sent when either list
+    /// changes, and only to a shell that set `appearance::WINDOW_CHROME` (an older shell cannot decode it and would
+    /// stop the app); empty lists clear them. An unknown window is ignored. Tag 0x25a: the id, a count and that many
+    /// rectangles (four f32 each, at most `MAX_WINDOW_PRESS`), then the material list as `Materials` writes it.
+    WindowChrome { id: u32, press: Vec<UiRect>, materials: Vec<Material> },
     /// Several windows: collapse window `window` to its title bar (`collapsed`) or expand it back. Tag 0x247.
     WindowCollapse { window: u32, collapsed: bool },
     /// `setNotificationCategories`: replaces the app's categories. Needs the `notifications` permission.
@@ -1522,6 +1546,67 @@ mod tag {
     pub const WINDOW_COLLAPSE: u32 = 0x247;
     pub const WINDOW_MOVED: u32 = 0x24d;
     pub const WINDOW_TITLE_DOUBLE_CLICK: u32 = 0x24e;
+    /// App -> shell: an extra window's press-taking controls and its materials (`ToShell::WindowChrome`).
+    pub const WINDOW_CHROME: u32 = 0x25a;
+}
+
+/// A material list as `ToShell::Materials` and `ToShell::WindowChrome` carry it: a count (at most `MAX_MATERIALS`), then
+/// per region a kind and state byte, the rectangle and radius, a flags byte and the per-corner radii when flagged.
+fn materials_(b: &mut Vec<u8>, list: &[Material]) {
+    let n = list.len().min(MAX_MATERIALS);
+    u32_(b, n as u32);
+    for m in &list[..n] {
+        b.push(m.kind as u8 | (m.state as u8) << 6);
+        for v in [m.rect.x, m.rect.y, m.rect.w, m.rect.h, m.radius] {
+            f32_(b, v);
+        }
+        b.push(m.emphasized as u8 | ((m.blending == BlendingMode::WithinWindow) as u8) << 1 | (m.corners.is_some() as u8) << 2);
+        if let Some(c) = m.corners {
+            for v in [c.tl, c.tr, c.br, c.bl] {
+                f32_(b, v);
+            }
+        }
+    }
+}
+
+/// Reads the list `materials_` wrote.
+fn materials_of(r: &mut Reader) -> Result<Vec<Material>, DecodeError> {
+    let n = r.u32()? as usize;
+    if n > MAX_MATERIALS {
+        return Err(DecodeError::BadValue);
+    }
+    let mut list = Vec::with_capacity(n);
+    for _ in 0..n {
+        let byte = r.u8()?;
+        let kind = *MaterialKind::ALL.get((byte & 0x3f) as usize).ok_or(DecodeError::BadValue)?;
+        let state = match byte >> 6 {
+            0 => MaterialState::FollowsWindowActiveState,
+            1 => MaterialState::Active,
+            2 => MaterialState::Inactive,
+            _ => return Err(DecodeError::BadValue),
+        };
+        let rect = UiRect { x: r.f32()?, y: r.f32()?, w: r.f32()?, h: r.f32()? };
+        let radius = r.f32()?;
+        if ![rect.x, rect.y, rect.w, rect.h, radius].iter().all(|v| v.is_finite()) || rect.w < 0. || rect.h < 0. || radius < 0. {
+            return Err(DecodeError::BadValue);
+        }
+        let flags = r.u8()?;
+        if flags & !7 != 0 {
+            return Err(DecodeError::BadValue);
+        }
+        let corners = if flags & 4 != 0 {
+            let c = Corners { tl: r.f32()?, tr: r.f32()?, br: r.f32()?, bl: r.f32()? };
+            if ![c.tl, c.tr, c.br, c.bl].iter().all(|v| v.is_finite() && *v >= 0.) {
+                return Err(DecodeError::BadValue);
+            }
+            Some(c)
+        } else {
+            None
+        };
+        let blending = if flags & 2 != 0 { BlendingMode::WithinWindow } else { BlendingMode::BehindWindow };
+        list.push(Material { kind, rect, radius, state, blending, emphasized: flags & 1 != 0, corners });
+    }
+    Ok(list)
 }
 
 /// Whether `(w, h)` is a content size a window can have: finite, positive and at most `MAX_CONTENT_PT` on a side.
@@ -1889,8 +1974,9 @@ impl ToApp {
                 f32_(&mut b, c.text_scale);
                 b.push(c.reduce_motion as u8);
             }
-            ToApp::Context{x,y}=>{u32_(&mut b,tag::CONTEXT);f32_(&mut b,*x);f32_(&mut b,*y);},
-            ToApp::ContextAction(id)=>{u32_(&mut b,tag::CONTEXT_ACTION);u32_(&mut b,*id);},
+            // the window comes last in both: a reader built before it stops after the fields it knows
+            ToApp::Context{x,y,window}=>{u32_(&mut b,tag::CONTEXT);f32_(&mut b,*x);f32_(&mut b,*y);if let Some(window)=window{u32_(&mut b,*window);}},
+            ToApp::ContextAction(id,window)=>{u32_(&mut b,tag::CONTEXT_ACTION);u32_(&mut b,*id);if let Some(window)=window{u32_(&mut b,*window);}},
             ToApp::MenuAction(id)=>{u32_(&mut b,tag::MENU_ACTION);u32_(&mut b,*id);},
             ToApp::QuickAction{kind,user_info}=>{
                 // the decoder refuses more than `MAX_QUICK_INFO` pairs and the receiver a packet over `MAX_PACKET`:
@@ -2197,8 +2283,8 @@ impl ToApp {
             tag::WINDOW_CLOSE_REQUEST => ToApp::WindowCloseRequest { id: r.u32()? },
             tag::RESUME => ToApp::Resume,
             tag::SUSPEND => ToApp::Suspend,
-            tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
-            tag::CONTEXT_ACTION=>ToApp::ContextAction(r.u32()?),
+            tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y,window:r.tail_u32()?}},
+            tag::CONTEXT_ACTION=>ToApp::ContextAction(r.u32()?,r.tail_u32()?),
             tag::MENU_ACTION=>ToApp::MenuAction(r.u32()?),
             tag::QUICK_ACTION=>{let kind=r.str()?;let n=r.u32()?;if n>MAX_QUICK_INFO{return Err(DecodeError::BadValue);}let mut user_info=Vec::new();for _ in 0..n{user_info.push((r.str()?,r.str()?));}ToApp::QuickAction{kind,user_info}},
             tag::AX_SET => {
@@ -2664,20 +2750,19 @@ impl ToShell {
             }
             ToShell::Materials(list) => {
                 u32_(&mut b, tag::MATERIALS);
-                let n = list.len().min(MAX_MATERIALS);
+                materials_(&mut b, list);
+            }
+            ToShell::WindowChrome { id, press, materials } => {
+                u32_(&mut b, tag::WINDOW_CHROME);
+                u32_(&mut b, *id);
+                let n = press.len().min(MAX_WINDOW_PRESS);
                 u32_(&mut b, n as u32);
-                for m in &list[..n] {
-                    b.push(m.kind as u8 | (m.state as u8) << 6);
-                    for v in [m.rect.x, m.rect.y, m.rect.w, m.rect.h, m.radius] {
+                for r in &press[..n] {
+                    for v in [r.x, r.y, r.w, r.h] {
                         f32_(&mut b, v);
                     }
-                    b.push(m.emphasized as u8 | ((m.blending == BlendingMode::WithinWindow) as u8) << 1 | (m.corners.is_some() as u8) << 2);
-                    if let Some(c) = m.corners {
-                        for v in [c.tl, c.tr, c.br, c.bl] {
-                            f32_(&mut b, v);
-                        }
-                    }
                 }
+                materials_(&mut b, materials);
             }
         }
         b
@@ -2981,43 +3066,22 @@ impl ToShell {
                 }
                 ToShell::ControlsTree(list)
             }
-            tag::MATERIALS => {
+            tag::MATERIALS => ToShell::Materials(materials_of(&mut r)?),
+            tag::WINDOW_CHROME => {
+                let id = r.u32()?;
                 let n = r.u32()? as usize;
-                if n > MAX_MATERIALS {
+                if n > MAX_WINDOW_PRESS {
                     return Err(DecodeError::BadValue);
                 }
-                let mut list = Vec::with_capacity(n);
+                let mut press = Vec::with_capacity(n);
                 for _ in 0..n {
-                    let byte = r.u8()?;
-                    let kind = *MaterialKind::ALL.get((byte & 0x3f) as usize).ok_or(DecodeError::BadValue)?;
-                    let state = match byte >> 6 {
-                        0 => MaterialState::FollowsWindowActiveState,
-                        1 => MaterialState::Active,
-                        2 => MaterialState::Inactive,
-                        _ => return Err(DecodeError::BadValue),
-                    };
-                    let rect = UiRect { x: r.f32()?, y: r.f32()?, w: r.f32()?, h: r.f32()? };
-                    let radius = r.f32()?;
-                    if ![rect.x, rect.y, rect.w, rect.h, radius].iter().all(|v| v.is_finite()) || rect.w < 0. || rect.h < 0. || radius < 0. {
+                    let b = UiRect { x: r.f32()?, y: r.f32()?, w: r.f32()?, h: r.f32()? };
+                    if ![b.x, b.y, b.w, b.h].iter().all(|v| v.is_finite()) || b.w < 0. || b.h < 0. {
                         return Err(DecodeError::BadValue);
                     }
-                    let flags = r.u8()?;
-                    if flags & !7 != 0 {
-                        return Err(DecodeError::BadValue);
-                    }
-                    let corners = if flags & 4 != 0 {
-                        let c = Corners { tl: r.f32()?, tr: r.f32()?, br: r.f32()?, bl: r.f32()? };
-                        if ![c.tl, c.tr, c.br, c.bl].iter().all(|v| v.is_finite() && *v >= 0.) {
-                            return Err(DecodeError::BadValue);
-                        }
-                        Some(c)
-                    } else {
-                        None
-                    };
-                    let blending = if flags & 2 != 0 { BlendingMode::WithinWindow } else { BlendingMode::BehindWindow };
-                    list.push(Material { kind, rect, radius, state, blending, emphasized: flags & 1 != 0, corners });
+                    press.push(b);
                 }
-                ToShell::Materials(list)
+                ToShell::WindowChrome { id, press, materials: materials_of(&mut r)? }
             }
             t @ (0x140..=0x14f | 0x1d0..=0x1df) => rich::decode_shell(t, &mut r)?,
             t @ 0x1b0..=0x1bf => extras::decode_shell(t, &mut r)?,

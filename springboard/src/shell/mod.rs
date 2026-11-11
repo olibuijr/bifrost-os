@@ -18,7 +18,6 @@ pub mod apphost;
 pub mod app_window_table;
 pub mod helpbook;
 pub mod folder_actions;
-pub mod file_import;
 pub mod touch_frames;
 pub mod intents;
 pub mod preview_gen;
@@ -774,8 +773,6 @@ pub struct Shell {
     ota: Option<ota::Ota>,
     /// Folder Actions: the attachments saved under the data dir, rescanned from the tick (see `folder_actions`).
     folder_actions: folder_actions::Watcher,
-    /// the file importer: Documents, Desktop and Downloads kept in the Core Search index on a background thread (see `file_import`)
-    file_import: file_import::Importer,
     /// the shared weather summary: refreshed hourly and on wake, with no app window open
     weather_refresh: weather::Refresher,
     /// last time (ms) the apps registry was stat'ed for outside changes
@@ -1114,6 +1111,14 @@ pub struct Shell {
     /// The time of the last `draw`: `needs_frame` (which gets no time) checks the timed desktop effects against it.
     desk_t:f64,
     desktop_context:Option<desktop_bar::ContextMenu>,
+    /// The primary press that is down in an app window's content: where it went down (screen px) and when (ms). The
+    /// desk sets it on the press and clears it on the release (`desk_event`).
+    desktop_press:Option<(f32,f32,f64)>,
+    /// The press that was still down when the app's menu opened (`ext_context_menu`): its release is the end of the
+    /// click that opened the menu, not a choice in it (`desktop_bar::opening_release`). None for a menu opened any
+    /// other way, and once that press is released or another one goes down.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    desktop_menu_press:Option<(f32,f32,f64)>,
     /// the open or save panel an app asked for (`docpanel`), shown as `desktop_menu = Document`
     #[cfg(feature = "desktop-wayland")]
     doc_panel:Option<docpanel::Panel>,
@@ -1317,7 +1322,6 @@ impl Shell {
             folder_actions: folder_actions::Watcher::new(folder_actions::Registry::from_text(
                 &std::fs::read_to_string(folder_actions::file_path(&apphost::root())).unwrap_or_default(),
             )),
-            file_import: Default::default(),
             weather_refresh: weather::Refresher::default(),
             disk_check_ms: 0.0,
             idle_off_ms: Options::default().auto_lock_ms as f64,
@@ -1477,7 +1481,7 @@ impl Shell {
             ext_frame: false,
             wayland: std::env::var_os("SPRINGBOARD_WAYLAND").is_some(),
             overview:Default::default(),
-            desktop_menu:None,desktop_menu_scroll:Default::default(),desktop_flyout:Default::default(),defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,
+            desktop_menu:None,desktop_menu_scroll:Default::default(),desktop_flyout:Default::default(),defaults:None,recent_list:recent_items::new(),recent_dir:None,desktop_context:None,desktop_press:None,desktop_menu_press:None,
             #[cfg(feature = "desktop-wayland")]
             desktop_menu_row:None,
             #[cfg(feature = "desktop-wayland")]
@@ -2433,6 +2437,8 @@ impl Shell {
             due.add(Some(t + auto_flip_in_secs(unix + offset as i64) as f64 * 1000.0));
         }
         if self.bell.pending() { due.add(Some(t)); }
+        // files dropped on the desktop are on their way: their banner goes up when the move reports, and only until then
+        if self.dnd_desktop_pending() { due.add(Some(t + 50.0)); }
         // the Look Up popover fills its definition in when the dictionaries finish loading
         if self.look_up_waiting() { due.add(Some(t + 50.0)); }
         // a service waits on the front app's selection until its deadline, then takes the word at the caret
@@ -4424,7 +4430,7 @@ impl Shell {
         self.visual_search_tick();
         self.ota_tick(t);
         self.folder_actions_tick();
-        self.file_import_tick();
+        self.dnd_desktop_tick();
         if self.weather_refresh.due(t) {
             self.weather_refresh.start(weather::data_path().into());
         }
@@ -6650,7 +6656,7 @@ impl LockView<'_> {
             centred(s, tm, cx, clock_top - ui.pt(6.0) as i32);
         }
         self.notes.draw(s, ui, self.w, dy);
-        let dots_y = (dy + self.h) as f32 - ui.pt(26.0);
+        let dots_y = (dy + self.h) as f32 - ui.pt(notify::LOCK_HINT_PT);
         // a keyboard machine unlocks with Return, not a swipe; the login window asks for the password instead
         if self.status_inset == 0 {
             let hint = ui.text("Press Return to unlock", 15.0, Weight::Regular, rgba(255, 255, 255, 200));

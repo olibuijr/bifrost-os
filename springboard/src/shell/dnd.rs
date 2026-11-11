@@ -267,6 +267,40 @@ pub struct State {
     pub session: Option<Session>,
     /// `registerForDraggedTypes` per window slot
     pub registered: HashMap<u8, Vec<String>>,
+    /// drops on the desktop whose files are still on their way to the Desktop folder: whether each one moves (else it
+    /// copies) and where its thread reports (`Shell::dnd_desktop_tick`)
+    #[cfg(feature = "desktop-wayland")]
+    pub desktop_jobs: Vec<(bool, std::sync::mpsc::Receiver<batch::Report>)>,
+    /// the banner of the last drop on the desktop and the item a click on it shows in Files
+    #[cfg(feature = "desktop-wayland")]
+    pub desktop_note: Option<(u64, PathBuf)>,
+}
+
+/// What the banner says after a drop on the desktop: its title, its text and the item a click shows in Files. The
+/// desktop draws no icons for the folder's items, so without it the file would only vanish from where it was. None
+/// when nothing changed (every item was on the Desktop already, or the batch was cancelled before the first one).
+#[cfg(feature = "desktop-wayland")]
+pub fn desktop_drop_banner(moved: bool, report: &batch::Report) -> Option<(String, String, Option<PathBuf>)> {
+    let name = |p: &PathBuf| p.file_name().map_or_else(|| p.to_string_lossy().into_owned(), |n| n.to_string_lossy().into_owned());
+    match (report.done.as_slice(), report.failed.as_slice()) {
+        ([], []) => None,
+        ([], [(path, why), ..]) => {
+            let title = if moved { "Not Moved to Desktop" } else { "Not Copied to Desktop" };
+            Some((title.to_string(), format!("{}: {why}", name(path)), None))
+        }
+        (done, failed) => {
+            let title = if moved { "Moved to Desktop" } else { "Copied to Desktop" };
+            let mut body = match done {
+                [one] => name(one),
+                many => format!("{} items", many.len()),
+            };
+            if !failed.is_empty() {
+                let left = if failed.len() == 1 { "1 item was left where it was".to_string() } else { format!("{} items were left where they were", failed.len()) };
+                body = format!("{body}. {left}.");
+            }
+            Some((title.to_string(), body, done.first().cloned()))
+        }
+    }
 }
 
 impl State {
@@ -507,12 +541,69 @@ impl super::Shell {
             dragop::COPY => batch::Op::Copy,
             _ => return 0,
         };
+        let (done, report) = std::sync::mpsc::channel();
         crate::bare::sys::spawn_named("desktop-drop", move || {
             let mut keep_both = |_: &Path| Some((batch::Resolution::KeepBoth, true));
             let mut tick = |_: &batch::Progress| true;
-            batch::transfer(op, &sources, &desktop, &mut keep_both, &mut tick);
+            let _ = done.send(batch::transfer(op, &sources, &desktop, &mut keep_both, &mut tick));
         });
+        self.dnd.desktop_jobs.push((op == batch::Op::Move, report));
         if op == batch::Op::Move { dragop::MOVE } else { dragop::COPY }
+    }
+
+    /// True while files dropped on the desktop are still on their way: the loop then looks again shortly
+    /// (`next_wake`), and not at all once the last drop has reported.
+    pub(super) fn dnd_desktop_pending(&self) -> bool {
+        #[cfg(feature = "desktop-wayland")]
+        return !self.dnd.desktop_jobs.is_empty();
+        #[cfg(not(feature = "desktop-wayland"))]
+        false
+    }
+
+    /// Takes the reports of the finished drops on the desktop and says where the files went: a banner from Files
+    /// ("Moved to Desktop" with the item's name), since the desktop shows no icon for them. A click on the banner
+    /// shows the item in Files (`dnd_desktop_reveal`).
+    pub(super) fn dnd_desktop_tick(&mut self) {
+        #[cfg(feature = "desktop-wayland")]
+        {
+            use std::sync::mpsc::TryRecvError;
+            let mut reports = Vec::new();
+            self.dnd.desktop_jobs.retain(|(moved, rx)| match rx.try_recv() {
+                Ok(r) => {
+                    reports.push((*moved, r));
+                    false
+                }
+                Err(TryRecvError::Empty) => true,
+                Err(TryRecvError::Disconnected) => false,
+            });
+            for (moved, report) in reports {
+                let Some((title, body, shown)) = desktop_drop_banner(moved, &report) else { continue };
+                let time = self.notify.now();
+                let id = self.notify_id(super::notify::Notification::new(AppId::Files, title, body, time));
+                self.dnd.desktop_note = shown.map(|p| (id, p));
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// A notification of Files was opened: when it is the banner of the last drop on the desktop (still the newest
+    /// one of Files), the dropped item is shown in Files, selected in the Desktop folder. True when it was shown;
+    /// the caller then opens nothing else.
+    pub(super) fn dnd_desktop_reveal(&mut self, t: f64) -> bool {
+        #[cfg(feature = "desktop-wayland")]
+        {
+            let Some((id, path)) = self.dnd.desktop_note.take() else { return false };
+            let newest = self.notify.store.groups().iter().find(|g| g.app == AppId::Files).map(|g| g.latest().id);
+            if newest != Some(id) || !self.desk_active() || self.is_locked() {
+                return false;
+            }
+            return self.desktop_show_in_files(&path, t).is_ok();
+        }
+        #[cfg(not(feature = "desktop-wayland"))]
+        {
+            let _ = t;
+            false
+        }
     }
 
     /// The grants a drag made for its file items go when the drag ends. The destinations' own grants stay.
@@ -837,6 +928,26 @@ mod tests {
         assert_eq!(desktop_drop_op(dragop::COPY, true), dragop::COPY, "a source that only offers copies");
         assert_eq!(desktop_drop_op(dragop::LINK, true), 0);
         assert_eq!(desktop_drop_op(0, true), 0);
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn the_banner_of_a_desktop_drop_names_the_item_and_what_happened_to_it() {
+        let report = |done: &[&str], failed: &[&str]| batch::Report {
+            done: done.iter().map(PathBuf::from).collect(),
+            failed: failed.iter().map(|p| (PathBuf::from(p), "No space left".to_string())).collect(),
+            ..Default::default()
+        };
+        let one = desktop_drop_banner(true, &report(&["/home/a/Desktop/Plan.pdf"], &[])).unwrap();
+        assert_eq!((one.0.as_str(), one.1.as_str()), ("Moved to Desktop", "Plan.pdf"));
+        assert_eq!(one.2, Some(PathBuf::from("/home/a/Desktop/Plan.pdf")), "a click shows the item where it is now");
+        let many = desktop_drop_banner(false, &report(&["/d/a", "/d/b", "/d/c"], &[])).unwrap();
+        assert_eq!((many.0.as_str(), many.1.as_str()), ("Copied to Desktop", "3 items"));
+        let part = desktop_drop_banner(true, &report(&["/d/a"], &["/x/b"])).unwrap();
+        assert_eq!(part.1, "a. 1 item was left where it was.");
+        let none = desktop_drop_banner(true, &report(&[], &["/x/b.txt"])).unwrap();
+        assert_eq!((none.0.as_str(), none.1.as_str(), none.2), ("Not Moved to Desktop", "b.txt: No space left", None));
+        assert_eq!(desktop_drop_banner(true, &batch::Report { skipped: vec![PathBuf::from("/d/a")], ..Default::default() }), None, "an item that is on the Desktop already says nothing");
     }
 
     #[test]

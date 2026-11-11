@@ -65,6 +65,8 @@ pub(crate) const MENU_NEW_WINDOW: u32 = 32;
 /// View > Group By Name and Group By Size (the panel offers None, Kind and Date).
 pub(crate) const MENU_GROUP_NAME: u32 = 33;
 pub(crate) const MENU_GROUP_SIZE: u32 = 34;
+/// File > New Tab (⌘T): a tab at the open folder.
+pub(crate) const MENU_NEW_TAB: u32 = 35;
 
 /// What the menu of the selected items depends on, so its layout can be checked without a window.
 #[derive(Clone, Copy, Debug, Default)]
@@ -210,6 +212,7 @@ impl Files {
             })
         };
         // the rows file-manager extensions add for the selection, or for the folder, are a group of their own
+        let (x, y) = crate::windows::menu_point(self.fx.extra_window, x / ctx.ui.s, y / ctx.ui.s, ctx.ui.s);
         ctx.context_menu(x, y, grouped(vec![items, self.extension_menu_items(hit.is_some())]));
     }
     /// Copy Item Path (Option+Cmd+C): the focused item's full path as text on the clipboard.

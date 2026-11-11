@@ -36,7 +36,7 @@ use crate::gfx::{Image, Surface};
 use crate::layout::{Layout, PER_PAGE};
 use banner::Banner;
 use center::Center;
-use list::{badge_image, badge_pos, listed_in, Card, Hit, ListView, Mode, Opts, Slide, CARD_H_PT, CARD_W_PT, ICON_PT};
+use list::{badge_image, badge_pos, listed_in, Card, Hit, ListView, Mode, Opts, Slide, CARD_H_PT, CARD_W_PT, GROUP_GAP_PT, ICON_PT};
 use lockwidgets::Strip;
 pub use schedule::Schedule;
 pub use store::{Notification, Store};
@@ -46,6 +46,8 @@ pub use store::{Notification, Store};
 pub const LOCK_LIST_TOP_PT: f32 = 250.0;
 /// between the Now Playing card and the list under it
 const MUSIC_GAP_PT: f32 = 12.0;
+/// The unlock hint's top edge, above the bottom of the lock screen (drawn when there is no login window).
+pub const LOCK_HINT_PT: f32 = 26.0;
 /// The banner's resting top edge, under the status bar.
 const BANNER_TOP_PT: f32 = 28.0;
 /// A touch that moves less than this is a tap.
@@ -106,7 +108,7 @@ const WIFI_DROP_MS: f64 = 8000.0;
 
 /// Everything the shell keeps about notifications.
 pub struct Notify {
-    store: Store,
+    pub(super) store: Store,
     wall: Wall,
     /// the last tick's time
     pub(super) t: f64,
@@ -119,8 +121,8 @@ pub struct Notify {
     lock: Option<ListView>,
     /// the strip above the list
     strip: Option<Strip>,
-    /// store generation, minute, private, battery (level * 2 + charging)
-    lock_key: (u32, i64, bool, u16),
+    /// store generation, minute, private, battery (level * 2 + charging), the list's room in px
+    lock_key: (u32, i64, bool, u16, i32),
     /// lock-screen stacks shown expanded
     expanded: Vec<AppId>,
     lock_touch: Option<LockTouch>,
@@ -181,7 +183,7 @@ impl Default for Notify {
             banner_drawn: false,
             lock: None,
             strip: None,
-            lock_key: (u32::MAX, 0, false, 0),
+            lock_key: (u32::MAX, 0, false, 0, 0),
             expanded: Vec::new(),
             lock_touch: None,
             revealed: None,
@@ -384,8 +386,8 @@ impl Notify {
     /// minute or a card drag changes.
     pub fn lock_state(&self) -> u32 {
         let drag = self.lock_touch.and_then(|tc| tc.slide()).map_or(0, |sl| sl.dx as i32) ^ i32::from(self.revealed.is_some()) << 20;
-        let (gen, minute, private, battery) = self.lock_key;
-        gen.wrapping_mul(0x9e37_79b9) ^ (minute as u32).wrapping_mul(0x85eb_ca6b) ^ (drag as u32) ^ u32::from(private).wrapping_mul(0x27d4_eb2f) ^ u32::from(battery).wrapping_mul(0x1656_67b1)
+        let (gen, minute, private, battery, room) = self.lock_key;
+        gen.wrapping_mul(0x9e37_79b9) ^ (minute as u32).wrapping_mul(0x85eb_ca6b) ^ (drag as u32) ^ u32::from(private).wrapping_mul(0x27d4_eb2f) ^ u32::from(battery).wrapping_mul(0x1656_67b1) ^ (room as u32).wrapping_mul(0xc2b2_ae35)
     }
 
     /// Generation of the badge counts.
@@ -699,6 +701,10 @@ impl Shell {
     /// whatever is on screen steps aside first.
     pub(super) fn open_from_notification(&mut self, app: AppId, t: f64) {
         self.usernotif_tapped(app);
+        // the banner of a drop on the desktop shows the dropped item in Files (`dnd::desktop_drop_banner`)
+        if app == AppId::Files && self.dnd_desktop_reveal(t) {
+            return;
+        }
         let link = app == AppId::Settings && self.notify.store.groups().iter().find(|g| g.app == app).is_some_and(|g| g.latest().title == "Software Update");
         self.open_from_notification_inner(app, t);
         if link && self.screen != Screen::Lock {
@@ -787,6 +793,10 @@ impl Shell {
         let mut list = ListView::new(&self.ui, mode, &groups, &icon, self.notify.now(), opts);
         let usernotif = &self.usernotif;
         list.set_actions(&self.ui, &|id| usernotif.actions(id), &|name| crate::first_frame_cache::cached_icon(name, 16));
+        if mode == Mode::Lock {
+            // the list ends above the account block: what does not fit is counted in a line under it
+            list.fit(&self.ui, self.lock_list_room());
+        }
         list
     }
 
@@ -805,6 +815,18 @@ impl Shell {
         let playing = self.svc_active();
         let pt = if playing { super::music::nowplaying::LOCK_CARD_Y_PT + super::music::nowplaying::LOCK_CARD_H_PT + MUSIC_GAP_PT } else { LOCK_LIST_TOP_PT };
         self.ui.pt(pt)
+    }
+
+    /// How tall the lock screen's list may be, in px: from its top down to a group gap above the login window's
+    /// account block (picture, name, password field; `login::block_top`), or above the unlock hint at the bottom of
+    /// the screen where no login window opens. Follows the screen size and the block's move for the keyboard.
+    fn lock_list_room(&self) -> f32 {
+        let bottom = match &self.login {
+            Some(l) => l.block_top(&self.ui),
+            None if self.login_backend.is_some() => super::login::block_top(&self.ui, self.h, self.options().login_name_password, 0.0),
+            None => self.h as f32 - self.ui.pt(LOCK_HINT_PT),
+        };
+        (bottom - self.ui.pt(GROUP_GAP_PT) - self.lock_list_top()).max(0.0)
     }
 
     /// Where the pending requests of `notification-schedule` are saved: beside the notification store, once the
@@ -845,7 +867,7 @@ impl Shell {
         }
         let private = self.lock_private();
         let battery = u16::from(self.info.battery) * 2 + u16::from(self.info.charging);
-        let key = (self.notify.gen, self.notify.now() / 60, private, battery);
+        let key = (self.notify.gen, self.notify.now() / 60, private, battery, self.lock_list_room().round() as i32);
         if self.notify.lock_key != key {
             let list = self.render_list(Mode::Lock);
             self.notify.lock = Some(list);

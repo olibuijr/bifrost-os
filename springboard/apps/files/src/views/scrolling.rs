@@ -75,6 +75,24 @@ impl Files {
         // a view too short for the middle to hold the whole row: the row is in view whatever else
         self.scroll = self.nearest(wanted, top, height, gap);
     }
+    /// Brings row `i` into view after a view switch with a whole line at the top of the view: a row that is in view
+    /// from the top of the folder leaves it there; any other lands in the middle line of the view. Only at the end of
+    /// the folder, where the last line sits on the bottom edge, can the first line shown be a partial one.
+    fn reveal_on_a_line(&mut self, i: usize) {
+        let Some((top0, step, _)) = self.lines() else { return };
+        let Some((top, height, gap)) = self.line_of(i) else { return };
+        if self.nearest(0., top, height, gap) == 0. {
+            self.scroll = 0.;
+            return;
+        }
+        let line = ((top - top0) / step).round().max(0.) as usize;
+        // the whole lines the view holds under the gap above its first one
+        let fit = (((self.bottom() - self.rows_top() - gap) / step).floor() as usize).max(1);
+        let first = line.saturating_sub((fit - 1) / 2);
+        // line `first` at the top of the view (its gap above it), or as near as the scroll range allows
+        let wanted = (first as f32 * step).min(self.scroll_max());
+        self.scroll = self.nearest(wanted, top, height, gap);
+    }
     /// The first item that is fully in view, when the view has been scrolled: where a view switch keeps its place.
     fn first_shown(&self) -> Option<PathBuf> {
         if self.scroll <= 0. {
@@ -104,9 +122,15 @@ impl Files {
             let i = self.selection.remove(at);
             self.selection.push(i);
         }
+        // the scroll of the view left behind means nothing in this one's geometry: the new view starts at its top and
+        // is then scrolled, by whole lines, to the place to keep
         self.scroll = 0.;
-        if let Some(i) = self.focus() {
-            self.reveal_comfortably(i);
+        let everything = self.selection.len() > 1 && self.selection.len() >= self.visible().len();
+        if everything {
+            // Select All has no one place to keep: the folder is shown from its top. (The focus is its last item, so
+            // the icon view came back scrolled to the end with its first line cut in half.)
+        } else if let Some(i) = self.focus() {
+            self.reveal_on_a_line(i);
         } else if let Some((top, _, gap)) = first.and_then(|p| row_of(&*self, &p)).and_then(|i| self.line_of(i)) {
             self.scroll = (top - gap - self.rows_top()).clamp(0., self.scroll_max());
         }
@@ -299,6 +323,60 @@ mod tests {
         // a view that was not scrolled stays at the top
         files.scroll = 0.;
         files.set_view(false, false);
+        assert_eq!(files.scroll, 0.);
+    }
+
+    /// E2E7: Select All, the list view, then the icon view again came back scrolled down with its first line cut in half.
+    #[test]
+    fn a_view_switch_after_select_all_starts_at_the_top_in_every_view() {
+        let views = [(true, false, false), (false, false, false), (false, true, false), (false, false, true)];
+        for from in views {
+            for to in views {
+                // a folder a little longer than the view, so its end is not on a line boundary
+                let mut files = items(40);
+                files.h = 430.;
+                files.switch_view(from.0, from.1, from.2);
+                files.select_all();
+                files.scroll = files.scroll_max();
+                files.switch_view(to.0, to.1, to.2);
+                assert_eq!(files.scroll, 0., "from {from:?} to {to:?}");
+                assert_eq!(files.selection.len(), 40, "everything is still selected");
+            }
+        }
+    }
+
+    #[test]
+    fn a_view_switch_never_keeps_the_other_views_scroll_and_shows_whole_lines() {
+        let views = [(true, false), (false, false), (false, true)];
+        for from in views {
+            for to in views {
+                for picked in [None, Some(3), Some(120), Some(199)] {
+                    let mut files = items(200);
+                    files.set_view(from.0, from.1);
+                    files.scroll = files.scroll_max() * 0.37;
+                    if let Some(i) = picked {
+                        files.select_only(i);
+                    }
+                    files.set_view(to.0, to.1);
+                    let (_, step, _) = files.lines().unwrap();
+                    let what = format!("from {from:?} to {to:?}, selected {picked:?}: scroll {}", files.scroll);
+                    assert!(files.scroll >= 0. && files.scroll <= files.scroll_max(), "inside the range ({what})");
+                    // the first line shown is a whole one, except at the very end of the folder
+                    let on_a_line = (files.scroll / step - (files.scroll / step).round()).abs() < 0.001;
+                    assert!(on_a_line || (files.scroll - files.scroll_max()).abs() < 0.001, "a whole line at the top ({what})");
+                    if let Some(i) = picked {
+                        assert!(fully_in_view(&files, files.focus().unwrap()), "the selected item is in view ({what})");
+                        assert_eq!(files.focus_entry().map(|e| e.name.clone()), Some(format!("f{i:03}")));
+                    }
+                }
+            }
+        }
+        // an item in the first lines leaves the view at the top
+        let mut files = items(200);
+        files.set_view(false, false);
+        files.select_only(2);
+        files.scroll = 500.;
+        files.set_view(true, false);
         assert_eq!(files.scroll, 0.);
     }
 
