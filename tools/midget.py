@@ -1496,6 +1496,7 @@ def cmd_click(args):
         if not ok:
             return 3
     print(f"click {px_to_abs(x, y, size)} of {size[0]}x{size[1]}" + (" right" if "--right" in fl else "") + (" double" if "--double" in fl else "")
+          + (f" with {fl['--mods'].lower()} held (key codes {'+'.join(str(c) for c in mods)})" if mods else "")
           + (" (relative mouse)" if "--relative" in fl else ""))
     return run_plan(click_plan(x, y, size, "--right" in fl, "--double" in fl, mods, "--relative" in fl), size)
 

@@ -685,8 +685,16 @@ pub enum ToApp {
     Quit,
     Command(Command),
     Activate(u64),
-    Context {x:f32,y:f32},
-    ContextAction(u32),
+    /// A secondary click in a window of the app. `window` is the window under the pointer (0 the main window, else
+    /// the id of `WindowOpen`): the point is in the main window's surface pixels, or in an extra window's points (as
+    /// `WindowTouch`). A shell built before the field (up to 0.10.52) leaves it out, it reads as `None`, and the click
+    /// is in the main window. It is the last field on the wire, so an app built before it reads the message as before.
+    Context {x:f32,y:f32,window:Option<u32>},
+    /// The item the person chose in the menu the app opened with `ToShell::ContextMenu` (or in its Dock menu), by the
+    /// id the app gave it. The second field is the window the menu was opened for (0 the main window, else the id of
+    /// `WindowOpen`; always 0 for the Dock menu); `None` from a shell built before the field (up to 0.10.52). It is
+    /// the last field on the wire, so an app built before it reads the message as before.
+    ContextAction(u32,Option<u32>),
     /// The user chose a Home Screen quick action: its type and the user info the app gave it.
     QuickAction { kind: String, user_info: Vec<(String, String)> },
     Open { url: String },
@@ -1966,8 +1974,9 @@ impl ToApp {
                 f32_(&mut b, c.text_scale);
                 b.push(c.reduce_motion as u8);
             }
-            ToApp::Context{x,y}=>{u32_(&mut b,tag::CONTEXT);f32_(&mut b,*x);f32_(&mut b,*y);},
-            ToApp::ContextAction(id)=>{u32_(&mut b,tag::CONTEXT_ACTION);u32_(&mut b,*id);},
+            // the window comes last in both: a reader built before it stops after the fields it knows
+            ToApp::Context{x,y,window}=>{u32_(&mut b,tag::CONTEXT);f32_(&mut b,*x);f32_(&mut b,*y);if let Some(window)=window{u32_(&mut b,*window);}},
+            ToApp::ContextAction(id,window)=>{u32_(&mut b,tag::CONTEXT_ACTION);u32_(&mut b,*id);if let Some(window)=window{u32_(&mut b,*window);}},
             ToApp::MenuAction(id)=>{u32_(&mut b,tag::MENU_ACTION);u32_(&mut b,*id);},
             ToApp::QuickAction{kind,user_info}=>{
                 // the decoder refuses more than `MAX_QUICK_INFO` pairs and the receiver a packet over `MAX_PACKET`:
@@ -2274,8 +2283,8 @@ impl ToApp {
             tag::WINDOW_CLOSE_REQUEST => ToApp::WindowCloseRequest { id: r.u32()? },
             tag::RESUME => ToApp::Resume,
             tag::SUSPEND => ToApp::Suspend,
-            tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y}},
-            tag::CONTEXT_ACTION=>ToApp::ContextAction(r.u32()?),
+            tag::CONTEXT=>{let x=r.f32()?;let y=r.f32()?;if !x.is_finite()||!y.is_finite(){return Err(DecodeError::BadValue);}ToApp::Context{x,y,window:r.tail_u32()?}},
+            tag::CONTEXT_ACTION=>ToApp::ContextAction(r.u32()?,r.tail_u32()?),
             tag::MENU_ACTION=>ToApp::MenuAction(r.u32()?),
             tag::QUICK_ACTION=>{let kind=r.str()?;let n=r.u32()?;if n>MAX_QUICK_INFO{return Err(DecodeError::BadValue);}let mut user_info=Vec::new();for _ in 0..n{user_info.push((r.str()?,r.str()?));}ToApp::QuickAction{kind,user_info}},
             tag::AX_SET => {

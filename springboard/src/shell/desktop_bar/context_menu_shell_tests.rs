@@ -13,7 +13,7 @@ fn items() -> Vec<ContextItem> {
 /// A desktop shell with `items()` open as a context menu for a pointer at (x, y).
 fn open_at(x: f32, y: f32) -> Shell {
     let mut sh = crate::shell::tests::desktop_shell();
-    sh.desktop_context = Some(ContextMenu { slot: 0, x, y, items: items() });
+    sh.desktop_context = Some(ContextMenu { slot: 0, window: 0, x, y, items: items() });
     sh.desktop_menu = Some(Menu::Context);
     sh
 }
@@ -133,7 +133,7 @@ fn a_long_app_menu_stays_inside_the_desktop_area_wherever_it_opens_and_scrolls_w
         let area = crate::shell::desk::Desk::area(&sh.desk_metrics());
         let (top, bottom) = (area.y as usize, (area.y + area.h) as usize);
         for at in [(20., 20.), (300., (bottom - 4) as f32), (sh.w as f32 - 4., (top + 4) as f32), (sh.w as f32 / 2., (top + bottom) as f32 / 2.), (sh.w as f32 + 50., sh.h as f32 + 50.)] {
-            sh.desktop_context = Some(ContextMenu { slot: 0, x: at.0, y: at.1, items: long(n) });
+            sh.desktop_context = Some(ContextMenu { slot: 0, window: 0, x: at.0, y: at.1, items: long(n) });
             sh.desktop_menu = Some(Menu::Context);
             let (x, y, w, h) = sh.desktop_popup_rect().unwrap();
             let tag = format!("{n} items, screen {}, pointer {at:?}: menu {x},{y} {w}x{h}, area {top}..{bottom}", sh.h);
@@ -180,4 +180,105 @@ fn hovering_a_row_highlights_it_and_the_bar_does_not_take_over_the_menu() {
     sh.desktop_menu_hover(x as f32 + 12., 4.);
     assert_eq!(sh.desktop_menu, Some(Menu::Context), "crossing the bar keeps the context menu");
     assert_eq!(sh.menu_row_of(Menu::Context), None);
+}
+
+/// The menu rule for a menu an app opens on a press (E2E7: the Viewer's overflow menu showed only while the button
+/// was held, since the release of the opening click was read as a release over no item).
+#[test]
+fn the_release_of_the_click_that_opened_a_menu_leaves_it_open() {
+    use OpeningRelease::{Act, Stay};
+    let press = (300., 200., 1000.);
+    // a click: released where it went down, soon
+    assert_eq!(opening_release(press, (300., 200.), 1060., 8., 500., false), Stay);
+    assert_eq!(opening_release(press, (301., 202.), 1060., 8., 500., true), Stay, "a row under an unmoved pointer (a flipped menu) is not chosen");
+    // press, drag to an item, release: the item is chosen, however fast or slow
+    assert_eq!(opening_release(press, (320., 260.), 1100., 8., 500., true), Act);
+    assert_eq!(opening_release(press, (320., 260.), 3000., 8., 500., true), Act);
+    // a quick click whose pointer slid off to no item is still the click
+    assert_eq!(opening_release(press, (320., 190.), 1100., 8., 500., false), Stay);
+    // held past the click time and let go over no item: the menu closes
+    assert_eq!(opening_release(press, (300., 200.), 1800., 8., 500., false), Act);
+    assert_eq!(opening_release(press, (400., 100.), 1800., 8., 500., false), Act);
+    // held without moving, a row under the pointer: nothing was chosen
+    assert_eq!(opening_release(press, (300., 200.), 1800., 8., 500., true), Stay);
+}
+
+/// The middle of the row titled `title` of the open context menu, in screen px.
+fn row_point(sh: &Shell, title: &str) -> (f32, f32) {
+    let rows = sh.menu_rows(Menu::Context);
+    let at = rows.iter().position(|r| r.text == title).unwrap();
+    let (x, top, w, _) = sh.desktop_popup_rect().unwrap();
+    let (spans, _) = menu_spans(&rows);
+    ((x + w / 2) as f32, top as f32 + sh.ui.pt(spans[at].0 + spans[at].1 / 2.))
+}
+
+/// `open_at`, unlocked, as the menu of a press that is still down at the menu's corner since `t`.
+fn opened_by_a_press(t: f64) -> Shell {
+    let mut sh = open_at(300., 200.);
+    sh.anim = None;
+    sh.screen = crate::shell::Screen::Home;
+    sh.desktop_menu_press = Some((300., 200., t));
+    sh
+}
+
+#[test]
+fn a_menu_opened_by_a_press_stays_open_when_the_click_ends() {
+    let mut sh = opened_by_a_press(1000.);
+    assert!(sh.desktop_bar_event(Event::Up(300., 200.), 1060.).is_some(), "the release is the menu's");
+    assert_eq!(sh.desktop_menu, Some(Menu::Context), "click to open: the menu stays");
+    assert_eq!(sh.desktop_menu_press, None, "the opening press is over");
+    // the next click chooses: its release is on a row
+    let (x, y) = row_point(&sh, "Open");
+    let _ = sh.desktop_bar_event(Event::Down(x, y), 2000.);
+    assert_eq!(sh.desktop_menu, Some(Menu::Context), "a press inside the menu keeps it");
+    let _ = sh.desktop_bar_event(Event::Up(x, y), 2050.);
+    assert_eq!(sh.desktop_menu, None, "the choice closes it");
+}
+
+#[test]
+fn a_press_dragged_onto_an_item_chooses_it_on_release() {
+    let mut sh = opened_by_a_press(1000.);
+    let (x, y) = row_point(&sh, "Get Info");
+    assert!(sh.desktop_bar_event(Event::Move(x, y), 1100.).is_some(), "the drag is the menu's, not the window's below");
+    assert_eq!(sh.menu_row_of(Menu::Context), Some(1), "the row under the held pointer is lit");
+    let _ = sh.desktop_bar_event(Event::Up(x, y), 1200.);
+    assert_eq!(sh.desktop_menu, None, "press, drag, release: chosen");
+}
+
+#[test]
+fn a_long_hold_released_over_no_item_closes_the_menu_and_a_later_press_is_not_the_opening_one() {
+    let mut sh = opened_by_a_press(1000.);
+    let late = 1000. + crate::shell::desk::double_click_ms() + 400.;
+    let _ = sh.desktop_bar_event(Event::Up(300., 200.), late);
+    assert_eq!(sh.desktop_menu, None, "held and let go over nothing");
+    // a menu opened by a secondary click has no opening press: a release outside any row closes it as before
+    let mut sh = opened_by_a_press(1000.);
+    sh.desktop_menu_press = None;
+    let _ = sh.desktop_bar_event(Event::Up(20., 900.), 1060.);
+    assert_eq!(sh.desktop_menu, None);
+    // any new press ends the opening one
+    let mut sh = opened_by_a_press(1000.);
+    let (x, y) = row_point(&sh, "Open");
+    let _ = sh.desktop_bar_event(Event::Down(x, y), 1010.);
+    assert_eq!(sh.desktop_menu_press, None);
+}
+
+/// E2E7: the Files File menu showed the quick-look key as "Spac e": the label was cut before its last character,
+/// whatever the key was called.
+#[test]
+fn a_key_with_a_name_is_drawn_whole_after_its_modifiers() {
+    assert_eq!(shortcut_spaced("Space"), "Space", "a word key alone is not cut");
+    assert_eq!(shortcut_spaced("\u{2318}I"), "\u{2318} I");
+    assert_eq!(shortcut_spaced("\u{21e7}\u{2318}Z"), "\u{21e7}\u{2318} Z");
+    assert_eq!(shortcut_spaced("\u{2325}Space"), "\u{2325} Space");
+    assert_eq!(shortcut_spaced("\u{2303}\u{2318}F5"), "\u{2303}\u{2318} F5", "a function key keeps its number");
+    assert_eq!(shortcut_spaced("\u{2318}\u{232b}"), "\u{2318} \u{232b}", "a glyph key (Delete) as before");
+    for glyph in ["\u{21a9}", "\u{238b}", "\u{21e5}", "\u{2190}", "F12", "A"] {
+        assert_eq!(shortcut_spaced(glyph), glyph, "a key without a modifier stands alone");
+    }
+    // the rows carry `KeyCombo`'s text: every named key comes out whole
+    for (combo, shown) in [("space", "Space"), ("cmd+space", "\u{2318} Space"), ("return", "\u{21a9}"), ("cmd+delete", "\u{2318} \u{232b}"), ("escape", "\u{238b}"), ("shift+tab", "\u{21e7} \u{21e5}"), ("cmd+left", "\u{2318} \u{2190}"), ("alt+f5", "\u{2325} F5")] {
+        let text = bifrost_ui::keys::KeyCombo::parse(combo).unwrap_or_else(|| panic!("{combo} parses")).to_string();
+        assert_eq!(shortcut_spaced(&text), shown, "{combo}");
+    }
 }

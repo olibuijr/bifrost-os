@@ -163,7 +163,7 @@ fn window_look() -> u64 {
 
 /// Two title-bar presses this close (ms) are a double-click, which zooms the window as Golden Gate does. The gap is
 /// the Settings > Mouse > Double-Click Speed choice (`pointer_prefs`).
-fn double_click_ms() -> f64 {
+pub(super) fn double_click_ms() -> f64 {
     crate::bare::pointer_prefs::get().double_click_ms as f64
 }
 
@@ -1146,6 +1146,14 @@ impl Desk {
     }
 
     /// The frontmost visible window hit at (x, y).
+    /// The window whose content a press is down in (the app holds the touch until it lifts), if any.
+    pub fn content_press(&self) -> Option<AppId> {
+        match self.grab {
+            Some(Grab::Content(app, _)) => Some(app),
+            _ => None,
+        }
+    }
+
     pub fn pick(&self, m: &Metrics, x: f32, y: f32) -> Option<(usize, Hit)> {
         self.wins.iter().enumerate().rev().filter(|(_, w)| !w.minimized && !self.unmapped.contains(&w.app))
             // a shaped (borderless) window is hit only where it drew: the rest belongs to the window below (W2-22)
@@ -3632,6 +3640,18 @@ impl Shell {
                     Hit::Edge(edges) => Grab::Resize { edges, start: w.r, x, y, app },
                     Hit::Content => {
                         self.desk.as_mut()?.grab = Some(Grab::Content(app, dy));
+                        // the press and its window: a menu the app opens on it stays open when the click ends
+                        // (`ext_context_menu`), and belongs to this window
+                        self.desktop_press = Some((x, y, t));
+                        if let AppId::External(slot) | AppId::ExternalWindow(slot, _) = app {
+                            if let Some(Some(host)) = self.ext.get_mut(slot as usize) {
+                                host.pointer_window = match app { AppId::ExternalWindow(_, id) => u32::from(id), _ => 0 };
+                            }
+                        }
+                        // the click that activates a window is a click in it: the window was raised above, it is its
+                        // app's key window before the press arrives (not a tick later, between the press and its
+                        // release), and the press and release go to the app as any other (click-through)
+                        self.sync_key_windows();
                         let b = w.body(&m);
                         let fx = self.with_size(b.w, b.h, |sh| sh.app_touch_single(app, Event::Down(x - b.x as f32, y - dy - b.y as f32), t));
                         return Some(fx);
@@ -3685,6 +3705,7 @@ impl Shell {
             }
             Event::Up(x, y) => {
                 let grab = self.desk.as_mut()?.grab.take();
+                self.desktop_press = None;
                 self.dirty = true;
                 match grab {
                     Some(Grab::Content(app, dy)) => {
@@ -4584,6 +4605,10 @@ mod w4_window_tests;
 
 #[cfg(all(test, feature = "desktop-wayland"))]
 mod launch_front_tests;
+
+/// The click that activates a window is delivered to it (click-through); a title bar press is the shell's.
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod activating_click_tests;
 
 /// E2E6 Search: whatever Search, the Apps grid, the Dock or `open-app` opens is the front window and keeps the
 /// keyboard, whatever focus the window server gives other windows on its own while the app maps (`FrontIntent`).

@@ -1,5 +1,20 @@
  use super::*;
- #[test] fn context_roundtrip_and_limits(){let packet=ToShell::ContextMenu{x:12.,y:34.,items:vec![ContextItem{id:7,label:"Open".into(),enabled:true}]};assert_eq!(ToShell::decode(&packet.encode()),Ok(packet));for message in [ToApp::Context{x:12.,y:34.},ToApp::ContextAction(7)]{assert_eq!(ToApp::decode(&message.encode()),Ok(message));}let bad=ToShell::ContextMenu{x:f32::NAN,y:0.,items:vec![]};assert_eq!(ToShell::decode(&bad.encode()),Err(DecodeError::BadValue));let large=ToShell::ContextMenu{x:0.,y:0.,items:(0..100).map(|id|ContextItem{id,label:"x".repeat(10000),enabled:true}).collect()};let bytes=large.encode();assert!(bytes.len()<MAX_PACKET);let ToShell::ContextMenu{items,..}=ToShell::decode(&bytes).unwrap()else{panic!()};assert_eq!(items.len(),32);}
+ #[test] fn context_roundtrip_and_limits(){let packet=ToShell::ContextMenu{x:12.,y:34.,items:vec![ContextItem{id:7,label:"Open".into(),enabled:true}]};assert_eq!(ToShell::decode(&packet.encode()),Ok(packet));for message in [ToApp::Context{x:12.,y:34.,window:None},ToApp::Context{x:12.,y:34.,window:Some(3)},ToApp::ContextAction(7,None),ToApp::ContextAction(7,Some(0)),ToApp::ContextAction(7,Some(3))]{assert_eq!(ToApp::decode(&message.encode()),Ok(message));}let bad=ToShell::ContextMenu{x:f32::NAN,y:0.,items:vec![]};assert_eq!(ToShell::decode(&bad.encode()),Err(DecodeError::BadValue));let large=ToShell::ContextMenu{x:0.,y:0.,items:(0..100).map(|id|ContextItem{id,label:"x".repeat(10000),enabled:true}).collect()};let bytes=large.encode();assert!(bytes.len()<MAX_PACKET);let ToShell::ContextMenu{items,..}=ToShell::decode(&bytes).unwrap()else{panic!()};assert_eq!(items.len(),32);}
+/// The window of a secondary click and of a chosen menu item is the last field on the wire and may be missing: a
+/// reader built before it stops after the fields it knows, and a sender built before it is read as `None`.
+#[test]
+fn the_window_of_a_context_click_and_of_its_action_is_a_trailing_optional_field() {
+    let (old, new) = (ToApp::Context { x: 1., y: 2., window: None }.encode(), ToApp::Context { x: 1., y: 2., window: Some(5) }.encode());
+    assert_eq!(new.len(), old.len() + 4, "four bytes more");
+    assert_eq!(&new[..old.len()], &old[..], "and the message a reader built before the field knows comes first");
+    assert_eq!(ToApp::decode(&old), Ok(ToApp::Context { x: 1., y: 2., window: None }), "a shell built before the field");
+    let (old, new) = (ToApp::ContextAction(9, None).encode(), ToApp::ContextAction(9, Some(5)).encode());
+    assert_eq!(new.len(), old.len() + 4);
+    assert_eq!(&new[..old.len()], &old[..]);
+    assert_eq!(ToApp::decode(&old), Ok(ToApp::ContextAction(9, None)));
+    // half a field is a broken packet, not a missing one
+    assert!(ToApp::decode(&new[..new.len() - 2]).is_err());
+}
 #[test]
 fn context_items_carry_separators_and_key_equivalents_inside_the_wire_fields() {
     let plain = ContextItem::new(7, "Open");
