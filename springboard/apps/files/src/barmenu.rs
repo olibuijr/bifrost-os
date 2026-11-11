@@ -125,9 +125,10 @@ impl Files {
         }
     }
 
-    /// The toolbar pull-down (the view pop-up, Group and Sort, the action menu) under the point (x, y), where a press
-    /// opens its menu: nowhere while a sheet or a panel of the window takes the pointer (`click` gives those the
-    /// click first), and never in a Get Info window.
+    /// The toolbar button under the point (x, y) whose menu or panel a press opens: the pull-downs (the view pop-up,
+    /// Group and Sort, the action menu) and, while there is something to share or to tag, Share and Tags. Nowhere
+    /// while a sheet or a panel of the window takes the pointer (`click` gives those the click first), and never in
+    /// a Get Info window. (Share and Tags were left to the release, so a held press on them showed nothing.)
     pub(crate) fn bar_menu_at(&self, x: f32, y: f32) -> Option<u32> {
         let modal = self.info_window
             || self.tag_panel
@@ -138,14 +139,38 @@ impl Files {
         if modal || x < self.side() || y >= HEADER_H {
             return None;
         }
-        self.bar_layout().hit(x, y).filter(|id| matches!(*id, BAR_VIEW | BAR_SORT | BAR_MORE))
+        let selected = !self.selection.is_empty();
+        self.bar_layout().hit(x, y).filter(|id| match *id {
+            BAR_VIEW | BAR_SORT | BAR_MORE => true,
+            // a button that is off opens nothing; its press is an ordinary one
+            BAR_SHARE => selected && !provider::is_path(&self.path),
+            BAR_TAGS => selected,
+            _ => false,
+        })
     }
 
-    /// A pointer press at (x, y): on a toolbar pull-down it queues that button's menu and returns true. The menu is
-    /// asked for by the press, not by the release, so the shell opens it while the button is still held: a quick
-    /// release leaves it open, and press, drag to a row and release chooses the row. The caller must not keep the
-    /// press: a release that still reaches the window would be a second click on the button and ask for the menu
-    /// again.
+    /// The colour row of the open Tags panel under the point (x, y).
+    pub(crate) fn tag_row_at(&self, x: f32, y: f32) -> Option<Tag> {
+        let row = ((y - TAG_ROWS_TOP) / TAG_ROW).floor();
+        let inside = self.tag_panel && x >= self.side() + 16. && x < self.w - 16. && y >= TAG_ROWS_TOP && (0. ..Tag::ALL.len() as f32).contains(&row);
+        inside.then(|| Tag::ALL[row as usize])
+    }
+
+    /// The release of the press that opened the Tags panel (`press_bar_menu`): over a colour row it turns that
+    /// colour on or off, as a release over a row of a menu chooses it; anywhere else the panel stays open, as a
+    /// click on the button leaves it.
+    pub(crate) fn tag_release(&mut self, x: f32, y: f32) {
+        if let Some(tag) = self.tag_row_at(x, y) {
+            self.toggle_tag(tag);
+        }
+    }
+
+    /// A pointer press at (x, y): on a toolbar pull-down, Share or Tags it queues that button's menu (or opens the
+    /// Tags panel) and returns true. The menu is asked for by the press, not by the release, so the shell opens it
+    /// while the button is still held: a quick release leaves it open, and press, drag to a row and release chooses
+    /// the row. The caller must not keep the press: a release that still reaches the window would be a second click
+    /// on the button and ask for the menu again (and close the Tags panel). The Tags panel is this window's own, so
+    /// the release of its press comes here (`tag_release`).
     pub(crate) fn press_bar_menu(&mut self, x: f32, y: f32) -> bool {
         let Some(id) = self.bar_menu_at(x, y) else { return false };
         // what a click on the button did before its menu opened: a name being typed is kept, and the search field
@@ -157,6 +182,7 @@ impl Files {
         self.controls.focus(None);
         self.revision += 1;
         self.bar_action(id);
+        self.fx.tag_press = id == BAR_TAGS && self.tag_panel;
         true
     }
 

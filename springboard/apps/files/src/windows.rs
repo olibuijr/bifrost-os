@@ -92,8 +92,9 @@ pub(crate) fn closes_window(info_window: bool, tabs: usize, typing: bool) -> boo
 }
 
 impl Files {
-    /// New Window (⌘N): opens a window that shows the folder of the window it is made from (this one), in its view
-    /// and at its size; the shell cascades it from the app's windows. Returns false when the shell refuses the window.
+    /// New Window (⌘N): opens a window at the folder new windows show (the home folder, where `Files::new` starts;
+    /// there is no setting for another one), in the view and at the size of the window it is made from (this one);
+    /// the shell cascades it from the app's windows. Returns false when the shell refuses the window.
     pub(crate) fn new_window(&mut self, ctx: &Ctx) -> bool {
         let (w, h) = new_window_size(self.w, self.h);
         let Ok(id) = ctx.open_window(new_window_spec(w, h, bifrost_app::app_windows::shell_takes_window_chrome())) else { return false };
@@ -112,10 +113,10 @@ impl Files {
         true
     }
 
-    /// A window just made (`Files::new`, at the home folder in the default view) takes the folder and the view of the
-    /// window it was opened from: the same folder with a history of its own, the view mode, the sort, the grouping,
-    /// the sizes, and whether hidden files, the sidebar and the status bar show. (A new window opened at the home
-    /// folder in the icon view, whatever the window in front showed.)
+    /// A window just made (`Files::new`, at the home folder in the default view) takes the view of the window it was
+    /// opened from: the view mode, the sort, the grouping, the sizes, and whether hidden files, the sidebar and the
+    /// status bar show. Its folder stays the one new windows show, as the reference file manager's New Window opens
+    /// its default folder whatever the window in front shows. (It took the folder of the window in front as well.)
     pub(crate) fn show_like(&mut self, from: &Files) {
         self.grid = from.grid;
         self.columns = from.columns;
@@ -129,12 +130,6 @@ impl Files {
         self.vo.icon = from.vo.icon;
         self.vo.text = from.vo.text;
         self.vo.col_w = from.vo.col_w;
-        if self.path != from.path {
-            // the folder is the first of this window's history: Back does not lead to the home folder it never showed
-            self.history.clear();
-            self.at = 0;
-            self.navigate(from.path.clone(), true);
-        }
     }
 
     /// The folder view of `window`: this one for the main window, else the New Window or Get Info window of that id
@@ -404,9 +399,10 @@ mod tests {
         assert!(menu_sent(&ctx).is_none());
     }
 
-    /// E2E8 R04a: File > New Window opened at the home folder, in the icon view, smaller than the window in front.
+    /// E2E8 R04a: File > New Window opened in the icon view, smaller than the window in front. E2E9: it then opened
+    /// at the folder of the window in front instead of the folder new windows show.
     #[test]
-    fn a_new_window_takes_the_folder_the_view_and_the_size_of_the_window_it_is_made_from() {
+    fn a_new_window_takes_the_view_and_the_size_of_the_window_it_is_made_from_and_shows_the_home_folder() {
         assert_eq!(new_window_size(960.0, 630.0), (960.0, 630.0), "the size of the window it is made from");
         assert_eq!(new_window_size(0.0, 0.0), NEW_WINDOW_PT, "a window that has no size yet");
         let root = std::env::temp_dir().join(format!("files-newwindow-{}", std::process::id()));
@@ -421,17 +417,18 @@ mod tests {
         from.vo.col_w = 240.0;
         from.show_hidden = true;
         from.status_bar = true;
-        // the new window as `Files::new` leaves it: at another folder, with that folder as its history
+        // the new window as `Files::new` leaves it: at the home folder, with that folder as its history
         let mut made = fixture(vec![]);
         made.home = root.clone();
-        made.history = vec![PathBuf::from("/fixture")];
+        made.path = root.clone();
+        made.history = vec![root.clone()];
         made.show_like(&from);
-        assert_eq!(made.path, root.join("sub"), "the folder of the window it was made from");
-        assert_eq!((made.history.clone(), made.at), (vec![root.join("sub")], 0), "which is where its own history starts");
+        assert_eq!(made.path, root, "the home folder, not the folder of the window it was made from");
+        assert_eq!((made.history.clone(), made.at), (vec![root.clone()], 0), "its history starts there");
         assert!(made.columns && !made.grid && !made.vo.gallery, "its view");
         assert!(matches!(made.sort, Sort::Date) && !made.vo.asc && made.vo.col_w == 240.0, "its sort and sizes");
         assert!(made.show_hidden && made.status_bar && !made.sidebar_hidden);
-        // the gallery is a view like the others; the same folder is not opened again
+        // the gallery is a view like the others; the folder and its history stay
         from.columns = false;
         from.vo.gallery = true;
         made.show_like(&from);
