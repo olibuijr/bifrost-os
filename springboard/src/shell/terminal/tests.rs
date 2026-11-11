@@ -525,3 +525,39 @@ fn selection_rows_ask_for_a_selection_first() {
         assert!(sh.terminal_ui.message.contains("elect"), "row {i}: {}", sh.terminal_ui.message);
     }
 }
+
+/// E2E9: a secondary click in Term's text opened nothing. It opens the standard menu: Copy (a choice only with a
+/// selection), Paste, Select All, then Clear, and each row does its work.
+#[test]
+fn a_secondary_click_opens_the_context_menu_and_its_rows_work() {
+    use super::menus::{context_items, CONTEXT_CLEAR, CONTEXT_COPY, CONTEXT_PASTE, CONTEXT_SELECT_ALL};
+    let titles = |items: &[bifrost_proto::ContextItem]| items.iter().map(|i| (i.title().to_string(), i.enabled, i.key_combo().map(str::to_string))).collect::<Vec<_>>();
+    let row = |title: &str, on: bool, key: &str| (title.to_string(), on, Some(key.to_string()));
+    let none = context_items(false);
+    assert_eq!(titles(&none), [row("Copy", false, "cmd+c"), row("Paste", true, "cmd+v"), row("Select All", true, "cmd+a"), (String::new(), false, None), row("Clear", true, "cmd+k")]);
+    assert!(none[3].is_separator(), "Clear is a group of its own");
+    assert!(context_items(true)[0].enabled, "Copy is a choice with a selection");
+    assert_eq!([none[0].id, none[1].id, none[2].id, none[4].id], [CONTEXT_COPY, CONTEXT_PASTE, CONTEXT_SELECT_ALL, CONTEXT_CLEAR]);
+
+    let mut sh = terminal(&["/bin/sh", "-c", "echo marker-one; read x"]);
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("marker-one"));
+    sh.terminal_context_menu(300.0, 400.0, 2000.0);
+    assert_eq!(sh.desktop_menu, Some(crate::shell::desktop_bar::Menu::Context), "the menu is open");
+    let menu = sh.desktop_context.as_ref().expect("with the Terminal's rows");
+    assert_eq!((menu.slot, menu.x, menu.y), (CONTEXT_SLOT, 300.0, 400.0), "at the pointer, under the Terminal's own slot");
+    assert!(!menu.items[0].enabled, "nothing is selected: Copy is not a choice");
+    // Select All, then the menu offers Copy
+    sh.terminal_context_action(CONTEXT_SELECT_ALL, 2100.0);
+    assert!(sh.term.as_ref().unwrap().selected_text().is_some_and(|s| s.contains("marker-one")));
+    sh.terminal_context_menu(300.0, 400.0, 2200.0);
+    assert!(sh.desktop_context.as_ref().unwrap().items[0].enabled, "Copy is a choice now");
+    // Clear drops the selection with the scrollback
+    sh.terminal_context_action(CONTEXT_CLEAR, 2300.0);
+    assert!(sh.term.as_ref().unwrap().selected_text().is_none());
+    // one of the Terminal's own panels is modal: no menu over it
+    sh.desktop_menu = None;
+    sh.desktop_context = None;
+    sh.terminal_ui.panel = Panel::More;
+    sh.terminal_context_menu(300.0, 400.0, 2400.0);
+    assert!(sh.desktop_menu.is_none() && sh.desktop_context.is_none());
+}

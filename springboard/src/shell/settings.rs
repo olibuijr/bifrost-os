@@ -1933,8 +1933,21 @@ impl Settings {
         self.sync_forward();
     }
 
-    /// Esc: backs out of the page on top (an open sheet or picker swallows it); false at the root.
+    /// Whether a pop-up menu of the page holds the keyboard: it is open and no field, sheet or picker is over it. It
+    /// does so however it was opened; a click gives the pane no keyboard focus, and the menu's keys used to need one.
+    fn popup_takes_keys(&self) -> bool {
+        !self.search.active && !self.overlay_open() && self.list().is_some_and(ListPage::popup_open)
+    }
+
+    /// Esc: closes an open pop-up menu and changes nothing, else backs out of the page on top (an open sheet or picker
+    /// swallows it); false at the root.
     pub fn back_page(&mut self, t: f64) -> bool {
+        if self.popup_takes_keys() {
+            if let Some(p) = self.list_mut() {
+                p.close_popup();
+            }
+            return true;
+        }
         if self.stack.len() <= 1 && !self.has_earlier_pane() {
             return false;
         }
@@ -2497,7 +2510,7 @@ impl Settings {
         if self.sheet.is_none() && !self.overlay_open() {
             match out {
                 Out::Named(tab @ ("Tab" | "BackTab")) => return self.cycle_focus(ui, tab == "Tab", t),
-                Out::Named(name @ ("Up" | "Down")) if self.valid_pane_focus().is_some() => return self.pane_step(ui, name == "Down"),
+                Out::Named(name @ ("Up" | "Down")) if self.valid_pane_focus().is_some() || self.popup_takes_keys() => return self.pane_step(ui, name == "Down"),
                 Out::Named(name @ ("Up" | "Down")) => return self.sidebar_key(ui, name, t),
                 _ => {}
             }
@@ -2602,17 +2615,11 @@ impl Settings {
     /// Return press its focused control (a switch flips, a pop-up button opens its menu, a link opens its page, a segmented
     /// row steps to its next segment) and Left and Right nudge a slider or step a segmented row. Every other key is `key`'s.
     pub fn key_with_prefs(&mut self, ui: &Ui, prefs: &mut Prefs, out: Out, t: f64) -> Vec<Effect> {
-        let Some((g, i)) = self.valid_pane_focus() else { return self.key(ui, out, t) };
         let press = matches!(&out, Out::Enter) || matches!(&out, Out::Text(s) if s == " ");
-        let step = match out {
-            Out::Named("Left") => Some(false),
-            Out::Named("Right") => Some(true),
-            _ => None,
-        };
-        let Some(page) = self.list() else { return self.key(ui, out, t) };
-        // an open pop-up menu takes Space and Return (they choose the highlighted item); Up and Down are `key`'s
-        if page.popup_open() {
-            return match (press, page.popup_choice()) {
+        // an open pop-up menu takes Space and Return (they choose the highlighted item); Up and Down are `key`'s. It
+        // takes them with or without a focused control: a menu opened with the pointer has none
+        if self.popup_takes_keys() {
+            return match (press, self.list().and_then(ListPage::popup_choice)) {
                 (true, Some(k)) => {
                     let fx = self.activate(ui, prefs, Hit::Choice(k), t);
                     self.sync_pane_ring();
@@ -2622,6 +2629,13 @@ impl Settings {
                 _ => self.key(ui, out, t),
             };
         }
+        let Some((g, i)) = self.valid_pane_focus() else { return self.key(ui, out, t) };
+        let step = match out {
+            Out::Named("Left") => Some(false),
+            Out::Named("Right") => Some(true),
+            _ => None,
+        };
+        let Some(page) = self.list() else { return self.key(ui, out, t) };
         let fx = if let (Some(up), Some(v)) = (step, page.slider_value(g, i)) {
             // a slider moves a tenth of its track a key, as a release (so the value is saved)
             let (tx, _, tw) = page.track(ui, g, i);

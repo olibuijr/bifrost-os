@@ -1568,7 +1568,7 @@ impl Shell {
     pub(super) fn run_menu_action(&mut self,action:Action,t:f64)->Vec<Effect> {
         let mut effects=Vec::new();match action {
                     Action::Settings(page)=>{self.desk_open(AppId::Settings,t);if !page.is_empty(){if let Some(st)=&mut self.settings {effects.extend(st.open_page(&self.ui,page,t));}}},
-                    Action::Context(slot,id)=>{if id>=super::sharing::MENU_BASE&&self.share_choose(id,t){self.desktop_context=None;}else if self.screen==Screen::App(AppId::External(slot)){let window=self.desktop_context.as_ref().map_or(0,|c|c.window);if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::ContextAction(id,Some(window)));}}self.desktop_context=None;},
+                    Action::Context(slot,id)=>{if slot==super::terminal::CONTEXT_SLOT{effects.extend(self.terminal_context_action(id,t));}else if id>=super::sharing::MENU_BASE&&self.share_choose(id,t){self.desktop_context=None;}else if self.screen==Screen::App(AppId::External(slot)){let window=self.desktop_context.as_ref().map_or(0,|c|c.window);if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::ContextAction(id,Some(window)));}}self.desktop_context=None;},
                     Action::StatusItem(slot,item,id)=>{if let Some(Some(h))=self.ext.get_mut(slot as usize){h.send(&bifrost_proto::ToApp::StatusItemAction{item,id});}},
                     Action::AppMenu(slot,id)=>{if self.screen==Screen::App(AppId::External(slot)){if let Some(Some(h))=self.ext.get_mut(slot as usize){h.input(bifrost_proto::WindowInput::MenuAction(id));}}},
                     Action::Dock(change)=>effects.extend(self.dock_change(change,t)),

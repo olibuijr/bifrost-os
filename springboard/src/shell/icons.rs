@@ -55,10 +55,12 @@ pub enum Icon {
     Vpn,
     /// Appearance (Light, Dark, Auto): a ring with its left half filled
     Appearance,
+    /// Screen Saver: a display with a crescent moon on it (drawn; it has no artwork file)
+    ScreenSaver,
 }
 
 impl Icon {
-    pub const ALL: [Icon; 27] = [
+    pub const ALL: [Icon; 28] = [
         Icon::Airplane,
         Icon::Wifi,
         Icon::Bluetooth,
@@ -86,6 +88,7 @@ impl Icon {
         Icon::Trackpad,
         Icon::Vpn,
         Icon::Appearance,
+        Icon::ScreenSaver,
     ];
 
     /// The tile's background colour.
@@ -98,7 +101,7 @@ impl Icon {
             Icon::Focus | Icon::ScreenTime => INDIGO,
             Icon::General | Icon::ControlCentre | Icon::Printer | Icon::Search | Icon::Keyboard | Icon::Trackpad | Icon::Mouse => GRAY,
             Icon::Assistant => INDIGO,
-            Icon::Wallpaper => TEAL,
+            Icon::Wallpaper | Icon::ScreenSaver => TEAL,
             Icon::Battery => GREEN,
             Icon::Appearance => CHARCOAL,
         }
@@ -378,6 +381,18 @@ pub fn tile(s: &mut Surface, ui: &Ui, icon: Icon, x: f32, y: f32) {
                 s.fill_rrect(cx - half, cy - r + row as f32, half, 1.0, 0.0, WHITE);
             }
         }
+        Icon::ScreenSaver => {
+            // the display: a rounded screen on a short stand
+            let (sx, sy) = p(5.0, 6.5);
+            s.stroke_rrect(sx, sy, ui.pt(19.0), ui.pt(13.0), ui.pt(2.6), ui.pt(1.7), WHITE);
+            let w = ui.pt(1.7);
+            line(s, p(14.5, 19.5), p(14.5, 22.0), w, WHITE);
+            line(s, p(10.5, 22.5), p(18.5, 22.5), w, WHITE);
+            // the moon on it: a disc with a bite out of its upper right
+            let (mx, my) = p(14.0, 13.2);
+            disc(s, mx, my, ui.pt(3.6), WHITE);
+            disc(s, mx + ui.pt(2.0), my - ui.pt(1.5), ui.pt(3.0), bg);
+        }
         Icon::Privacy | Icon::Passcode => {
             let (px0, py0) = p(9.0, 13.0);
             s.fill_rrect(px0, py0, ui.pt(11.5), ui.pt(10.5), ui.pt(3.5), WHITE);
@@ -431,7 +446,7 @@ mod tests {
         let ui = crate::shell::tests::ui();
         for icon in Icon::ALL {
             let size = ui.pt(TILE_PT).round() as usize;
-            assert!(artwork(icon, size).is_some(), "{icon:?} artwork decodes");
+            assert_eq!(artwork(icon, size).is_some(), icon != Icon::ScreenSaver, "{icon:?} artwork decodes (Screen Saver is drawn)");
             let mut buf = canvas();
             tile(&mut surface(&mut buf), &ui, icon, 10.0, 10.0);
             let inside = |x: usize, y: usize| buf[(10 + y) * 80 + 10 + x];
@@ -439,6 +454,26 @@ mod tests {
             assert!(inside(0, 0) >> 24 < 128, "{icon:?} corner is rounded");
             assert_eq!(buf[5 * 80 + 5], 0, "nothing outside the tile");
         }
+    }
+
+    /// E2E9: Screen Saver showed the Wallpaper tile in the sidebar. It has a tile of its own: a display with a moon.
+    #[test]
+    fn the_screen_saver_tile_is_its_own_picture() {
+        let ui = crate::shell::tests::ui();
+        let draw = |icon| {
+            let mut buf = canvas();
+            tile(&mut surface(&mut buf), &ui, icon, 10.0, 10.0);
+            buf
+        };
+        let (saver, wallpaper) = (draw(Icon::ScreenSaver), draw(Icon::Wallpaper));
+        assert!(saver != wallpaper, "not the Wallpaper tile");
+        let at = |x: f32, y: f32| saver[(10.0 + ui.pt(y)) as usize * 80 + (10.0 + ui.pt(x)) as usize];
+        assert_ne!(at(14.5, 6.9), Icon::ScreenSaver.color(), "the top edge of the display");
+        assert_ne!(at(5.4, 13.0), Icon::ScreenSaver.color(), "its left edge");
+        assert_eq!(at(14.5, 22.5), WHITE, "the foot of its stand");
+        assert_eq!(at(12.2, 14.2), WHITE, "the moon");
+        assert_eq!(at(8.0, 10.0), Icon::ScreenSaver.color(), "the screen around the moon is the tile's colour");
+        assert_eq!(at(2.5, 14.5), Icon::ScreenSaver.color(), "and so is the tile outside the display");
     }
 
     #[test]
@@ -488,6 +523,8 @@ fn artwork(icon: Icon, px: usize) -> Option<std::sync::Arc<crate::gfx::Image>> {
         Icon::Trackpad => include_bytes!("../../res/settings-icons/trackpad.png"),
         Icon::Vpn => include_bytes!("../../res/settings-icons/vpn.png"),
         Icon::Appearance => include_bytes!("../../res/settings-icons/appearance.png"),
+        // drawn by `tile` from primitives
+        Icon::ScreenSaver => return None,
     };
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mut c = cache.lock().ok()?;

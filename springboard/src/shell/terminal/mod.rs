@@ -51,6 +51,9 @@ mod open;
 #[cfg(test)]
 mod tests;
 pub const HEADER_PT: f32 = 40.0;
+/// The slot the built-in Terminal's context menu is opened under (`desktop_bar::ContextMenu::slot`): no installed app
+/// has it, so the chosen row comes back to the shell (`terminal_context_action`) and is sent to no app.
+pub(in crate::shell) const CONTEXT_SLOT: u8 = u8::MAX;
 const BAR: u32 = pack(27, 27, 27, 255);
 const ACTIVE: u32 = pack(17, 17, 17, 255);
 const BODY: u32 = pack(20, 20, 20, 255);
