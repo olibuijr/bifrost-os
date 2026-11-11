@@ -22,19 +22,45 @@ pub fn families() -> &'static [String] {
 /// for Times and Courier (`stand_in`), and `None` for Helvetica, which is drawn in the system font, and when nothing
 /// stands in. The page then draws that run in the system font.
 pub fn family_file(font: u8) -> Option<&'static str> {
+    // Helvetica never has a file (`stand_in`), so a page in the default family is drawn without the catalogue
+    if font == 0 {
+        return None;
+    }
     catalogue().1.get(font as usize).and_then(|p| p.as_deref())
 }
 
-/// The family names and the file each is drawn with, in `Style::font` order.
+/// The family names and the file each is drawn with, in `Style::font` order; read once (`catalogue`).
+static CATALOGUE: std::sync::OnceLock<(Vec<String>, Vec<Option<String>>)> = std::sync::OnceLock::new();
+
+/// The family names and the file each is drawn with, in `Style::font` order. The first call reads the header of every
+/// installed font file (thousands on a full system), so it waits for that; `preload_families` starts the reading at
+/// launch, off the app loop, and the paths an empty window draws through ask for nothing past the base families.
 fn catalogue() -> &'static (Vec<String>, Vec<Option<String>>) {
-    static ALL: std::sync::OnceLock<(Vec<String>, Vec<Option<String>>)> = std::sync::OnceLock::new();
-    ALL.get_or_init(|| {
+    CATALOGUE.get_or_init(|| {
         #[cfg(not(test))]
         let installed = installed_families();
         #[cfg(test)]
         let installed: Vec<InstalledFamily> = Vec::new();
         build_catalogue(&installed)
     })
+}
+
+/// Starts reading the installed families on a background queue, so the first window is drawn before the font folders
+/// have been walked. When the list is ready the app loop is woken (an empty main-queue job): the runtime then asks for
+/// the menus again and Format > Font lists every family. A caller that needs the whole list sooner (`families`, a
+/// document that names an installed family) waits for this same reading; it never runs twice.
+pub fn preload_families() {
+    use bifrost_app::dispatch::{DispatchQueue, Qos};
+    DispatchQueue::global(Qos::UserInitiated).async_(|| {
+        let _ = catalogue();
+        DispatchQueue::main().async_(|| {});
+    });
+}
+
+/// How many families Format > Font lists now: all of them once the installed ones have been read, the base families
+/// until then. Never waits (`preload_families` wakes the app when the rest can be listed).
+pub fn listed_family_count() -> usize {
+    CATALOGUE.get().map_or(FAMILIES.len(), |c| c.0.len())
 }
 
 /// One installed family: its name, the file that stands for it, and whether it is fixed pitch.
@@ -95,6 +121,10 @@ fn installed_families() -> Vec<InstalledFamily> {
 /// The index of the family named exactly `name` (any case), when a document can use it.
 pub fn family_index(name: &str) -> Option<u8> {
     let name = name.trim();
+    // a base family is found without the installed ones (they come first in the catalogue, so the answer is the same)
+    if let Some(base) = FAMILIES.iter().position(|f| f.eq_ignore_ascii_case(name)) {
+        return Some(base as u8);
+    }
     families().iter().position(|f| f.eq_ignore_ascii_case(name)).map(|i| i as u8)
 }
 
@@ -435,7 +465,9 @@ impl Text {
     /// The family new text takes where no character sets one (the Preferences' default font). Setting it changes no
     /// text and makes no undo entry.
     pub fn set_default_font(&mut self, font: u8) {
-        self.default_font = (font as usize).min(families().len() - 1) as u8;
+        // a base family is a family whatever is installed: no look at the installed ones (a new window's first frame)
+        let last = if (font as usize) < FAMILIES.len() { FAMILIES.len() - 1 } else { families().len() - 1 };
+        self.default_font = (font as usize).min(last) as u8;
         if self.cells.is_empty() {
             self.typing.font = self.default_font;
         }
@@ -1363,6 +1395,21 @@ mod tests {
 
     fn fam(name: &str, mono: bool) -> InstalledFamily {
         InstalledFamily { name: name.into(), path: format!("/fonts/{name}.ttf"), mono }
+    }
+
+    /// The first frame of an empty window asks only for the base families, which are answered without reading the
+    /// installed ones (the catalogue is read off the app loop at launch).
+    #[test]
+    fn the_base_families_are_known_without_the_installed_ones() {
+        assert_eq!(family_index("Helvetica"), Some(0));
+        assert_eq!(family_index(" courier "), Some(2), "any case, blanks trimmed, as for an installed family");
+        assert_eq!(family_file(0), None, "the default family draws in the system font");
+        assert!(listed_family_count() >= FAMILIES.len(), "the Font menu lists the base families at least");
+        let mut t = Text::new();
+        t.set_default_font(PLAIN_FONT);
+        assert_eq!(t.style().font, PLAIN_FONT);
+        t.set_default_font(250);
+        assert_eq!(t.style().font as usize, families().len() - 1, "a family past the list is the last one");
     }
 
     #[test]
