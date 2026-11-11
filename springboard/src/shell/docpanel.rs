@@ -1560,6 +1560,15 @@ impl Broker {
 }
 
 
+/// `permitted` for an app that has left its slot (it was asked to quit), by its id.
+fn permitted_app(app_id: &str) -> bool {
+    #[cfg(test)]
+    if tests::ALLOW.with(|a| a.get()) {
+        return true;
+    }
+    super::apphost::installed().iter().any(|a| a.manifest.id == app_id && a.manifest.permissions.iter().any(|p| p == "documents"))
+}
+
 /// Only apps whose manifest asks for `documents` may open panels (the app policy accepts it; it binds nothing).
 fn permitted(slot: u8) -> bool {
     #[cfg(test)]
@@ -1634,6 +1643,39 @@ impl super::Shell {
 
     pub(super) fn doc_broker(&mut self) -> Option<&mut Broker> {
         self.doc_broker.get_or_insert_with(Broker::installed).as_mut()
+    }
+
+    /// The document requests of an app that was asked to quit (`Shell::ext_quit_poll`); `gone` says it has left. Such
+    /// an app is no longer in its slot, so `doc_request` cannot reach it, but it may be finishing a save: the look at
+    /// the original, the save in place and the commit are answered through the broker as for a running app. A panel is
+    /// not shown for an app that is leaving (the request is cancelled). When the app is gone and no new instance of it
+    /// runs, the saves it began and never committed are thrown away with their temporary files.
+    pub(super) fn doc_quitting(&mut self, h: &mut super::apphost::AppHost, requests: Vec<ToShell>, gone: bool) {
+        let app_id = h.id.clone();
+        for msg in requests {
+            let panel = match &msg {
+                ToShell::DocOpen { request, .. } | ToShell::DocOpenEx { request, .. } | ToShell::DocSave { request, .. } => Some(*request),
+                _ => None,
+            };
+            if let Some(request) = panel {
+                h.send(&ToApp::DocError { request, code: DocErrorCode::Cancelled });
+                continue;
+            }
+            if !permitted_app(&app_id) {
+                continue;
+            }
+            if let Some((reply, file)) = self.doc_broker().and_then(|b| b.request(&app_id, msg)) {
+                match &file {
+                    Some(f) => h.send_file(&reply, f),
+                    None => h.send(&reply),
+                }
+            }
+        }
+        if gone && !self.ext.iter().flatten().any(|running| running.id == app_id) {
+            if let Some(b) = self.doc_broker.as_mut().and_then(Option::as_mut) {
+                b.app_gone(&app_id);
+            }
+        }
     }
 
     /// A `Doc*` request from the app in `slot` (`ext_tick` collects them).
@@ -2514,6 +2556,53 @@ pub(crate) mod tests {
         assert_eq!(sh.doc_panel.as_ref().unwrap().selected, Some(1), "a real click selects the row");
         // outside the panel the wheel is used up too: the panel is modal
         assert!(sh.pointer_wheel(1.0, sh.h as f32 - 2.0, 0.0, -3.0, 9500.0));
+        ALLOW.with(|a| a.set(false));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// An app the shell asked to quit (Cmd+Q on an app that does not answer the quit itself, the close control, logout)
+    /// may be in the middle of a save. It has left its slot, but its look at the original, its save in place and its
+    /// commit are still answered, so the save reaches the file; before, they were read and dropped, and the app
+    /// waited out its quit time for answers that never came.
+    #[test]
+    fn an_app_that_was_asked_to_quit_still_gets_its_save_in_place_answered() {
+        use std::io::Write;
+        ALLOW.with(|a| a.set(true));
+        let (d, mut sh, peer) = shell_with_app("e2e-quit-save");
+        let file = d.join("home/Documents/b.txt");
+        let (reply, _) = sh.doc_broker().unwrap().finish("is.example.editor", 1, Kind::Open(DocMode::Write), Outcome::Open("Documents/b.txt".into()));
+        let ToApp::DocGranted { grant, mode: DocMode::Write, .. } = reply else { panic!("{reply:?}") };
+        let listing = |d: &Path| {
+            let mut names: Vec<String> = fs::read_dir(d.join("home/Documents")).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+            names.sort();
+            names
+        };
+        let before = listing(&d);
+        sh.ext_close(0);
+        assert!(sh.ext[0].is_none() && sh.dying.len() == 1, "the app was asked to quit and waits to be reaped");
+        ask(&peer, &mut sh, ToShell::DocReopen { request: 2, grant });
+        ask(&peer, &mut sh, ToShell::DocSaveGrant { request: 3, grant });
+        let mut got = replies(&peer);
+        assert!(matches!(got[..], [(ToApp::DocGranted { request: 2, .. }, Some(_)), (ToApp::DocGranted { request: 3, .. }, Some(_))]), "{got:?}");
+        got[1].1.as_mut().unwrap().write_all(b"saved").unwrap();
+        assert_eq!(fs::read(&file).unwrap(), b"b.txt", "nothing is replaced before the commit");
+        ask(&peer, &mut sh, ToShell::DocCommit { request: 3 });
+        let got = replies(&peer);
+        assert!(matches!(got[..], [(ToApp::DocGranted { request: 3, .. }, Some(_))]), "{got:?}");
+        assert_eq!(fs::read(&file).unwrap(), b"saved");
+        // no panel is shown for an app that is leaving
+        ask(&peer, &mut sh, ToShell::DocSave { request: 4, suggested_name: "x.txt".into(), filters: vec![] });
+        assert!(sh.doc_panel.is_none());
+        let got = replies(&peer);
+        assert!(matches!(got[..], [(ToApp::DocError { request: 4, code: DocErrorCode::Cancelled }, None)]), "{got:?}");
+        // a save it began and did not commit before it left is thrown away with its temporary file
+        ask(&peer, &mut sh, ToShell::DocSaveGrant { request: 5, grant });
+        assert!(matches!(replies(&peer)[..], [(ToApp::DocGranted { request: 5, .. }, Some(_))]));
+        drop(peer);
+        sh.ext_tick(2.0);
+        assert!(sh.dying.is_empty(), "the app is gone");
+        assert_eq!(listing(&d), before, "no temporary file is left beside the original");
+        assert_eq!(fs::read(&file).unwrap(), b"saved");
         ALLOW.with(|a| a.set(false));
         fs::remove_dir_all(&d).unwrap();
     }

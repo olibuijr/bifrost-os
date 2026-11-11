@@ -1190,6 +1190,18 @@ Wiring: `App::document` calls `controller.handle(ctx, ev)` (`None` = not the con
 `controller.file_menu()`, `menu_action` forwards ids for which `is_menu_id` is true, `tick`/`next_wake`/`suspend` forward, and after
 each edit the app calls `note_change`. `handle` answers with `Notice` values (`Created`, `Opened`, `Saved`, `Reverted`, `Closed`, `Failed`).
 
+Quitting in the middle of a save (`applicationShouldTerminate` answered `terminateLater`, in effect): when an app ends
+(`ToApp::Quit`, `Ctx::terminate`) the runtime keeps it alive, with its window already closed, until its saves have ended
+or one second has passed (`runtime::finish_saves`). A save counts while the shell owes an answer to `save_document` or
+`save_document_in_place`, and while the app says so through `App::save_in_flight(ctx) -> bool`: an app whose save has
+steps the runtime cannot see (a picture encoded on a queue, a look at the original with `reopen_document` before the
+save in place) returns `true` until the save has ended and, in the same call, does what its `tick` would (takes the
+worker's result, sends the next request); the runtime asks every 10 ms. The shell answers the document requests of an
+app it asked to quit (`Shell::ext_quit_poll`, `doc_quitting`) until the app is gone or its 1500 ms grace period is over,
+without showing a panel. Not matched: the wait is bounded (the reference waits for `reply(toApplicationShouldTerminate:)`
+without a limit), so a save that takes longer than a second from the quit is cut off; the app has to keep what it needs
+to say so at its next launch (Viewer does, see its changelog). First user: Viewer 0.11.25.
+
 Gaps (not matched yet): no versions browser (`Revert To > Browse All Versions`, no version history at all), no iCloud documents,
 no `NSFileCoordinator` or file-presenter watching (an external change to an open file is noticed only as `Stale` on the next
 save), document packages only in part (see "Folder packages" below), no multiple windows per document, no `NSDocument` subclass hooks for printing or sharing. Rename
