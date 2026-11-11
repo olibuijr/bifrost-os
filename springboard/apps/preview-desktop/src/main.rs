@@ -138,6 +138,8 @@ struct PictureJob {
     turns: u8,
     adjust: Adjust,
     raster: Raster,
+    /// The document's file as it is now: what a PNG keeps besides its pixels is read from it (`export::write_saved`).
+    source: PathBuf,
     temp: PathBuf,
 }
 
@@ -146,7 +148,12 @@ impl PictureJob {
     /// save has reached its file, so the file is not decoded again to show what was just encoded), or why it was not.
     fn run(self) -> Result<(PathBuf, bifrost_app::kit::Image), String> {
         let out = export::finish(&self.img, &self.marks, self.src, self.turns, &self.adjust, 1.0);
-        export::write_image(&out, self.raster, &self.temp)?;
+        // only a PNG keeps anything of the file; a file that cannot be read any more has nothing to keep
+        let original = match self.raster {
+            Raster::Png => std::fs::read(&self.source).unwrap_or_default(),
+            Raster::Jpeg(_) => Vec::new(),
+        };
+        export::write_saved(&out, self.raster, &original, self.turns % 2 == 1, &self.temp)?;
         Ok((self.temp, out))
     }
 }
@@ -179,7 +186,8 @@ enum AlertKind {
     Changed,
     /// Revert was chosen: asks before the document's changes are discarded.
     ConfirmRevert,
-    /// The window is being closed or the app quit with unsaved changes: Save, Don't Save or Cancel.
+    /// The window is being closed, the app quit or another document opened with unsaved changes: Save, Don't Save or
+    /// Cancel.
     Unsaved(Leaving),
     /// Something the person has to be told once (a save the last quit cut off): OK.
     Notice,
@@ -193,6 +201,21 @@ enum Leaving {
     Close,
     /// Quit.
     Quit,
+    /// Another document is to take this one's place (File > Open, Open Recent, a file another app sent, a drop, a
+    /// clipboard picture, a screenshot): it waits in `Viewer::next_document` and opens then.
+    Open,
+}
+
+/// A document that is to take the open one's place. While the open one has unsaved changes it waits here for the
+/// answer to the question about them.
+enum NextDocument {
+    /// A file by its path: Open Recent, a file another app sent, a screenshot.
+    Path(PathBuf),
+    /// A file the shell handed over (the open panel's choice, a double-click in the file manager, a drop): its bytes
+    /// become a working copy, and its grant is kept so File > Save reaches the file.
+    Granted { name: String, grant: GrantId, stamp: Option<origin::Stamp>, bytes: Vec<u8> },
+    /// A picture from the clipboard, under the name it is kept by.
+    Pasted { name: String, bytes: Vec<u8> },
 }
 
 /// The alert shown when the original could not be written.
@@ -365,6 +388,9 @@ struct Viewer {
     /// The menu of the toolbar's `»` button, asked for by a press: where it opens (window pixels) and its items. The
     /// event that carried the press sends it to the shell.
     menu_request: Option<(f32, f32, Vec<ContextItem>)>,
+    /// The document that opens once the question about the open one's unsaved changes is answered with Save (after
+    /// the save has ended) or Don't Save; Cancel gives it up (`open_next`, `finish_leaving`).
+    next_document: Option<NextDocument>,
 }
 
 impl Viewer {
@@ -435,6 +461,7 @@ impl Viewer {
             leave: None,
             saved_note: None,
             menu_request: None,
+            next_document: None,
         }
     }
 
@@ -575,6 +602,8 @@ impl Viewer {
             self.save_alert = None;
         }
         self.leave = None;
+        // nor does a document wait any longer for that question's answer
+        self.drop_next();
         self.after_open = None;
         self.doc = None;
         self.loading = None;
@@ -681,8 +710,10 @@ impl Viewer {
     }
 
     /// File > Save: the markup, page order and turns are written into the file the document was opened from, and the
-    /// file is opened again. A picture is written as a picture in the format of its file; a PDF is written by its
-    /// worker. Either way the saved document is first written into the data folder, and `save_written` takes it on.
+    /// file is opened again. A picture is written as a picture in the format its file has, when that loses nothing
+    /// the file holds (`document::Stored::in_place`); any other picture is saved as a copy and its file is left alone
+    /// (`save_copy`). A PDF is written by its worker. The saved document is first written into the data folder, and
+    /// `save_written` takes it on.
     /// The status says "Saving name…" at once, in the frame of the key press: a picture is encoded on a queue of its
     /// own (`pump` takes the result), so the window is not held while a large one is written. While a save is under
     /// way another one is not started: its answers from the shell would be taken for the first one's.
@@ -759,8 +790,10 @@ impl Viewer {
         self.save_alert = Some(SaveAlert { kind: AlertKind::Notice, title, message, focus: None });
     }
 
-    /// The close control, Cmd+W or Quit with unsaved changes: asks whether to save them first.
+    /// The close control, Cmd+W, Quit or another document opening with unsaved changes: asks whether to save them
+    /// first. A document that waited for the answer to an earlier question is given up with that question.
     fn ask_unsaved(&mut self, leaving: Leaving) {
+        self.drop_next();
         let name = self.document_name().unwrap_or_default();
         self.save_alert = Some(SaveAlert {
             kind: AlertKind::Unsaved(leaving),
@@ -778,6 +811,58 @@ impl Viewer {
         self.unsaved_copy = None;
     }
 
+    /// Another document is to take the open one's place. When the open one has unsaved changes the question comes up
+    /// first (Save, Don't Save or Cancel, as at close and quit) and `next` waits for the answer; opening it at once
+    /// discarded the changes without a word. While a save is under way the document is what the save holds, which
+    /// reaches its file whatever opens meanwhile, so `next` opens at once.
+    fn open_next(&mut self, next: NextDocument) {
+        if self.edited() && !self.saving() {
+            self.ask_unsaved(Leaving::Open);
+            self.next_document = Some(next);
+        } else {
+            self.open_now(next);
+        }
+    }
+
+    /// Opens `next` in place of the open document.
+    fn open_now(&mut self, next: NextDocument) {
+        match next {
+            NextDocument::Path(path) => self.open_path(&path),
+            NextDocument::Granted { name, grant, stamp, bytes } => {
+                self.open_granted(&name, grant, stamp, &bytes);
+            }
+            NextDocument::Pasted { name, bytes } => self.open_pasted(&name, &bytes),
+        }
+    }
+
+    /// Gives up the document that waited for the question's answer (Cancel, a save that failed, another question):
+    /// a grant it came with goes back to the shell on the next turn.
+    fn drop_next(&mut self) {
+        if let Some(NextDocument::Granted { grant, .. }) = self.next_document.take() {
+            self.released.push(grant);
+        }
+    }
+
+    /// Keeps the file the shell handed over (`bytes`, called `name`) as a working copy and opens it; the grant stays
+    /// with the copy, so File > Save writes the file. The copy is kept by what the file is (`stamp`), not only by its
+    /// name: a.png from another folder gets a copy of its own. The copy's path, or None when it could not be kept
+    /// (the status says why, and the grant goes back to the shell).
+    fn open_granted(&mut self, name: &str, grant: GrantId, stamp: Option<origin::Stamp>, bytes: &[u8]) -> Option<PathBuf> {
+        let place = self.origins.place(&recents::copy_name(name), stamp.as_ref());
+        match recents::keep_copy_at(&self.data_dir, &place, bytes) {
+            Ok(path) => {
+                self.set_origin(&place, Some((grant, stamp)));
+                self.open_path(&path);
+                Some(path)
+            }
+            Err(e) => {
+                self.released.push(grant);
+                self.status = document::open_failure(name, &format!("Viewer could not keep its working copy ({})", e.kind()));
+                None
+            }
+        }
+    }
+
     /// Carries out the close or quit the unsaved-changes question was asked for, once no save is under way: after
     /// Don't Save at once, after Save when the save has ended and the document is clean. A save that failed (its
     /// alert is up, or the document is still edited) keeps the window and the app: the person has to see why.
@@ -786,12 +871,24 @@ impl Viewer {
         if self.saving() {
             return;
         }
+        // Save was answered and the document is saved as a copy (`save_copy`): the save panel has not answered yet
+        if !discarded && self.saving_copy() {
+            return;
+        }
         self.leave = None;
         if discarded || (!self.edited() && self.save_alert.is_none()) {
             match leaving {
                 Leaving::Close => ctx.close_main_window(),
                 Leaving::Quit => ctx.terminate(),
+                Leaving::Open => {
+                    if let Some(next) = self.next_document.take() {
+                        self.open_now(next);
+                    }
+                }
             }
+        } else {
+            // the save failed: the document stays open with its changes, and nothing takes its place
+            self.drop_next();
         }
     }
 
@@ -846,10 +943,17 @@ impl Viewer {
             }
             return None;
         }
+        // The file is written only in the format its bytes have, and only when it holds nothing a save would lose.
+        // A save in place wrote PNG data into a file called .gif, .webp, .tif, .bmp, .ico or .svg, which no other app
+        // could open any more, reduced a 16-bit PNG to 8 bits and dropped a colour profile.
+        let Some(format) = doc.stored.in_place() else {
+            self.save_copy();
+            return None;
+        };
         let page = self.view.page;
         let src = doc.source_of(page)?;
         let img = doc.picture(page)?;
-        let raster = raster_of(&path, self.jpeg_quality);
+        let raster = raster_for(format, self.jpeg_quality);
         let job = PictureJob {
             img: (*img).clone(),
             marks: doc.marks.clone(),
@@ -857,6 +961,7 @@ impl Viewer {
             turns: doc.turn_of(page),
             adjust: self.adjust,
             raster,
+            source: path.clone(),
             temp: self.saving_file(&path, raster.ext()),
         };
         self.status = saving_status(&path);
@@ -1088,6 +1193,8 @@ impl Viewer {
                 self.discard_changes();
                 self.leave = Some((leaving, true));
             }
+            // Cancel: the document stays as it is, and the one that was to take its place is given up
+            (AlertKind::Unsaved(Leaving::Open), _) => self.drop_next(),
             _ => {}
         }
     }
@@ -1140,18 +1247,50 @@ impl Viewer {
         }
     }
 
-    /// Save As: the document as it is, in the format of its file and at its own size, goes into a file chosen in the
-    /// save panel (the export path).
+    /// Save As: the document as it is, at its own size, goes into a file chosen in the save panel (the export path).
+    /// A picture is written as a JPEG when its file holds one and as a PNG otherwise.
     fn save_as(&mut self) {
         let Some(doc) = &self.doc else { return };
         if doc.is_pdf {
             self.export_pdf();
             return;
         }
-        let raster = raster_of(&doc.path, self.jpeg_quality);
+        let raster = raster_for(doc.stored.copy_format(), self.jpeg_quality);
         let scale = std::mem::replace(&mut self.export_scale, 1.0);
         self.export_raster(raster);
         self.export_scale = scale;
+    }
+
+    /// File > Save for a picture whose file is not written (`document::Stored::in_place` is None): a format the app
+    /// reads and does not write (GIF, WebP, TIFF, BMP, an icon, SVG), an animation, a PNG of 16 bits a sample, or a
+    /// picture with a colour profile. The file stays as it is. The picture as it is shown goes the Save As way
+    /// instead: the save panel suggests the file's name with the copy's extension (`Stored::copy_name`), the status
+    /// line says why (`Stored::copy_reason`), and the chosen file becomes the document once it is written, so the
+    /// title names it and the next File > Save writes it. While the panel is up another Save asks for no second one.
+    fn save_copy(&mut self) {
+        if self.saving_copy() {
+            return;
+        }
+        let Some(doc) = &self.doc else { return };
+        let stored = doc.stored;
+        let name = name_of(&doc.path);
+        // an export that was still waiting for its panel is replaced by this one
+        self.pending_export = None;
+        let scale = std::mem::replace(&mut self.export_scale, 1.0);
+        self.export_raster(raster_for(stored.copy_format(), self.jpeg_quality));
+        self.export_scale = scale;
+        // nothing waits when the picture could not be encoded: the status says so
+        if let Some(pending) = self.pending_export.as_mut() {
+            pending.adopt = true;
+            pending.name = stored.copy_name(&name);
+            self.status = stored.copy_reason(&name);
+        }
+    }
+
+    /// Whether a Save As waits for its file: the save panel is up, or the chosen file is being committed. The file
+    /// becomes the document then.
+    fn saving_copy(&self) -> bool {
+        self.pending_export.as_ref().is_some_and(|p| p.adopt) || self.adopting.is_some()
     }
 
     /// Save As from the save alert: as `save_as`, and the chosen file becomes the document once it is saved.
@@ -1240,11 +1379,14 @@ impl Viewer {
         self.save();
         // the file is the same document: the zoom mode the person chose stays (the page and the pan start over)
         let zoom = self.view.zoom;
-        // nor does a close or quit that waits for this save end here: only another document opening drops it
+        // nor does a close or quit that waits for this save end here, nor is the document that waits to take this
+        // one's place given up: only another document opening drops them
         let leave = self.leave;
+        let next = self.next_document.take();
         self.open_path(path);
         self.view.zoom = zoom;
         self.leave = leave;
+        self.next_document = next;
         self.status = message.clone();
         self.after_open = Some(message);
     }
@@ -1463,7 +1605,7 @@ impl Viewer {
             _ if (MENU_RECENT..MENU_RECENT + recents::MAX_RECENTS as u32).contains(&id) => {
                 let Some(path) = self.recents.get((id - MENU_RECENT) as usize).map(Path::to_path_buf) else { return true };
                 if path.exists() {
-                    self.open_path(&path);
+                    self.open_next(NextDocument::Path(path));
                 } else {
                     self.recents.prune();
                     self.status = format!("{} is no longer there.", name_of(&path));
@@ -2347,7 +2489,7 @@ impl Viewer {
         }
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let name = document::clipboard_file_name(&bytes, stamp);
-        self.open_pasted(&name, &bytes);
+        self.open_next(NextDocument::Pasted { name, bytes });
     }
 
     /// Keeps the clipboard picture `bytes` as the working copy `name` and opens it. Its place under `opened/` comes
@@ -2596,6 +2738,8 @@ impl Viewer {
     /// File > Revert to Original: drops the markup, restores the page order and turns and resets the colour.
     fn revert(&mut self) {
         self.editing = None;
+        // a form field that was being typed into goes back to what the file has, with the rest of the form
+        self.form_focus = None;
         if let Some(doc) = &mut self.doc {
             let n = doc.sizes.len();
             doc.marks.clear();
@@ -2739,7 +2883,7 @@ impl Viewer {
         match ev {
             Input::Open(url) => match path_from_url(&url) {
                 Some(path) => {
-                    self.open_path(&path);
+                    self.open_next(NextDocument::Path(path));
                     true
                 }
                 None => false,
@@ -3215,10 +3359,12 @@ impl Viewer {
     }
 }
 
-/// The format File > Save and Save As write a picture in: the format of its file for a JPEG, PNG for every other.
-fn raster_of(path: &Path, jpeg_quality: u8) -> Raster {
-    match path.extension().and_then(|e| e.to_str()) {
-        Some(ext) if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") => Raster::Jpeg(jpeg_quality),
+/// What a picture is written as for `format`, which is PNG or JPEG (`document::Stored::in_place`, `copy_format`): a
+/// JPEG at the quality File > JPEG Quality gives, a PNG otherwise. The format comes from the bytes of the file, not
+/// from its name.
+fn raster_for(format: bifrost_app::image_source::Format, jpeg_quality: u8) -> Raster {
+    match format {
+        bifrost_app::image_source::Format::Jpeg => Raster::Jpeg(jpeg_quality),
         _ => Raster::Png,
     }
 }
@@ -3327,7 +3473,7 @@ impl App for Viewer {
             .find(|p| is_viewable_path(p.as_str()) && Path::new(p.as_str()).is_file())
             .map(PathBuf::from)
             .ok_or_else(|| RpcError::new(INVALID_PARAMS, "no picture or PDF in the selection"))?;
-        self.open_path(&path);
+        self.open_next(NextDocument::Path(path));
         Ok(Json::Obj(Vec::new()))
     }
 
@@ -3743,23 +3889,30 @@ impl App for Viewer {
             }
             return true;
         }
-        // the copy is kept by what the file is, not only by its name: a.png from another folder gets its own copy
-        let place = self.origins.place(&recents::copy_name(&doc.name), stamp.as_ref());
-        match recents::keep_copy_at(&self.data_dir, &place, &bytes) {
-            Ok(path) => {
-                self.set_origin(&place, Some((doc.grant, stamp)));
-                self.open_path(&path);
-                if saved_as {
-                    let message = format!("Saved {}", name_of(&path));
-                    self.status = message.clone();
-                    self.say_saved(&message);
-                    self.after_open = self.loading.is_some().then_some(message);
+        if saved_as {
+            // Save As wrote the document into this file: it is the same document under its new name, with nothing
+            // left to ask about. A close, a quit or another document that waited for this save (Save in the
+            // unsaved-changes question, for a picture that is saved as a copy) is not given up by the open:
+            // `finish_leaving` carries it out now that the save has ended.
+            let leave = self.leave;
+            let next = self.next_document.take();
+            if let Some(path) = self.open_granted(&doc.name, doc.grant, stamp, &bytes) {
+                // a picture's colour adjustment is in the saved file: applied again it would show twice, and the
+                // document that was just saved would count as edited
+                if self.doc.as_ref().is_some_and(|d| !d.is_pdf) {
+                    self.adjust = Adjust::default();
                 }
+                let message = format!("Saved {}", name_of(&path));
+                self.status = message.clone();
+                self.say_saved(&message);
+                self.after_open = self.loading.is_some().then_some(message);
             }
-            Err(e) => {
-                ctx.release_document(doc.grant);
-                self.status = document::open_failure(&doc.name, &format!("Viewer could not keep its working copy ({})", e.kind()))
-            }
+            self.leave = leave;
+            self.next_document = next;
+        } else {
+            // a file chosen in the open panel, sent by the file manager or dropped on the window: it takes the open
+            // document's place, after the question about that one's unsaved changes
+            self.open_next(NextDocument::Granted { name: doc.name, grant: doc.grant, stamp, bytes });
         }
         true
     }
@@ -3779,7 +3932,7 @@ impl App for Viewer {
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
         match screenshot::captured_path(service, event, body) {
             Some(path) => {
-                self.open_path(&path);
+                self.open_next(NextDocument::Path(path));
                 true
             }
             None => false,
@@ -4427,7 +4580,8 @@ mod tests {
 
     /// A bar too narrow for every button shows the kit's `»` button; a press on it asks for a menu of the buttons that
     /// are not on the bar, so none is left out without a sign. A pull-down button that has no room is listed with the
-    /// entries of its own menu.
+    /// entries of its own menu. (420 px is narrower than the window can be made: the manifest's least width keeps the
+    /// primary buttons on the bar, see the next tests.)
     #[test]
     fn buttons_that_do_not_fit_are_listed_behind_the_overflow_button() {
         let ctx = menu_ctx();
@@ -4436,10 +4590,12 @@ mod tests {
         let lay = v.layout(&ctx.ui, 420, 800);
         let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, true, &title, Tool::Pan);
         let button = layout.overflow_button.expect("a 420 px window has no room for every button");
-        assert!(layout.overflow.contains(&canvas::ADJUST_MENU_ID), "the last button is the first to go: {:?}", layout.overflow);
+        assert!(layout.overflow.contains(&canvas::ADJUST_MENU_ID), "a bar this narrow has Adjust behind the button too: {:?}", layout.overflow);
         let on_bar = layout.visible.iter().filter(|(id, _)| *id != canvas::TITLE_ID).count();
         assert_eq!(on_bar + layout.overflow.len() + 1, bar.items.len(), "every button is on the bar or in the menu");
-        assert!(bar.items.iter().all(|item| item.id != Action::ActualSize.id() && item.id != Action::RotateLeft.id()), "the bar gave up what the View menu has before it left a button out");
+        for given_up in [Action::ActualSize, Action::RotateLeft] {
+            assert!(bar.items.iter().any(|item| item.id == given_up.id()) && layout.overflow.contains(&given_up.id()), "{given_up:?} is behind the button, not left out");
+        }
         let k = ctx.ui.pt(1.0);
         let at = ((button.x + button.w / 2.0) * k, (button.y + button.h / 2.0) * k);
         assert_eq!(canvas::button_hit(&ctx.ui, &lay, true, &title, Tool::Pan, at.0, at.1), None, "it is no action itself");
@@ -4468,13 +4624,24 @@ mod tests {
         cleanup(&v);
     }
 
-    /// The window as it opens (1200 px wide at the lab's scale and at the preview's, 768 points at the larger scale)
-    /// shows the sidebar button, the pages, the zoom, Fit, the turn and the Markup and Adjust buttons on the bar, with
-    /// no `»` button: whatever the document is called, with and without the sidebar, clean or edited.
-    #[test]
-    fn the_window_at_its_default_width_has_every_primary_button_on_the_bar() {
-        let ctx = menu_ctx();
-        let primary = [
+    /// The least window size the manifest allows, in points.
+    fn manifest_min_size() -> (i32, i32) {
+        let manifest = include_str!("../manifest.toml");
+        let line = manifest.lines().find(|l| l.starts_with("min_size")).expect("the manifest gives a least size");
+        let size = line.split('"').nth(1).expect("a quoted size");
+        let (w, h) = size.split_once('x').expect("width x height");
+        (w.parse().expect("a width"), h.parse().expect("a height"))
+    }
+
+    /// The kit's type at `scale` pixels to the point.
+    fn ui_at(scale: f32) -> Ui {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), scale)
+    }
+
+    /// The buttons every bar has, in bar order.
+    fn primary_buttons() -> [u32; 9] {
+        [
             Action::ToggleSidebar.id(),
             Action::Previous.id(),
             Action::Next.id(),
@@ -4484,33 +4651,126 @@ mod tests {
             Action::RotateRight.id(),
             canvas::MARKUP_MENU_ID,
             canvas::ADJUST_MENU_ID,
-        ];
+        ]
+    }
+
+    /// What must hold for the bar at every window width from the manifest's least: the title and every primary button
+    /// are on the bar, between the bar's start and the trailing margin; a button that is not on the bar is one of the
+    /// two the bar gives up, and is behind the `»` button, which is then on the bar and keeps the margin too; nothing
+    /// overlaps; and the buttons on the bar are in their order.
+    fn check_bar(ui: &Ui, lay: &Layout, title: &str, when: &str) -> (bifrost_app::controls::nav::Toolbar, bifrost_app::controls::nav::ToolbarLayout) {
+        let k = ui.pt(1.0);
+        let (bar, layout) = canvas::toolbar(ui, lay, true, title, Tool::Pan);
+        let (start, edge) = (lay.side as f32 / k, lay.w as f32 / k - canvas::TOOLBAR_TRAILING_PT);
+        let optional = [Action::ActualSize.id(), Action::RotateLeft.id()];
+        let (id, slot) = layout.visible[0];
+        assert_eq!(id, canvas::TITLE_ID, "{when}: the title leads");
+        assert!(slot.w >= canvas::TITLE_MIN_PT, "{when}: the title keeps its least width, has {}", slot.w);
+        for id in primary_buttons() {
+            assert!(layout.rect_of(id).is_some(), "{when}: {id:#x} is on the bar; behind the button: {:?}", layout.overflow);
+        }
+        for (id, r) in &layout.visible {
+            assert!(r.x >= start - 0.01 && r.x + r.w <= edge + 0.01, "{when}: {id:#x} at {r:?} is between {start} and the trailing margin at {edge}");
+        }
+        for pair in layout.visible.windows(2) {
+            assert!(pair[0].1.x + pair[0].1.w <= pair[1].1.x + 0.01, "{when}: {:#x} and {:#x} do not overlap", pair[0].0, pair[1].0);
+        }
+        for item in &bar.items {
+            assert!(layout.rect_of(item.id).is_some() || layout.overflow.contains(&item.id), "{when}: {} is on the bar or behind the button", item.label);
+        }
+        assert!(layout.overflow.iter().all(|id| optional.contains(id)), "{when}: only Actual Size and Rotate Left leave the bar: {:?}", layout.overflow);
+        match layout.overflow_button {
+            Some(button) => {
+                assert!(!layout.overflow.is_empty(), "{when}: the button is there for something");
+                let last = layout.visible.iter().map(|(_, r)| r.x + r.w).fold(0.0, f32::max);
+                assert!(button.x >= last - 0.01 && button.x + button.w <= edge + 0.01, "{when}: the button at {button:?} follows the bar and keeps the margin at {edge}");
+            }
+            None => assert!(layout.overflow.is_empty(), "{when}: nothing is off the bar without the button"),
+        }
+        let order: Vec<u32> = Action::toolbar().iter().map(|a| a.id()).chain([canvas::MARKUP_MENU_ID, canvas::ADJUST_MENU_ID]).collect();
+        let on_bar: Vec<u32> = layout.visible.iter().skip(1).map(|(id, _)| *id).collect();
+        assert_eq!(on_bar, order.iter().copied().filter(|id| on_bar.contains(id)).collect::<Vec<_>>(), "{when}: the buttons on the bar keep their order");
+        (bar, layout)
+    }
+
+    /// The window at exactly the manifest's least width, in the state that leaves the bar the least room (the sidebar
+    /// shown, the title saying "Edited"): the title, the sidebar button, the pages, the zoom, Fit, Rotate Right, Markup
+    /// and Adjust are on the bar inside the trailing margin, and Actual Size and Rotate Left are behind the `»`
+    /// button, whose menu lists them. At 0.11.26 those two were left out there with no button to reach them, and
+    /// Adjust touched the window's edge.
+    #[test]
+    fn the_narrowest_window_has_every_primary_button_on_the_bar_and_the_rest_behind_the_overflow_button() {
+        let (min_w, min_h) = manifest_min_size();
         let long = "a very long file name that goes on and on and on and on and on and on.png";
         let edited = format!("wide.png{}", canvas::EDITED_SUFFIX);
-        for width in [720, 768, 960, 1200] {
+        let long_edited = format!("{long}{}", canvas::EDITED_SUFFIX);
+        for scale in [1.0f32, 1.5625] {
+            let ui = ui_at(scale);
+            let width = (min_w as f32 * ui.pt(1.0)).round() as i32;
+            let height = (min_h as f32 * ui.pt(1.0)).round() as i32;
+            let lay = Layout::new(&ui, width, height);
+            assert!(lay.side > 0, "the sidebar is shown");
+            for title in [edited.as_str(), long_edited.as_str(), "wide.png", long, "a"] {
+                let (bar, layout) = check_bar(&ui, &lay, title, &format!("{min_w} points at {scale}, {title:?}"));
+                assert_eq!(layout.overflow, [Action::ActualSize.id(), Action::RotateLeft.id()], "{scale} {title:?}");
+                assert_eq!(canvas::overflow_actions(&bar, &layout), [(Action::ActualSize, true), (Action::RotateLeft, true)]);
+            }
+            // without the sidebar the bar starts after the window controls and has more room: the same holds
+            let mut bare = lay;
+            bare.side = 0;
+            check_bar(&ui, &bare, &edited, &format!("{min_w} points at {scale}, no sidebar"));
+        }
+        // a press on the button asks for the menu of the two
+        let ctx = menu_ctx();
+        let mut v = viewer_with(Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] });
+        v.rotate(1);
+        let title = v.window_title();
+        assert!(title.ends_with(canvas::EDITED_SUFFIX));
+        let lay = v.layout(&ctx.ui, min_w, min_h);
+        let (_, layout) = check_bar(&ctx.ui, &lay, &title, "the edited document");
+        let button = layout.overflow_button.expect("the button");
+        assert!(v.touch(&ctx.ui, min_w, min_h, TouchKind::Down, button.x + button.w / 2.0, button.y + button.h / 2.0));
+        let (_, _, items) = v.menu_request.take().expect("the press asks for the menu");
+        assert_eq!(items.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(), ["Actual Size", "Rotate Left"]);
+        assert!(items.iter().all(|i| i.enabled));
+        cleanup(&v);
+    }
+
+    /// At every width from the least to one with room for everything, with and without the sidebar and whatever the
+    /// document is called, no button is left out without the `»` button, the primary buttons are on the bar, and the
+    /// last thing on the bar keeps the trailing margin. A wide window shows every button and no `»` button.
+    #[test]
+    fn the_bar_drops_nothing_and_keeps_its_trailing_margin_at_every_width() {
+        let ctx = menu_ctx();
+        let (min_w, _) = manifest_min_size();
+        let long = "a very long file name that goes on and on and on and on and on and on.png";
+        let edited = format!("wide.png{}", canvas::EDITED_SUFFIX);
+        let mut shown_whole = false;
+        for width in min_w..=1400 {
             for sidebar in [true, false] {
                 for title in ["wide.png", edited.as_str(), long] {
                     let mut lay = Layout::new(&ctx.ui, width, 500);
                     if !sidebar {
                         lay.side = 0;
                     }
-                    let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, true, title, Tool::Pan);
-                    assert!(layout.overflow.is_empty() && layout.overflow_button.is_none(), "{width} {sidebar} {title}: {:?}", layout.overflow);
-                    for id in primary {
-                        assert!(layout.rect_of(id).is_some(), "{width} {sidebar} {title}: {id:#x} is on the bar");
-                    }
-                    let right = layout.visible.iter().map(|(_, r)| r.x + r.w).fold(0.0, f32::max);
-                    assert!(right <= lay.w as f32 / ctx.ui.pt(1.0), "{width} {sidebar} {title}: nothing runs past the window");
-                    assert_eq!(bar.items[0].id, canvas::TITLE_ID);
+                    let (_, layout) = check_bar(&ctx.ui, &lay, title, &format!("{width} {sidebar} {title:?}"));
+                    // Rotate Left is given up before Actual Size
+                    assert!(layout.overflow.is_empty() || layout.overflow.contains(&Action::RotateLeft.id()), "{width} {sidebar} {title:?}: {:?}", layout.overflow);
+                    shown_whole |= layout.overflow.is_empty();
                 }
             }
         }
-        // a bar with room to spare also shows what it gave up: Actual Size and Rotate Left
-        let (_, roomy) = canvas::toolbar(&ctx.ui, &Layout::new(&ctx.ui, 2400, 500), true, "wide.png", Tool::Pan);
+        assert!(shown_whole);
+        let (_, roomy) = check_bar(&ctx.ui, &Layout::new(&ctx.ui, 1400, 500), &edited, "a wide window");
+        assert!(roomy.overflow.is_empty() && roomy.overflow_button.is_none());
         assert!(roomy.rect_of(Action::ActualSize.id()).is_some() && roomy.rect_of(Action::RotateLeft.id()).is_some());
-        // the manifest keeps the window from being made narrower than the bar's primary buttons
-        let manifest = include_str!("../manifest.toml");
-        assert!(manifest.contains("min_size = \"720x420\""), "the least width the test above covers");
+        // with no document there is no title, and the same holds for the greyed buttons
+        let (bar, layout) = canvas::toolbar(&ctx.ui, &Layout::new(&ctx.ui, min_w, 500), false, "", Tool::Pan);
+        assert!(bar.items.iter().all(|item| layout.rect_of(item.id).is_some() || layout.overflow.contains(&item.id)));
+        assert_eq!(layout.overflow.is_empty(), layout.overflow_button.is_none());
+        for id in primary_buttons() {
+            assert!(layout.rect_of(id).is_some(), "{id:#x} is on the empty window's bar");
+        }
     }
 
     /// The Markup and Adjust buttons ask for their menu once, at the press, anchored under the button; the release and
@@ -4994,16 +5254,320 @@ mod tests {
         cleanup(&v);
     }
 
+    /// File > Save never writes a file in another format than the one its bytes have, and never a file that holds
+    /// more than a save would write. A GIF, a WebP picture, a PNG of 16 bits a sample and a PNG with a colour profile
+    /// stay as they are, byte for byte: Save asks for a new file in the save panel instead, suggesting the name with
+    /// .png (and " copy" when the file is a PNG already), and the status line says why and how much of an animation
+    /// is in the copy. At 0.11.27's start Save wrote PNG data into the .gif and the .webp, which nothing else could
+    /// open then, 8 bits into the 16-bit PNG, and dropped the profile.
+    #[test]
+    fn save_on_a_picture_viewer_cannot_write_back_asks_for_a_copy_and_leaves_the_file_alone() {
+        use springboard::cg::imageio::encode::{encode_png, encode_png16, PngOptions};
+        use springboard::cg::imageio::{gif, webp};
+        let dir = std::env::temp_dir().join(format!("viewer-save-copy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let ctx = menu_ctx();
+        // 3 by 2 pixels: a red frame and a blue one
+        let first: Vec<u8> = [255u8, 0, 0, 255].repeat(6);
+        let second: Vec<u8> = [0u8, 0, 255, 255].repeat(6);
+        let animation = gif::encode(3, 2, &[gif::GifFrame { rgba: &first, delay_ms: 100 }, gif::GifFrame { rgba: &second, delay_ms: 100 }], Some(0)).unwrap();
+        let still = webp::encode(3, 2, &first, None, None, None).unwrap();
+        let deep = encode_png16(3, 2, &[0xffffu16, 0x1234, 0, 0xffff].repeat(6), &PngOptions::default()).unwrap();
+        let profiled = encode_png(3, 2, &first, &PngOptions { icc: Some(("p".into(), vec![1, 2, 3, 4])), ..Default::default() }).unwrap();
+        let cases: [(&str, &[u8], &str, &str); 4] = [
+            ("anim.gif", &animation[..], "anim.png", "Only the first of its 2 frames is in the copy."),
+            ("still.webp", &still[..], "still.png", "Viewer cannot save WebP files"),
+            ("deep.png", &deep[..], "deep copy.png", "8 bits a sample"),
+            ("tagged.png", &profiled[..], "tagged copy.png", "colour profile"),
+        ];
+        for (name, bytes, suggested, says) in cases {
+            let file = dir.join(name);
+            std::fs::write(&file, bytes).unwrap();
+            let mut v = Viewer::new();
+            v.data_dir = dir.join(format!("data-{name}"));
+            v.open_path(&file);
+            assert!(v.doc.is_some(), "{name}: {}", v.status);
+            assert_eq!(v.doc.as_ref().unwrap().stored.in_place(), None, "{name}");
+            v.rotate(1);
+            assert!(v.edited(), "{name}");
+            v.save_document();
+            v.pump(&ctx);
+            assert_eq!(std::fs::read(&file).unwrap(), bytes, "{name}: the file is not written");
+            assert!(!v.saving() && v.pending_original.is_none() && v.save_alert.is_none(), "{name}: nothing is saved in place");
+            let pending = v.pending_export.as_ref().unwrap_or_else(|| panic!("{name}: the save panel is asked for"));
+            assert_eq!((pending.name.as_str(), pending.ext, pending.adopt), (suggested, "png", true), "{name}");
+            assert!(matches!(pending.what, Export::Picture(ref png) if png.starts_with(b"\x89PNG")), "{name}: a PNG waits for the chosen file");
+            let request = pending.request;
+            assert!(request.is_some(), "{name}: the panel was asked for");
+            assert!(v.status.contains(says) && v.status.contains(&format!("{name} stays as it is")), "{name}: {}", v.status);
+            assert!(v.edited(), "{name}: the changes are unsaved until the copy is written");
+            // Save again while the panel is up asks for no second panel, and still writes nothing
+            v.start_save();
+            v.pump(&ctx);
+            assert_eq!(v.pending_export.as_ref().and_then(|p| p.request), request, "{name}");
+            assert_eq!(std::fs::read(&file).unwrap(), bytes, "{name}");
+            cleanup(&v);
+        }
+        // The whole way, for a file the shell handed over and with Save chosen in the question at close: neither the
+        // file nor Viewer's working copy of it is written, the window waits for the save panel, and the chosen file
+        // is the document afterwards: the title names it, File > Save writes it, and it leads Open Recent.
+        let mut v = Viewer::new();
+        v.data_dir = dir.join("data-granted");
+        let copy = v.open_granted("anim.gif", [7; 16], None, &animation).expect("the working copy");
+        assert_eq!(pixels_of(&v), vec![0xff00_00ffu32; 6], "the first frame is what is shown");
+        assert_eq!(v.doc.as_ref().unwrap().stored.frames, 2);
+        v.rotate(1);
+        v.adjust.exposure = 0.5;
+        v.ask_unsaved(Leaving::Close);
+        v.answer_save_alert(ALERT_SAVE);
+        v.pump(&ctx);
+        assert!(v.leave.is_some() && !v.saving() && v.saving_copy(), "the close waits for the save panel");
+        assert_eq!(std::fs::read(&copy).unwrap(), animation, "the working copy is not written");
+        let request = v.pending_export.as_ref().and_then(|p| p.request).expect("the save panel is asked for");
+        let chosen = dir.join("chosen.png");
+        let to = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(true).open(&chosen).unwrap();
+        v.document(&ctx, DocumentEvent::SaveTo(bifrost_app::Document { request, grant: [8; 16], name: "anim.png".into(), size: 0, mode: DocMode::Write, file: to }));
+        assert!(std::fs::read(&chosen).unwrap().starts_with(b"\x89PNG"), "the copy is a PNG");
+        assert!(v.saving_copy() && v.leave.is_some(), "the commit is waited for");
+        let saved = bifrost_app::Document { request, grant: [8; 16], name: "anim.png".into(), size: 0, mode: DocMode::Write, file: std::fs::File::open(&chosen).unwrap() };
+        assert!(v.document(&ctx, DocumentEvent::Saved(saved)));
+        assert_eq!(v.status, "Saved anim.png");
+        assert!(v.leave.is_some(), "the close is carried out by the next turn, not given up");
+        {
+            let doc = v.doc.as_ref().expect("the copy is the document");
+            assert_ne!(doc.path, copy);
+            assert_eq!(doc.sizes, [(2, 3)], "the picture as it was shown, turned");
+            assert_eq!(doc.stored.in_place(), Some(bifrost_app::image_source::Format::Png), "the next Save writes the PNG itself");
+            assert_eq!(v.origins.grant_of(&v.data_dir, &doc.path), Some([8; 16]), "through the chosen file's grant");
+            assert_eq!(v.recents.get(0), Some(doc.path.as_path()));
+        }
+        assert_eq!(v.window_title(), "anim.png");
+        assert_eq!(v.adjust, Adjust::default(), "the colour adjustment is in the saved picture");
+        assert!(!v.edited() && !v.saving_copy());
+        assert_eq!(std::fs::read(&copy).unwrap(), animation, "the GIF's copy is as it was opened");
+        v.pump(&ctx);
+        assert!(v.leave.is_none(), "the window closed once the copy was saved");
+        cleanup(&v);
+        // Cancel in the save panel keeps the document, its changes and the window
+        let mut v = Viewer::new();
+        v.data_dir = dir.join("data-cancelled");
+        let copy = v.open_granted("anim.gif", [7; 16], None, &animation).expect("the working copy");
+        v.rotate(1);
+        v.ask_unsaved(Leaving::Quit);
+        v.answer_save_alert(ALERT_SAVE);
+        v.pump(&ctx);
+        let request = v.pending_export.as_ref().and_then(|p| p.request).expect("the save panel is asked for");
+        assert!(v.document(&ctx, DocumentEvent::Failed { request, code: DocErrorCode::Cancelled }));
+        v.pump(&ctx);
+        assert!(v.leave.is_none() && !v.saving_copy() && v.edited());
+        assert!(!ctx.take_terminate(), "nothing quits");
+        assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(copy.clone()));
+        assert_eq!(std::fs::read(&copy).unwrap(), animation);
+        cleanup(&v);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A PNG of 8 bits a sample without a colour profile and a JPEG are still saved into their own file, in the
+    /// format their bytes have whatever the file is called: a JPEG named .png is written as a JPEG, not as a PNG.
+    #[test]
+    fn save_writes_a_plain_png_and_a_jpeg_in_place_in_the_format_their_bytes_have() {
+        let dir = std::env::temp_dir().join(format!("viewer-save-in-place-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let img = Image { w: 3, h: 2, px: vec![0xff20_60a0; 6] };
+        let png = export::png_bytes(&img).unwrap();
+        let jpeg = export::encode(&img, Raster::Jpeg(export::JPEG_QUALITY)).unwrap();
+        let png_magic: &[u8] = b"\x89PNG";
+        let jpeg_magic: &[u8] = &[0xff, 0xd8, 0xff];
+        let cases: [(&str, &[u8], &[u8]); 4] = [("a.png", &png[..], png_magic), ("a.jpg", &jpeg[..], jpeg_magic), ("named.png", &jpeg[..], jpeg_magic), ("named.jpg", &png[..], png_magic)];
+        for (name, bytes, magic) in cases {
+            let file = dir.join(name);
+            std::fs::write(&file, bytes).unwrap();
+            let mut v = Viewer::new();
+            v.data_dir = dir.join(format!("data-{name}"));
+            v.open_path(&file);
+            assert!(v.doc.as_ref().is_some_and(|d| d.stored.in_place().is_some()), "{name}: {}", v.status);
+            v.rotate(1);
+            v.save_document();
+            assert!(v.pending_export.is_none() && !v.saving() && v.save_alert.is_none(), "{name}: {}", v.status);
+            assert_eq!(v.status, format!("Saved {name}"));
+            let now = std::fs::read(&file).unwrap();
+            assert!(now.starts_with(magic), "{name}: the file keeps the format its bytes had");
+            assert_ne!(now, bytes, "{name}: the turned picture is in the file");
+            let saved = document::decode_picture(&now).expect("the saved file decodes");
+            assert_eq!((saved.w, saved.h), (2, 3), "{name}");
+            assert!(!v.edited(), "{name}");
+            cleanup(&v);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Saving a PNG loses nothing of its pixels: opened, turned four quarter turns and saved, the file holds the pixels
+    /// it was opened with, bit for bit, at 8 bits a sample in the colour type it had (RGB, and RGBA for a picture with
+    /// transparency). One quarter turn saved and three more saved come back to them too. (The file is smaller than
+    /// one written without row filters, because the encoder filters each row and compresses harder; that is the only
+    /// difference.)
+    #[test]
+    fn a_png_opened_turned_four_times_and_saved_has_its_original_pixels() {
+        for (name, transparent, colour_type) in [("rgb", false, 2u8), ("rgba", true, 6u8)] {
+            let dir = std::env::temp_dir().join(format!("viewer-png-round-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            let mut px: Vec<u32> = (0..15u32).map(|i| 0xff00_0000 | (i * 17) | ((255 - i * 9) << 8) | ((i * 5 + 3) << 16)).collect();
+            if transparent {
+                px[4] = 0;
+            }
+            let original = Image { w: 5, h: 3, px };
+            let file = dir.join("round.png");
+            std::fs::write(&file, export::png_bytes(&original).unwrap()).unwrap();
+            let on_disk = || document::decode_picture(&std::fs::read(&file).unwrap()).expect("the saved file decodes");
+            let header = || {
+                let bytes = std::fs::read(&file).unwrap();
+                (bytes[24], bytes[25])
+            };
+            assert_eq!(header(), (8, colour_type), "{name}: the test file");
+            let mut v = Viewer::new();
+            v.data_dir = dir.join("data");
+            v.open_path(&file);
+            assert_eq!(pixels_of(&v), original.px, "{name}: as opened");
+            // four quarter turns are the picture as it was opened
+            for _ in 0..4 {
+                v.rotate(1);
+            }
+            v.save_document();
+            assert!(!v.saving() && v.save_alert.is_none(), "{name}: {}", v.status);
+            assert_eq!(on_disk(), original, "{name}: four turns and a save");
+            assert_eq!(header(), (8, colour_type), "{name}: the bit depth and the colour type stay");
+            // one quarter turn, saved: the turned pixels, each of them exact
+            v.rotate(1);
+            v.save_document();
+            let turned = model::rotate(&original, 1);
+            assert_eq!(on_disk(), turned, "{name}: one turn and a save");
+            assert_eq!(pixels_of(&v), turned.px, "{name}: the document is the saved picture");
+            // three more, saved: the original again
+            for _ in 0..3 {
+                v.rotate(1);
+            }
+            v.save_document();
+            assert!(!v.saving() && v.save_alert.is_none(), "{name}: {}", v.status);
+            assert_eq!(on_disk(), original, "{name}: back where it began");
+            assert_eq!(header(), (8, colour_type));
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    /// A picture whose metadata says it is to be turned opens upright, and a save writes the upright pixels with an
+    /// upright orientation: the turn is in the pixels or in the orientation, never in both, so the saved file shows
+    /// the same way in every app.
+    #[test]
+    fn a_picture_with_an_orientation_opens_upright_and_is_saved_upright_once() {
+        use springboard::cg::imageio::encode::{encode_png, PngOptions};
+        let dir = std::env::temp_dir().join(format!("viewer-png-orient-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (red, blue) = (0xff00_00ffu32, 0xffff_0000u32);
+        let stored = Image { w: 2, h: 1, px: vec![red, blue] };
+        // a little-endian block with one entry: orientation 6, the picture is to be turned a quarter turn clockwise
+        let exif = vec![0x49, 0x49, 0x2a, 0, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0];
+        let options = PngOptions { exif: Some(exif), ..Default::default() };
+        let file = dir.join("side.png");
+        std::fs::write(&file, encode_png(2, 1, &pixels::to_straight_rgba(&stored), &options).unwrap()).unwrap();
+        let orientation = || {
+            let bytes = std::fs::read(&file).unwrap();
+            let at = bytes.windows(4).position(|w| w == b"eXIf").expect("the EXIF chunk");
+            bytes[at + 4 + 18]
+        };
+        assert_eq!(orientation(), 6, "the test file");
+        let mut v = Viewer::new();
+        v.data_dir = dir.join("data");
+        v.open_path(&file);
+        let doc = v.doc.as_ref().expect("the picture opens");
+        assert_eq!(doc.sizes, [(1, 2)], "upright: the sides are swapped");
+        assert_eq!(pixels_of(&v), [red, blue], "the left pixel is on top");
+        assert!(!v.edited(), "opening changes nothing");
+        v.save_document();
+        assert!(!v.saving() && v.save_alert.is_none(), "{}", v.status);
+        assert_eq!(orientation(), 1, "the saved file says upright");
+        let again = document::decode_picture(&std::fs::read(&file).unwrap()).expect("the saved file decodes");
+        assert_eq!((again.w, again.h, again.px), (1, 2, vec![red, blue]), "and is the picture as it was shown, turned once");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Adjust > Brighter is half a stop of exposure: every colour value is multiplied by the square root of two, so
+    /// 100 becomes 141, up to full, which cannot go further. The step shows in the picture that is drawn and is what
+    /// Save writes, marks the document edited and is one Undo step; Reset Colour gives back exactly the pixels that
+    /// were opened. Four steps (two stops) are the most.
+    #[test]
+    fn brighter_changes_the_picture_by_half_a_stop_and_reset_colour_restores_it() {
+        let ctx = menu_ctx();
+        // red 100, green 60, blue 20; black; red full, green 200, blue 128; a dark grey
+        let px = vec![0xff14_3c64u32, 0xff00_0000, 0xff80_c8ff, 0xff0a_0a0a];
+        let mut v = viewer_with(Image { w: 2, h: 2, px: px.clone() });
+        let lay = v.layout(&ctx.ui, 1200, 780);
+        // the picture as the canvas draws it, and as Save writes it
+        let shown = |v: &Viewer| {
+            let doc = v.doc.as_ref().unwrap();
+            let img = doc.picture_rc().unwrap();
+            let drawn = document::adjusted(&img, &v.adjust);
+            assert_eq!(export::finish(&img, &doc.marks, 0, 0, &v.adjust, 1.0), drawn, "Save writes what is shown");
+            drawn.px
+        };
+        let channel = |p: u32, k: u32| ((p >> (8 * k)) & 0xff) as i32;
+        assert_eq!(shown(&v), px);
+        assert!(!v.edited());
+        assert!(v.act(&ctx.ui, &lay, Action::Brighter));
+        assert_eq!(v.adjust.exposure, 0.5, "one step is half a stop");
+        let bright = shown(&v);
+        for (k, was) in [(0u32, 100i32), (1, 60), (2, 20)] {
+            let want = (was as f32 * std::f32::consts::SQRT_2).round() as i32;
+            assert!((channel(bright[0], k) - want).abs() <= 1, "{was} becomes {want}, is {}", channel(bright[0], k));
+        }
+        assert!(channel(bright[0], 0) - 100 >= 40, "a step is plain to see: 100 becomes about 141");
+        assert_eq!(bright[1], px[1], "black stays black");
+        assert_eq!(channel(bright[2], 0), 255, "full stays full");
+        assert!(channel(bright[2], 1) > 200 && channel(bright[2], 2) > 128 + 40);
+        assert!(bright.iter().all(|p| p >> 24 == 255), "the picture stays opaque");
+        assert!(v.edited() && v.window_title().ends_with(canvas::EDITED_SUFFIX), "the document is edited");
+        assert!(v.history.can_undo(), "the step can be undone");
+        undo(&mut v);
+        assert_eq!(v.adjust, Adjust::default());
+        assert_eq!(shown(&v), px, "Undo gives the opened pixels back");
+        assert!(!v.edited());
+        // Darker is the same step the other way
+        assert!(v.act(&ctx.ui, &lay, Action::Darker));
+        assert!((channel(shown(&v)[0], 0) - 71).abs() <= 1, "100 becomes about 71");
+        assert!(v.act(&ctx.ui, &lay, Action::Brighter));
+        assert_eq!(shown(&v), px, "a step back is no change at all");
+        // two steps are a whole stop, and Reset Colour restores the pixels exactly
+        v.act(&ctx.ui, &lay, Action::Brighter);
+        v.act(&ctx.ui, &lay, Action::Brighter);
+        assert!((channel(shown(&v)[0], 0) - 200).abs() <= 1, "100 becomes 200");
+        assert!(v.act(&ctx.ui, &lay, Action::ResetColour));
+        assert_eq!(v.adjust, Adjust::default());
+        assert_eq!(shown(&v), px, "Reset Colour gives exactly the opened pixels");
+        assert!(!v.edited());
+        // the most is two stops: a fifth step changes nothing
+        for _ in 0..4 {
+            v.act(&ctx.ui, &lay, Action::Brighter);
+        }
+        let most = shown(&v);
+        assert_eq!(v.adjust.exposure, 2.0);
+        v.act(&ctx.ui, &lay, Action::Brighter);
+        assert_eq!(shown(&v), most);
+        cleanup(&v);
+    }
+
     /// In Fit the page keeps the margin to every edge of the canvas: at open, turned, cropped and at another window
     /// size. A page that filled the canvas's height sat flush under the toolbar and on the window's bottom edge.
     #[test]
     fn a_fitted_page_keeps_the_margin_to_every_edge_of_the_canvas() {
         let ctx = menu_ctx();
         let mut v = viewer_with(Image { w: 1600, h: 800, px: vec![0xff00_00ff; 1600 * 800] });
-        let inside = |v: &Viewer, w: i32, h: i32, when: &str| {
-            let lay = v.layout(&ctx.ui, w, h);
+        let inside_at = |v: &Viewer, ui: &Ui, w: i32, h: i32, when: &str| {
+            let lay = v.layout(ui, w, h);
             let m = lay.margin;
-            assert_eq!(m, ctx.ui.pt(canvas::FIT_MARGIN_PT) as i32);
+            assert_eq!(m, ui.pt(canvas::FIT_MARGIN_PT) as i32, "{when}: the one margin for all four sides");
             assert!(m > 0, "the window has a margin");
             let (cx, cy, cw, ch) = lay.canvas();
             let p = v.placed(&lay).expect("a picture");
@@ -5014,12 +5578,27 @@ mod tests {
             assert!(slack_x.min(slack_y) <= 1, "{when}: fitted");
             assert!((p.x - cx - (cx + cw - right)).abs() <= 1 && (p.y - cy - (cy + ch - bottom)).abs() <= 1, "{when}: centred");
         };
+        let inside = |v: &Viewer, w: i32, h: i32, when: &str| inside_at(v, &ctx.ui, w, h, when);
         inside(&v, 1200, 780, "at open");
         v.rotate(1);
         inside(&v, 1200, 780, "turned");
         v.rotate(1);
         inside(&v, 1200, 780, "turned twice");
         inside(&v, 700, 900, "a narrow window");
+        // the least window the manifest allows, with the sidebar shown and with a panel on the right as well, at
+        // every scale: the page still has the margin on all four sides
+        let (min_w, min_h) = manifest_min_size();
+        for scale in [1.0f32, 1.25, 1.5625, 2.0] {
+            let ui = ui_at(scale);
+            let (w, h) = ((min_w as f32 * scale).round() as i32, (min_h as f32 * scale).round() as i32);
+            for turns in 0..4 {
+                inside_at(&v, &ui, w, h, &format!("the least window at {scale}, turned {turns}"));
+                v.inspector = true;
+                inside_at(&v, &ui, w, h, &format!("the least window at {scale} with the Inspector, turned {turns}"));
+                v.inspector = false;
+                v.rotate(1);
+            }
+        }
         v.sidebar = false;
         inside(&v, 1200, 780, "without the sidebar");
         v.selection = Some((0, Norm { x: 0.0, y: 0.0, w: 0.5, h: 1.0 }));
@@ -5281,6 +5860,145 @@ mod tests {
         // a window that is closed has nothing to ask on
         v.rotate(1);
         assert!(v.quit_requested(&ctx) && v.save_alert.is_none());
+        cleanup(&v);
+    }
+
+    /// Another file opening over a document with unsaved changes asks first, with the question close and quit ask:
+    /// a file another app sends (a double-click in the file manager, a drop), a file the shell hands over (the open
+    /// panel's choice), Open Recent and a clipboard picture. Cancel keeps the document and its changes and gives the
+    /// other file up; Don't Save discards the changes and opens it. At 0.11.26 the other file opened at once and the
+    /// changes were gone without a word.
+    #[test]
+    fn opening_another_file_over_unsaved_changes_asks_first() {
+        let (mut v, copy) = viewer_on_copy("ask-open");
+        let ctx = menu_ctx();
+        let picture = export::png_bytes(&Image { w: 3, h: 1, px: vec![0xff00_ff00; 3] }).unwrap();
+        let other = v.data_dir.join("other.png");
+        std::fs::write(&other, &picture).unwrap();
+        let open_file = |v: &Viewer| v.doc.as_ref().map(|d| d.path.clone());
+        let asked = |v: &Viewer, how: &str| {
+            let sheet = v.save_sheet().unwrap_or_else(|| panic!("{how}: the question"));
+            assert!(sheet.title.contains("b.png") && sheet.title.contains("save the changes"), "{how}: {}", sheet.title);
+            assert_eq!(sheet.buttons.iter().map(|b| b.id).collect::<Vec<_>>(), [ALERT_SAVE, ALERT_DONT_SAVE, ALERT_CANCEL], "{how}");
+            assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(copy.clone()), "{how}: the document is still open");
+            assert!(v.edited() && v.next_document.is_some(), "{how}: with its changes, and the other file waits");
+        };
+        v.rotate(1);
+        // a file another app sends; Escape cancels
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        asked(&v, "a file sent to the app");
+        assert!(v.event(&ctx, Input::Key(KeyInput::Code(27))));
+        assert!(v.save_alert.is_none() && v.next_document.is_none() && v.leave.is_none());
+        assert_eq!(open_file(&v), Some(copy.clone()));
+        assert!(v.edited() && v.doc.as_ref().unwrap().turns == [1], "Cancel keeps the changes");
+        // a file the shell hands over: Cancel gives its grant back
+        let handed = bifrost_app::Document { request: 77, grant: [7; 16], name: "other.png".into(), size: picture.len() as u64, mode: DocMode::Write, file: std::fs::File::open(&other).unwrap() };
+        assert!(v.document(&ctx, DocumentEvent::Opened(handed)));
+        asked(&v, "a file from the open panel");
+        v.answer_save_alert(ALERT_CANCEL);
+        assert!(v.next_document.is_none() && v.released.contains(&[7; 16]), "the grant goes back to the shell");
+        assert_eq!(open_file(&v), Some(copy.clone()));
+        // Open Recent
+        v.recents.add(&other);
+        let at = (0..recents::MAX_RECENTS).find(|i| v.recents.get(*i) == Some(other.as_path())).expect("the file is in Open Recent");
+        assert!(v.open_menu(&ctx, MENU_RECENT + at as u32));
+        asked(&v, "Open Recent");
+        v.answer_save_alert(ALERT_CANCEL);
+        // a clipboard picture
+        v.open_next(NextDocument::Pasted { name: "Clipboard 1.png".into(), bytes: picture.clone() });
+        asked(&v, "New from Clipboard");
+        v.answer_save_alert(ALERT_CANCEL);
+        assert!(v.edited() && v.next_document.is_none());
+        // Don't Save: the changes go and the other file opens
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        asked(&v, "before the changes are discarded");
+        v.answer_save_alert(ALERT_DONT_SAVE);
+        v.finish_leaving(&ctx);
+        assert_eq!(open_file(&v), Some(other.clone()));
+        assert!(!v.edited() && v.save_alert.is_none() && v.next_document.is_none() && v.leave.is_none());
+        assert!(!ctx.take_terminate(), "nothing quits");
+        // a document without changes is replaced with no question
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        assert!(v.save_alert.is_none() && open_file(&v) == Some(other.clone()));
+        cleanup(&v);
+    }
+
+    /// Save in that question saves the document first; the other file opens when the save has ended, and not when it
+    /// failed: the document then stays open with its changes and the alert says why.
+    #[test]
+    fn save_before_opening_another_file_opens_it_when_the_save_has_ended() {
+        let (mut v, copy) = viewer_on_copy("ask-open-save");
+        let ctx = menu_ctx();
+        // the copy is in Open Recent, so it is kept when the other document opens
+        v.recents.add(&copy);
+        let other = v.data_dir.join("other.png");
+        std::fs::write(&other, export::png_bytes(&Image { w: 3, h: 1, px: vec![0xff00_ff00; 3] }).unwrap()).unwrap();
+        v.rotate(1);
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        assert!(v.save_sheet().is_some());
+        // Return is Save
+        assert!(v.event(&ctx, Input::Key(KeyInput::Code(13))));
+        assert!(v.save_alert.is_none() && v.saving() && v.next_document.is_some());
+        assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(copy.clone()), "not while the save is under way");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while v.saving() {
+            assert!(std::time::Instant::now() < deadline, "the picture is written");
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            v.pump(&ctx);
+        }
+        assert!(std::fs::read(&copy).unwrap().starts_with(b"\x89PNG"), "the changes are in the file");
+        assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(other.clone()), "the other file opened once the save had ended");
+        assert!(!v.edited() && v.next_document.is_none() && v.leave.is_none());
+        cleanup(&v);
+        // a save that fails keeps the document, and the other file is given up
+        let (mut v, copy) = viewer_on_copy("ask-open-refused");
+        let other = v.data_dir.join("other.png");
+        std::fs::write(&other, export::png_bytes(&Image { w: 3, h: 1, px: vec![0xff00_ff00; 3] }).unwrap()).unwrap();
+        v.set_origin("b.png", Some(([9; 16], None)));
+        v.rotate(1);
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        // Save was chosen (the picture is written here at once, as `save_document` does for the tests)
+        v.save_alert = None;
+        v.leave = Some((Leaving::Open, false));
+        v.save_document();
+        v.pump(&ctx);
+        assert!(v.leave.is_some() && v.next_document.is_some(), "the other file waits for the save");
+        v.original_failed(Some(DocErrorCode::Denied));
+        v.pump(&ctx);
+        assert!(v.leave.is_none() && v.next_document.is_none());
+        assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(copy));
+        assert!(v.save_sheet().is_some_and(|s| s.title.contains("could not be saved")) && v.edited());
+        cleanup(&v);
+    }
+
+    /// Don't Save and Revert put a PDF form's fields back as the file has them: nothing of what was typed is left to
+    /// save, and no field keeps the keyboard.
+    #[test]
+    fn discarding_changes_puts_filled_form_fields_back() {
+        use bifrost_app::controls::acroform::Field;
+        let mut v = viewer_with(Image { w: 4, h: 4, px: vec![0xff00_00ff; 16] });
+        {
+            let doc = v.doc.as_mut().unwrap();
+            doc.form.add(Field::text("name", 0)).unwrap();
+            doc.form.add(Field::button("agree", 0)).unwrap();
+            doc.widgets = vec![
+                forms::FormWidget { page: 0, rect: Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }, name: "name".into(), kind: forms::Kind::Text, obj: 4, node: 4, on_name: String::new() },
+                forms::FormWidget { page: 0, rect: Norm { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }, name: "agree".into(), kind: forms::Kind::Check, obj: 5, node: 5, on_name: "Yes".into() },
+            ];
+        }
+        let as_opened = v.doc.as_ref().unwrap().form.clone();
+        assert!(!v.edited());
+        v.click_widget(0);
+        assert_eq!(v.form_focus, Some(0));
+        assert!(v.key_form(0, &KeyInput::Text("Ada".into())));
+        v.click_widget(1);
+        v.click_widget(0);
+        assert!(v.edited(), "filled fields are unsaved changes");
+        assert_ne!(v.doc.as_ref().unwrap().form, as_opened);
+        v.discard_changes();
+        let doc = v.doc.as_ref().unwrap();
+        assert_eq!(doc.form, as_opened, "the fields are as the file has them");
+        assert!(!doc.form_changed && doc.field_edits().is_empty() && !v.edited() && v.form_focus.is_none());
         cleanup(&v);
     }
 

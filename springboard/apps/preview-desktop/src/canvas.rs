@@ -325,8 +325,11 @@ const TOOLBAR: &[Action] = &[
     Action::RotateRight,
 ];
 
-/// The buttons the bar shows only while it has room for them, the first given up first: each is also a View menu
-/// item with a key, so a bar without them lacks nothing and needs no `»` button for them.
+/// The buttons the bar gives up first when it has no room for every button, the last of them first. They are not
+/// left out: they move to the end of the bar's items, where the kit puts what does not fit behind its `»` button, and
+/// the menu of that button lists them (`overflow_actions`). The buttons before them (the sidebar, the pages, the zoom,
+/// Fit, Rotate Right, Markup and Adjust) are on the bar at every width the window can have (`min_size` in
+/// manifest.toml).
 const OPTIONAL: &[Action] = &[Action::ActualSize, Action::RotateLeft];
 
 /// The toolbar's Markup pull-down button among the window's controls, and what its menu lists. It is no `Action`.
@@ -570,7 +573,10 @@ pub const TITLE_ID: u32 = 0x4000;
 /// The most room the window title takes on the toolbar; a longer one is cut with an ellipsis.
 const TITLE_MAX_PT: f32 = ui::SPACE_XXXL * 6.0;
 /// The least room the title keeps when the buttons leave it less: a few letters and the ellipsis.
-const TITLE_MIN_PT: f32 = ui::SPACE_XXXL * 2.0;
+pub const TITLE_MIN_PT: f32 = ui::SPACE_XXXL * 2.0;
+/// The room the bar keeps free at the window's trailing edge, in points, so its last button (or the `»` button) does
+/// not touch the edge: the inset the kit apps' own bars keep there.
+pub const TOOLBAR_TRAILING_PT: f32 = ui::SPACE_M;
 
 /// What the window title carries after the document's name while it has unsaved changes.
 pub const EDITED_SUFFIX: &str = " \u{2013} Edited";
@@ -607,47 +613,64 @@ fn buttons_width(ui: &Ui, items: &[ToolbarItem], bar_h: f32) -> f32 {
     layout.visible.iter().map(|(_, r)| r.x + r.w - x).fold(0.0, f32::max)
 }
 
+/// Where the bar lies, in points: from the sidebar's edge to `TOOLBAR_TRAILING_PT` before the window's trailing edge.
+/// The layout, the hit tests and the drawing all use it.
+fn toolbar_bounds(lay: &Layout, scale: f32) -> bifrost_app::controls::Rect {
+    let x = lay.side as f32 / scale;
+    bifrost_app::controls::Rect { x, y: 0.0, w: (lay.w as f32 / scale - x - TOOLBAR_TRAILING_PT).max(0.0), h: lay.bar.max(0) as f32 / scale }
+}
+
 /// The shared Golden Gate toolbar model and the exact layout used to draw it and publish its controls. `title` is the
 /// window title (the document's name, with "Edited" while it has unsaved changes), empty with no document: the window
 /// is full-size, so the shell draws no title row and the title leads the toolbar, where the document apps show theirs.
 ///
-/// The room is given out in this order: the buttons every bar has (the sidebar, the pages, the zoom, Fit, the turn and
-/// the two pull-down buttons), then the title up to its own width, then the `OPTIONAL` buttons while they fit. A bar
-/// too narrow even for the first of these puts what is left behind the kit's `»` button.
+/// The room is given out in this order: the buttons every bar has (the sidebar, the pages, the zoom, Fit, Rotate
+/// Right and the two pull-down buttons), then the title up to its own width, then the `OPTIONAL` buttons. No button
+/// is left out without a sign: an `OPTIONAL` button that has no room is behind the kit's `»` button, which is on the
+/// bar whenever a button is not, and so is any other button of a bar narrower than the window can be made. The
+/// buttons that are on the bar keep their order.
 pub fn toolbar(ui: &Ui, lay: &Layout, open: bool, title: &str, tool: Tool) -> (Toolbar, ToolbarLayout) {
     let scale = ui.pt(1.0).max(0.001);
-    let bounds = bifrost_app::controls::Rect {
-        x: lay.side as f32 / scale,
-        y: 0.0,
-        w: (lay.w - lay.side).max(0) as f32 / scale,
-        h: lay.bar.max(0) as f32 / scale,
-    };
-    let mut items = toolbar_items(open, tool);
-    let optional = |item: &ToolbarItem| OPTIONAL.iter().any(|a| a.id() == item.id);
-    let title_slot = (!title.is_empty()).then(|| {
-        let needed: Vec<ToolbarItem> = items.iter().filter(|item| !optional(item)).cloned().collect();
-        // what the kit lays the bar out in: a bar that starts under the window controls begins after them
-        let room = widgets::clear_of_traffic_lights(bounds).w;
-        // one gap between the title and the first button, and a point so that rounding leaves no button out
-        let most = room - buttons_width(ui, &needed, bounds.h) - widgets::TOOLBAR_GAP_PT - 1.0;
-        ToolbarItem::custom(TITLE_ID, "Title", title_width(ui, title, most))
-    });
-    // The buttons a narrow bar has no room for are not dropped: the kit puts them behind its `»` button
-    // (`ToolbarLayout::overflow`), and `menu_hit` lists them in the menu that button opens.
-    let lay_out = |items: &[ToolbarItem]| {
-        let bar = Toolbar::new(title_slot.iter().cloned().chain(items.iter().cloned()).collect());
+    let bounds = toolbar_bounds(lay, scale);
+    let items = toolbar_items(open, tool);
+    // what the kit lays the bar out in: a bar that starts under the window controls begins after them
+    let room = widgets::clear_of_traffic_lights(bounds).w;
+    let lay_out = |items: Vec<ToolbarItem>, most: f32| {
+        let slot = (!title.is_empty()).then(|| ToolbarItem::custom(TITLE_ID, "Title", title_width(ui, title, most)));
+        let bar = Toolbar::new(slot.into_iter().chain(items).collect());
         let layout = widgets::toolbar_layout(ui, bounds, &bar);
         (bar, layout)
     };
-    let mut out = lay_out(&items);
-    for given_up in OPTIONAL {
+    // Every button on the bar, when the title keeps its own width beside them. One gap lies between the title and
+    // the first button, and a point is kept so that rounding leaves no button out.
+    let whole = room - buttons_width(ui, &items, bounds.h) - widgets::TOOLBAR_GAP_PT - 1.0;
+    if title.is_empty() || whole >= title_width(ui, title, f32::MAX) {
+        let out = lay_out(items.clone(), whole);
         if out.1.overflow.is_empty() {
-            break;
+            return out;
         }
-        items.retain(|item| item.id != given_up.id());
-        out = lay_out(&items);
     }
-    out
+    // Not every button fits: the `OPTIONAL` ones go behind the `»` button, the last of them first. The title has what
+    // the other buttons and the `»` button leave it.
+    let needed: Vec<ToolbarItem> = items.iter().filter(|item| OPTIONAL.iter().all(|a| a.id() != item.id)).cloned().collect();
+    let most = room - buttons_width(ui, &needed, bounds.h) - widgets::TOOLBAR_GAP_PT - 1.0 - (widgets::TOOLBAR_GAP_PT + widgets::CAPSULE_PT);
+    let mut first_moved = OPTIONAL.len() - 1;
+    loop {
+        // the kit takes the bar's last items off first: the buttons to give up are put there, in their own order
+        let moved = |item: &ToolbarItem| OPTIONAL[first_moved..].iter().any(|a| a.id() == item.id);
+        let ordered: Vec<ToolbarItem> = items.iter().filter(|item| !moved(item)).chain(items.iter().filter(|item| moved(item))).cloned().collect();
+        let out = lay_out(ordered, most);
+        if out.1.overflow.is_empty() {
+            // everything fits after all (the title took less than its share): the buttons stay in their order
+            return lay_out(items.clone(), most);
+        }
+        // only what was put last is off the bar, or there is nothing more to put last: a bar narrower than the
+        // window can be made has its other buttons behind the `»` button too
+        if first_moved == 0 || out.1.overflow.iter().all(|id| OPTIONAL[first_moved..].iter().any(|a| a.id() == *id)) {
+            return out;
+        }
+        first_moved -= 1;
+    }
 }
 
 /// The id of the toolbar's `»` button among the window's controls. It is no `Action`.
@@ -1554,18 +1577,8 @@ fn draw_toolbar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
         bifrost_app::controls::Rect { x: 0.0, y: 0.0, w: lay.w as f32 / scale, h: lay.bar as f32 / scale },
     );
     let (bar, _) = toolbar(ui, lay, scene.doc.is_some(), scene.title, scene.tool);
-    let layout = widgets::toolbar(
-        s,
-        ui,
-        bifrost_app::controls::Rect {
-            x: lay.side as f32 / scale,
-            y: 0.0,
-            w: (lay.w - lay.side).max(0) as f32 / scale,
-            h: lay.bar as f32 / scale,
-        },
-        &bar,
-        None,
-    );
+    // the same bounds the layout and the hit tests use, so what is drawn is where a press finds it
+    let layout = widgets::toolbar(s, ui, toolbar_bounds(lay, scale), &bar, None);
     // the title's slot is laid out by the kit and drawn here
     if let Some((_, slot)) = layout.visible.iter().find(|(id, _)| *id == TITLE_ID) {
         let shown = fit_title(ui, scene.title, (slot.w - ui::SPACE_S).max(0.0) * scale);
