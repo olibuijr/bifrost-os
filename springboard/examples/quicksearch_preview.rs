@@ -1,7 +1,8 @@
 //! Renders Search on the host: pulled down with the suggestions row
 //! (target/quicksearch.ppm), mid-pull (target/quicksearch-pull.ppm) and with
 //! "se" typed (target/quicksearch-se.ppm), for comparison with the bifrost
-//! captures in ~/Pictures/tab/bifrost-ref/quicksearch.
+//! captures in ~/Pictures/tab/bifrost-ref/quicksearch. The files Search lists come from a folder of sample files made
+//! here (`sample_home`), never from the home folder of whoever runs the preview.
 use springboard::font::Font;
 use springboard::gfx::{Image, Surface, View};
 use springboard::shell::keyboard::Out;
@@ -23,13 +24,28 @@ fn save(sh: &mut Shell, t: f64, path: &str) {
     fs::write(path, ppm).unwrap();
 }
 
+/// A home folder of sample files in the temp dir, made afresh: what Search walks in this preview.
+fn sample_home() -> std::path::PathBuf {
+    let home = std::env::temp_dir().join("bifrost-quicksearch-preview-home");
+    let _ = fs::remove_dir_all(&home);
+    for (folder, name) in [("Documents", "Seasons report.txt"), ("Documents", "Budget.csv"), ("Pictures", "Seljalandsfoss.jpg"), ("Desktop", "Second draft.md"), ("Downloads", "Manual.pdf")] {
+        fs::create_dir_all(home.join(folder)).unwrap();
+        fs::write(home.join(folder).join(name), "sample").unwrap();
+    }
+    home
+}
+
 fn main() {
+    // before anything reads it and before any thread starts: nothing in this process looks at the real home folder
+    let home = sample_home();
+    std::env::set_var("HOME", &home);
     let leak = |p: &str| -> &'static [u8] { Box::leak(fs::read(p).unwrap().into_boxed_slice()) };
     let font = Font::parse(leak("assets/SFUI.ttf")).unwrap();
     let wallpaper = View::from_raw(leak("assets/wallpaper.raw")).unwrap();
     let icon = |name: &str, size: usize| fs::read(format!("assets/icons/{name}.raw")).ok().and_then(|b| Image::from_raw(&b)).map(|i| i.resized(size, size));
     let info = Info { hour: 0, min: 24, wday: 0, mday: 4, mon: 9, battery: 47, online: true, wifi_bars: 3, wifi: "WIFI".into(), wifi_on: true, brightness: 0.55, ..Info::default() };
     let mut sh = Shell::new(W as i32, H as i32, font, leak("assets/SFUIMono.ttf"), wallpaper, icon, info);
+    sh.set_search_home(home);
     let mut t = 0.0;
     sh.event(Event::Down(600.0, 1800.0), t);
     for i in 1..=10 {

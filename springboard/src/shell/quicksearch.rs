@@ -3209,6 +3209,14 @@ impl Shell {
         self.quicksearch.note_launch(app);
     }
 
+    /// The folder Search walks as the home folder from now on, in place of the account's or `$HOME`. For host previews:
+    /// they give a folder of sample files, so a preview never reads or shows the developer's own file names.
+    pub fn set_search_home(&mut self, home: PathBuf) {
+        self.quicksearch.home = Some(home);
+        // a list scanned before is of another folder
+        self.quicksearch.files_at = None;
+    }
+
     /// Types into the shown card as the keyboard would (remote control, previews).
     pub fn quicksearch_key(&mut self, out: Out, t: f64) -> Vec<Effect> {
         if !self.quicksearch.is_shown() {
