@@ -201,10 +201,36 @@ pub fn rfc2822_date(unix: i64) -> String {
     )
 }
 
-/// The time of day in UTC as `09:30:05`, for the activity list.
-pub fn time_of_day(unix: i64) -> String {
-    let secs = unix.rem_euclid(86_400);
-    format!("{:02}:{:02}:{:02}", secs / 3600, secs % 3600 / 60, secs % 60)
+/// The system zone's seconds east of UTC at `unix`, with daylight saving as it was at that instant: the zone the
+/// shell tells the app (`bifrost_app::time_zone`), read when called, so a time on screen follows a change of the zone.
+pub fn zone_offset(unix: i64) -> i32 {
+    bifrost_app::time_zone::TimeZone::auto_updating_current().seconds_from_gmt(bifrost_app::coding::Date(unix as f64))
+}
+
+/// Stands before and after the Unix time an activity line starts with. A control character no line holds.
+const STAMP_MARK: char = '\u{1f}';
+
+/// What a line of the activity list starts with: when it happened, as Unix seconds between two `STAMP_MARK`s. The
+/// time is written when the list is shown (`activity_text`), in the system zone and the person's clock style as they
+/// are then.
+pub fn activity_stamp(unix: i64) -> String {
+    format!("{STAMP_MARK}{unix}{STAMP_MARK}")
+}
+
+/// A line of the activity list as it is shown: its stamp as a time of day in the system zone and the person's clock
+/// style (`bifrost_app::time_zone`), "09:30  Checking mail", or "9:30 AM  Checking mail" with Settings > Date & Time >
+/// 24-Hour Time off. A line with no stamp is shown as it is.
+pub fn activity_text(line: &str) -> String {
+    activity_text_in(line, &zone_offset, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `activity_text` with the zone's offset at an instant and a given clock style. The time is written by the
+/// formatter of `time_zone::time_text`.
+pub fn activity_text_in(line: &str, offset_at: &dyn Fn(i64) -> i32, h24: bool) -> String {
+    let stamped = line.strip_prefix(STAMP_MARK).and_then(|rest| rest.split_once(STAMP_MARK));
+    let Some((unix, text)) = stamped.and_then(|(stamp, text)| Some((stamp.parse::<i64>().ok()?, text))) else { return line.to_string() };
+    let secs = (unix + i64::from(offset_at(unix))).rem_euclid(86_400);
+    format!("{}{text}", springboard::status::clock_in((secs / 3600) as i32, (secs % 3600 / 60) as i32, h24))
 }
 
 /// A Message-ID for a new message: `<unix.seq@domain>`.
@@ -918,10 +944,21 @@ mod tests {
     }
 
     #[test]
-    fn the_time_of_day_is_read_in_utc() {
-        assert_eq!(time_of_day(0), "00:00:00");
-        assert_eq!(time_of_day(1_000_000_000), "01:46:40");
-        assert_eq!(time_of_day(-1), "23:59:59");
+    fn an_activity_line_tells_its_time_in_the_zone_and_the_clock_style() {
+        // 2026-10-13 00:00:00 UTC, then a morning, noon, an afternoon and midnight of that day
+        let day = 1_791_849_600_i64;
+        let line = |h: i64, m: i64| format!("{}  Checking mail", activity_stamp(day + h * 3600 + m * 60 + 5));
+        let shown = |h24: bool| [line(8, 5), line(12, 0), line(15, 58), line(0, 0)].map(|l| activity_text_in(&l, &|_| 0, h24));
+        assert_eq!(shown(true), ["08:05  Checking mail", "12:00  Checking mail", "15:58  Checking mail", "00:00  Checking mail"]);
+        assert_eq!(shown(false), ["8:05 AM  Checking mail", "12:00 PM  Checking mail", "3:58 PM  Checking mail", "12:00 AM  Checking mail"]);
+        // the zone's offset at that instant moves the clock, also back over midnight
+        assert_eq!(activity_text_in(&line(8, 5), &|_| 7200, true), "10:05  Checking mail");
+        assert_eq!(activity_text_in(&line(0, 0), &|_| -3600, false), "11:00 PM  Checking mail");
+        // a line with no stamp, or with a damaged one, is shown as it is
+        assert_eq!(activity_text_in("line 5", &|_| 0, true), "line 5");
+        assert_eq!(activity_text_in("\u{1f}soon\u{1f}  x", &|_| 0, true), "\u{1f}soon\u{1f}  x");
+        // no shell speaks in a test: 24-hour time, in the zone of the test
+        assert_eq!(activity_text(&line(8, 5)), activity_text_in(&line(8, 5), &zone_offset, true));
     }
 
     #[test]

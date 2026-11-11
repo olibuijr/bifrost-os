@@ -2032,7 +2032,7 @@ impl MailWindow {
 
     /// Adds a line to the activity list, with the time.
     fn note(&mut self, line: String) {
-        self.mail.log(format!("{}  {line}", message::time_of_day(now_unix())));
+        self.mail.log(format!("{}  {line}", message::activity_stamp(now_unix())));
     }
 
     /// Mailbox > Check Connection: signs in to both servers of the shown account and says what each answered.
