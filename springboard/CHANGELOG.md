@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.10.52 — 2026-11-11
+
+What the test of 0.10.51 found.
+
+- Search keeps its size on every screen: the card is 520 pt wide and is no longer scaled up on a wide display.
+- Search: one row for one file. A document the Files app indexed whose file is gone is no longer listed, and is taken out of the index. Folders under the home folder are found by name. "Show name in Folder" is listed also when the only file found is the Top Hit. An app is found by a run of its name or by its words' initials, no longer by scattered letters.
+- Apps are told the clock style and the time zone by the shell, at start and when either changes (`bifrost_app::time_zone::uses_24_hour_clock`, `time_text`). Before, an app could not read the 24-Hour Time switch from inside its sandbox, and every app told the time in the default zone.
+- Files 1.34.20: dates follow 24-Hour Time and the time zone, and are written one way in the list, the previews and Get Info. Keys, Edit commands and the File menu act on the window in front (in a second window Copy and Paste did nothing). A paste into the folder the item came from makes a copy without asking; the question about an existing name dims the folder behind it. A drag can end in another Files window; the drag picture is the size of the icon; a drop on the desktop moves the file when it stays on the same disk (Option copies). A disk image opens in the window that asked. Files needs this shell.
+- Removable volumes are mounted about two seconds after the plug: the shell watches `/dev` for disks instead of waiting for its next wake-up, which on an idle desktop was up to ten seconds. A disk in a format the computer cannot read says so in plain words. `disks.mount_volume` mounts a volume that is attached and not mounted, for apps with the storage permission, never while locked.
+- An app that is asked to quit in the middle of a save finishes it: its requests to the document broker were read and dropped once it had been asked to leave (Cmd+Q, logout, restart).
+- Viewer 0.11.25: a save under way holds the quit, takes no edits and keeps the zoom; a turned page's thumbnail stays in its tile; buttons a narrow toolbar has no room for sit behind the overflow button; a picture from the clipboard never writes over a working copy of the same name.
+- Lab tools: `lab-push.sh` no longer holds its caller's output open, and gives lab media the repository's public key.
+
 ## 0.10.51 — 2026-11-11
 
 What the test of 0.10.50 found, and what the first tests with a USB stick and a finger found.

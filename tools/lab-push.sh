@@ -57,6 +57,10 @@ M
 python3 tools/stage-assets.py --replace springboard/assets "$SYNC/assets"
 (cd "$SYNC/assets" && find . -type f -printf '%P\n' | grep -v '[][ ]') |
   while read -r f; do echo "assets/$f /usr/share/springboard/assets/$f 644"; done >> "$SYNC/manifest"
+# the repository's public key: a lab medium built before the update repository was signed has none, and the installer
+# refuses to install without it
+cp packaging/arch/keys/bifrost-repo.gpg "$SYNC/bifrost-repo.gpg"
+echo "bifrost-repo.gpg /usr/share/bifrost/keys/bifrost-repo.gpg 644" >> "$SYNC/manifest"
 ss -ltn | grep -q ":8078 " || (cd "$SYNC" && exec setsid python3 -m http.server 8078 --bind 10.99.0.1) >/dev/null 2>&1 </dev/null &
 # the redirect is on the whole subshell: a waiting shell that kept this script's stdout held a caller's pipe open for as
 # long as the server ran (vm-cycle.py then sat in its 20 minute timeout)

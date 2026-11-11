@@ -38,7 +38,6 @@ const MAX_PENDING: usize = 256;
 extern "C" {
     fn inotify_init1(flags: c_int) -> c_int;
     fn inotify_add_watch(fd: c_int, path: *const std::ffi::c_char, mask: u32) -> c_int;
-    fn read(fd: c_int, buf: *mut u8, len: usize) -> isize;
     fn close(fd: c_int) -> c_int;
 }
 
@@ -124,7 +123,7 @@ pub fn pump() {
         let mut buf = [0u8; 4096];
         loop {
             // SAFETY: `buf` is valid for its length; the descriptor does not block
-            let n = unsafe { read(w.fd, buf.as_mut_ptr(), buf.len()) };
+            let n = unsafe { crate::bare::sys::read(w.fd, buf.as_mut_ptr().cast(), buf.len()) };
             if n <= 0 {
                 break;
             }
