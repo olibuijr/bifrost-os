@@ -1231,19 +1231,6 @@ pub fn index_folder(app_id: &str, domain: &str, root: &Path) -> usize {
     n
 }
 
-/// Scans `root` for at most `max` files ([`scan_folder_limited`]) and replaces the items of `app_id` in `domain` with what
-/// it finds, in one step, so a file that was deleted or renamed leaves the index. The scan runs before the index lock is
-/// taken. Returns the number of files indexed.
-pub fn reindex_folder(app_id: &str, domain: &str, root: &Path, max: usize) -> usize {
-    let items = scan_folder_limited(domain, root, max);
-    let n = items.len();
-    with(|ix| {
-        ix.delete(app_id, DELETE_DOMAINS, &[domain.to_string()]);
-        ix.index(app_id, items);
-    });
-    n
-}
-
 /// `indexSearchableItems` on the default index of `app_id`, with each item's expiry set once it is stored.
 pub fn index_items(app_id: &str, items: Vec<(SearchableItem, Option<u64>)>) {
     with(|ix| {
