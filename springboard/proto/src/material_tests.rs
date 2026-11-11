@@ -156,3 +156,39 @@ fn try_send_does_not_block_and_oversized_packets_are_errors() {
     c.send(&vec![1u8; 20 * 1024], &[]).unwrap();
     assert!(d.recv(true).is_err(), "a 20 KiB packet is a protocol error, not a cut Packet");
 }
+
+/// An extra window's chrome: its press-taking rectangles and its materials, as the main window's `Controls` and
+/// `Materials` carry them.
+#[test]
+fn window_chrome_round_trips_and_refuses_bad_values() {
+    let sidebar = Material::new(MaterialKind::Sidebar, UiRect { x: 0., y: 0., w: 200., h: 600. }, 0.);
+    let mut popover = Material::new(MaterialKind::Popover, UiRect { x: 10., y: 20., w: 30., h: 40. }, 6.);
+    popover.corners = Some(Corners { tl: 1., tr: 2., br: 3., bl: 4. });
+    for m in [
+        ToShell::WindowChrome { id: 3, press: vec![UiRect { x: 212., y: 12., w: 28., h: 28. }, UiRect { x: 700., y: 12., w: 180., h: 28. }], materials: vec![sidebar, popover] },
+        ToShell::WindowChrome { id: 1, press: vec![], materials: vec![] },
+        ToShell::WindowChrome { id: u32::MAX, press: vec![UiRect { x: 0., y: 0., w: 0., h: 0. }], materials: vec![] },
+    ] {
+        assert_eq!(ToShell::decode(&m.encode()), Ok(m));
+    }
+    // the tag, then the id
+    let bytes = ToShell::WindowChrome { id: 7, press: vec![], materials: vec![] }.encode();
+    assert_eq!(&bytes[..4], &0x25au32.to_le_bytes());
+    assert_eq!(bytes.len(), 16, "tag, id and two empty counts");
+    // more rectangles than a packet carries are cut by the sender and refused from a peer that claims them
+    let many = ToShell::WindowChrome { id: 1, press: vec![UiRect { x: 1., y: 1., w: 1., h: 1. }; MAX_WINDOW_PRESS + 5], materials: vec![] };
+    match ToShell::decode(&many.encode()) {
+        Ok(ToShell::WindowChrome { press, .. }) => assert_eq!(press.len(), MAX_WINDOW_PRESS),
+        other => panic!("{other:?}"),
+    }
+    let mut claims = bytes.clone();
+    claims[8..12].copy_from_slice(&(MAX_WINDOW_PRESS as u32 + 1).to_le_bytes());
+    assert!(ToShell::decode(&claims).is_err());
+    // a rectangle that is not finite or has a negative size
+    for bad in [UiRect { x: f32::NAN, y: 0., w: 1., h: 1. }, UiRect { x: 0., y: 0., w: -1., h: 1. }] {
+        assert!(ToShell::decode(&ToShell::WindowChrome { id: 1, press: vec![bad], materials: vec![] }.encode()).is_err());
+    }
+    // a packet cut short
+    let whole = ToShell::WindowChrome { id: 3, press: vec![UiRect { x: 1., y: 2., w: 3., h: 4. }], materials: vec![sidebar] }.encode();
+    assert!(ToShell::decode(&whole[..whole.len() - 3]).is_err());
+}

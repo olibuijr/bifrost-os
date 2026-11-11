@@ -340,6 +340,17 @@ pub(crate) fn trash_now(sources: &[PathBuf], bin: &Path, cancel: &AtomicBool, tx
     report
 }
 
+/// The undo step of a job that made copies (`done`: where each one is): a paste or a copying drop, files another app
+/// dropped, or Duplicate. None for the other jobs and for one that copied nothing.
+pub(crate) fn copy_undo(kind: JobKind, done: &[PathBuf]) -> Option<Undo> {
+    let duplicate = match kind {
+        JobKind::Transfer(Op::Copy) | JobKind::Receive => false,
+        JobKind::Duplicate => true,
+        _ => return None,
+    };
+    (!done.is_empty()).then(|| Undo::Copy { made: done.to_vec(), duplicate })
+}
+
 impl<T> Feed<T> {
     pub(crate) fn send(&self, value: T) -> Result<(), mpsc::SendError<T>> {
         let sent = self.0.send(value);
@@ -441,6 +452,11 @@ impl Files {
                 JobKind::Trash => self.push_undo(Undo::Trash(report.moved.clone())),
                 _ => {}
             }
+        }
+        // a paste, a copying drop, a drop from another app and Duplicate made copies: Undo takes them away again.
+        // (None of them left an undo step, so Edit > Undo stayed grey after a paste.)
+        if let Some(step) = copy_undo(work.kind, &report.done) {
+            self.push_undo(step);
         }
         // follow the items that moved, were copied, or went to Recently Deleted
         let done = report.done.clone();

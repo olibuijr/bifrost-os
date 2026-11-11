@@ -107,6 +107,9 @@ pub(crate) struct DragOut {
     pub(crate) sibling: Option<bool>,
     /// the folder a drop was last weighed for, and whether the dragged items are on its volume (`same_volume`)
     volume: Option<(PathBuf, bool)>,
+    /// what the shell's mask said of this window's own drag at its last `Dest` event: Option narrowed it to the copy
+    /// (`own_drop_copies`), Command to the move (`must_move`). None while the window follows the pointer itself.
+    own_mask: Option<(bool, bool)>,
 }
 
 impl DragOut {
@@ -210,6 +213,13 @@ impl Files {
         self.dnd.volume = None;
         self.fx.drag_paths = paths;
     }
+    /// Whether dropping this window's own drag on `target` copies the items: Option asks for a copy, and a folder on
+    /// another volume takes one unless Command asks for the move. The same rule as the drop itself (`start_drop`), so
+    /// the status line names what the release will do.
+    pub(crate) fn own_drop_would_copy(&mut self, target: &Path) -> bool {
+        let (copy, must_move) = self.dnd.own_mask.unwrap_or((self.fx.copy_drag, false));
+        drop_op(copy || self.fx.copy_drag, must_move, self.drag_same_volume(target)) == Op::Copy
+    }
     /// Whether the dragged items are on the volume of the folder `dest` (kept for the folder last asked about: a
     /// hover asks at every pointer step).
     fn drag_same_volume(&mut self, dest: &Path) -> bool {
@@ -266,6 +276,8 @@ impl Files {
         self.dragging = true;
         self.fx.drag_paths = self.selected_paths();
         self.fx.copy_drag = false;
+        self.dnd.own_mask = None;
+        self.dnd.volume = None;
         self.revision += 1;
         self.drag_out_ask(ctx);
         true
@@ -394,6 +406,9 @@ impl Files {
         let copy_key = own_drop_copies(self.fx.copy_drag, allowed);
         match phase {
             DragPhase::Entered | DragPhase::Updated => {
+                if own {
+                    self.dnd.own_mask = Some((copy_key, must_move(allowed)));
+                }
                 if !own {
                     self.dragging = true;
                     self.dnd.foreign = Some(session);
@@ -668,6 +683,35 @@ mod tests {
         if Path::new("/proc/self").exists() {
             assert!(!same_volume(&[root.join("f")], Path::new("/proc")));
         }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The status line said "Move" over a folder on another volume, where the drop copies.
+    #[test]
+    fn the_status_line_names_the_verb_the_drop_performs() {
+        let root = std::env::temp_dir().join(format!("files-verb-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("to")).unwrap();
+        std::fs::write(root.join("f"), "x").unwrap();
+        let mut files = crate::tests::fixture(vec![]);
+        files.dragging = true;
+        files.fx.drag_paths = vec![root.join("f")];
+        assert!(!files.own_drop_would_copy(&root.join("to")), "the same volume: a move");
+        files.fx.copy_drag = true;
+        assert!(files.own_drop_would_copy(&root.join("to")), "Option copies");
+        files.fx.copy_drag = false;
+        if Path::new("/proc/self").exists() {
+            assert!(files.own_drop_would_copy(Path::new("/proc")), "another volume: the drop copies, and the line says so");
+            // Command held while the shell owns the pointer: the items move across volumes
+            files.dnd.own_mask = Some((false, true));
+            assert!(!files.own_drop_would_copy(Path::new("/proc")));
+            // Option held there: a copy on the same volume too
+            files.dnd.own_mask = Some((true, false));
+            assert!(files.own_drop_would_copy(&root.join("to")));
+        }
+        assert_eq!(crate::statusbar::drag_status(true, 1, Path::new("/media/usb/Backup")), "Copy 1 item to Backup");
+        assert_eq!(crate::statusbar::drag_status(false, 3, Path::new("/home/a/Documents")), "Move 3 items to Documents");
+        assert_eq!(crate::statusbar::drag_status(true, 2, Path::new("/")), "Copy 2 items to Computer");
         let _ = std::fs::remove_dir_all(&root);
     }
 

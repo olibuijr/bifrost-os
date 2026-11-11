@@ -30,9 +30,35 @@ impl ExtraWindow {
         if self.drawn != Some((s.w, s.h)) {
             self.files.painted_state.clear();
             self.drawn = Some((s.w, s.h));
+            // the window lays itself out for the surface it is given: the desk sizes the body after the window opens and
+            // on every resize, and a layout kept at the size asked for left the toolbar, the scroll range and the click
+            // targets where a window of another size has them
+            let (w, h) = surface_pt(s.w, s.h, ctx.ui.s);
+            if (w, h) != (self.files.w, self.files.h) {
+                self.files.w = w;
+                self.files.h = h;
+                self.files.update_controls();
+            }
         }
         self.files.draw(ctx, s, t)
     }
+}
+
+/// What New Window asks the shell for. The window is the main window again: its content runs under the title bar
+/// (the manifest's `window = "full-size"` for the main one), so the traffic lights sit over the sidebar and the
+/// toolbar row is the title row, with no second title bar above it. That needs a shell that takes the window's toolbar
+/// controls and blurs behind its sidebar (`chrome`, `shell_takes_window_chrome`); on any other shell the window keeps
+/// the shell's title bar, where every press in the toolbar still reaches the app. Either way it is cascaded from the
+/// app's windows instead of covering the one it was opened from.
+pub(crate) fn new_window_spec(w: f32, h: f32, chrome: bool) -> WindowSpec {
+    let spec = WindowSpec::new("Files", w, h).cascaded();
+    if chrome { spec.full_size_content() } else { spec }
+}
+
+/// A surface's size in points at `scale` px per point, as `App::configure` gives the main window its size.
+pub(crate) fn surface_pt(w: usize, h: usize, scale: f32) -> (f32, f32) {
+    let k = scale.max(0.01);
+    (w as f32 / k, h as f32 / k)
 }
 
 /// Whether ⌘W in an extra window closes the window: always a Get Info window, and a browser window that has no
@@ -45,7 +71,7 @@ impl Files {
     /// New Window (⌘N): opens a window at the home folder. Returns false when the shell refuses the window.
     pub(crate) fn new_window(&mut self, ctx: &Ctx) -> bool {
         let (w, h) = NEW_WINDOW_PT;
-        let Ok(id) = ctx.open_window(WindowSpec::new("Files", w, h)) else { return false };
+        let Ok(id) = ctx.open_window(new_window_spec(w, h, bifrost_app::app_windows::shell_takes_window_chrome())) else { return false };
         let mut files = Box::new(Files::new());
         files.data_dir = Some(ctx.data_dir.clone());
         // its folder is watched by the main window's stream, and the main window's `tick` runs its share
@@ -67,6 +93,15 @@ impl Files {
             return self;
         }
         self.windows.iter().find(|e| e.id == window).map_or(self, |e| &*e.files)
+    }
+
+    /// The controls of the New Window window `window`, in its points, for the shell's drag band (`App::window_controls`):
+    /// the toolbar buttons and the search field take their presses. None for a Get Info window or a window that is gone.
+    pub(crate) fn window_nodes(&self, window: WindowId) -> Vec<Node> {
+        match self.windows.iter().find(|e| e.id == window) {
+            Some(e) if !e.files.info_window => e.files.controls.nodes().to_vec(),
+            _ => Vec::new(),
+        }
     }
 
     /// The windows the extra window at `at` opened (Get Info, New Window) join the main window's list: they are
@@ -101,6 +136,23 @@ impl Files {
         for (i, e) in self.windows.iter_mut().enumerate() {
             if Some(i) != from && !e.files.info_window {
                 e.files.clip = clip.clone();
+            }
+        }
+    }
+
+    /// Shares what any window copied or cut since the last look, on whatever way it did (a key, a menu item, the
+    /// context menu, a control call): the windows are compared by their copy counts, so no route has to remember to
+    /// share. The newest copy wins when two windows copied since.
+    pub(crate) fn share_clips(&mut self) {
+        if self.fx.clip_rev != self.fx.clip_shared {
+            self.fx.clip_shared = self.fx.clip_rev;
+            self.share_clip(None);
+        }
+        for i in 0..self.windows.len() {
+            let fx = &mut self.windows[i].files.fx;
+            if fx.clip_rev != fx.clip_shared {
+                fx.clip_shared = fx.clip_rev;
+                self.share_clip(Some(i));
             }
         }
     }
@@ -188,6 +240,66 @@ mod tests {
         assert_eq!(main.windows[1].files.clip, copied);
         main.share_clip(Some(9));
         assert_eq!(main.clip, copied, "an unknown window changes nothing");
+    }
+
+    #[test]
+    fn a_new_window_is_a_full_size_window_where_the_shell_gives_it_the_main_windows_chrome() {
+        let spec = new_window_spec(900.0, 600.0, true);
+        assert!(spec.full_size && spec.cascade);
+        assert_eq!((spec.title.as_str(), spec.width, spec.height), ("Files", 900.0, 600.0));
+        // a shell that does not: the shell's title bar stays, and the toolbar keeps its presses
+        let spec = new_window_spec(900.0, 600.0, false);
+        assert!(!spec.full_size && spec.cascade);
+    }
+
+    #[test]
+    fn the_toolbar_controls_of_an_extra_window_are_its_own() {
+        let mut main = two_windows();
+        main.windows[0].files.w = 700.;
+        main.windows[0].files.update_controls();
+        main.update_controls();
+        let own: Vec<_> = main.windows[0].files.controls.nodes().iter().map(|n| (n.id, n.bounds)).collect();
+        let told: Vec<_> = main.window_nodes(WindowId(4)).iter().map(|n| (n.id, n.bounds)).collect();
+        assert!(!told.is_empty(), "the toolbar buttons");
+        assert_eq!(told, own);
+        assert!(main.window_nodes(WindowId(9)).is_empty(), "a window that is gone has none");
+        // a Get Info window keeps the shell's title bar: it names no controls
+        main.windows[0].files.info_window = true;
+        assert!(main.window_nodes(WindowId(4)).is_empty());
+    }
+
+    #[test]
+    fn a_window_is_laid_out_for_the_surface_it_draws_into() {
+        assert_eq!(surface_pt(1200, 800, 1.25), (960.0, 640.0));
+        assert_eq!(surface_pt(900, 600, 1.0), (900.0, 600.0));
+        let (w, h) = surface_pt(100, 50, 0.0);
+        assert!(w.is_finite() && h.is_finite(), "a zero scale divides by nothing");
+    }
+
+    /// A copy that did not come through a window's own input (the control socket, a menu item) stayed in the window
+    /// that made it until the next keyboard copy.
+    #[test]
+    fn a_copy_made_on_any_way_reaches_every_window() {
+        let mut main = two_windows();
+        // the main window copies outside `event` (what a control call or a menu item does)
+        main.selection = vec![0];
+        main.copy_selected(false);
+        assert_eq!(main.windows[0].files.clip, None, "not shared yet");
+        main.share_clips();
+        let copied = Some((vec![PathBuf::from("/fixture/a")], false));
+        assert_eq!(main.windows[0].files.clip, copied);
+        // nothing new: a second look changes nothing, and a window's own later state is not overwritten
+        main.windows[0].files.clip = None;
+        main.share_clips();
+        assert_eq!(main.windows[0].files.clip, None);
+        // an extra window cuts: the main window and the others take it
+        main.windows.push(ExtraWindow::new(WindowId(5), Box::new(fixture(vec![]))));
+        main.windows[0].files.selection = vec![1];
+        main.windows[0].files.copy_selected(true);
+        main.share_clips();
+        let cut = Some((vec![PathBuf::from("/fixture/b")], true));
+        assert_eq!(main.clip, cut);
+        assert_eq!(main.windows[1].files.clip, cut);
     }
 
     #[test]
