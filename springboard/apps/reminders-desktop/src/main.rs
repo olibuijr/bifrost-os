@@ -572,7 +572,7 @@ impl App for RemindersApp {
                 }
                 true
             }
-            // a right click on a list in the sidebar opens its menu; the choice comes back as a ContextAction
+            // a right click on a reminder or on a list in the sidebar opens its menu; the choice comes back as a ContextAction
             Input::Context { x, y } => match a.context_menu_at(&ctx.ui, x, y) {
                 Some(items) => {
                     ctx.context_menu(x, y, items);

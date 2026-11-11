@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.13
+
+- A right click on a process row selects it and opens its menu: Inspect Process, Copy Process Details, Quit Process and Force Quit Process, enabled as in the Process menu.
+- The first frame no longer names every other account's process "nobody": a process whose owner the system has not told yet has an empty User until the answer is in, and the answer names the list on screen at once instead of waiting for the next reading.
+- % CPU shows a dash for a process read once (every process on the first frame); a share needs two readings. It read 0.0 before.
+
 ## 0.10.12
 
 - The sidebar is wide enough for its labels: "System Processes", "Inactive Processes", "Windowed Processes", "Selected Processes" and "Applications in the Last 8 Hours" are no longer cut.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.17
+
+- A sample wider than the preview wraps onto more lines; a large sample was cut with an ellipsis.
+- Turn On/Off, Remove Font, Install and Cancel are standard toolbar buttons, and Sample / Repertoire / Info is a standard segmented control; they were flat rectangles.
+
 ## 0.6.16
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

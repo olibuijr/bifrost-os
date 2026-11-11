@@ -215,7 +215,7 @@ pub fn detail_rows(segment: usize, data: &Inspection, proc: Option<&ProcSample>)
     }
     if let Some(p) = proc {
         rows.push(("User", p.user.clone()));
-        rows.push(("CPU", model::percent(p.cpu)));
+        rows.push(("CPU", model::cpu_text(p, true)));
         rows.push(("CPU Time", cpu_time(p.cpu_ticks)));
         rows.push(("Threads", p.threads.to_string()));
     }

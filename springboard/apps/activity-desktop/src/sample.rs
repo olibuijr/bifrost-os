@@ -126,6 +126,9 @@ pub struct ProcSample {
     pub uid: u32,
     /// Share of one core over the last interval, in percent (can exceed 100 with threads).
     pub cpu: f32,
+    /// No share can be told yet: this is the first reading of the process, and a share needs two. `cpu` is zero then,
+    /// and the table shows a dash for it (`model::cpu_text`).
+    pub cpu_pending: bool,
     /// Resident memory in bytes.
     pub rss: u64,
     pub threads: u32,
@@ -639,6 +642,32 @@ fn owner_of(pid: u32, uid: u32, users: &HashMap<u32, String>, owners: &Owners) -
     (uid, users.get(&uid).cloned().unwrap_or_else(|| uid.to_string()))
 }
 
+/// The owner a fresh reading gives process `pid`. A process the namespace could not map, and the shell has not
+/// answered for yet, has no name: the overflow account's ("nobody") is not its owner, and every other user's process
+/// read as that on the first frame. `name_owners` names it when the shell's answer is in.
+fn owner_at_reading(pid: u32, uid: u32, users: &HashMap<u32, String>, owners: &Owners) -> (u32, String) {
+    if uid == OVERFLOW_UID && !owners.contains_key(&pid) {
+        return (uid, String::new());
+    }
+    owner_of(pid, uid, users, owners)
+}
+
+/// Names the processes of a reading already taken once the shell has answered, so the list does not wait for the
+/// next reading: each one still unmapped takes the shell's owner, or the account its uid has here when the shell
+/// has none for it. True when a row changed.
+fn name_owners(procs: &mut [ProcSample], users: &HashMap<u32, String>, owners: &Owners) -> bool {
+    let mut changed = false;
+    for p in procs.iter_mut().filter(|p| p.uid == OVERFLOW_UID) {
+        let (uid, user) = owner_of(p.pid, p.uid, users, owners);
+        if (uid, &user) != (p.uid, &p.user) {
+            p.uid = uid;
+            p.user = user;
+            changed = true;
+        }
+    }
+    changed
+}
+
 fn read_file(path: &str) -> Option<String> {
     fs::read_to_string(path).ok()
 }
@@ -733,9 +762,11 @@ impl Sampler {
         }
     }
 
-    /// Takes the owners the shell answered; the next sample names the processes with them.
-    pub fn set_owners(&mut self, owners: Owners) {
+    /// Takes the owners the shell answered and names the processes of the reading on screen (`procs`) with them; the
+    /// next sample uses them too. True when a row of `procs` changed.
+    pub fn set_owners(&mut self, owners: Owners, procs: &mut [ProcSample]) -> bool {
         self.owners = owners;
+        name_owners(procs, &self.users, &self.owners)
     }
 
     /// Reads the machine now. `now_ms` is a monotonic time in milliseconds; the first sample has no rates.
@@ -882,7 +913,7 @@ impl Sampler {
                     _ => 0.0,
                 };
                 seen.insert(pid, Prev { ticks: stat.ticks, read, written, gpu_ns, voluntary });
-                let (uid, user) = owner_of(pid, uid, &self.users, &self.owners);
+                let (uid, user) = owner_at_reading(pid, uid, &self.users, &self.owners);
                 procs.push(ProcSample {
                     pid,
                     ppid: stat.ppid,
@@ -890,6 +921,7 @@ impl Sampler {
                     user,
                     uid,
                     cpu,
+                    cpu_pending: before.is_none() || dt.is_none(),
                     rss,
                     threads: stat.threads,
                     read_bps,
@@ -1179,5 +1211,31 @@ mod tests {
         assert_eq!(owner_of(1, OVERFLOW_UID, &users, &owners), (0, "root".to_string()));
         assert_eq!(owner_of(99, OVERFLOW_UID, &users, &owners), (OVERFLOW_UID, "65534".to_string()), "no answer: unchanged");
         assert_eq!(owner_of(5, 1500, &users, &owners), (1500, "app".to_string()), "a mapped uid is trusted");
+    }
+
+    /// E2E 9: the first frame named every other user's process "nobody"; the right names came a reading later.
+    #[test]
+    fn an_unmapped_owner_has_no_name_until_the_shell_answers() {
+        use bifrost_core::json::parse;
+        let users = parse_passwd("nobody:x:65534:65534::/:/bin/false\nme:x:1000:1000::/home/me:/bin/sh\n");
+        // the first reading: the shell has not answered
+        let none = Owners::new();
+        assert_eq!(owner_at_reading(1, OVERFLOW_UID, &users, &none), (OVERFLOW_UID, String::new()), "not \"nobody\"");
+        assert_eq!(owner_at_reading(300, 1000, &users, &none), (1000, "me".to_string()), "a mapped uid has its name at once");
+        let mut procs = vec![
+            ProcSample { pid: 1, uid: OVERFLOW_UID, ..Default::default() },
+            ProcSample { pid: 300, uid: 1000, user: "me".into(), ..Default::default() },
+            ProcSample { pid: 77, uid: OVERFLOW_UID, ..Default::default() },
+        ];
+        // the answer names the reading already on screen
+        let owners = parse_owners(&parse(r#"{"users":[{"uid":0,"user":"root","pids":[1]}]}"#).unwrap());
+        assert!(name_owners(&mut procs, &users, &owners));
+        assert_eq!((procs[0].uid, procs[0].user.as_str()), (0, "root"));
+        assert_eq!((procs[1].uid, procs[1].user.as_str()), (1000, "me"));
+        assert_eq!((procs[2].uid, procs[2].user.as_str()), (OVERFLOW_UID, "nobody"), "a process the shell does not know keeps the account its uid has here");
+        assert!(!name_owners(&mut procs, &users, &owners), "nothing left to name");
+        // later readings name a known process at once
+        assert_eq!(owner_at_reading(1, OVERFLOW_UID, &users, &owners), (0, "root".to_string()));
+        assert_eq!(owner_at_reading(78, OVERFLOW_UID, &users, &owners), (OVERFLOW_UID, String::new()), "a new process waits for the next answer");
     }
 }

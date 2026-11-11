@@ -9,6 +9,7 @@ use crate::swatch;
 use bifrost_app::attributed::FontFeatures;
 use bifrost_app::controls::Rect;
 use bifrost_app::controls::prefs_layout::m;
+use bifrost_app::glyphs;
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::rgba;
 use bifrost_app::kit::ui::{
@@ -174,6 +175,31 @@ pub fn first_line(ui: &Ui, note: &Note, m: &BodyMetrics, lines: &[Line]) -> usiz
     layout::first_visible(lines.len(), layout::line_of(lines, note.caret), visible_rows(ui, note, m))
 }
 
+/// The height (points) at which the note shows all of its text at its width and text size.
+pub fn fitted_height(ui: &Ui, note: &Note) -> f32 {
+    let m = body_metrics(ui, note);
+    let lines = body_lines(ui, note, &m).len().max(1);
+    // one spare point, so rounding to pixels never costs the last line
+    TITLE_H + 2.0 * PAD_PT + (lines as f32 * m.step / ui.pt(1.0)).ceil() + 1.0
+}
+
+/// The symbol of the collapse control: a chevron pointing right on a collapsed note and down on an open one.
+fn disclosure_symbol(collapsed: bool) -> &'static str {
+    if collapsed { "chevron.right" } else { "chevron.down" }
+}
+
+/// The box of the collapse control's chevron (points): body-text sized, centred in the control's part of the title bar.
+fn disclosure_rect(note: &Note) -> Rect {
+    Rect { x: note.x + (DISCLOSURE_PT - MAC_BODY_PT) / 2.0, y: note.y + (TITLE_H - MAC_BODY_PT) / 2.0, w: MAC_BODY_PT, h: MAC_BODY_PT }
+}
+
+/// The box of the chevron that says the body has more text above (`up`) or below it (points): centred in the
+/// padding between the text and the title bar, or the note's bottom edge.
+fn more_rect(note: &Note, up: bool) -> Rect {
+    let y = if up { note.y + TITLE_H } else { note.y + note.h - PAD_PT };
+    Rect { x: note.x + (note.w - PAD_PT) / 2.0, y, w: PAD_PT, h: PAD_PT }
+}
+
 /// The wrapped lines of the body.
 pub fn body_lines(ui: &Ui, note: &Note, m: &BodyMetrics) -> Vec<Line> {
     layout::lines(&note.text, m.max, &|a, b| measure_range(ui, note, m, a, b))
@@ -225,10 +251,8 @@ fn draw_note(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool, marks: &[M
     c.push_clip(rect, radius);
     c.fill_rect(RectF::new(x, y, w, ui.pt(TITLE_H)), title_shade());
 
-    // disclosure: collapsed notes show a right-pointing mark, expanded ones a downward one
-    let disclosure = if note.collapsed { ">" } else { "v" };
-    let img = ui.text(disclosure, MAC_SUBHEAD_PT, Weight::Bold, ink_on(note, Ink::Black));
-    widgets::blit(c, &img, (x + ui.pt(DISCLOSURE_PT / 2.0) - img.w as f32 / 2.0) as i32, (y + (ui.pt(TITLE_H) - img.h as f32) / 2.0) as i32);
+    // disclosure: a drawn chevron, not a letter (E2E 9: ">" and "v" read as text in the title)
+    glyphs::glyph(c, ui, disclosure_symbol(note.collapsed), disclosure_rect(note), ink_on(note, Ink::Black));
 
     let title_px = ui.pt(note.w - DISCLOSURE_PT - PAD_PT);
     let title = ui.fit(&note.title(), MAC_SUBHEAD_PT, title_px);
@@ -364,12 +388,10 @@ fn draw_body(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool, marks: &[M
     }
     // a cue at each edge that has more text beyond it, so clipped text never looks like the whole note
     if first > 0 {
-        let img = ui.text("^", MAC_FOOTNOTE_PT, Weight::Bold, LABEL_2.now());
-        widgets::blit(c, &img, (x + ui.pt(note.w) / 2.0 - img.w as f32 / 2.0) as i32, (y + ui.pt(TITLE_H)) as i32);
+        glyphs::glyph(c, ui, "chevron.up", more_rect(note, true), LABEL_2.now());
     }
     if first + rows < lines.len() {
-        let img = ui.text("v", MAC_FOOTNOTE_PT, Weight::Bold, LABEL_2.now());
-        widgets::blit(c, &img, (x + ui.pt(note.w) / 2.0 - img.w as f32 / 2.0) as i32, (y + ui.pt(note.h - PAD_PT) - img.h as f32) as i32);
+        glyphs::glyph(c, ui, "chevron.down", more_rect(note, false), LABEL_2.now());
     }
 }
 
@@ -512,6 +534,63 @@ mod tests {
             let (n, f, a) = ((note >> shift) & 255, (fill >> shift) & 255, fill >> 24);
             let want = f + (n * (255 - a) + 127) / 255;
             assert!(((p >> shift) & 255).abs_diff(want) <= 1, "channel {shift}: {p:#010x}");
+        }
+    }
+
+    fn test_ui(scale: f32) -> Ui {
+        let assets = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets");
+        let data: &'static [u8] = Box::leak(std::fs::read(format!("{assets}/SFUI.ttf")).unwrap().into_boxed_slice());
+        Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), scale)
+    }
+
+    /// E2E 9: the collapse control and the more-text cues were the letters ">", "v" and "^".
+    #[test]
+    fn the_collapse_control_and_the_more_text_cues_are_drawn_symbols() {
+        for name in [disclosure_symbol(true), disclosure_symbol(false), "chevron.up", "chevron.down"] {
+            assert!(glyphs::has(name), "{name} is a symbol the kit draws");
+        }
+        assert_ne!(disclosure_symbol(true), disclosure_symbol(false));
+        let mut n = Note::new(1, 30.0, 40.0, 0);
+        n.resize(240.0, 200.0);
+        let d = disclosure_rect(&n);
+        assert!(d.x >= n.x && d.x + d.w <= n.x + DISCLOSURE_PT, "inside the control's part of the title bar");
+        assert!(d.y >= n.y && d.y + d.h <= n.y + TITLE_H);
+        assert_eq!(d.x + d.w / 2.0, n.x + DISCLOSURE_PT / 2.0, "centred on the control");
+        let (up, down) = (more_rect(&n, true), more_rect(&n, false));
+        assert_eq!((up.y, up.y + up.h), (n.y + TITLE_H, n.y + TITLE_H + PAD_PT), "above the first line, in the padding");
+        assert_eq!((down.y, down.y + down.h), (n.y + n.h - PAD_PT, n.y + n.h), "below the last line, in the padding");
+        assert_eq!(up.x + up.w / 2.0, n.x + n.w / 2.0);
+
+        // the chevron is drawn in the title bar: ink lands inside its box and nowhere else left of the title
+        let ui = test_ui(1.0);
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.resize(240.0, 200.0);
+        n.translucent = false;
+        let (w, h) = (240usize, 200usize);
+        let mut px = vec![0u32; w * h];
+        draw_note(&mut bifrost_app::kit::Surface { w, h, stride: w, px: &mut px, y0: 0 }, &ui, &n, false, &[]);
+        let d = disclosure_rect(&n);
+        let bar = px[(TITLE_H as usize / 2) * w + DISCLOSURE_PT as usize + 4];
+        let marked = |x0: f32, x1: f32, y0: f32, y1: f32| (y0 as usize..y1 as usize).any(|y| (x0 as usize..x1 as usize).any(|x| px[y * w + x] != bar));
+        assert!(marked(d.x, d.x + d.w, d.y, d.y + d.h), "the chevron is drawn");
+        assert!(!marked(d.x, d.x + d.w, d.y + d.h, TITLE_H - 1.0), "nothing under it");
+    }
+
+    #[test]
+    fn a_fitted_note_shows_all_of_its_text() {
+        let text = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen\n\n".repeat(6);
+        for scale in [1.0, 1.25, 1.5625, 2.0] {
+            let ui = test_ui(scale);
+            let mut n = Note::new(1, 0.0, 0.0, 0);
+            n.set_text(&text);
+            let m = body_metrics(&ui, &n);
+            let lines = body_lines(&ui, &n, &m);
+            assert!(lines.len() > visible_rows(&ui, &n, &m), "the default note is too short for this text");
+            assert!(first_line(&ui, &n, &m, &lines) > 0, "so it scrolls to the caret at the end");
+            n.resize(n.w, fitted_height(&ui, &n));
+            assert!(lines.len() <= visible_rows(&ui, &n, &m), "scale {scale}");
+            assert_eq!(first_line(&ui, &n, &m, &lines), 0, "nothing is above the first line at scale {scale}");
+            assert!(fitted_height(&ui, &n) < TITLE_H + 2.0 * PAD_PT + (lines.len() + 1) as f32 * body_pt(n.style.size) * LINE_HEIGHT + 2.0, "and no taller than a line more");
         }
     }
 

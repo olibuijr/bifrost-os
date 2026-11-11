@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-activity"
-version = "0.10.12"
+version = "0.10.13"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -692,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-fontbook"
-version = "0.6.16"
+version = "0.6.17"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -810,7 +810,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-maps"
-version = "0.7.11"
+version = "0.7.12"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -896,7 +896,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-photobooth"
-version = "0.5.13"
+version = "0.5.14"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -932,7 +932,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-reminders"
-version = "1.20.16"
+version = "1.20.17"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1011,7 +1011,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stickies"
-version = "0.10.11"
+version = "0.10.12"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

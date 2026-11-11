@@ -15,6 +15,7 @@ use bifrost_app::kit::ui::{MAC_BODY_PT, SPACE_S, SPACE_XS};
 use bifrost_app::kit::{Scroller, TextCache, Ui, Weight};
 use bifrost_app::layout::{SIDEBAR_MAX_PT, SIDEBAR_MIN_PT, UNIFIED_BAR_PT};
 use bifrost_app::widgets::{CAPSULE_PT, TOOLBAR_GAP_PT};
+use bifrost_app::proto::ContextItem;
 use bifrost_app::TouchKind;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -657,9 +658,48 @@ impl Monitor {
         std::mem::take(&mut self.owners_poll)
     }
 
-    /// The real owners the shell answered; the next sample names the processes with them.
+    /// The real owners the shell answered (none when it could not say): the reading on screen is named with them at
+    /// once, and so is the next sample.
     pub fn set_owners(&mut self, owners: crate::sample::Owners) {
-        self.sampler.set_owners(owners);
+        let changed = match &mut self.snapshot {
+            Some(snap) => self.sampler.set_owners(owners, &mut snap.procs),
+            None => self.sampler.set_owners(owners, &mut []),
+        };
+        if changed {
+            self.rebuild();
+            self.refresh_inspector();
+        }
+    }
+
+    /// A right click at window pixel (x, y): the process row under it becomes the selection and its menu is returned.
+    /// None anywhere else, and while a sheet, the inspector or a report covers the table.
+    pub fn context_menu_at(&mut self, ui: &Ui, x: f32, y: f32) -> Option<Vec<ContextItem>> {
+        if self.signal_sheet.is_some() || self.quit_sheet.is_some() || self.inspector.is_some() || self.report.is_some() {
+            return None;
+        }
+        let k = ui.pt(1.0);
+        let (x, y) = (x / k, y / k);
+        let g = self.geo(ui);
+        if x < g.content_x || x >= g.content_x + g.content_w {
+            return None;
+        }
+        let pid = self.row_at(ui, y)?;
+        self.selected = Some(pid);
+        self.search_focused = false;
+        Some(self.process_menu())
+    }
+
+    /// The selected process's menu: rows of the Process menu, under the same ids and enabled the same way, so a choice
+    /// runs as the menu bar's item does.
+    fn process_menu(&self) -> Vec<ContextItem> {
+        let can_signal = self.can_quit_selected();
+        vec![
+            ContextItem::new(MENU_INSPECT, "Inspect Process").key("cmd+i"),
+            ContextItem::new(MENU_COPY, "Copy Process Details").key("cmd+c"),
+            ContextItem::separator(),
+            ContextItem::new(MENU_QUIT, "Quit Process").enabled(can_signal),
+            ContextItem::new(MENU_FORCE, "Force Quit Process").enabled(can_signal),
+        ]
     }
 
     /// The pids that own a window now, from the shell's list.
@@ -1585,6 +1625,68 @@ mod tests {
 
     fn proc(pid: u32, ppid: u32, name: &str) -> ProcSample {
         ProcSample { pid, ppid, name: name.into(), ..Default::default() }
+    }
+
+    /// E2E 9: a right click on a process row showed no menu.
+    #[test]
+    fn a_right_click_on_a_process_row_selects_it_and_opens_its_menu() {
+        use bifrost_app::kit::Font;
+        let assets = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets");
+        let data: &'static [u8] = Box::leak(std::fs::read(format!("{assets}/SFUI.ttf")).unwrap().into_boxed_slice());
+        let scale = 1.5625;
+        let ui = Ui::new(Font::parse(data).unwrap(), scale);
+        let mut m = Monitor::new(1200.0 * scale, 780.0 * scale);
+        m.set_filter(Filter::All);
+        let own = m.sampler.own_uid;
+        let mut mine = proc(900_001, 1, "mine");
+        mine.uid = own;
+        let mut other = proc(900_002, 1, "other");
+        other.uid = own.wrapping_add(1);
+        with_rows(&mut m, vec![mine, other]);
+        assert_eq!(m.rows.len(), 2);
+        let g = m.geo(&ui);
+        let k = ui.pt(1.0);
+        let x = (g.content_x + g.content_w / 2.0) * k;
+        let row_y = |i: usize| (g.table_top + (i as f32 + 0.5) * ROW_PT) * k;
+
+        for i in 0..2 {
+            let pid = m.rows[i].pid;
+            let menu = m.context_menu_at(&ui, x, row_y(i)).expect("the row's menu");
+            assert_eq!(m.selected, Some(pid), "the right click selects the row under the pointer");
+            let titles: Vec<&str> = menu.iter().map(|item| item.title()).collect();
+            assert_eq!(titles, ["Inspect Process", "Copy Process Details", "", "Quit Process", "Force Quit Process"]);
+            let ids: Vec<u32> = menu.iter().filter(|item| !item.is_separator()).map(|item| item.id).collect();
+            assert_eq!(ids, [MENU_INSPECT, MENU_COPY, MENU_QUIT, MENU_FORCE], "the menu bar's ids, so a choice runs the same action");
+            let quit = menu.iter().find(|item| item.id == MENU_QUIT).unwrap();
+            assert_eq!(quit.enabled, pid == 900_001, "only a process of this account can be quit");
+            assert!(menu.iter().find(|item| item.id == MENU_INSPECT).unwrap().enabled);
+        }
+
+        // no menu off the rows, in the sidebar, or under a sheet
+        m.selected = None;
+        assert!(m.context_menu_at(&ui, x, row_y(5)).is_none(), "below the last row");
+        assert!(m.context_menu_at(&ui, g.side / 2.0 * k, row_y(0)).is_none(), "the sidebar");
+        assert!(m.context_menu_at(&ui, x, (g.head_y + 1.0) * k).is_none(), "the column headers");
+        assert_eq!(m.selected, None);
+        m.selected = Some(900_001);
+        m.quit_selected();
+        assert!(m.quit_sheet.is_some());
+        assert!(m.context_menu_at(&ui, x, row_y(1)).is_none(), "the sheet takes the click");
+        assert_eq!(m.selected, Some(900_001));
+    }
+
+    /// E2E 9: the answer about the owners waited for the next reading, so the first frames named them wrongly.
+    #[test]
+    fn the_shells_owners_name_the_reading_on_screen() {
+        use crate::sample::{Owners, OVERFLOW_UID};
+        let mut m = Monitor::new(800.0, 600.0);
+        m.set_filter(Filter::All);
+        let mut unmapped = proc(900_003, 1, "daemon");
+        unmapped.uid = OVERFLOW_UID;
+        with_rows(&mut m, vec![unmapped]);
+        assert_eq!(m.rows[0].user, "", "no name before the answer");
+        m.set_owners(Owners::from([(900_003, (0, "root".to_string()))]));
+        assert_eq!((m.rows[0].uid, m.rows[0].user.as_str()), (0, "root"), "named without a new reading");
     }
 
     fn with_rows(m: &mut Monitor, procs: Vec<ProcSample>) {

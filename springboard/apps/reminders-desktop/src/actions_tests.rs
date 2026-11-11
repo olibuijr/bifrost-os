@@ -1601,3 +1601,53 @@ fn the_clear_and_purge_alerts_take_return_cmd_period_cmd_d_and_the_tab_focus_rin
     assert!(app.purge_ask.is_none() && app.kept_count == 0, "Cmd+D presses Delete");
     cleanup(&path);
 }
+
+/// E2E 9: a right click on a reminder showed no menu; only the sidebar's lists and the kept rows had one.
+#[test]
+fn a_right_click_on_a_reminder_selects_it_and_opens_its_menu() {
+    let (mut app, ui, path) = self::app("row-menu");
+    add(&mut app, &ui, "Milk", 0.0);
+    add(&mut app, &ui, "Soap", 10.0);
+    render(&mut app, &ui);
+    let (milk, soap) = (id_of(&app, "Milk"), id_of(&app, "Soap"));
+    app.selected = Some(soap);
+
+    let (x, y, w, h) = row_of(&app, &ui, "Milk");
+    let menu = app.context_menu_at(&ui, x + w / 2.0, y + h / 2.0).expect("the reminder's menu");
+    let rows: Vec<&str> = menu.iter().map(|i| i.title()).collect();
+    assert_eq!(rows, ["Show Details", "", "Mark as Completed", "Flag", "Mark as Urgent", "", "Delete Reminder"]);
+    assert!(menu.iter().all(|i| i.is_separator() || i.enabled));
+    assert_eq!(app.selected_item(), Some(milk), "the right click selects the row under the pointer");
+
+    // each row does what the app already does for the selected reminder
+    assert!(app.context_action(&ui, CTX_ITEM_FLAG, 20.0));
+    assert!(app.data.items.iter().any(|r| r.id == milk && r.flagged));
+    assert!(!app.data.items.iter().any(|r| r.id == soap && r.flagged));
+    assert!(!app.context_action(&ui, CTX_ITEM_FLAG, 21.0), "a choice is taken once");
+
+    let (x, y, w, h) = row_of(&app, &ui, "Milk");
+    let menu = app.context_menu_at(&ui, x + w / 2.0, y + h / 2.0).expect("the menu again");
+    assert!(menu.iter().any(|i| i.title() == "Unflag"), "the rows read the reminder's state");
+    assert!(app.context_action(&ui, CTX_ITEM_URGENT, 30.0));
+    assert!(app.data.items.iter().any(|r| r.id == milk && r.urgent));
+
+    let (x, y, w, h) = row_of(&app, &ui, "Milk");
+    assert!(app.context_menu_at(&ui, x + w / 2.0, y + h / 2.0).is_some());
+    assert!(app.context_action(&ui, CTX_ITEM_DETAILS, 40.0));
+    assert!(app.has_draft(), "Show Details opens the reminder's form");
+    assert!(app.context_menu_at(&ui, x + w / 2.0, y + h / 2.0).is_none(), "no menu under an open form");
+    app.activate(&ui, Target::Cancel, 41.0);
+
+    // a row's ids are not a list's: a list menu's choice after a dismissed row menu still reaches the list
+    render(&mut app, &ui);
+    let (x, y, w, h) = row_of(&app, &ui, "Soap");
+    assert!(app.context_menu_at(&ui, x + w / 2.0, y + h / 2.0).is_some());
+    assert!(!app.context_action(&ui, CTX_PIN, 50.0), "no list menu is open");
+    assert_eq!(titles(&app).len(), 2);
+
+    let (x, y, w, h) = row_of(&app, &ui, "Soap");
+    assert!(app.context_menu_at(&ui, x + w / 2.0, y + h / 2.0).is_some());
+    assert!(app.context_action(&ui, CTX_ITEM_DELETE, 60.0));
+    assert_eq!(titles(&app), ["Milk"], "Delete Reminder deletes the reminder under the pointer");
+    cleanup(&path);
+}
