@@ -879,9 +879,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     // showing its old size (black past it) until it comes to the front (0.10.39)
                     repaint_suspended |= !active;
                 }
-                ToApp::Context{x,y}=>{if let Some(ctx)=&ctx {need_frame|=app.event(ctx,Input::Context{x,y});}},
+                // a secondary click and the chosen item belong to the window the shell names (an older shell names none: the main window)
+                ToApp::Context{x,y,window}=>{if let Some(ctx)=&ctx {need_frame|=crate::app_windows::deliver_context(&mut app,ctx,x,y,window);}},
                 ToApp::MenuAction(id)=>{if let Some(ctx)=&ctx {need_frame|=app.menu_action(ctx,id);}},
-                ToApp::ContextAction(id)=>{if let Some(ctx)=&ctx {need_frame|=app.event(ctx,Input::ContextAction(id));}},
+                ToApp::ContextAction(id,window)=>{if let Some(ctx)=&ctx {need_frame|=crate::app_windows::deliver_context_action(&mut app,ctx,id,window);}},
                 ToApp::QuickAction { kind, user_info } => {
                     if let Some(c) = &ctx {
                         need_frame |= app.event(c, Input::QuickAction(crate::quick_actions::QuickActionPick { kind, user_info }));

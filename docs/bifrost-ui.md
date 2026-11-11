@@ -766,6 +766,14 @@ closed), its point is read in that window's units, and the choice goes back with
 carries window 0. The field is the last one on the wire and optional: an app built before it reads the messages as it
 always did.
 
+SDK side (`app_windows::deliver_context`, `deliver_context_action`): window 0 or no window is `App::event` as before;
+an extra window's click and choice are `App::window_event(ctx, window, Input::Context { x, y })` and
+`Input::ContextAction(id)`, the point in the window's points (an app that hit-tests in px multiplies by `ctx.ui.pt(1.0)`,
+and gives `Ctx::context_menu` a point in points for that window; Files: `windows::window_input_in_px`, `menu_point`).
+A click for a closed window is dropped, a choice for one falls back to `App::event`. Compatibility: an app whose
+`window_event` ignores these inputs for an extra window (the trait default) behaves as before, and an app built with
+this SDK on a shell up to 0.10.52 hears every click and choice in its main window, as it did.
+
 ## Uniform type identifiers (`UniformTypeIdentifiers`, 0.4.69)
 
 `uttype` is now the one table of file types: 58 types with identifier, parents, extensions, MIME type and

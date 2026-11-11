@@ -553,8 +553,10 @@ impl App for Files {
         if files.info_window && !touch {
             return false;
         }
-        // an extra window's touches arrive in window points (`WindowTouch`); the handlers take px, as the main window's
-        let ev = if touch { bifrost_app::app_windows::window_touch_in_px(ev, ctx.ui.pt(1.0)) } else { ev };
+        // an extra window's touches and its secondary click arrive in window points (`WindowTouch`, `Context` with a
+        // window); the handlers take px, as the main window's. The menu a secondary click or a toolbar pull-down opens
+        // is this window's, and its choice (`ContextAction`) comes back here, for this window's selection and folder.
+        let ev = windows::window_input_in_px(ev, ctx.ui.pt(1.0));
         let changed = files.window_input_event(ctx, ev);
         self.share_clips();
         // a window that window opened (Get Info, New Window) is drawn and closed from here, with the others

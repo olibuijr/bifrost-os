@@ -61,6 +61,22 @@ pub(crate) fn surface_pt(w: usize, h: usize, scale: f32) -> (f32, f32) {
     (w as f32 / k, h as f32 / k)
 }
 
+/// An extra window's input as the handlers written for the main window take it: a touch and a secondary click arrive
+/// in the window's points (`ToApp::WindowTouch`, `ToApp::Context` with a window) and are hit-tested in px.
+pub(crate) fn window_input_in_px(ev: Input, px_per_pt: f32) -> Input {
+    match ev {
+        Input::Context { x, y } => Input::Context { x: x * px_per_pt, y: y * px_per_pt },
+        other => bifrost_app::app_windows::window_touch_in_px(other, px_per_pt),
+    }
+}
+
+/// Where a window asks the shell to open a menu (`Ctx::context_menu`) for the point (x, y) of its own points: the
+/// main window names it in surface pixels, an extra window in its points (the shell reads the point in the units of
+/// the window the pointer last used, as it sends that window's touches).
+pub(crate) fn menu_point(extra_window: bool, x: f32, y: f32, px_per_pt: f32) -> (f32, f32) {
+    if extra_window { (x, y) } else { (x * px_per_pt, y * px_per_pt) }
+}
+
 /// Whether ⌘W in an extra window closes the window: always a Get Info window, and a browser window that has no
 /// second tab to close (with tabs, ⌘W closes the open tab) and no name being typed.
 pub(crate) fn closes_window(info_window: bool, tabs: usize, typing: bool) -> bool {
@@ -240,6 +256,88 @@ mod tests {
         assert_eq!(main.windows[1].files.clip, copied);
         main.share_clip(Some(9));
         assert_eq!(main.clip, copied, "an unknown window changes nothing");
+    }
+
+    fn ctx_at(scale: f32) -> Ctx {
+        use bifrost_app::kit::{Font, Ui};
+        let font = Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let cfg = bifrost_app::proto::Configure { w: 1920, h: 1260, scale, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(font, scale), cfg)
+    }
+
+    fn menu_sent(ctx: &Ctx) -> Option<(f32, f32, Vec<ContextItem>)> {
+        ctx.take_sent().into_iter().find_map(|m| match m {
+            bifrost_app::proto::ToShell::ContextMenu { x, y, items } => Some((x, y, items)),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn a_menu_point_is_in_pixels_for_the_main_window_and_in_points_for_an_extra_one() {
+        assert_eq!(menu_point(false, 100.0, 40.0, 2.0), (200.0, 80.0));
+        assert_eq!(menu_point(true, 100.0, 40.0, 2.0), (100.0, 40.0));
+        assert!(matches!(window_input_in_px(Input::Context { x: 100.0, y: 40.0 }, 2.0), Input::Context { x, y } if (x, y) == (200.0, 80.0)));
+        assert!(matches!(window_input_in_px(Input::ContextAction(7), 2.0), Input::ContextAction(7)));
+    }
+
+    /// E2E7: a secondary click in a second Files window did nothing. It selects the item under the pointer in that
+    /// window, opens that window's menu at the pointer, and the choice acts on that window's selection.
+    #[test]
+    fn a_secondary_click_in_a_second_window_opens_its_menu_and_the_choice_acts_there() {
+        let ctx = ctx_at(2.0);
+        let mut main = two_windows();
+        main.windows[0].files.fx.extra_window = true;
+        main.selection = vec![0];
+        // a point on the second item of the second window, in its points
+        let second = &main.windows[0].files;
+        let at = (0..150).flat_map(|i| (0..100).map(move |j| (i as f32 * 6.0, j as f32 * 6.0))).find(|&(x, y)| second.item_at(x, y) == Some(1));
+        let (x, y) = at.expect("the second item is in the window");
+        assert!(main.window_event(&ctx, WindowId(4), Input::Context { x, y }));
+        let (mx, my, items) = menu_sent(&ctx).expect("the window asks for its menu");
+        assert_eq!((mx, my), (x, y), "at the pointer, in the window's points");
+        assert!(items.iter().any(|i| i.id == MENU_COPY), "the item menu");
+        assert_eq!(main.windows[0].files.selection, vec![1], "the item under the pointer, in that window");
+        assert_eq!(main.selection, vec![0], "the main window's selection is its own");
+        // the choice comes back for that window: Copy copies its item, not the main window's
+        main.window_event(&ctx, WindowId(4), Input::ContextAction(MENU_COPY));
+        assert_eq!(main.clip, Some((vec![PathBuf::from("/fixture/b")], false)), "what it copied every window pastes");
+        // a choice for a window that is gone acts nowhere
+        assert!(!main.window_event(&ctx, WindowId(9), Input::ContextAction(MENU_COPY)));
+        // the same click in the main window is in pixels, and so is the point of its menu
+        main.selection.clear();
+        assert!(main.window_event(&ctx, WindowId::MAIN, Input::Context { x: x * 2.0, y: y * 2.0 }));
+        let (mx, my, _) = menu_sent(&ctx).expect("the main window's menu");
+        assert_eq!((mx, my), (x * 2.0, y * 2.0));
+        assert_eq!(main.selection, vec![1]);
+    }
+
+    /// A toolbar pull-down opened in a second window opens under that window's button, and its choice sorts that
+    /// window alone.
+    #[test]
+    fn a_toolbar_menu_of_a_second_window_opens_in_its_points_and_its_choice_acts_there() {
+        let ctx = ctx_at(2.0);
+        let mut main = two_windows();
+        main.windows[0].files.fx.extra_window = true;
+        main.windows[0].files.update_controls();
+        main.update_controls();
+        // where the menu was queued for: under the button, in the window's points
+        let queued = |files: &Files| match files.sys.effects.last() {
+            Some(Effect::PopUp(x, y, _)) => (*x, *y),
+            _ => panic!("the Sort button queues its menu"),
+        };
+        main.windows[0].files.bar_action(BAR_SORT);
+        let want = queued(&main.windows[0].files);
+        main.windows[0].files.flush_services(&ctx);
+        let (x, y, _) = menu_sent(&ctx).expect("the second window's Sort menu");
+        assert_eq!((x, y), want, "an extra window names the point in its points");
+        main.bar_action(BAR_SORT);
+        let want = queued(&main);
+        main.flush_services(&ctx);
+        let (x, y, _) = menu_sent(&ctx).expect("the main window's Sort menu");
+        assert_eq!((x, y), (want.0 * 2.0, want.1 * 2.0), "the main window in pixels");
+        main.window_event(&ctx, WindowId(4), Input::ContextAction(MENU_SORT_SIZE));
+        assert!(matches!(main.windows[0].files.sort, Sort::Size), "the window the menu was opened in");
+        assert!(matches!(main.sort, Sort::Name), "the main window keeps its order");
     }
 
     #[test]

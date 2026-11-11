@@ -226,6 +226,12 @@ pub(crate) struct SystemState {
 impl SystemState {
     /// Sends the queued calls. Each call that expects a reply is remembered by its request id.
     pub(crate) fn flush(&mut self, ctx: &Ctx) {
+        self.flush_for(ctx, false);
+    }
+
+    /// `flush` for the main window (`extra_window` false) or for an extra one, whose menus open at a point in its own
+    /// points.
+    pub(crate) fn flush_for(&mut self, ctx: &Ctx, extra_window: bool) {
         release_open_grants(ctx, std::time::Instant::now());
         for effect in std::mem::take(&mut self.effects) {
             match effect {
@@ -266,8 +272,12 @@ impl SystemState {
                     let id = bifrost_app::launch_services::open_with(ctx, &file_name_of(&path));
                     self.wait(id, Waiting::OpenWith(path));
                 }
-                // the shell takes window pixels for both; the choice comes back as `Input::ContextAction`
-                Effect::PopUp(x, y, items) => ctx.context_menu(x * ctx.ui.s, y * ctx.ui.s, items),
+                // the shell takes the main window's pixels, an extra window's points; the choice comes back to the
+                // window as `Input::ContextAction`
+                Effect::PopUp(x, y, items) => {
+                    let (x, y) = crate::windows::menu_point(extra_window, x, y, ctx.ui.s);
+                    ctx.context_menu(x, y, items)
+                }
                 Effect::Share(paths, (x, y, w, h)) => {
                     let items: Vec<bifrost_app::share::Payload> = paths.iter().take(MAX_SHARE_ITEMS).map(|p| bifrost_app::share::Payload::Url(file_url(p))).collect();
                     let s = ctx.ui.s;
@@ -517,7 +527,7 @@ impl Files {
 
     /// Sends the queued service calls (see `SystemState::flush`).
     pub(crate) fn flush_services(&mut self, ctx: &Ctx) {
-        self.sys.flush(ctx);
+        self.sys.flush_for(ctx, self.fx.extra_window);
     }
 
     /// Handles a reply to a call this app made. Returns true when a frame is needed.
