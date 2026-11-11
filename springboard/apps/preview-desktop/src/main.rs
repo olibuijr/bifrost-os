@@ -179,7 +179,8 @@ enum AlertKind {
     Changed,
     /// Revert was chosen: asks before the document's changes are discarded.
     ConfirmRevert,
-    /// The window is being closed or the app quit with unsaved changes: Save, Don't Save or Cancel.
+    /// The window is being closed, the app quit or another document opened with unsaved changes: Save, Don't Save or
+    /// Cancel.
     Unsaved(Leaving),
     /// Something the person has to be told once (a save the last quit cut off): OK.
     Notice,
@@ -193,6 +194,21 @@ enum Leaving {
     Close,
     /// Quit.
     Quit,
+    /// Another document is to take this one's place (File > Open, Open Recent, a file another app sent, a drop, a
+    /// clipboard picture, a screenshot): it waits in `Viewer::next_document` and opens then.
+    Open,
+}
+
+/// A document that is to take the open one's place. While the open one has unsaved changes it waits here for the
+/// answer to the question about them.
+enum NextDocument {
+    /// A file by its path: Open Recent, a file another app sent, a screenshot.
+    Path(PathBuf),
+    /// A file the shell handed over (the open panel's choice, a double-click in the file manager, a drop): its bytes
+    /// become a working copy, and its grant is kept so File > Save reaches the file.
+    Granted { name: String, grant: GrantId, stamp: Option<origin::Stamp>, bytes: Vec<u8> },
+    /// A picture from the clipboard, under the name it is kept by.
+    Pasted { name: String, bytes: Vec<u8> },
 }
 
 /// The alert shown when the original could not be written.
@@ -365,6 +381,9 @@ struct Viewer {
     /// The menu of the toolbar's `»` button, asked for by a press: where it opens (window pixels) and its items. The
     /// event that carried the press sends it to the shell.
     menu_request: Option<(f32, f32, Vec<ContextItem>)>,
+    /// The document that opens once the question about the open one's unsaved changes is answered with Save (after
+    /// the save has ended) or Don't Save; Cancel gives it up (`open_next`, `finish_leaving`).
+    next_document: Option<NextDocument>,
 }
 
 impl Viewer {
@@ -435,6 +454,7 @@ impl Viewer {
             leave: None,
             saved_note: None,
             menu_request: None,
+            next_document: None,
         }
     }
 
@@ -575,6 +595,8 @@ impl Viewer {
             self.save_alert = None;
         }
         self.leave = None;
+        // nor does a document wait any longer for that question's answer
+        self.drop_next();
         self.after_open = None;
         self.doc = None;
         self.loading = None;
@@ -759,8 +781,10 @@ impl Viewer {
         self.save_alert = Some(SaveAlert { kind: AlertKind::Notice, title, message, focus: None });
     }
 
-    /// The close control, Cmd+W or Quit with unsaved changes: asks whether to save them first.
+    /// The close control, Cmd+W, Quit or another document opening with unsaved changes: asks whether to save them
+    /// first. A document that waited for the answer to an earlier question is given up with that question.
     fn ask_unsaved(&mut self, leaving: Leaving) {
+        self.drop_next();
         let name = self.document_name().unwrap_or_default();
         self.save_alert = Some(SaveAlert {
             kind: AlertKind::Unsaved(leaving),
@@ -778,6 +802,58 @@ impl Viewer {
         self.unsaved_copy = None;
     }
 
+    /// Another document is to take the open one's place. When the open one has unsaved changes the question comes up
+    /// first (Save, Don't Save or Cancel, as at close and quit) and `next` waits for the answer; opening it at once
+    /// discarded the changes without a word. While a save is under way the document is what the save holds, which
+    /// reaches its file whatever opens meanwhile, so `next` opens at once.
+    fn open_next(&mut self, next: NextDocument) {
+        if self.edited() && !self.saving() {
+            self.ask_unsaved(Leaving::Open);
+            self.next_document = Some(next);
+        } else {
+            self.open_now(next);
+        }
+    }
+
+    /// Opens `next` in place of the open document.
+    fn open_now(&mut self, next: NextDocument) {
+        match next {
+            NextDocument::Path(path) => self.open_path(&path),
+            NextDocument::Granted { name, grant, stamp, bytes } => {
+                self.open_granted(&name, grant, stamp, &bytes);
+            }
+            NextDocument::Pasted { name, bytes } => self.open_pasted(&name, &bytes),
+        }
+    }
+
+    /// Gives up the document that waited for the question's answer (Cancel, a save that failed, another question):
+    /// a grant it came with goes back to the shell on the next turn.
+    fn drop_next(&mut self) {
+        if let Some(NextDocument::Granted { grant, .. }) = self.next_document.take() {
+            self.released.push(grant);
+        }
+    }
+
+    /// Keeps the file the shell handed over (`bytes`, called `name`) as a working copy and opens it; the grant stays
+    /// with the copy, so File > Save writes the file. The copy is kept by what the file is (`stamp`), not only by its
+    /// name: a.png from another folder gets a copy of its own. The copy's path, or None when it could not be kept
+    /// (the status says why, and the grant goes back to the shell).
+    fn open_granted(&mut self, name: &str, grant: GrantId, stamp: Option<origin::Stamp>, bytes: &[u8]) -> Option<PathBuf> {
+        let place = self.origins.place(&recents::copy_name(name), stamp.as_ref());
+        match recents::keep_copy_at(&self.data_dir, &place, bytes) {
+            Ok(path) => {
+                self.set_origin(&place, Some((grant, stamp)));
+                self.open_path(&path);
+                Some(path)
+            }
+            Err(e) => {
+                self.released.push(grant);
+                self.status = document::open_failure(name, &format!("Viewer could not keep its working copy ({})", e.kind()));
+                None
+            }
+        }
+    }
+
     /// Carries out the close or quit the unsaved-changes question was asked for, once no save is under way: after
     /// Don't Save at once, after Save when the save has ended and the document is clean. A save that failed (its
     /// alert is up, or the document is still edited) keeps the window and the app: the person has to see why.
@@ -791,7 +867,15 @@ impl Viewer {
             match leaving {
                 Leaving::Close => ctx.close_main_window(),
                 Leaving::Quit => ctx.terminate(),
+                Leaving::Open => {
+                    if let Some(next) = self.next_document.take() {
+                        self.open_now(next);
+                    }
+                }
             }
+        } else {
+            // the save failed: the document stays open with its changes, and nothing takes its place
+            self.drop_next();
         }
     }
 
@@ -1088,6 +1172,8 @@ impl Viewer {
                 self.discard_changes();
                 self.leave = Some((leaving, true));
             }
+            // Cancel: the document stays as it is, and the one that was to take its place is given up
+            (AlertKind::Unsaved(Leaving::Open), _) => self.drop_next(),
             _ => {}
         }
     }
@@ -1240,11 +1326,14 @@ impl Viewer {
         self.save();
         // the file is the same document: the zoom mode the person chose stays (the page and the pan start over)
         let zoom = self.view.zoom;
-        // nor does a close or quit that waits for this save end here: only another document opening drops it
+        // nor does a close or quit that waits for this save end here, nor is the document that waits to take this
+        // one's place given up: only another document opening drops them
         let leave = self.leave;
+        let next = self.next_document.take();
         self.open_path(path);
         self.view.zoom = zoom;
         self.leave = leave;
+        self.next_document = next;
         self.status = message.clone();
         self.after_open = Some(message);
     }
@@ -1463,7 +1552,7 @@ impl Viewer {
             _ if (MENU_RECENT..MENU_RECENT + recents::MAX_RECENTS as u32).contains(&id) => {
                 let Some(path) = self.recents.get((id - MENU_RECENT) as usize).map(Path::to_path_buf) else { return true };
                 if path.exists() {
-                    self.open_path(&path);
+                    self.open_next(NextDocument::Path(path));
                 } else {
                     self.recents.prune();
                     self.status = format!("{} is no longer there.", name_of(&path));
@@ -2347,7 +2436,7 @@ impl Viewer {
         }
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let name = document::clipboard_file_name(&bytes, stamp);
-        self.open_pasted(&name, &bytes);
+        self.open_next(NextDocument::Pasted { name, bytes });
     }
 
     /// Keeps the clipboard picture `bytes` as the working copy `name` and opens it. Its place under `opened/` comes
@@ -2596,6 +2685,8 @@ impl Viewer {
     /// File > Revert to Original: drops the markup, restores the page order and turns and resets the colour.
     fn revert(&mut self) {
         self.editing = None;
+        // a form field that was being typed into goes back to what the file has, with the rest of the form
+        self.form_focus = None;
         if let Some(doc) = &mut self.doc {
             let n = doc.sizes.len();
             doc.marks.clear();
@@ -2739,7 +2830,7 @@ impl Viewer {
         match ev {
             Input::Open(url) => match path_from_url(&url) {
                 Some(path) => {
-                    self.open_path(&path);
+                    self.open_next(NextDocument::Path(path));
                     true
                 }
                 None => false,
@@ -3327,7 +3418,7 @@ impl App for Viewer {
             .find(|p| is_viewable_path(p.as_str()) && Path::new(p.as_str()).is_file())
             .map(PathBuf::from)
             .ok_or_else(|| RpcError::new(INVALID_PARAMS, "no picture or PDF in the selection"))?;
-        self.open_path(&path);
+        self.open_next(NextDocument::Path(path));
         Ok(Json::Obj(Vec::new()))
     }
 
@@ -3743,23 +3834,19 @@ impl App for Viewer {
             }
             return true;
         }
-        // the copy is kept by what the file is, not only by its name: a.png from another folder gets its own copy
-        let place = self.origins.place(&recents::copy_name(&doc.name), stamp.as_ref());
-        match recents::keep_copy_at(&self.data_dir, &place, &bytes) {
-            Ok(path) => {
-                self.set_origin(&place, Some((doc.grant, stamp)));
-                self.open_path(&path);
-                if saved_as {
-                    let message = format!("Saved {}", name_of(&path));
-                    self.status = message.clone();
-                    self.say_saved(&message);
-                    self.after_open = self.loading.is_some().then_some(message);
-                }
+        if saved_as {
+            // Save As wrote the document into this file: it is the same document under its new name, with nothing
+            // left to ask about
+            if let Some(path) = self.open_granted(&doc.name, doc.grant, stamp, &bytes) {
+                let message = format!("Saved {}", name_of(&path));
+                self.status = message.clone();
+                self.say_saved(&message);
+                self.after_open = self.loading.is_some().then_some(message);
             }
-            Err(e) => {
-                ctx.release_document(doc.grant);
-                self.status = document::open_failure(&doc.name, &format!("Viewer could not keep its working copy ({})", e.kind()))
-            }
+        } else {
+            // a file chosen in the open panel, sent by the file manager or dropped on the window: it takes the open
+            // document's place, after the question about that one's unsaved changes
+            self.open_next(NextDocument::Granted { name: doc.name, grant: doc.grant, stamp, bytes });
         }
         true
     }
@@ -3779,7 +3866,7 @@ impl App for Viewer {
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
         match screenshot::captured_path(service, event, body) {
             Some(path) => {
-                self.open_path(&path);
+                self.open_next(NextDocument::Path(path));
                 true
             }
             None => false,
@@ -5388,6 +5475,145 @@ mod tests {
         // a window that is closed has nothing to ask on
         v.rotate(1);
         assert!(v.quit_requested(&ctx) && v.save_alert.is_none());
+        cleanup(&v);
+    }
+
+    /// Another file opening over a document with unsaved changes asks first, with the question close and quit ask:
+    /// a file another app sends (a double-click in the file manager, a drop), a file the shell hands over (the open
+    /// panel's choice), Open Recent and a clipboard picture. Cancel keeps the document and its changes and gives the
+    /// other file up; Don't Save discards the changes and opens it. At 0.11.26 the other file opened at once and the
+    /// changes were gone without a word.
+    #[test]
+    fn opening_another_file_over_unsaved_changes_asks_first() {
+        let (mut v, copy) = viewer_on_copy("ask-open");
+        let ctx = menu_ctx();
+        let picture = export::png_bytes(&Image { w: 3, h: 1, px: vec![0xff00_ff00; 3] }).unwrap();
+        let other = v.data_dir.join("other.png");
+        std::fs::write(&other, &picture).unwrap();
+        let open_file = |v: &Viewer| v.doc.as_ref().map(|d| d.path.clone());
+        let asked = |v: &Viewer, how: &str| {
+            let sheet = v.save_sheet().unwrap_or_else(|| panic!("{how}: the question"));
+            assert!(sheet.title.contains("b.png") && sheet.title.contains("save the changes"), "{how}: {}", sheet.title);
+            assert_eq!(sheet.buttons.iter().map(|b| b.id).collect::<Vec<_>>(), [ALERT_SAVE, ALERT_DONT_SAVE, ALERT_CANCEL], "{how}");
+            assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(copy.clone()), "{how}: the document is still open");
+            assert!(v.edited() && v.next_document.is_some(), "{how}: with its changes, and the other file waits");
+        };
+        v.rotate(1);
+        // a file another app sends; Escape cancels
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        asked(&v, "a file sent to the app");
+        assert!(v.event(&ctx, Input::Key(KeyInput::Code(27))));
+        assert!(v.save_alert.is_none() && v.next_document.is_none() && v.leave.is_none());
+        assert_eq!(open_file(&v), Some(copy.clone()));
+        assert!(v.edited() && v.doc.as_ref().unwrap().turns == [1], "Cancel keeps the changes");
+        // a file the shell hands over: Cancel gives its grant back
+        let handed = bifrost_app::Document { request: 77, grant: [7; 16], name: "other.png".into(), size: picture.len() as u64, mode: DocMode::Write, file: std::fs::File::open(&other).unwrap() };
+        assert!(v.document(&ctx, DocumentEvent::Opened(handed)));
+        asked(&v, "a file from the open panel");
+        v.answer_save_alert(ALERT_CANCEL);
+        assert!(v.next_document.is_none() && v.released.contains(&[7; 16]), "the grant goes back to the shell");
+        assert_eq!(open_file(&v), Some(copy.clone()));
+        // Open Recent
+        v.recents.add(&other);
+        let at = (0..recents::MAX_RECENTS).find(|i| v.recents.get(*i) == Some(other.as_path())).expect("the file is in Open Recent");
+        assert!(v.open_menu(&ctx, MENU_RECENT + at as u32));
+        asked(&v, "Open Recent");
+        v.answer_save_alert(ALERT_CANCEL);
+        // a clipboard picture
+        v.open_next(NextDocument::Pasted { name: "Clipboard 1.png".into(), bytes: picture.clone() });
+        asked(&v, "New from Clipboard");
+        v.answer_save_alert(ALERT_CANCEL);
+        assert!(v.edited() && v.next_document.is_none());
+        // Don't Save: the changes go and the other file opens
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        asked(&v, "before the changes are discarded");
+        v.answer_save_alert(ALERT_DONT_SAVE);
+        v.finish_leaving(&ctx);
+        assert_eq!(open_file(&v), Some(other.clone()));
+        assert!(!v.edited() && v.save_alert.is_none() && v.next_document.is_none() && v.leave.is_none());
+        assert!(!ctx.take_terminate(), "nothing quits");
+        // a document without changes is replaced with no question
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        assert!(v.save_alert.is_none() && open_file(&v) == Some(other.clone()));
+        cleanup(&v);
+    }
+
+    /// Save in that question saves the document first; the other file opens when the save has ended, and not when it
+    /// failed: the document then stays open with its changes and the alert says why.
+    #[test]
+    fn save_before_opening_another_file_opens_it_when_the_save_has_ended() {
+        let (mut v, copy) = viewer_on_copy("ask-open-save");
+        let ctx = menu_ctx();
+        // the copy is in Open Recent, so it is kept when the other document opens
+        v.recents.add(&copy);
+        let other = v.data_dir.join("other.png");
+        std::fs::write(&other, export::png_bytes(&Image { w: 3, h: 1, px: vec![0xff00_ff00; 3] }).unwrap()).unwrap();
+        v.rotate(1);
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        assert!(v.save_sheet().is_some());
+        // Return is Save
+        assert!(v.event(&ctx, Input::Key(KeyInput::Code(13))));
+        assert!(v.save_alert.is_none() && v.saving() && v.next_document.is_some());
+        assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(copy.clone()), "not while the save is under way");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while v.saving() {
+            assert!(std::time::Instant::now() < deadline, "the picture is written");
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            v.pump(&ctx);
+        }
+        assert!(std::fs::read(&copy).unwrap().starts_with(b"\x89PNG"), "the changes are in the file");
+        assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(other.clone()), "the other file opened once the save had ended");
+        assert!(!v.edited() && v.next_document.is_none() && v.leave.is_none());
+        cleanup(&v);
+        // a save that fails keeps the document, and the other file is given up
+        let (mut v, copy) = viewer_on_copy("ask-open-refused");
+        let other = v.data_dir.join("other.png");
+        std::fs::write(&other, export::png_bytes(&Image { w: 3, h: 1, px: vec![0xff00_ff00; 3] }).unwrap()).unwrap();
+        v.set_origin("b.png", Some(([9; 16], None)));
+        v.rotate(1);
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        // Save was chosen (the picture is written here at once, as `save_document` does for the tests)
+        v.save_alert = None;
+        v.leave = Some((Leaving::Open, false));
+        v.save_document();
+        v.pump(&ctx);
+        assert!(v.leave.is_some() && v.next_document.is_some(), "the other file waits for the save");
+        v.original_failed(Some(DocErrorCode::Denied));
+        v.pump(&ctx);
+        assert!(v.leave.is_none() && v.next_document.is_none());
+        assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(copy));
+        assert!(v.save_sheet().is_some_and(|s| s.title.contains("could not be saved")) && v.edited());
+        cleanup(&v);
+    }
+
+    /// Don't Save and Revert put a PDF form's fields back as the file has them: nothing of what was typed is left to
+    /// save, and no field keeps the keyboard.
+    #[test]
+    fn discarding_changes_puts_filled_form_fields_back() {
+        use bifrost_app::controls::acroform::Field;
+        let mut v = viewer_with(Image { w: 4, h: 4, px: vec![0xff00_00ff; 16] });
+        {
+            let doc = v.doc.as_mut().unwrap();
+            doc.form.add(Field::text("name", 0)).unwrap();
+            doc.form.add(Field::button("agree", 0)).unwrap();
+            doc.widgets = vec![
+                forms::FormWidget { page: 0, rect: Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }, name: "name".into(), kind: forms::Kind::Text, obj: 4, node: 4, on_name: String::new() },
+                forms::FormWidget { page: 0, rect: Norm { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }, name: "agree".into(), kind: forms::Kind::Check, obj: 5, node: 5, on_name: "Yes".into() },
+            ];
+        }
+        let as_opened = v.doc.as_ref().unwrap().form.clone();
+        assert!(!v.edited());
+        v.click_widget(0);
+        assert_eq!(v.form_focus, Some(0));
+        assert!(v.key_form(0, &KeyInput::Text("Ada".into())));
+        v.click_widget(1);
+        v.click_widget(0);
+        assert!(v.edited(), "filled fields are unsaved changes");
+        assert_ne!(v.doc.as_ref().unwrap().form, as_opened);
+        v.discard_changes();
+        let doc = v.doc.as_ref().unwrap();
+        assert_eq!(doc.form, as_opened, "the fields are as the file has them");
+        assert!(!doc.form_changed && doc.field_edits().is_empty() && !v.edited() && v.form_focus.is_none());
         cleanup(&v);
     }
 

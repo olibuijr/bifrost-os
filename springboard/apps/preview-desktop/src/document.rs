@@ -57,6 +57,9 @@ pub struct Document {
     pub widgets: Vec<FormWidget>,
     /// Whether a field value was changed this session, so the next save writes the form values.
     pub form_changed: bool,
+    /// The form's values as the file has them, kept from the first change of a field this session, so Revert and
+    /// Don't Save put them back. None while no field was changed.
+    form_opened: Option<FieldSet>,
     source: Source,
     /// A picture as it was opened, for Revert to Original after pixel edits. None for a PDF.
     original: Option<Rc<Image>>,
@@ -89,6 +92,7 @@ impl Document {
             form: FieldSet::new(),
             widgets: Vec::new(),
             form_changed: false,
+            form_opened: None,
             source,
             original,
             revision: 0,
@@ -118,6 +122,9 @@ impl Document {
     /// Sets the text of the field that widget `widget` belongs to. False when the field refuses the text.
     pub fn set_field_text(&mut self, widget: usize, text: &str) -> bool {
         let Some(w) = self.widgets.get(widget) else { return false };
+        if self.form_opened.is_none() {
+            self.form_opened = Some(self.form.clone());
+        }
         let ok = self.form.set_value(&w.name, text).is_ok();
         self.form_changed |= ok;
         ok
@@ -127,6 +134,9 @@ impl Document {
     pub fn toggle_field(&mut self, widget: usize) -> bool {
         let Some(w) = self.widgets.get(widget) else { return false };
         let on = self.form.get(&w.name).is_some_and(|f| f.is_on());
+        if self.form_opened.is_none() {
+            self.form_opened = Some(self.form.clone());
+        }
         let ok = self.form.set_state(&w.name, !on).is_ok();
         self.form_changed |= ok;
         ok
@@ -248,11 +258,17 @@ impl Document {
         self.revision = self.revision.wrapping_add(1);
     }
 
-    /// Puts the picture as it was opened back, undoing every pixel edit. Nothing happens for a PDF.
+    /// Puts the document's content as it was opened back: a picture's pixels, undoing every pixel edit, and a PDF
+    /// form's values, undoing what was typed into its fields and the check boxes that were turned, so nothing of them
+    /// is left to save.
     pub fn restore_original(&mut self) {
         if let Some(img) = self.original.clone() {
             self.replace_picture(img);
         }
+        if let Some(form) = self.form_opened.take() {
+            self.form = form;
+        }
+        self.form_changed = false;
     }
 
     /// The shown places of the bookmarked pages, in no particular order (a deleted page has none).
@@ -781,6 +797,7 @@ mod tests {
             FormWidget { page: 0, rect: crate::model::Norm { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }, name: "agree".into(), kind: Kind::Check, obj: 5, node: 5, on_name: "Yes".into() },
         ];
         assert!(doc.field_edits().is_empty(), "an untouched form saves nothing");
+        let as_opened = doc.form.clone();
         assert_eq!(doc.widget_at(0, (0.25, 0.25)), Some(0));
         assert_eq!(doc.widget_at(0, (0.75, 0.75)), Some(1));
         assert_eq!(doc.widget_at(1, (0.25, 0.25)), None);
@@ -793,6 +810,16 @@ mod tests {
         assert_eq!(edits[1].value, FieldValue::State("Yes".into()));
         assert_eq!(edits[1].widgets, vec![(5, "Yes".to_string())]);
         assert!(!doc.toggle_field(9), "no such widget");
+        // Revert and Don't Save put the fields back as the file has them, with nothing left to save
+        assert!(doc.edited());
+        doc.restore_original();
+        assert_eq!(doc.form, as_opened);
+        assert!(!doc.edited() && doc.field_edits().is_empty());
+        // a change made after that is taken back by the next one, to the same values
+        assert!(doc.set_field_text(0, "Bo") && doc.edited());
+        doc.restore_original();
+        assert_eq!(doc.form, as_opened);
+        assert!(!doc.edited());
     }
 
     #[test]
