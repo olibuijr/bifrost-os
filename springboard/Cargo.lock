@@ -915,7 +915,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-printers"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

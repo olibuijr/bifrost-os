@@ -121,10 +121,9 @@ pub struct PrintCenter {
     pub labels: TextCache,
     /// The target a press started on; the release acts only when it lands on the same one.
     pub press: Target,
-    /// The time now (Unix seconds) and the zone's offset from UTC (seconds), for the Created column. Read again with
-    /// each listing.
+    /// The time now (Unix seconds), for the Created column. Read again with each listing. The zone and the clock style
+    /// are read when the column is drawn (`model::created_text`).
     pub now_secs: i64,
-    pub tz_offset: i32,
     /// The Dock badge last set.
     badge: String,
     /// The open panel asked for a document to print.
@@ -162,7 +161,6 @@ impl PrintCenter {
             labels: TextCache::default(),
             press: Target::Nothing,
             now_secs: 0,
-            tz_offset: 0,
             badge: String::new(),
             open_request: None,
             description: TextField::new(),
@@ -176,11 +174,9 @@ impl PrintCenter {
         }
     }
 
-    /// Reads the clock and the zone for the Created column.
+    /// Reads the clock for the Created column.
     fn refresh_clock(&mut self) {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
-        self.now_secs = now;
-        self.tz_offset = bifrost_app::time_zone::TimeZone::current().seconds_from_gmt(bifrost_app::coding::Date(now as f64));
+        self.now_secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
     }
 
     /// A window with no scheduler behind it, for tests of the code that drives it.

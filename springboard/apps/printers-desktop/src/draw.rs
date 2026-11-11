@@ -185,7 +185,7 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
             job.user.clone(),
             pages_text(job),
             size_text(job.size_kb),
-            created_text(job.created, p.tz_offset, p.now_secs),
+            created_text(job.created, p.now_secs),
             p.model.job_status(job),
         ];
         let mid = r.y + JOB_ROW_PT / 2.0;
