@@ -1642,9 +1642,17 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::ControlCentre => page(
             "Control Center",
             false,
-            vec![rows(vec![("Brightness", String::new()), ("Volume", String::new()), ("Wi-Fi", String::new()), ("Screen Lock", String::new()), ("Focus", on_off(o.dnd).into())])
-                .header("INCLUDED CONTROLS")
-                .footer(by_form("Swipe down from the top-right corner of the screen to open Control Center.", "Click the Control Center icon in the menu bar to open Control Center."))],
+            // each control the panel holds opens the pane that sets it up, with its state where the page has it. They were
+            // rows with no value and no action: four dead rows and one read-only one (E2E rev 9)
+            vec![Group::new(vec![
+                Item::new("Brightness").link(PageId::Display),
+                Item::new("Volume").link(PageId::Sounds),
+                Item::new("Wi-Fi").value(if m.wifi_on { info.wifi.as_str() } else { "Off" }).link(PageId::Wifi),
+                Item::new("Screen Lock").link(PageId::LockScreen),
+                Item::new("Focus").value(on_off(o.dnd)).link(PageId::Focus),
+            ])
+            .header("INCLUDED CONTROLS")
+            .footer(by_form("Swipe down from the top-right corner of the screen to open Control Center.", "Click the Control Center icon in the menu bar to open Control Center."))],
         ),
         PageId::Accessibility => {
             let a = m.a11y;
