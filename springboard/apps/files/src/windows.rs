@@ -44,6 +44,17 @@ impl ExtraWindow {
     }
 }
 
+/// What New Window asks the shell for. The window is the main window again: its content runs under the title bar
+/// (the manifest's `window = "full-size"` for the main one), so the traffic lights sit over the sidebar and the
+/// toolbar row is the title row, with no second title bar above it. That needs a shell that takes the window's toolbar
+/// controls and blurs behind its sidebar (`chrome`, `shell_takes_window_chrome`); on any other shell the window keeps
+/// the shell's title bar, where every press in the toolbar still reaches the app. Either way it is cascaded from the
+/// app's windows instead of covering the one it was opened from.
+pub(crate) fn new_window_spec(w: f32, h: f32, chrome: bool) -> WindowSpec {
+    let spec = WindowSpec::new("Files", w, h).cascaded();
+    if chrome { spec.full_size_content() } else { spec }
+}
+
 /// A surface's size in points at `scale` px per point, as `App::configure` gives the main window its size.
 pub(crate) fn surface_pt(w: usize, h: usize, scale: f32) -> (f32, f32) {
     let k = scale.max(0.01);
@@ -60,7 +71,7 @@ impl Files {
     /// New Window (⌘N): opens a window at the home folder. Returns false when the shell refuses the window.
     pub(crate) fn new_window(&mut self, ctx: &Ctx) -> bool {
         let (w, h) = NEW_WINDOW_PT;
-        let Ok(id) = ctx.open_window(WindowSpec::new("Files", w, h)) else { return false };
+        let Ok(id) = ctx.open_window(new_window_spec(w, h, bifrost_app::app_windows::shell_takes_window_chrome())) else { return false };
         let mut files = Box::new(Files::new());
         files.data_dir = Some(ctx.data_dir.clone());
         // its folder is watched by the main window's stream, and the main window's `tick` runs its share
@@ -82,6 +93,15 @@ impl Files {
             return self;
         }
         self.windows.iter().find(|e| e.id == window).map_or(self, |e| &*e.files)
+    }
+
+    /// The controls of the New Window window `window`, in its points, for the shell's drag band (`App::window_controls`):
+    /// the toolbar buttons and the search field take their presses. None for a Get Info window or a window that is gone.
+    pub(crate) fn window_nodes(&self, window: WindowId) -> Vec<Node> {
+        match self.windows.iter().find(|e| e.id == window) {
+            Some(e) if !e.files.info_window => e.files.controls.nodes().to_vec(),
+            _ => Vec::new(),
+        }
     }
 
     /// The windows the extra window at `at` opened (Get Info, New Window) join the main window's list: they are
@@ -220,6 +240,32 @@ mod tests {
         assert_eq!(main.windows[1].files.clip, copied);
         main.share_clip(Some(9));
         assert_eq!(main.clip, copied, "an unknown window changes nothing");
+    }
+
+    #[test]
+    fn a_new_window_is_a_full_size_window_where_the_shell_gives_it_the_main_windows_chrome() {
+        let spec = new_window_spec(900.0, 600.0, true);
+        assert!(spec.full_size && spec.cascade);
+        assert_eq!((spec.title.as_str(), spec.width, spec.height), ("Files", 900.0, 600.0));
+        // a shell that does not: the shell's title bar stays, and the toolbar keeps its presses
+        let spec = new_window_spec(900.0, 600.0, false);
+        assert!(!spec.full_size && spec.cascade);
+    }
+
+    #[test]
+    fn the_toolbar_controls_of_an_extra_window_are_its_own() {
+        let mut main = two_windows();
+        main.windows[0].files.w = 700.;
+        main.windows[0].files.update_controls();
+        main.update_controls();
+        let own: Vec<_> = main.windows[0].files.controls.nodes().iter().map(|n| (n.id, n.bounds)).collect();
+        let told: Vec<_> = main.window_nodes(WindowId(4)).iter().map(|n| (n.id, n.bounds)).collect();
+        assert!(!told.is_empty(), "the toolbar buttons");
+        assert_eq!(told, own);
+        assert!(main.window_nodes(WindowId(9)).is_empty(), "a window that is gone has none");
+        // a Get Info window keeps the shell's title bar: it names no controls
+        main.windows[0].files.info_window = true;
+        assert!(main.window_nodes(WindowId(4)).is_empty());
     }
 
     #[test]

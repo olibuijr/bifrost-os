@@ -445,6 +445,11 @@ impl App for Files {
     }
     fn configure(&mut self, ctx: &Ctx) {
         self.painted_state.clear();
+        // the appearance or the date conventions changed: the other windows are painted again too (only the main
+        // window was, so a New Window window kept the old scheme until something changed in it)
+        for e in &mut self.windows {
+            e.files.painted_state.clear();
+        }
         // files from any app can be dropped on the folder listing (`dragout`)
         bifrost_app::dnd::register_types(ctx, &["public.data"]);
         if self.data_dir.is_none() {
@@ -464,6 +469,9 @@ impl App for Files {
         // what a control call copied or cut is what a paste in any window takes
         self.share_clips();
         reply
+    }
+    fn window_controls(&self, _: &Ctx, window: WindowId) -> Vec<Node> {
+        self.window_nodes(window)
     }
     fn controls(&self, _: &Ctx)->Vec<Node> {let mut nodes=self.controls.nodes().to_vec();for n in &mut nodes {if n.id==4{n.value=self.query.to_string();}}nodes}
     /// The Edit menu follows the key window: Copy and Cut need a selection in the window that has the keys. The
