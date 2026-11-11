@@ -687,7 +687,7 @@ impl Shell {
                 Panel::Processes => "Select a process to inspect or terminate.",
                 Panel::Command if self.terminal_ui.title_edit => "An empty title goes back to the automatic one.",
                 Panel::Command => "The command runs in a new tab that closes when it ends.",
-                Panel::Look => "Tap a colour well, then use the steppers. Changes are saved and apply to every tab.",
+                Panel::Look => "Tap a color well, then use the steppers. Changes are saved and apply to every tab.",
                 _ => "Changes to text size and theme are saved automatically.",
             }
         };

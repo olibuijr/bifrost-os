@@ -3166,3 +3166,21 @@ fn the_wheel_scrolls_the_form_of_an_editor_window_and_leaves_the_grid() {
     assert!((c.scroll.offset() - grid).abs() < 0.5, "the main window's grid stays where it was");
     assert!(!c.wheel_pane(&ui, 8, 100.0, 200.0, -50.0), "no such window");
 }
+
+/// E2E R9 (B52): with 24-Hour Time on, the Week view's hours read "8 AM", "Noon", "1 PM". The times and the hour
+/// labels follow the clock style the shell tells the app.
+#[test]
+fn times_and_hour_labels_follow_the_clock_style() {
+    // a morning, noon, an afternoon and midnight
+    let times = |h24: bool| [8 * 60 + 5, 12 * 60, 15 * 60 + 58, 0].map(|m| time_label_in(m, h24));
+    assert_eq!(times(true), ["08:05", "12:00", "15:58", "00:00"]);
+    assert_eq!(times(false), ["8:05 AM", "12:00 PM", "3:58 PM", "12:00 AM"]);
+    // an event that ends at the day's last minute plus one
+    assert_eq!((time_label_in(1440, true), time_label_in(1440, false)), ("24:00".to_string(), "12:00 AM".to_string()));
+    let hours = |h24: bool| [8, 12, 13, 0, 23].map(|h| hour_label_in(h, h24));
+    assert_eq!(hours(true), ["08:00", "12:00", "13:00", "00:00", "23:00"]);
+    assert_eq!(hours(false), ["8 AM", "Noon", "1 PM", "12 AM", "11 PM"]);
+    // no shell speaks in a test, so the style is 24-hour: the same text as `time_zone::time_text`
+    assert_eq!(time_label(14 * 60 + 5), bifrost_app::time_zone::time_text(14, 5));
+    assert_eq!(hour_label(8), bifrost_app::time_zone::time_text(8, 0));
+}

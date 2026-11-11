@@ -6,8 +6,14 @@
 use crate::*;
 use bifrost_app::app_windows::{WindowId, WindowSpec};
 
-/// Size of a window opened with New Window, in points.
+/// Size of a window opened with New Window from a window that has no size yet, in points.
 const NEW_WINDOW_PT: (f32, f32) = (900.0, 600.0);
+
+/// The size New Window asks for, in points: the size (`w`, `h`) of the window it is made from, as the reference file
+/// manager's new window has the size of the one in front. (It asked for a fixed size, smaller than the first window.)
+pub(crate) fn new_window_size(w: f32, h: f32) -> (f32, f32) {
+    if w >= 1.0 && h >= 1.0 { (w, h) } else { NEW_WINDOW_PT }
+}
 
 /// A window opened with New Window: its id and the folder view it shows.
 pub(crate) struct ExtraWindow {
@@ -26,7 +32,7 @@ impl ExtraWindow {
     /// Draws the window. A surface of another size than the last one is blank, so everything is painted again: without
     /// that the state matched the last paint, nothing was redrawn and the new buffers went out empty (a transparent
     /// window body).
-    pub(crate) fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
+    pub(crate) fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
         if self.drawn != Some((s.w, s.h)) {
             self.files.painted_state.clear();
             self.drawn = Some((s.w, s.h));
@@ -40,7 +46,9 @@ impl ExtraWindow {
                 self.files.update_controls();
             }
         }
-        self.files.draw(ctx, s, t)
+        // not `App::draw`, which is the main window's: it would take this window for the key window whenever the
+        // main one is (`App::draw_window` tells this window whether it has the keys)
+        self.files.render(&ctx.ui, s)
     }
 }
 
@@ -84,11 +92,13 @@ pub(crate) fn closes_window(info_window: bool, tabs: usize, typing: bool) -> boo
 }
 
 impl Files {
-    /// New Window (⌘N): opens a window at the home folder. Returns false when the shell refuses the window.
+    /// New Window (⌘N): opens a window that shows the folder of the window it is made from (this one), in its view
+    /// and at its size; the shell cascades it from the app's windows. Returns false when the shell refuses the window.
     pub(crate) fn new_window(&mut self, ctx: &Ctx) -> bool {
-        let (w, h) = NEW_WINDOW_PT;
+        let (w, h) = new_window_size(self.w, self.h);
         let Ok(id) = ctx.open_window(new_window_spec(w, h, bifrost_app::app_windows::shell_takes_window_chrome())) else { return false };
         let mut files = Box::new(Files::new());
+        files.show_like(self);
         files.data_dir = Some(ctx.data_dir.clone());
         // its folder is watched by the main window's stream, and the main window's `tick` runs its share
         files.fx.extra_window = true;
@@ -100,6 +110,31 @@ impl Files {
         files.update_controls();
         self.windows.push(ExtraWindow::new(id, files));
         true
+    }
+
+    /// A window just made (`Files::new`, at the home folder in the default view) takes the folder and the view of the
+    /// window it was opened from: the same folder with a history of its own, the view mode, the sort, the grouping,
+    /// the sizes, and whether hidden files, the sidebar and the status bar show. (A new window opened at the home
+    /// folder in the icon view, whatever the window in front showed.)
+    pub(crate) fn show_like(&mut self, from: &Files) {
+        self.grid = from.grid;
+        self.columns = from.columns;
+        self.sort = from.sort;
+        self.show_hidden = from.show_hidden;
+        self.sidebar_hidden = from.sidebar_hidden;
+        self.status_bar = from.status_bar;
+        self.vo.gallery = from.vo.gallery;
+        self.vo.asc = from.vo.asc;
+        self.vo.group = from.vo.group;
+        self.vo.icon = from.vo.icon;
+        self.vo.text = from.vo.text;
+        self.vo.col_w = from.vo.col_w;
+        if self.path != from.path {
+            // the folder is the first of this window's history: Back does not lead to the home folder it never showed
+            self.history.clear();
+            self.at = 0;
+            self.navigate(from.path.clone(), true);
+        }
     }
 
     /// The folder view of `window`: this one for the main window, else the New Window or Get Info window of that id
@@ -338,6 +373,71 @@ mod tests {
         main.window_event(&ctx, WindowId(4), Input::ContextAction(MENU_SORT_SIZE));
         assert!(matches!(main.windows[0].files.sort, Sort::Size), "the window the menu was opened in");
         assert!(matches!(main.sort, Sort::Name), "the main window keeps its order");
+    }
+
+    /// E2E8 R12: press, hold and drag on a pull-down opened nothing. The press itself asks for the menu, in an extra
+    /// window at a point of its own points, and the release that follows asks for nothing.
+    #[test]
+    fn a_press_on_a_pull_down_of_a_second_window_asks_for_its_menu_at_once() {
+        let ctx = ctx_at(2.0);
+        let mut main = two_windows();
+        main.windows[0].files.fx.extra_window = true;
+        main.windows[0].files.update_controls();
+        let sort = main.windows[0].files.bar_layout().rect_of(BAR_SORT).unwrap();
+        // an extra window's touches arrive in its points
+        let touch = |kind: TouchKind| Input::Touch { kind, id: 0, x: sort.x + sort.w / 2., y: sort.y + sort.h / 2., t: 0., source: bifrost_app::TouchSource::Pointer, mods: bifrost_app::proto::ModifierFlags::EMPTY };
+        assert!(main.window_event(&ctx, WindowId(4), touch(TouchKind::Down)));
+        let (x, y, items) = menu_sent(&ctx).expect("the press asks for the Sort menu");
+        assert_eq!(Some((x, y)), main.windows[0].files.bar_layout().menu_anchor(BAR_SORT, crate::barmenu::BAR_MENU_GAP), "under the button, in the window's points");
+        assert_eq!(items.len(), main.windows[0].files.group_sort_items().len());
+        assert!(main.windows[0].files.down.is_none(), "the press is not kept for a click");
+        main.window_event(&ctx, WindowId(4), touch(TouchKind::Up));
+        assert!(menu_sent(&ctx).is_none(), "a release that still reaches the window asks for no second menu");
+        // the main window, in pixels
+        main.update_controls();
+        let sort = main.bar_layout().rect_of(BAR_SORT).unwrap();
+        let touch = |kind: TouchKind| Input::Touch { kind, id: 0, x: (sort.x + sort.w / 2.) * 2.0, y: (sort.y + sort.h / 2.) * 2.0, t: 0., source: bifrost_app::TouchSource::Pointer, mods: bifrost_app::proto::ModifierFlags::EMPTY };
+        assert!(main.window_event(&ctx, WindowId::MAIN, touch(TouchKind::Down)));
+        let (x, y, _) = menu_sent(&ctx).expect("the main window's Sort menu");
+        assert_eq!((x, y), (sort.x * 2.0, (sort.bottom() + crate::barmenu::BAR_MENU_GAP) * 2.0));
+        main.window_event(&ctx, WindowId::MAIN, touch(TouchKind::Up));
+        assert!(menu_sent(&ctx).is_none());
+    }
+
+    /// E2E8 R04a: File > New Window opened at the home folder, in the icon view, smaller than the window in front.
+    #[test]
+    fn a_new_window_takes_the_folder_the_view_and_the_size_of_the_window_it_is_made_from() {
+        assert_eq!(new_window_size(960.0, 630.0), (960.0, 630.0), "the size of the window it is made from");
+        assert_eq!(new_window_size(0.0, 0.0), NEW_WINDOW_PT, "a window that has no size yet");
+        let root = std::env::temp_dir().join(format!("files-newwindow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        let mut from = fixture(vec![]);
+        from.path = root.join("sub");
+        from.grid = false;
+        from.columns = true;
+        from.sort = Sort::Date;
+        from.vo.asc = false;
+        from.vo.col_w = 240.0;
+        from.show_hidden = true;
+        from.status_bar = true;
+        // the new window as `Files::new` leaves it: at another folder, with that folder as its history
+        let mut made = fixture(vec![]);
+        made.home = root.clone();
+        made.history = vec![PathBuf::from("/fixture")];
+        made.show_like(&from);
+        assert_eq!(made.path, root.join("sub"), "the folder of the window it was made from");
+        assert_eq!((made.history.clone(), made.at), (vec![root.join("sub")], 0), "which is where its own history starts");
+        assert!(made.columns && !made.grid && !made.vo.gallery, "its view");
+        assert!(matches!(made.sort, Sort::Date) && !made.vo.asc && made.vo.col_w == 240.0, "its sort and sizes");
+        assert!(made.show_hidden && made.status_bar && !made.sidebar_hidden);
+        // the gallery is a view like the others; the same folder is not opened again
+        from.columns = false;
+        from.vo.gallery = true;
+        made.show_like(&from);
+        assert!(made.vo.gallery && !made.columns && !made.grid);
+        assert_eq!(made.history.len(), 1);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

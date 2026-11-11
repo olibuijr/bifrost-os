@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.24.16
+
+- The time in the list and in the date line above a note follows Settings > Date & Time > 24-Hour Time ("00:23", or "12:23 AM" with the switch off) and the system time zone, at once when either changes. Each date is read at the zone's offset at its own instant, so a note written before a daylight saving change keeps its time.
+
 ## 1.24.15
 
 - Compliance: the gallery selection ring uses the spacing tokens; no change in behaviour.

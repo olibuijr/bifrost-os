@@ -6,6 +6,7 @@
 pub struct Item {
     pub title: String,
     pub link: String,
+    /// when the feed dated it, as `stored_date` keeps it: in UTC whenever the feed wrote its zone
     pub date: String,
     pub body: String,
     /// the feed's display name
@@ -43,7 +44,7 @@ fn parse_item(block: &str, source: &str) -> Option<Item> {
         return None;
     }
     let link = link_of(block);
-    let date = ["pubDate", "published", "updated", "dc:date"].iter().find_map(|t| inner(block, t)).map(|d| short_date(&clean(&d))).unwrap_or_default();
+    let date = ["pubDate", "published", "updated", "dc:date"].iter().find_map(|t| inner(block, t)).map(|d| stored_date(&clean(&d))).unwrap_or_default();
     let body = ["content:encoded", "content", "description", "summary"].iter().find_map(|t| inner(block, t).map(|b| clean(&b)).filter(|b| !b.is_empty())).unwrap_or_default();
     Some(Item { title, link, date, body, source: source.to_string(), image: image_of(block) })
 }
@@ -246,8 +247,71 @@ pub fn short_date(raw: &str) -> String {
     s
 }
 
-/// Minutes since 1970-01-01 of an item's short date (`Mon, 26 Oct 2026 03:43` or `2026-10-26 03:43`, the feed's own
-/// clock), or None when the date is missing or unreadable.
+/// The zone a feed wrote after a date, in minutes east of UTC: "+0200", "-05:00", "Z", "GMT" or "UT" at the end of an
+/// RFC 822 date, or after the time of an ISO 8601 one. None when the date names no zone this reads (a zone
+/// abbreviation such as "EST" is not read).
+fn zone_minutes(raw: &str) -> Option<i64> {
+    let raw = raw.trim();
+    let tail = if raw.starts_with(|c: char| c.is_ascii_digit()) && raw.as_bytes().get(4) == Some(&b'-') && raw.contains('T') {
+        let time = raw.split_once('T')?.1;
+        &time[time.find(['+', '-', 'Z', 'z'])?..]
+    } else {
+        raw.split_whitespace().last()?
+    };
+    if ["Z", "GMT", "UT", "UTC"].iter().any(|z| tail.eq_ignore_ascii_case(z)) {
+        return Some(0);
+    }
+    let sign = match tail.as_bytes().first()? {
+        b'+' => 1,
+        b'-' => -1,
+        _ => return None,
+    };
+    let digits: String = tail[1..].chars().filter(|c| *c != ':').collect();
+    if !(digits.len() == 2 || digits.len() == 4) || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let hours: i64 = digits[..2].parse().ok()?;
+    let minutes: i64 = if digits.len() == 4 { digits[2..].parse().ok()? } else { 0 };
+    Some(sign * (hours * 60 + minutes))
+}
+
+/// The date an item keeps: `short_date`, moved to UTC ("2026-10-05 06:15") when the feed wrote a zone other than
+/// UTC, so every kept date is one instant however its feed wrote it. A date with no zone is taken as UTC.
+pub fn stored_date(raw: &str) -> String {
+    let short = short_date(raw);
+    match (zone_minutes(raw), minutes_of(&short)) {
+        (Some(zone), Some(minutes)) if zone != 0 && short.contains(':') => {
+            let utc = minutes - zone;
+            let (y, m, d) = bifrost_app::calendar_system::civil_from_days(utc.div_euclid(1440));
+            let minute = utc.rem_euclid(1440);
+            format!("{y:04}-{m:02}-{d:02} {:02}:{:02}", minute / 60, minute % 60)
+        }
+        _ => short,
+    }
+}
+
+/// An item's date as a row and the article show it: the day and the time in the system's zone, the time as the
+/// user's clocks write it ("Today at 08:15", "5 Oct 2026 at 8:15 AM"). `now` is Unix seconds.
+pub fn date_text(date: &str, now: i64) -> String {
+    // each instant at the zone's offset then: an article from before a daylight saving change keeps its time
+    let offset = |t: i64| bifrost_app::time_zone::TimeZone::auto_updating_current().seconds_from_gmt(bifrost_app::coding::Date(t as f64));
+    let at = minutes_of(date).map_or(now, |m| m * 60);
+    date_text_in(date, offset(at), now, offset(now), bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `date_text` with the zone's offset from UTC in seconds at the item's instant and at `now`, and a given clock
+/// style. A date that cannot be read, or one with no time of day, is shown as the feed wrote it. The text is the
+/// shell's (`springboard::files::fs::date_text_in`), which reads both instants at one offset: the item's time is
+/// moved by the difference of the two, so its day and time are the ones of its own offset.
+pub fn date_text_in(date: &str, offset: i32, now: i64, now_offset: i32, h24: bool) -> String {
+    match minutes_of(date) {
+        Some(m) if date.contains(':') => springboard::files::fs::date_text_in(m * 60 + i64::from(offset) - i64::from(now_offset), now, now_offset, h24),
+        _ => date.to_string(),
+    }
+}
+
+/// Minutes since 1970-01-01 of an item's date (`Mon, 26 Oct 2026 03:43` or `2026-10-26 03:43`, in UTC as
+/// `stored_date` keeps it), or None when the date is missing or unreadable.
 pub fn minutes_of(date: &str) -> Option<i64> {
     use bifrost_app::calendar_system::days_from_civil;
     let (y, m, d, time) = if date.starts_with(|c: char| c.is_ascii_digit()) && date.as_bytes().get(4) == Some(&b'-') {
@@ -267,14 +331,14 @@ pub fn minutes_of(date: &str) -> Option<i64> {
     Some(days_from_civil(y, m, d) * 1440 + hour * 60 + minute)
 }
 
-/// Today's list: every feed's items dated on `day` (days since 1970-01-01), newest first across the sources.
-/// Items with no readable date follow the dated ones, in feed order.
-pub fn today_list(feeds: &[Vec<Item>], day: i64) -> Vec<Item> {
+/// Today's list: every feed's items dated on `day` (days since 1970-01-01, in a zone `offset` minutes east of UTC),
+/// newest first across the sources. Items with no readable date follow the dated ones, in feed order.
+pub fn today_list(feeds: &[Vec<Item>], day: i64, offset: i64) -> Vec<Item> {
     let mut dated: Vec<(i64, &Item)> = vec![];
     let mut undated: Vec<&Item> = vec![];
     for item in feeds.iter().flatten() {
         match minutes_of(&item.date) {
-            Some(m) if m.div_euclid(1440) == day => dated.push((m, item)),
+            Some(m) if (m + offset).div_euclid(1440) == day => dated.push((m, item)),
             Some(_) => {}
             None => undated.push(item),
         }
@@ -352,7 +416,53 @@ mod tests {
             vec![item("Mon, 26 Oct 2026 02:21", "B"), item("2026-10-26 05:00", "B")],
         ];
         let day = minutes_of("2026-10-26 00:00").unwrap() / 1440;
-        let titles: Vec<String> = today_list(&feeds, day).into_iter().map(|i| i.title).collect();
+        let titles: Vec<String> = today_list(&feeds, day, 0).into_iter().map(|i| i.title).collect();
         assert_eq!(titles, ["2026-10-26 05:00", "Mon, 26 Oct 2026 03:43", "Mon, 26 Oct 2026 02:21", ""]);
+        // three hours east of UTC the late evening before is already that day
+        let east: Vec<String> = today_list(&feeds, day, 180).into_iter().map(|i| i.title).collect();
+        assert_eq!(east, ["2026-10-26 05:00", "Mon, 26 Oct 2026 03:43", "Mon, 26 Oct 2026 02:21", "Sun, 25 Oct 2026 21:48", ""]);
+        // and three hours west the small hours of that day still belong to the day before
+        let west: Vec<String> = today_list(&feeds, day - 1, -180).into_iter().map(|i| i.title).collect();
+        assert_eq!(west, ["Mon, 26 Oct 2026 02:21", "Sun, 25 Oct 2026 21:48", ""]);
+    }
+
+    #[test]
+    fn kept_dates_are_in_utc_when_the_feed_wrote_its_zone() {
+        assert_eq!(stored_date("Mon, 05 Oct 2026 08:15:00 +0000"), "Mon, 05 Oct 2026 08:15:00");
+        assert_eq!(stored_date("Mon, 05 Oct 2026 08:15:00 GMT"), "Mon, 05 Oct 2026 08:15:00");
+        assert_eq!(stored_date("Mon, 05 Oct 2026 08:15:00 +0200"), "2026-10-05 06:15");
+        assert_eq!(stored_date("Mon, 05 Oct 2026 22:15:00 -0500"), "2026-10-06 03:15");
+        assert_eq!(stored_date("2026-10-05T08:15:00Z"), "2026-10-05 08:15");
+        assert_eq!(stored_date("2026-10-05T00:15:00+02:00"), "2026-10-04 22:15");
+        assert_eq!(stored_date("2026-10-05T08:15:00-0330"), "2026-10-05 11:45");
+        // no zone, a zone this does not read, and a date with no time stay as the feed wrote them
+        assert_eq!(stored_date("2026-10-05T08:15:00"), "2026-10-05 08:15");
+        assert_eq!(stored_date("Mon, 05 Oct 2026 08:15:00 EST"), "Mon, 05 Oct 2026 08:15:00");
+        assert_eq!(stored_date("2026-10-05"), "2026-10-05");
+        assert_eq!(stored_date("soon"), "soon");
+    }
+
+    #[test]
+    fn dates_are_shown_in_the_clock_style_and_the_zone() {
+        // read on 2026-10-06 at 12:00 UTC
+        let now = minutes_of("2026-10-06 12:00").unwrap() * 60;
+        let text = |date: &str, h24: bool| date_text_in(date, 0, now, 0, h24);
+        // morning, noon, afternoon and midnight, in both styles
+        assert_eq!(text("Tue, 06 Oct 2026 08:15:00", true), "Today at 08:15");
+        assert_eq!(text("Tue, 06 Oct 2026 08:15:00", false), "Today at 8:15 AM");
+        assert_eq!(text("2026-10-06 12:00", true), "Today at 12:00");
+        assert_eq!(text("2026-10-06 12:00", false), "Today at 12:00 PM");
+        assert_eq!(text("2026-10-05 16:30", true), "Yesterday at 16:30");
+        assert_eq!(text("2026-10-05 16:30", false), "Yesterday at 4:30 PM");
+        assert_eq!(text("Sat, 03 Oct 2026 00:00:00", true), "3 Oct 2026 at 00:00");
+        assert_eq!(text("Sat, 03 Oct 2026 00:00:00", false), "3 Oct 2026 at 12:00 AM");
+        // two hours east the late evening is the next day, which is today there
+        assert_eq!(date_text_in("2026-10-05 23:30", 7200, now, 7200, true), "Today at 01:30");
+        // an article from before a change of the offset keeps the time of its own offset
+        assert_eq!(date_text_in("2026-10-03 10:00", 7200, now, 3600, true), "3 Oct 2026 at 12:00");
+        // nothing readable, or no time of day: the feed's own text
+        assert_eq!(text("", true), "");
+        assert_eq!(text("soon", false), "soon");
+        assert_eq!(text("2026-10-05", false), "2026-10-05");
     }
 }

@@ -1249,7 +1249,7 @@ impl Shell {
                         DeskHit::Card { group, item: Some(j) } => {
                             if let Some((app, _, id)) = self.desk_note(group, Some(j)) {
                                 self.notify.center.hide();
-                                self.open_from_notification(app, t);
+                                self.open_notification(Some(id), app, t);
                                 self.clear_notification(id);
                             }
                         }

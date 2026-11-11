@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.10
+
+- The departure and arrival times of a transit journey follow Settings > Date & Time > 24-Hour Time ("14:20", or "2:20 PM" with the switch off), also for a journey already on screen when the setting changes. They stay in the time of the place the journey runs in.
+
 ## 0.7.9
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

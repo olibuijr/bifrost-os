@@ -60,7 +60,8 @@ impl Step {
             "turn" | "end of road" | "fork" | "on ramp" | "off ramp" if !modifier.is_empty() => format!("Turn {modifier}{onto}"),
             "roundabout" | "rotary" => format!("Take the roundabout{onto}"),
             "merge" => format!("Merge{onto}"),
-            "transit" => self.name.clone(),
+            // the times of a leg are written in the person's clock style
+            "transit" => crate::transit::step_text(&self.name),
             "continue" | "new name" => format!("Continue{way}"),
             "" => format!("Continue{way}"),
             other if modifier.is_empty() => format!("{}{onto}", capitalise(other)),

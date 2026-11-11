@@ -422,6 +422,38 @@ pub fn clock_minutes(text: &str) -> Option<u32> {
     (h < 24 && m < 60).then_some(h * 60 + m)
 }
 
+/// A clock time of the forecast ("07:41", in the place's own time) in the person's clock style (Settings > Date & Time
+/// > 24-Hour Time, which the shell tells the app; `bifrost_app::time_zone`): "07:41", or "7:41 AM" with the switch
+/// off. Text that is not a clock time is kept as it is.
+pub fn clock_text(time: &str) -> String {
+    clock_text_in(time, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `clock_text` in a given clock style, written by the formatter of `time_zone::time_text`.
+pub fn clock_text_in(time: &str, h24: bool) -> String {
+    match clock_minutes(time) {
+        Some(minute) if time.len() < 16 => springboard::status::clock_in((minute / 60) as i32, (minute % 60) as i32, h24),
+        _ => time.to_string(),
+    }
+}
+
+/// The label of an hour of the forecast ("13", the hour of the place's own time) in the person's clock style: "13" as
+/// the forecast gives it, or "1 PM" with 24-Hour Time off. Text that is not an hour is kept as it is.
+pub fn hour_text(label: &str) -> String {
+    hour_text_in(label, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `hour_text` in a given clock style.
+pub fn hour_text_in(label: &str, h24: bool) -> String {
+    match label.parse::<u32>() {
+        Ok(0) if !h24 => "12 AM".to_string(),
+        Ok(h @ 1..=11) if !h24 => format!("{h} AM"),
+        Ok(12) if !h24 => "12 PM".to_string(),
+        Ok(h @ 13..=23) if !h24 => format!("{} PM", h - 12),
+        _ => label.to_string(),
+    }
+}
+
 /// How far the sun is along its day arc, 0 at sunrise to 1 at sunset. None at night, and when a time is missing.
 pub fn sun_progress(now: &str, sunrise: &str, sunset: &str) -> Option<f32> {
     let (now, rise, set) = (clock_minutes(now)?, clock_minutes(sunrise)?, clock_minutes(sunset)?);
@@ -789,6 +821,22 @@ mod tests {
         assert_eq!(clock_minutes("24:00"), None);
         assert_eq!(clock_minutes("noon"), None);
         assert_eq!(clock_minutes(""), None);
+    }
+
+    #[test]
+    fn the_times_of_the_forecast_follow_the_clock_style() {
+        // a morning, noon, an afternoon and midnight
+        let times = |h24: bool| ["07:41", "12:00", "18:20", "00:00"].map(|t| clock_text_in(t, h24));
+        assert_eq!(times(true), ["07:41", "12:00", "18:20", "00:00"]);
+        assert_eq!(times(false), ["7:41 AM", "12:00 PM", "6:20 PM", "12:00 AM"]);
+        let hours = |h24: bool| ["07", "12", "13", "00"].map(|h| hour_text_in(h, h24));
+        assert_eq!(hours(true), ["07", "12", "13", "00"]);
+        assert_eq!(hours(false), ["7 AM", "12 PM", "1 PM", "12 AM"]);
+        // what is not a time is kept: the placeholder of a missing sunrise, a whole date, an odd label
+        assert_eq!((clock_text_in("--:--", false), clock_text_in("2026-10-04T13:20", false)), ("--:--".to_string(), "2026-10-04T13:20".to_string()));
+        assert_eq!((hour_text_in("Now", false), hour_text_in("24", false)), ("Now".to_string(), "24".to_string()));
+        // no shell speaks in a test, so the style is 24-hour
+        assert_eq!((clock_text("18:20"), hour_text("13")), ("18:20".to_string(), "13".to_string()));
     }
 
     #[test]

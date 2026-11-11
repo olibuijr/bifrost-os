@@ -369,7 +369,7 @@ impl Stocks {
         }
         let sub_mid = y + ui.pt(48.0);
         if let Some(q) = &quote {
-            put(&mut self.labels, s, ui, &format!("Priced {}", q.stamp), MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Left, left, sub_mid);
+            put(&mut self.labels, s, ui, &format!("Priced {}", q.stamp_text()), MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), Align::Left, left, sub_mid);
             let pct = q.change_pct();
             let change = format!("{} ({:+.2}%) since the previous close", signed(q.change()), pct);
             put(&mut self.labels, s, ui, &change, MAC_CAPTION1_PT, Weight::Medium, change_colour(pct), Align::Right, right, sub_mid);

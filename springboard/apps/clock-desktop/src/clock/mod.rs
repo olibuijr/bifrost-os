@@ -40,6 +40,18 @@ use tz::{civil, City, CITIES};
 
 pub const ORANGE: u32 = springboard::shell::ui::SYSTEM_ORANGE;
 
+/// A time of day in the person's clock style (Settings > Date & Time > 24-Hour Time, which the shell tells the app;
+/// `bifrost_app::time_zone`): "07:30", or "7:30 AM" with the switch off. Every time the Clock writes goes through
+/// here: the world clocks, the map, sunrise and sunset, the alarms, the widget and the intents' answers.
+pub fn time_text(hour: u32, min: u32) -> String {
+    time_text_in(hour, min, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `time_text` in a given clock style, written by the formatter of `time_zone::time_text`.
+pub fn time_text_in(hour: u32, min: u32, h24: bool) -> String {
+    springboard::status::clock_in(hour as i32, min as i32, h24)
+}
+
 const BUTTON_R_PT: f32 = 48.0;
 const BUTTON_X_PT: f32 = 92.0;
 const BUTTON_Y_PT: f32 = 625.0;
@@ -585,7 +597,7 @@ impl Clock {
                 for (i, a) in self.alarms.list.iter().enumerate() {
                     let card = Self::alarm_card(ui, i);
                     if card.1 + card.3 <= Self::content_top(ui) || card.1 >= self.h as f32 { continue }
-                    let time = a.time_text();
+                    let time = time_text(a.hour, a.min);
                     push(200 + i as u64, Role::Row, format!("Alarm {time}"), a.label.clone(), card, true);
                     if !self.editing {
                         push(300 + i as u64, Role::Toggle, format!("{time} alarm"), on_off(a.on), Self::alarm_switch_hit(card, ui), true);
@@ -1454,7 +1466,7 @@ impl Clock {
             glyphs::paint(s, bbox, ink, glyphs::either(hour_hand, minute_hand));
             let second_hand = glyphs::segment(hand(sec_frac + 0.5, SECOND_TAIL_LEN), hand(sec_frac, SECOND_HAND_LEN), ui.pt(SECOND_HAND_W_PT));
             glyphs::paint(s, bbox, ORANGE, glyphs::either(second_hand, glyphs::disc(c, ui.pt(SPACE_XS))));
-            let line = format!("{}, {:02}:{:02}", city.name, local.hour, local.min);
+            let line = format!("{}, {}", city.name, time_text(local.hour, local.min));
             self.dynamic(s, ui, &line, MAC_TITLE3_PT, Weight::Regular, LABEL.now(), c.0, y + ui.pt(WORLD_TIME_Y_PT), 0.5);
             let (word, diff) = tz::relative(city, unix, home);
             let rel = format!("{word}, {}", tz::hours_text(diff));
@@ -1514,7 +1526,7 @@ impl Clock {
             let left = x + ui.pt(if self.editing { ALARM_EDIT_TEXT_PT } else { ALARM_TEXT_PT });
             let ink = if a.on { LABEL.now() } else { LABEL_3.now() };
             // the large time and the switch share the top row; the label and the repeat days are under the time
-            self.dynamic(s, ui, &a.time_text(), DISPLAY_MEDIUM_PT, Weight::Regular, ink, left, y + ui.pt(ALARM_TIME_Y_PT), 0.0);
+            self.dynamic(s, ui, &time_text(a.hour, a.min), DISPLAY_MEDIUM_PT, Weight::Regular, ink, left, y + ui.pt(ALARM_TIME_Y_PT), 0.0);
             self.dynamic(s, ui, &ui.fit(&a.label, MAC_TITLE3_PT, w - ui.pt(60.0)), MAC_TITLE3_PT, Weight::Regular, ink, left, y + ui.pt(ALARM_LABEL_Y_PT), 0.0);
             let repeat = format!("Repeat: {}", a.repeat_text());
             self.dynamic(s, ui, &ui.fit(&repeat, MAC_BODY_PT, w - ui.pt(60.0)), MAC_BODY_PT, Weight::Regular, LABEL_2.now(), left, y + ui.pt(ALARM_REPEAT_Y_PT), 0.0);
@@ -2260,5 +2272,17 @@ pub(crate) mod tests {
         // input repaints the whole window again
         tap(&mut c, &ui, 4.0, 1900.0, 2200.0);
         assert!(c.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, &ui, 2300.0).is_none());
+    }
+
+    /// E2E R9: every time the Clock writes follows Settings > Date & Time > 24-Hour Time.
+    #[test]
+    fn times_follow_the_clock_style() {
+        // a morning, noon, an afternoon and midnight
+        let times = |h24: bool| [(7, 30), (12, 0), (15, 58), (0, 0)].map(|(h, m)| time_text_in(h, m, h24));
+        assert_eq!(times(true), ["07:30", "12:00", "15:58", "00:00"]);
+        assert_eq!(times(false), ["7:30 AM", "12:00 PM", "3:58 PM", "12:00 AM"]);
+        // no shell speaks in a test, so the style is 24-hour: the same text as `time_zone::time_text`
+        assert_eq!(time_text(14, 5), bifrost_app::time_zone::time_text(14, 5));
+        assert_eq!(intent::alarm_set_text(&Alarm::new(7, 30)), "Alarm set for 07:30");
     }
 }

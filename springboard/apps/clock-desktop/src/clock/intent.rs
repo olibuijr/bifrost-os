@@ -68,8 +68,8 @@ pub fn alarm_from_params(params: &Json) -> Result<Alarm, RpcError> {
 /// What the intent says when the alarm is set: "Alarm set for 07:30 (Weekdays)".
 pub fn alarm_set_text(alarm: &Alarm) -> String {
     match alarm.repeat_text().as_str() {
-        "Never" => format!("Alarm set for {}", alarm.time_text()),
-        repeat => format!("Alarm set for {} ({})", alarm.time_text(), repeat),
+        "Never" => format!("Alarm set for {}", super::time_text(alarm.hour, alarm.min)),
+        repeat => format!("Alarm set for {} ({})", super::time_text(alarm.hour, alarm.min), repeat),
     }
 }
 
@@ -91,13 +91,13 @@ pub fn perform(id: &str, params: &Json, unix: i64, home_offset: i32) -> Result<I
     let text = match params.get("city").and_then(Json::as_str).map(str::trim).filter(|s| !s.is_empty()) {
         None => {
             let here = tz::civil(unix, home_offset);
-            format!("{:02}:{:02} here", here.hour, here.min)
+            format!("{} here", super::time_text(here.hour, here.min))
         }
         Some(name) => {
             let city = find_city(name).ok_or_else(|| intents::failed(format!("No World Clock city named {name}")))?;
             let (word, _) = tz::relative(city, unix, home_offset);
             let local = city.local(unix);
-            format!("{} {:02}:{:02}, {}", city.name, local.hour, local.min, word)
+            format!("{} {}, {}", city.name, super::time_text(local.hour, local.min), word)
         }
     };
     Ok(IntentResult::value(Json::Str(text.clone())).with_dialog(&text))

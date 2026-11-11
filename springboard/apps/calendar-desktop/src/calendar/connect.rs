@@ -57,10 +57,16 @@ pub fn alert_id(uid: &str, minutes_before: i64) -> String {
     format!("{ALERT_PREFIX}{uid}:{minutes_before}")
 }
 
-/// `HH:MM` of Unix time `unix` in the local zone.
+/// The time of day of Unix time `unix` in the local zone, in the person's clock style: "09:30", or "9:30 AM" with
+/// 24-Hour Time off.
 fn clock(unix: i64, offset: i32) -> String {
+    clock_in(unix, offset, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `clock` in a given clock style.
+fn clock_in(unix: i64, offset: i32, h24: bool) -> String {
     let s = (unix + offset as i64).rem_euclid(86_400);
-    format!("{:02}:{:02}", s / 3600, (s % 3600) / 60)
+    springboard::status::clock_in((s / 3600) as i32, ((s % 3600) / 60) as i32, h24)
 }
 
 /// The alert requests due in the planning window, keyed by identifier. Each identifier names the next occurrence of
@@ -169,6 +175,12 @@ impl Connect {
     /// True when the store changed (`gen`) or the local day rolled over (`day`) since the last sync.
     pub fn is_stale(&self, gen: u64, day: i64) -> bool {
         self.synced != Some((gen, day))
+    }
+
+    /// Forgets the last sync, so the next tick plans again: the clock style or the zone changed, and the Up Next
+    /// entries carry a time of day.
+    pub fn invalidate(&mut self) {
+        self.synced = None;
     }
 
     /// True when the shell has no `notification-schedule` service, so the app must post its own alerts.
@@ -411,5 +423,21 @@ mod tests {
         let sent = calls(&ctx);
         assert!(!sent.iter().any(|(s, _)| s == notification_schedule::SERVICE));
         assert!(sent.iter().any(|(s, _)| s == widgets_timeline::SERVICE));
+    }
+
+    #[test]
+    fn the_up_next_time_follows_the_clock_style_and_a_change_plans_again() {
+        // a morning, noon, an afternoon and midnight, read two hours east of UTC
+        let at = |h: i64, m: i64| h * 3600 + m * 60 - 7200;
+        let times = |h24: bool| [at(8, 5), at(12, 0), at(15, 58), at(0, 0)].map(|t| clock_in(t, 7200, h24));
+        assert_eq!(times(true), ["08:05", "12:00", "15:58", "00:00"]);
+        assert_eq!(times(false), ["8:05 AM", "12:00 PM", "3:58 PM", "12:00 AM"]);
+        let ctx = ctx();
+        let mut c = Connect::default();
+        let rich = IcsCalendar::default();
+        c.sync(&ctx, &Snap { events: &[], rich: &rich, extras: &Extras::default(), now: NOW, offset: OFF }, 1, TODAY);
+        assert!(!c.is_stale(1, TODAY));
+        c.invalidate();
+        assert!(c.is_stale(1, TODAY), "the clock style changed: the entries are written again");
     }
 }

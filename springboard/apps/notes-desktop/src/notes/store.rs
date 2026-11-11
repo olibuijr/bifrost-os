@@ -411,13 +411,34 @@ pub fn trash_caption(deleted: i64, now: i64) -> String {
     }
 }
 
-/// The list's date column: the time today, the weekday within the last
-/// week, otherwise the date.
+/// The system zone's seconds east of UTC at `unix`, with daylight saving as it was at that instant: the zone the
+/// shell tells the app (`bifrost_app::time_zone`), read when called, so a note's time follows a change of the zone.
+/// UTC under the test pin, as the pinned clock is.
+pub fn zone_offset(unix: i64) -> i32 {
+    if bifrost_core::pin::pinned() {
+        return 0;
+    }
+    bifrost_app::time_zone::TimeZone::auto_updating_current().seconds_from_gmt(bifrost_app::coding::Date(unix as f64))
+}
+
+/// The list's date column for a note changed at `modified`, in the system zone and the person's clock style: the
+/// time today ("00:22", or "12:22 AM" with 24-Hour Time off), the weekday within the last week, otherwise the date.
+pub fn list_date_now(modified: i64, now: i64) -> String {
+    list_date_in(modified, now, zone_offset(modified), zone_offset(now), bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `list_date_now` with both instants read at one `offset` from UTC.
 pub fn list_date(modified: i64, now: i64, offset: i32) -> String {
-    let (m, n) = (civil(modified, offset), civil(now, offset));
+    list_date_in(modified, now, offset, offset, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// The list's date column with the offset from UTC at each of the two instants and a given clock style. The time is
+/// written by the formatter of `time_zone::time_text`.
+pub fn list_date_in(modified: i64, now: i64, modified_offset: i32, now_offset: i32, h24: bool) -> String {
+    let (m, n) = (civil(modified, modified_offset), civil(now, now_offset));
     let same_day = (m.year, m.month, m.day) == (n.year, n.month, n.day);
     if same_day {
-        format!("{:02}:{:02}", m.hour, m.min)
+        springboard::status::clock_in(m.hour as i32, m.min as i32, h24)
     } else if now - modified < 6 * 86_400 && modified <= now {
         DAYS[m.wday as usize].to_string()
     } else {
@@ -425,10 +446,20 @@ pub fn list_date(modified: i64, now: i64, offset: i32) -> String {
     }
 }
 
-/// The editor's heading: "4 October 2026 at 00:23".
+/// The editor's heading for a note changed at `unix`, in the system zone and the person's clock style.
+pub fn long_date_now(unix: i64) -> String {
+    long_date_in(unix, zone_offset(unix), bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// The editor's heading at `offset` from UTC: "4 October 2026 at 00:23".
 pub fn long_date(unix: i64, offset: i32) -> String {
+    long_date_in(unix, offset, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `long_date` in a given clock style: "4 October 2026 at 00:23", or "4 October 2026 at 12:23 AM".
+pub fn long_date_in(unix: i64, offset: i32, h24: bool) -> String {
     let c = civil(unix, offset);
-    format!("{} {} {} at {:02}:{:02}", c.day, MONTHS[c.month as usize - 1], c.year, c.hour, c.min)
+    format!("{} {} {} at {}", c.day, MONTHS[c.month as usize - 1], c.year, springboard::status::clock_in(c.hour as i32, c.min as i32, h24))
 }
 
 /// Loads every `*.md` in `dir`, newest first; a missing directory is empty.
@@ -574,6 +605,27 @@ mod tests {
         assert_eq!(list_date(now - 10 * 86_400, now, 0), "24/09/2026");
         assert_eq!(list_date(now + 86_400, now, 0), "05/10/2026", "a future stamp is never a weekday");
         assert_eq!(long_date(now, 0), "4 October 2026 at 00:23");
+    }
+
+    #[test]
+    fn times_follow_the_clock_style() {
+        // 2026-10-04 00:00 UTC, then a morning, noon, an afternoon and midnight of that day
+        let day = 1_791_072_000;
+        let at = |h: i64, m: i64| day + h * 3600 + m * 60;
+        let now = at(23, 59);
+        let list = |h24: bool| [at(8, 5), at(12, 0), at(15, 58), at(0, 0)].map(|t| list_date_in(t, now, 0, 0, h24));
+        assert_eq!(list(true), ["08:05", "12:00", "15:58", "00:00"]);
+        assert_eq!(list(false), ["8:05 AM", "12:00 PM", "3:58 PM", "12:00 AM"]);
+        let long = |h24: bool| [at(8, 5), at(12, 0), at(15, 58), at(0, 0)].map(|t| long_date_in(t, 0, h24));
+        assert_eq!(long(true), ["4 October 2026 at 08:05", "4 October 2026 at 12:00", "4 October 2026 at 15:58", "4 October 2026 at 00:00"]);
+        assert_eq!(long(false), ["4 October 2026 at 8:05 AM", "4 October 2026 at 12:00 PM", "4 October 2026 at 3:58 PM", "4 October 2026 at 12:00 AM"]);
+        // each instant is read at its own offset: a note written at 00:30 on Monday, before the clocks went back an
+        // hour, is of the same day at 00:10 after; read at the later offset it would be Sunday's
+        assert_eq!(list_date_in(at(22, 30), at(23, 10), 7200, 3600, true), "00:30");
+        assert_eq!(list_date_in(at(22, 30), at(23, 10), 3600, 3600, true), "Sunday");
+        // no shell speaks in a test: 24-hour time, in the zone of the test (UTC unless the pin says so)
+        assert_eq!(list_date(at(8, 5), now, 0), "08:05");
+        assert_eq!(long_date_now(at(8, 5)), long_date(at(8, 5), zone_offset(at(8, 5))));
     }
 
     #[test]

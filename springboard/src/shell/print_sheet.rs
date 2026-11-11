@@ -33,7 +33,7 @@ const PREVIEW_H_PT: f32 = 154.0;
 const SIDES: [(Sides, &str); 3] = [(Sides::OneSided, "One-sided"), (Sides::TwoSidedLongEdge, "Two-sided"), (Sides::TwoSidedShortEdge, "Two-sided, short edge")];
 /// The rows, in order: printer, paper, orientation, scale, copies, pages, sides, colour.
 const ROWS: usize = 8;
-const ROW_NAMES: [&str; ROWS] = ["Printer", "Paper", "Orientation", "Scale", "Copies", "Pages", "Sides", "Colour"];
+const ROW_NAMES: [&str; ROWS] = ["Printer", "Paper", "Orientation", "Scale", "Copies", "Pages", "Sides", "Color"];
 
 // indices into `PrintSheet::labels`
 const L_TITLE: usize = 0;
@@ -363,7 +363,7 @@ impl PrintSheet {
                 PageChoice::Even => "Even pages".to_string(),
             },
             SIDES[self.setup.sides.min(SIDES.len() - 1)].1.to_string(),
-            if self.setup.mono { "Black & White".to_string() } else { "Colour".to_string() },
+            if self.setup.mono { "Black & White".to_string() } else { "Color".to_string() },
         ];
         let mut labels = vec![ui.text("Print", MAC_TITLE3_PT, Weight::Semibold, WHITE)];
         for name in ROW_NAMES {

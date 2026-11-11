@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- The time an item was last changed is told in the system time zone (it was in UTC) and as the Files app writes a date: "Today at 09:30", "Yesterday at 18:02" or "14 Nov 2023 at 22:13", with the time following Settings > Date & Time > 24-Hour Time ("Today at 9:30 AM" with the switch off), at once when the setting or the zone changes.
+
 ## 0.1.11
 
 - Adds the app compliance test.

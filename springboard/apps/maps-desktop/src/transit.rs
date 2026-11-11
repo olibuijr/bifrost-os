@@ -162,7 +162,9 @@ fn place_of(p: Option<&Json>) -> Option<(f64, f64)> {
 }
 
 /// The text of one leg: "Walk to Hlemmur" or "Bus 14 from Hlemmur 10:05 to Haholt 10:31", with the stops in between
-/// when the planner lists them.
+/// when the planner lists them. Each time is kept as its minute of the day between two `TIME_MARK`s, and written
+/// in the person's clock style when the step is shown (`step_text`), so a journey on screen follows a change of
+/// Settings > Date & Time > 24-Hour Time.
 fn leg_text(leg: &Json) -> String {
     let text = ride_text(leg);
     match leg.get("intermediateStops").and_then(Json::as_array).map_or(0, <[Json]>::len) {
@@ -176,7 +178,7 @@ fn ride_text(leg: &Json) -> String {
     let mode = leg.str_field("mode").unwrap_or_default();
     let name = |key: &str| leg.get(key).and_then(|p| p.str_field("name")).filter(|n| !n.is_empty());
     let offset = leg.get("agencyTimeZoneOffset").and_then(Json::number).unwrap_or(0.0);
-    let at = |key: &str| leg.get(key).and_then(Json::number).map(|ms| clock(ms, offset));
+    let at = |key: &str| leg.get(key).and_then(Json::number).map(|ms| format!("{TIME_MARK}{}{TIME_MARK}", minute_of_day(ms, offset)));
     if mode == "WALK" || mode.is_empty() {
         return format!("Walk to {}", name("to").unwrap_or_else(|| "the next stop".into()));
     }
@@ -207,11 +209,35 @@ pub fn mode_label(mode: &str) -> &'static str {
     }
 }
 
-/// "10:05" for a time in milliseconds since the epoch, shifted by the agency's offset from UTC (milliseconds).
-pub fn clock(ms: f64, offset_ms: f64) -> String {
+/// Stands before and after a time in the name of a transit step: the minute of the day, in decimal, between two of
+/// these. A control character no stop name holds.
+const TIME_MARK: char = '\u{1f}';
+
+/// The minute of the day of a time in milliseconds since the epoch, shifted by the agency's offset from UTC
+/// (milliseconds): a departure is told in the time of the place it leaves from, not in the system zone.
+pub fn minute_of_day(ms: f64, offset_ms: f64) -> u16 {
     let secs = ((ms + offset_ms) / 1000.0).floor() as i64;
-    let day = secs.rem_euclid(86_400);
-    format!("{:02}:{:02}", day / 3600, day % 3600 / 60)
+    (secs.rem_euclid(86_400) / 60) as u16
+}
+
+/// The name of a transit step as it is shown: each marked time written in the person's clock style
+/// (`bifrost_app::time_zone`), "Bus 14 from Hlemmur 14:20 to Hamraborg 14:36", or "2:20 PM" and "2:36 PM" with
+/// 24-Hour Time off.
+pub fn step_text(name: &str) -> String {
+    step_text_in(name, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `step_text` in a given clock style, written by the formatter of `time_zone::time_text`. Text between two marks
+/// that is not a minute of the day is kept as it is.
+pub fn step_text_in(name: &str, h24: bool) -> String {
+    let mut out = String::with_capacity(name.len());
+    for (i, part) in name.split(TIME_MARK).enumerate() {
+        match part.parse::<u16>() {
+            Ok(minute) if i % 2 == 1 && minute < 1440 => out.push_str(&springboard::status::clock_in(i32::from(minute / 60), i32::from(minute % 60), h24)),
+            _ => out.push_str(part),
+        }
+    }
+    out
 }
 
 /// Decodes an encoded polyline of five decimal places into (lat, lon) points. A damaged string gives the points read
@@ -320,9 +346,25 @@ mod tests {
 
     #[test]
     fn times_follow_the_agency_offset_and_wrap_the_day() {
-        assert_eq!(clock(1_790_000_400_000.0, 0.0), "14:20");
-        assert_eq!(clock(1_790_000_400_000.0, 3_600_000.0), "15:20");
-        assert_eq!(clock(60_000.0, -120_000.0), "23:59");
+        assert_eq!(minute_of_day(1_790_000_400_000.0, 0.0), 14 * 60 + 20);
+        assert_eq!(minute_of_day(1_790_000_400_000.0, 3_600_000.0), 15 * 60 + 20);
+        assert_eq!(minute_of_day(60_000.0, -120_000.0), 23 * 60 + 59);
+    }
+
+    #[test]
+    fn the_times_of_a_leg_follow_the_clock_style() {
+        // a morning, noon, an afternoon and midnight
+        let leg = |from: u16, to: u16| format!("Bus 14 from Hlemmur {TIME_MARK}{from}{TIME_MARK} to Hamraborg {TIME_MARK}{to}{TIME_MARK}, 2 stops in between");
+        assert_eq!(step_text_in(&leg(8 * 60 + 5, 12 * 60), true), "Bus 14 from Hlemmur 08:05 to Hamraborg 12:00, 2 stops in between");
+        assert_eq!(step_text_in(&leg(8 * 60 + 5, 12 * 60), false), "Bus 14 from Hlemmur 8:05 AM to Hamraborg 12:00 PM, 2 stops in between");
+        assert_eq!(step_text_in(&leg(15 * 60 + 58, 0), true), "Bus 14 from Hlemmur 15:58 to Hamraborg 00:00, 2 stops in between");
+        assert_eq!(step_text_in(&leg(15 * 60 + 58, 0), false), "Bus 14 from Hlemmur 3:58 PM to Hamraborg 12:00 AM, 2 stops in between");
+        // a leg with no time, and marks around something that is not a minute of the day, are kept
+        assert_eq!(step_text_in("Walk to Hlemmur", false), "Walk to Hlemmur");
+        assert_eq!(step_text_in(&format!("Stop {TIME_MARK}9999{TIME_MARK}"), false), "Stop 9999");
+        // the journey as the planner's reply gives it, in the style of a test (24-hour: no shell speaks)
+        let routes = parse_itineraries(REPLY).unwrap();
+        assert_eq!(step_text(&routes[0].steps[1].name), "Bus 14 from Hlemmur 14:20 to Hamraborg 14:36");
     }
 
     #[test]

@@ -58,7 +58,7 @@ impl Files {
             // Files: a grey plate behind the icon and an accent capsule behind the name
             s.fill_rrect(ui.pt(icon_x - 4.), ui.pt(y - 4.), ui.pt(self.grid_icon() + 8.), ui.pt(self.grid_icon() + 8.), ui.pt(SPACE_S), CARD_BG.now());
             let lw = (ui.measure(&e.name, self.vo.text, Weight::Regular) / ui.pt(1.) + 10.).min(self.grid_w() - 4.);
-            s.fill_rrect(ui.pt(x + (self.grid_w() - lw) / 2.), ui.pt(label_y - 1.), ui.pt(lw), ui.pt(self.vo.text + 6.), ui.pt(SPACE_XS), SELECTION.now());
+            s.fill_rrect(ui.pt(x + (self.grid_w() - lw) / 2.), ui.pt(label_y - 1.), ui.pt(lw), ui.pt(self.vo.text + 6.), ui.pt(SPACE_XS), self.selection_plate());
         }
         self.paint_entry_icon(ui, s, e, icon_x, y, self.grid_icon(), true);
         tag_dots(s, ui, &self.tag_index, &e.path, icon_x + 4., y + 4.);
@@ -66,7 +66,7 @@ impl Files {
         if let Some(field) = name_field {
             bifrost_app::widgets::text_field(s, ui, field, Rect { x: x + 2., y: label_y - 2., w: self.grid_w() - 4., h: 22. }, "", true);
         } else {
-            let (colour, max, pt) = (ink(selected), ui.pt(self.grid_w() - 8.), self.vo.text);
+            let (colour, max, pt) = (self.name_ink(selected), ui.pt(self.grid_w() - 8.), self.vo.text);
             let key = (e.path.clone(), e.mtime, colour, ui.pt(pt).to_bits(), max as u32);
             let im = self.labels.borrow_mut().get_or_insert(key, || {
                 let label = ui.fit(&e.name, pt, max);

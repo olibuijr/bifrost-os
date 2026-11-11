@@ -247,6 +247,10 @@ fn the_control_centre_page_lists_the_controls_it_holds() {
     let labels: Vec<&str> = s.groups[0].items.iter().map(|i| i.label.as_str()).collect();
     assert_eq!(labels, ["Brightness", "Volume", "Wi-Fi", "Screen Lock", "Focus"]);
     assert_eq!(s.groups[0].items[4].value, "Off");
+    // no dead rows: each one opens the pane that sets its control up
+    let opens: Vec<&Action> = s.groups[0].items.iter().map(|i| &i.action).collect();
+    assert_eq!(opens, [&Action::Push(PageId::Display), &Action::Push(PageId::Sounds), &Action::Push(PageId::Wifi), &Action::Push(PageId::LockScreen), &Action::Push(PageId::Focus)]);
+    assert!(s.groups[0].items.iter().all(|i| i.accessory == Accessory::Chevron), "each row shows that it leads somewhere");
 }
 
 #[test]

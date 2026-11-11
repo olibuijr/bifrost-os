@@ -514,7 +514,7 @@ impl App for ActivityApp {
         }
         process.push(AppMenuItem::separator());
         process.push(AppMenuItem::new(MENU_DELTAS, "Show Deltas for Process").checked(m.deltas_on_selected()).enabled(m.has_selected()));
-        process.push(AppMenuItem::new(MENU_INSPECT, "Inspect Process").enabled(m.has_selected()));
+        process.push(AppMenuItem::new(MENU_INSPECT, "Inspect Process").key("cmd+i").enabled(m.has_selected()));
         process.push(AppMenuItem::new(MENU_SAMPLE, "Sample Process").enabled(m.has_selected() && !m.job_running()));
         process.push(AppMenuItem::submenu("Sample Duration"));
         for (i, secs) in sample_proc::DURATIONS.iter().enumerate() {

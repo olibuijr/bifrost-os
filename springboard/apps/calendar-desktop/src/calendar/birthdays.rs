@@ -27,18 +27,28 @@ const TITLE_MAX: usize = 150;
 /// The minute of the day a birthday alert counts from: 09:00.
 const ALERT_AT: u16 = 9 * 60;
 
-/// The default birthday alerts: the name the Settings menu shows and the minutes before 09:00 on the birthday.
+/// The default birthday alerts: the day the Settings menu names (the time of day is added by `alert_title`) and the
+/// minutes before 09:00 on the birthday.
 pub const ALERTS: [(&str, Option<u32>); 5] = [
     ("None", None),
-    ("On the day at 9 AM", Some(0)),
-    ("1 day before at 9 AM", Some(1440)),
-    ("2 days before at 9 AM", Some(2880)),
-    ("1 week before at 9 AM", Some(10_080)),
+    ("On the day", Some(0)),
+    ("1 day before", Some(1440)),
+    ("2 days before", Some(2880)),
+    ("1 week before", Some(10_080)),
 ];
 
-/// The name of default birthday alert `v` (an index into `ALERTS`).
-pub fn alert_title(v: u8) -> &'static str {
-    ALERTS.get(v as usize).map_or("None", |a| a.0)
+/// The name of default birthday alert `v` (an index into `ALERTS`) in the person's clock style: "1 day before at
+/// 09:00", or "1 day before at 9 AM" with 24-Hour Time off.
+pub fn alert_title(v: u8) -> String {
+    alert_title_in(v, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `alert_title` in a given clock style.
+fn alert_title_in(v: u8, h24: bool) -> String {
+    match ALERTS.get(v as usize) {
+        Some((day, Some(_))) => format!("{day} at {}", super::hour_label_in(u32::from(ALERT_AT / 60), h24)),
+        _ => "None".to_string(),
+    }
 }
 
 /// The minutes before 09:00 of the birthday that alert `v` fires, None for no alert.
@@ -338,6 +348,9 @@ mod tests {
         // the alerts are the ones the Settings menu lists
         assert_eq!(ALERTS.len(), super::super::prefs::BIRTHDAY_ALERT_CHOICES as usize);
         assert_eq!(alert_title(0), "None");
+        assert_eq!(alert_title_in(9, true), "None");
+        assert_eq!((alert_title_in(1, true), alert_title_in(1, false)), ("On the day at 09:00".to_string(), "On the day at 9 AM".to_string()));
+        assert_eq!((alert_title_in(4, true), alert_title_in(4, false)), ("1 week before at 09:00".to_string(), "1 week before at 9 AM".to_string()));
         assert_eq!(alert_minutes(4), Some(10_080));
         assert_eq!(alert_minutes(9), None);
     }

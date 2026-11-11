@@ -549,7 +549,7 @@ impl Accent {
     }
 
     pub fn label(self) -> &'static str {
-        ["Blue", "Purple", "Pink", "Red", "Orange", "Yellow", "Green", "Graphite", "Multicolour"][self as usize]
+        ["Blue", "Purple", "Pink", "Red", "Orange", "Yellow", "Green", "Graphite", "Multicolor"][self as usize]
     }
 
     pub fn parse(s: &str) -> Accent {

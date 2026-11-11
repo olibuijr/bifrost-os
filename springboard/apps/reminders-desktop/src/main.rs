@@ -92,6 +92,8 @@ struct RemindersApp {
     probe: Option<u32>,
     /// The store generation the Today widget timeline was last sent for.
     widget_gen: Option<u32>,
+    /// `time_zone::conventions_revision` the Today widget timeline was last sent at: its rows name times of day.
+    widget_conventions: u32,
     /// Whether the app is currently opted into sudden termination (it starts disabled, as the count does).
     terminable: bool,
     /// The open panel asked for by File > Import List.
@@ -720,8 +722,11 @@ impl App for RemindersApp {
         let offset_at = |t: i64| springboard::bare::timezone::offset_at(t).unwrap_or(wall_offset);
         let now = self.wall.now(t);
         // The Today widget is sent when the reminders change, and again when the shell asks for a reload.
-        if self.widget_gen != Some(a.generation()) {
+        // Also when Settings > Date & Time changed the clock style or the zone: the rows name times of day.
+        let conventions = bifrost_app::time_zone::conventions_revision();
+        if self.widget_gen != Some(a.generation()) || self.widget_conventions != conventions {
             self.widget_gen = Some(a.generation());
+            self.widget_conventions = conventions;
             system::reload_today(ctx, a.items(), a.today(), now, a.all_day_min(), &offset_at);
         }
         if self.schedule.is_none() && self.probe.is_none() {
@@ -802,5 +807,5 @@ fn tip_store(data_dir: &Path) -> bifrost_app::controls::tips::Datastore {
 }
 
 fn main() {
-    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, badge_req: None, schedule: None, probe: None, widget_gen: None, terminable: false, import: None, quick: None, pick: None, save: None, indexed: Default::default(), indexed_gen: None });
+    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, badge_req: None, schedule: None, probe: None, widget_gen: None, widget_conventions: 0, terminable: false, import: None, quick: None, pick: None, save: None, indexed: Default::default(), indexed_gen: None });
 }

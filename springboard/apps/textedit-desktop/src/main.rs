@@ -2464,7 +2464,8 @@ impl TextEditApp {
             menu_item(Action::InsertParagraph, "Paragraph Break", "", enabled).depth(1),
             menu_item(Action::InsertImage, "Image...", "", enabled).depth(1),
             AppMenuItem::submenu("Speech"),
-            menu_item(Action::SpeakStart, "Start Speaking", "", enabled).depth(1),
+            // nothing to say in a document with no text (the action would do nothing)
+            menu_item(Action::SpeakStart, "Start Speaking", "", doc.is_some_and(|d| d.text.cells().iter().any(|c| !c.ch.is_whitespace()))).depth(1),
             menu_item(Action::SpeakStop, "Stop Speaking", "", true).depth(1),
             AppMenuItem::separator(),
             menu_item(Action::Complete, "Complete", "alt+escape", enabled),
@@ -2524,7 +2525,8 @@ impl TextEditApp {
         items.push(menu_item(Action::PasteStyle, "Paste Style", "cmd+alt+v", rich && self.copied_style.is_some()).depth(1));
         // every installed family, the selection's checked (the Fonts panel and the format bar list them too)
         items.push(AppMenuItem::separator().depth(1));
-        for index in 0..text::families().len().min(256) {
+        // (the base families until the installed ones have been read, `text::preload_families`; the menu is sent again then)
+        for index in 0..text::listed_family_count().min(256) {
             let index = index as u8;
             items.push(menu_item(Action::Font(index), view::family_name(index), "", rich).checked(style.font == index).depth(1));
         }
@@ -3318,6 +3320,8 @@ fn chord_edit_action(key: u32, shift: bool, alt: bool, ctrl: bool, meta: bool) -
 }
 
 fn main() {
+    // the installed font families are read off the app loop, so the first window does not wait for the font folders
+    text::preload_families();
     bifrost_app::run(TextEditApp::new());
 }
 

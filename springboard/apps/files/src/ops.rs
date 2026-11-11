@@ -359,6 +359,12 @@ impl<T> Feed<T> {
     }
 }
 
+/// Whether a job of this kind puts new items into its destination folder: a paste or a drop (copy or move), a drop
+/// from another app, Duplicate, Compress and Expand. Moving to the Trash and emptying it add nothing to a folder.
+pub(crate) fn adds_items(kind: JobKind) -> bool {
+    !matches!(kind, JobKind::Trash | JobKind::Empty)
+}
+
 impl Files {
     /// Copies or cuts the selected items for Paste.
     pub(crate) fn copy_selected(&mut self, cut: bool) {
@@ -486,8 +492,29 @@ impl Files {
         if affected {
             let dir = self.path.clone();
             self.navigate(dir, false);
+            // what the job put into the folder shown is selected once the folder has been read again, as the
+            // reference file manager selects what was just added. (Nothing was selected after a paste, so Copy and
+            // Cut went grey and the copy had to be found by eye.)
+            if adds_items(work.kind) && self.path == work.dest {
+                self.fx.added = report.done.clone();
+            }
         }
         self.notice = notice;
+    }
+    /// Once the open folder has been read again: selects the items a paste, a drop, Duplicate or an undo just put
+    /// into it (`fx.added`) and scrolls the first of them into view. Items that are not shown (hidden, or in another
+    /// folder) are left out, and the list is dropped whatever happens, so it never reaches a later listing.
+    pub(crate) fn apply_added(&mut self) {
+        let added = std::mem::take(&mut self.fx.added);
+        if added.is_empty() {
+            return;
+        }
+        let rows: Vec<usize> = self.visible().into_iter().filter(|&i| added.contains(&self.rows[i].path)).collect();
+        let Some(&first) = rows.first() else { return };
+        self.selection = rows;
+        // in the middle of the view when it was out of it, as a new folder is shown
+        self.reveal_comfortably(first);
+        self.revision += 1;
     }
     pub(crate) fn cancel_job(&mut self) {
         if let Some(work) = &self.work {

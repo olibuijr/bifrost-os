@@ -32,7 +32,7 @@ pub(crate) const MENU_VIEW_COLUMNS: u32 = BAR_MENU_BASE + 8;
 pub(crate) const MENU_VIEW_GALLERY: u32 = BAR_MENU_BASE + 9;
 
 /// Points between a pull-down button's bottom edge and its menu.
-const BAR_MENU_GAP: f32 = 4.;
+pub(crate) const BAR_MENU_GAP: f32 = 4.;
 
 /// The most rows a context menu may have; the shell drops a longer one.
 const MAX_MENU_ITEMS: usize = 32;
@@ -123,6 +123,41 @@ impl Files {
             BAR_SHARE => self.share_selection(),
             _ => {}
         }
+    }
+
+    /// The toolbar pull-down (the view pop-up, Group and Sort, the action menu) under the point (x, y), where a press
+    /// opens its menu: nowhere while a sheet or a panel of the window takes the pointer (`click` gives those the
+    /// click first), and never in a Get Info window.
+    pub(crate) fn bar_menu_at(&self, x: f32, y: f32) -> Option<u32> {
+        let modal = self.info_window
+            || self.tag_panel
+            || self.work.as_ref().is_some_and(|w| w.conflict.is_some())
+            || self.preview.is_some()
+            || self.info.is_some()
+            || self.open_with.is_some();
+        if modal || x < self.side() || y >= HEADER_H {
+            return None;
+        }
+        self.bar_layout().hit(x, y).filter(|id| matches!(*id, BAR_VIEW | BAR_SORT | BAR_MORE))
+    }
+
+    /// A pointer press at (x, y): on a toolbar pull-down it queues that button's menu and returns true. The menu is
+    /// asked for by the press, not by the release, so the shell opens it while the button is still held: a quick
+    /// release leaves it open, and press, drag to a row and release chooses the row. The caller must not keep the
+    /// press: a release that still reaches the window would be a second click on the button and ask for the menu
+    /// again.
+    pub(crate) fn press_bar_menu(&mut self, x: f32, y: f32) -> bool {
+        let Some(id) = self.bar_menu_at(x, y) else { return false };
+        // what a click on the button did before its menu opened: a name being typed is kept, and the search field
+        // gives up the typing focus
+        if self.naming.is_some() {
+            self.commit_rename();
+        }
+        self.searching = false;
+        self.controls.focus(None);
+        self.revision += 1;
+        self.bar_action(id);
+        true
     }
 
     /// Queues the menu of toolbar button `id` to open under that button.

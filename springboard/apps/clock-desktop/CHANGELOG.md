@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.11
+
+- Times follow Settings > Date & Time > 24-Hour Time, at once when it changes: the world clocks and their map labels, sunrise and sunset, the alarms list, the World Clock widget and the answers of the time and alarm shortcuts ("07:30", or "7:30 AM" with the switch off). A change of the system time zone is taken at once. Durations (timers, the stopwatch) are unchanged.
+
 ## 1.6.10
 
 - Compliance: the selected alarm's ring uses the spacing token; no change in behaviour.

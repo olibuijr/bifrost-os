@@ -56,6 +56,21 @@ pub(crate) struct FileManagerState {
     pub(crate) mounts_until: Option<Instant>,
     /// The drag image at device pixels for the drag being asked for: its side and straight RGBA (`dragpreview`).
     pub(crate) drag_image: Option<(u32, Vec<u8>)>,
+    /// This window is not the key window (another window of Files has the keys, or another app is in front): its
+    /// selection is drawn on the unemphasised plate (`Files::selection_plate`). Set before each draw (`set_key`).
+    pub(crate) inactive: bool,
+    /// The main window only: the app left the foreground (`App::suspend`), so none of its windows is key.
+    pub(crate) suspended: bool,
+    /// The main window only: the app went to the background or came back, and the windows have not been drawn since
+    /// (`tick` asks for the frame).
+    pub(crate) emphasis_stale: bool,
+    /// The items a paste, a drop, Duplicate or an undo just put into the open folder: selected and scrolled into
+    /// view once the folder has been read again (`Files::apply_added`).
+    pub(crate) added: Vec<PathBuf>,
+    /// Type-to-select: the letters typed so far, and when the last one came (`Files::type_select`).
+    pub(crate) typed: Option<(String, Instant)>,
+    /// Go to Folder: why the path typed could not be opened, shown in the sheet until the path is edited.
+    pub(crate) goto_error: Option<String>,
 }
 
 /// Expands a typed path: `~` is the home folder, a relative path is taken from `base`.
@@ -70,6 +85,36 @@ pub(crate) fn expand(home: &Path, base: &Path, typed: &str) -> PathBuf {
     } else {
         base.join(typed)
     }
+}
+
+/// What Return in the Go to Folder sheet opens.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum GotoTarget {
+    /// A folder: it is shown.
+    Folder(PathBuf),
+    /// Anything else that exists: its folder is shown and the item selected (the folder, then the item).
+    Item(PathBuf, PathBuf),
+}
+
+/// Where the path typed into the Go to Folder sheet leads: `~`, `~/sub`, an absolute path or one relative to the
+/// folder shown (`expand`), with or without a slash at its end. None when nothing is there.
+pub(crate) fn goto_target(home: &Path, base: &Path, typed: &str) -> Option<GotoTarget> {
+    if typed.trim().is_empty() {
+        return None;
+    }
+    // without the slash at the end, the `.` and the doubled slashes a typed path may have
+    let dest: PathBuf = expand(home, base, typed).components().collect();
+    if dest.is_dir() {
+        return Some(GotoTarget::Folder(dest));
+    }
+    // a file, or a link that leads nowhere: something with that name is in its folder
+    let folder = dest.parent().filter(|p| p.is_dir())?.to_path_buf();
+    dest.symlink_metadata().is_ok().then(|| GotoTarget::Item(folder, dest))
+}
+
+/// The sheet's line for a path that leads nowhere, in the sentence style of the other notices.
+pub(crate) fn goto_missing_message(typed: &str) -> String {
+    format!("The folder \u{201C}{}\u{201D} can\u{2019}t be found.", typed.trim())
 }
 
 /// Tab completion for the Go to Folder field: the longest common prefix of the folders that start with the
@@ -113,6 +158,7 @@ impl Files {
         self.preview = None;
         self.info = None;
         self.tag_panel = false;
+        self.fx.goto_error = None;
         self.fx.goto = Some(field);
         self.revision += 1;
     }
@@ -141,17 +187,37 @@ impl Files {
         let Some(field) = self.fx.goto.as_mut() else {
             return false;
         };
+        // an edit of the path takes the last answer away; Return gives a new one
+        if matches!(input, Input::Key(_)) {
+            self.fx.goto_error = None;
+        }
         match input {
             Input::Key(KeyInput::Text(s)) => field.push_str(s),
             Input::Key(KeyInput::Code(code)) => match *code {
                 13 => {
                     let typed = field.to_string();
-                    let dest = expand(&self.home, &self.path, &typed);
-                    if dest.is_dir() {
-                        self.fx.goto = None;
-                        self.go_to(dest);
-                    } else {
-                        self.notice = Some(format!("The folder \"{}\" can't be found", typed.trim()));
+                    match goto_target(&self.home, &self.path, &typed) {
+                        Some(GotoTarget::Folder(dest)) => {
+                            self.fx.goto = None;
+                            self.go_to(dest);
+                        }
+                        // the path of a file: its folder opens with the file selected and scrolled into view, as
+                        // Show in Files does (`apply_pending`)
+                        Some(GotoTarget::Item(folder, item)) => {
+                            self.fx.goto = None;
+                            // a file of the folder shown is selected where it is; no second history entry
+                            let shown = folder == self.path;
+                            if !shown {
+                                self.navigate(folder, true);
+                            }
+                            self.fx.pending = Some(crate::ops::Pending { path: item, rename: false });
+                            if shown {
+                                self.apply_pending();
+                            }
+                        }
+                        // the sheet stays open and says so under the field, where the path can be corrected. (The
+                        // message went to the status bar, behind the sheet's own hint.)
+                        None => self.fx.goto_error = Some(goto_missing_message(&typed)),
                     }
                 }
                 KEY_ESCAPE | KEY_ESCAPE_ASCII => self.fx.goto = None,
@@ -184,11 +250,17 @@ impl Files {
         rect(s, ui, x, y, w, 118., CARD_BG.now());
         text(s, ui, "Go to the folder:", MAC_TITLE3_PT, LABEL.now(), x + 20., y + 16., w - 40.);
         bifrost_app::widgets::text_field(s, ui, field, Rect { x: x + 20., y: y + 48., w: w - 40., h: 24. }, "", true);
-        text(s, ui, "Tab completes the name. Return opens it, Escape cancels.", bifrost_app::kit::ui::MAC_SUBHEAD_PT, LABEL_2.now(), x + 20., y + 84., w - 40.);
+        // the line under the field: why the path could not be opened, else how the sheet works
+        match &self.fx.goto_error {
+            Some(error) => text(s, ui, error, bifrost_app::kit::ui::MAC_SUBHEAD_PT, LABEL.now(), x + 20., y + 84., w - 40.),
+            None => text(s, ui, "Tab completes the name. Return opens it, Escape cancels.", bifrost_app::kit::ui::MAC_SUBHEAD_PT, LABEL_2.now(), x + 20., y + 84., w - 40.),
+        }
     }
-    /// Tracks the folder a drag hovers over; call when the drop target changes.
+    /// Tracks the folder a drag hovers over; call when the drop target changes. The open folder itself (the view's
+    /// background, a file's row) is a drop target but springs nothing open: opening it again would put the view back
+    /// at its top under the drag.
     pub(crate) fn spring_hover(&mut self, target: Option<&PathBuf>) {
-        self.fx.spring = target.filter(|t| t.is_dir()).map(|t| (t.clone(), Instant::now()));
+        self.fx.spring = target.filter(|t| t.is_dir() && **t != self.path).map(|t| (t.clone(), Instant::now()));
     }
     /// Opens the hovered folder once the delay has passed. Returns true when it navigated.
     pub(crate) fn spring_tick(&mut self) -> bool {
@@ -281,6 +353,71 @@ mod tests {
     #[test]
     fn a_folder_springs_open_after_a_second() {
         assert_eq!(SPRING_DELAY, Duration::from_secs(1));
+    }
+
+    /// Go to Folder: `~`, `~/sub` and a slash at the end open the folder, the path of a file reveals the file, and a
+    /// path that leads nowhere is answered in the sheet, which stays open.
+    #[test]
+    fn go_to_folder_opens_folders_reveals_files_and_says_when_nothing_is_there() {
+        let home = std::env::temp_dir().join(format!("files-goto-return-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(home.join("sub/deep")).unwrap();
+        std::fs::write(home.join("sub/notes.txt"), "n").unwrap();
+        let base = home.join("sub");
+        let folder = |p: PathBuf| Some(GotoTarget::Folder(p));
+        assert_eq!(goto_target(&home, &base, "~"), folder(home.clone()));
+        assert_eq!(goto_target(&home, &base, "~/"), folder(home.clone()));
+        assert_eq!(goto_target(&home, &base, "~/sub"), folder(home.join("sub")));
+        assert_eq!(goto_target(&home, &base, "~/sub/"), folder(home.join("sub")), "a slash at the end");
+        assert_eq!(goto_target(&home, &base, " ~/sub/deep/ "), folder(home.join("sub/deep")), "spaces around the path");
+        assert_eq!(goto_target(&home, &base, "deep"), folder(home.join("sub/deep")), "relative to the folder shown");
+        assert_eq!(goto_target(&home, &base, &format!("{}/sub/", home.display())), folder(home.join("sub")), "an absolute path");
+        assert_eq!(goto_target(&home, &base, "~/sub/notes.txt"), Some(GotoTarget::Item(home.join("sub"), home.join("sub/notes.txt"))), "a file: its folder, and the file to select");
+        assert_eq!(goto_target(&home, &base, "~/nowhere"), None);
+        assert_eq!(goto_target(&home, &base, "~/nowhere/notes.txt"), None);
+        assert_eq!(goto_target(&home, &base, "  "), None, "an empty field opens nothing");
+        // the sheet: Return on a path that leads nowhere keeps it open with the reason under the field
+        let mut files = crate::tests::fixture(vec![]);
+        files.home = home.clone();
+        files.path = home.clone();
+        let key = |code: u32| Input::Key(KeyInput::Code(code));
+        let type_path = |files: &mut Files, path: &str| {
+            files.open_goto();
+            if let Some(field) = files.fx.goto.as_mut() {
+                field.clear();
+                field.push_str(path);
+            }
+        };
+        type_path(&mut files, "~/nowhere");
+        assert!(files.goto_input(&key(13)));
+        assert!(files.fx.goto.is_some(), "the sheet stays open");
+        assert_eq!(files.fx.goto_error.as_deref(), Some("The folder \u{201C}~/nowhere\u{201D} can\u{2019}t be found."));
+        assert_eq!(files.path, home, "and the window stays where it was");
+        // editing the path takes the message away
+        assert!(files.goto_input(&Input::Key(KeyInput::Text("x".into()))));
+        assert!(files.fx.goto_error.is_none());
+        // a file's path: the sheet closes, the folder opens and the file waits to be selected
+        type_path(&mut files, "~/sub/notes.txt");
+        assert!(files.goto_input(&key(13)));
+        assert!(files.fx.goto.is_none() && files.fx.goto_error.is_none());
+        assert_eq!(files.path, home.join("sub"));
+        assert_eq!(files.fx.pending, Some(crate::ops::Pending { path: home.join("sub/notes.txt"), rename: false }));
+        // a folder with a slash at its end
+        type_path(&mut files, "~/sub/deep/");
+        assert!(files.goto_input(&key(13)));
+        assert_eq!(files.path, home.join("sub/deep"));
+        assert!(files.fx.goto.is_none());
+        // a file of the folder that is shown already is selected at once, and the history does not grow
+        files.path = home.join("sub");
+        files.listing = fs::list(&home.join("sub")).unwrap();
+        files.refresh_rows();
+        let steps = files.history.len();
+        type_path(&mut files, "~/sub/notes.txt");
+        assert!(files.goto_input(&key(13)));
+        assert_eq!(files.selected_paths(), vec![home.join("sub/notes.txt")]);
+        assert_eq!(files.history.len(), steps);
+        assert!(files.fx.pending.is_none());
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

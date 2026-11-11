@@ -57,9 +57,14 @@ pub struct Document {
     pub widgets: Vec<FormWidget>,
     /// Whether a field value was changed this session, so the next save writes the form values.
     pub form_changed: bool,
+    /// The form's values as the file has them, kept from the first change of a field this session, so Revert and
+    /// Don't Save put them back. None while no field was changed.
+    form_opened: Option<FieldSet>,
     source: Source,
     /// A picture as it was opened, for Revert to Original after pixel edits. None for a PDF.
     original: Option<Rc<Image>>,
+    /// What the file a picture was opened from holds, which decides whether File > Save may write that file.
+    pub stored: Stored,
     /// Counts the changes to a picture's pixels, so a drawn copy of it can tell it is stale.
     pub revision: u32,
     /// The pictures and thumbnails drawn so far, by key.
@@ -89,8 +94,10 @@ impl Document {
             form: FieldSet::new(),
             widgets: Vec::new(),
             form_changed: false,
+            form_opened: None,
             source,
             original,
+            stored: Stored::unknown(),
             revision: 0,
             drawn: RefCell::new(HashMap::new()),
             asked: RefCell::new(HashSet::new()),
@@ -118,6 +125,9 @@ impl Document {
     /// Sets the text of the field that widget `widget` belongs to. False when the field refuses the text.
     pub fn set_field_text(&mut self, widget: usize, text: &str) -> bool {
         let Some(w) = self.widgets.get(widget) else { return false };
+        if self.form_opened.is_none() {
+            self.form_opened = Some(self.form.clone());
+        }
         let ok = self.form.set_value(&w.name, text).is_ok();
         self.form_changed |= ok;
         ok
@@ -127,6 +137,9 @@ impl Document {
     pub fn toggle_field(&mut self, widget: usize) -> bool {
         let Some(w) = self.widgets.get(widget) else { return false };
         let on = self.form.get(&w.name).is_some_and(|f| f.is_on());
+        if self.form_opened.is_none() {
+            self.form_opened = Some(self.form.clone());
+        }
         let ok = self.form.set_state(&w.name, !on).is_ok();
         self.form_changed |= ok;
         ok
@@ -248,11 +261,17 @@ impl Document {
         self.revision = self.revision.wrapping_add(1);
     }
 
-    /// Puts the picture as it was opened back, undoing every pixel edit. Nothing happens for a PDF.
+    /// Puts the document's content as it was opened back: a picture's pixels, undoing every pixel edit, and a PDF
+    /// form's values, undoing what was typed into its fields and the check boxes that were turned, so nothing of them
+    /// is left to save.
     pub fn restore_original(&mut self) {
         if let Some(img) = self.original.clone() {
             self.replace_picture(img);
         }
+        if let Some(form) = self.form_opened.take() {
+            self.form = form;
+        }
+        self.form_changed = false;
     }
 
     /// The shown places of the bookmarked pages, in no particular order (a deleted page has none).
@@ -365,11 +384,131 @@ impl Document {
     }
 }
 
+/// What the file a picture was opened from holds, read from its bytes and never from its name: a file called a.png
+/// that holds a JPEG is a JPEG. The app shows the first picture of the file as 8-bit pixels in the display's colours
+/// and writes a still PNG or JPEG of them without a colour profile, so File > Save may write the file only when
+/// nothing of it is lost that way (`in_place`). Every other picture is saved as a copy under a name the person
+/// chooses, and its file stays as it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stored {
+    /// The format of the bytes. None for an SVG document, which is none of the raster formats.
+    pub format: Option<Format>,
+    /// The pictures in the file: the frames of an animation, the pages of a TIFF, the sizes of an icon. Only the
+    /// first is shown and saved.
+    pub frames: usize,
+    /// More than 8 bits a sample (a 16-bit PNG): a save would write 8.
+    pub deep: bool,
+    /// An embedded colour profile: the pixels were converted to the display's colours when the file was decoded, and
+    /// a save would write them without the profile.
+    pub profiled: bool,
+}
+
+impl Stored {
+    /// A document whose file was not read for it (a PDF).
+    pub fn unknown() -> Stored {
+        Stored { format: None, frames: 1, deep: false, profiled: false }
+    }
+
+    /// One still 8-bit picture of `format` without a colour profile.
+    #[cfg(test)]
+    pub fn plain(format: Format) -> Stored {
+        Stored { format: Some(format), frames: 1, deep: false, profiled: false }
+    }
+
+    /// Reads it from the bytes of the file: the signature and the header of the first picture, with no decode.
+    pub fn of(bytes: Vec<u8>) -> Stored {
+        let source = imageio::ImageSource::new(bytes);
+        let first = source.properties_at(0);
+        Stored {
+            format: source.format(),
+            frames: source.count().max(1),
+            deep: first.as_ref().is_some_and(|p| p.depth > 8),
+            profiled: first.as_ref().is_some_and(|p| p.icc_profile.is_some()),
+        }
+    }
+
+    /// The format File > Save writes into the file itself: the format its bytes have, when that is PNG or JPEG and
+    /// the file is one still picture of at most 8 bits a sample without a colour profile. None when the file is to be
+    /// left alone and the document saved as a copy.
+    pub fn in_place(&self) -> Option<Format> {
+        match self.format {
+            Some(format @ (Format::Png | Format::Jpeg)) if self.frames <= 1 && !self.deep && !self.profiled => Some(format),
+            _ => None,
+        }
+    }
+
+    /// The format a copy of the picture is saved in: JPEG for a JPEG, PNG for every other.
+    pub fn copy_format(&self) -> Format {
+        match self.format {
+            Some(Format::Jpeg) => Format::Jpeg,
+            _ => Format::Png,
+        }
+    }
+
+    /// The name the save panel suggests for the copy of the file called `name`: the same name with the extension of
+    /// the copy's format (a.gif gives a.png). A name that has an extension of that format already (a 16-bit a.png,
+    /// a GIF called a.png, a.jpeg with a profile) would be the file's own, so " copy" tells the copy apart.
+    pub fn copy_name(&self, name: &str) -> String {
+        let (stem, ext) = match name.rsplit_once('.') {
+            Some((stem, ext)) if !stem.is_empty() => (stem, ext),
+            _ => (name, ""),
+        };
+        let wanted = match self.copy_format() {
+            Format::Jpeg => "jpg",
+            _ => "png",
+        };
+        if Format::from_extension(ext) == Some(self.copy_format()) {
+            format!("{stem} copy.{wanted}")
+        } else {
+            format!("{stem}.{wanted}")
+        }
+    }
+
+    /// Why File > Save does not write the file called `name` and what is saved instead, as the status line says it
+    /// while the save panel is up. Empty when the file is saved in place.
+    pub fn copy_reason(&self, name: &str) -> String {
+        if self.in_place().is_some() {
+            return String::new();
+        }
+        let copy = match self.copy_format() {
+            Format::Jpeg => "JPEG",
+            _ => "PNG",
+        };
+        let (kind, parts) = match self.format {
+            Some(Format::Png) => ("PNG", "frames"),
+            Some(Format::Jpeg) => ("JPEG", "pictures"),
+            Some(Format::Gif) => ("GIF", "frames"),
+            Some(Format::Webp) => ("WebP", "frames"),
+            Some(Format::Tiff) => ("TIFF", "pages"),
+            Some(Format::Bmp) => ("BMP", "pictures"),
+            Some(Format::Ico) => ("icon", "sizes"),
+            None => ("SVG", "pictures"),
+        };
+        let why = if self.format != Some(self.copy_format()) {
+            format!("Viewer cannot save {kind} files")
+        } else if self.frames > 1 {
+            "Viewer cannot save an animation".to_string()
+        } else if self.deep {
+            "Viewer saves 8 bits a sample and this file has more".to_string()
+        } else {
+            "Viewer cannot save this file\u{2019}s colour profile".to_string()
+        };
+        let first = if self.frames > 1 { format!(" Only the first of its {} {parts} is in the copy.", self.frames) } else { String::new() };
+        format!("{why}, so the picture is saved as a {copy} copy and {name} stays as it is.{first}")
+    }
+}
+
 /// Decodes the bytes of a picture file. An SVG document is not one of the raster formats `ImageSource` reads from a
 /// header, so it is drawn at its own size by the decoder every other picture view uses (`imageio::decode`).
+///
+/// The picture is turned upright by the orientation its metadata gives (a camera's EXIF, a PNG's `eXIf`), as every
+/// other view of it shows it. The pixels are what a save writes, and a save writes no orientation but upright
+/// (`export::kept_png_chunks`; a JPEG is saved without EXIF), so the turn is in the pixels or in the metadata, never in
+/// both. Decoded as stored, a photo taken on its side opened on its side and was saved that way with its
+/// orientation gone.
 pub fn decode_picture(bytes: &[u8]) -> Result<Image, SourceError> {
     match ImageSource::new(bytes) {
-        Ok(source) => source.decode(),
+        Ok(source) => source.decode_upright(),
         Err(SourceError::NotImage) => imageio::decode(bytes).ok_or(SourceError::NotImage),
         Err(e) => Err(e),
     }
@@ -425,7 +564,9 @@ pub fn open_picture(path: &Path, data_dir: &Path) -> Result<Document, String> {
     let bytes = std::fs::read(path).map_err(|e| read_error(&e).to_string())?;
     let img = decode_picture(&bytes).map_err(|e| picture_error(e).to_string())?;
     let sizes = vec![(img.w, img.h)];
-    Ok(Document::new(path, data_dir, sizes, Source::Picture(Rc::new(img)), Vec::new(), false))
+    let mut doc = Document::new(path, data_dir, sizes, Source::Picture(Rc::new(img)), Vec::new(), false);
+    doc.stored = Stored::of(bytes);
+    Ok(doc)
 }
 
 /// The document of a PDF whose worker has opened it. `jobs` and `inbox` are the worker's.
@@ -529,13 +670,17 @@ pub mod tests_support {
     /// A one-page document showing `img`.
     pub fn picture_of(img: Image) -> Document {
         let size = (img.w, img.h);
-        Document::new(Path::new("/a/b.png"), Path::new("/nonexistent"), vec![size], Source::Picture(Rc::new(img)), Vec::new(), false)
+        let mut doc = Document::new(Path::new("/a/b.png"), Path::new("/nonexistent"), vec![size], Source::Picture(Rc::new(img)), Vec::new(), false);
+        doc.stored = Stored::plain(Format::Png);
+        doc
     }
 
     /// A document of `n` pages of 4 by 4 pixels, all showing the same picture.
     pub fn pictures(n: usize) -> Document {
         let img = Image { w: 4, h: 4, px: vec![0; 16] };
-        Document::new(Path::new("/a/b.png"), Path::new("/nonexistent"), vec![(4, 4); n], Source::Picture(Rc::new(img)), Vec::new(), false)
+        let mut doc = Document::new(Path::new("/a/b.png"), Path::new("/nonexistent"), vec![(4, 4); n], Source::Picture(Rc::new(img)), Vec::new(), false);
+        doc.stored = Stored::plain(Format::Png);
+        doc
     }
 }
 
@@ -546,6 +691,44 @@ mod tests {
     fn picture_doc(w: usize, h: usize) -> Document {
         let img = Image { w, h, px: vec![0; w * h] };
         Document::new(Path::new("/a/b.png"), Path::new("/nonexistent"), vec![(w, h)], Source::Picture(Rc::new(img)), Vec::new(), false)
+    }
+
+    /// Only one still picture of 8 bits a sample without a colour profile, in a format the app writes, is saved into
+    /// its own file. Everything else is saved as a copy, under a name that is never the file's own.
+    #[test]
+    fn only_a_plain_png_or_jpeg_is_saved_into_its_own_file() {
+        let png = Stored::plain(Format::Png);
+        let jpeg = Stored::plain(Format::Jpeg);
+        assert_eq!((png.in_place(), jpeg.in_place()), (Some(Format::Png), Some(Format::Jpeg)));
+        assert!(png.copy_reason("a.png").is_empty() && jpeg.copy_reason("a.jpg").is_empty());
+        for format in [Format::Gif, Format::Bmp, Format::Ico, Format::Tiff, Format::Webp] {
+            let stored = Stored::plain(format);
+            assert_eq!((stored.in_place(), stored.copy_format()), (None, Format::Png), "{format:?}");
+            assert!(stored.copy_reason("a.x").contains("saved as a PNG copy and a.x stays as it is"), "{format:?}");
+        }
+        assert_eq!(Stored::unknown().in_place(), None, "an SVG document");
+        assert_eq!(Stored::of(b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>".to_vec()), Stored::unknown());
+        let deep = Stored { deep: true, ..png };
+        let tagged = Stored { profiled: true, ..jpeg };
+        let animated = Stored { frames: 3, ..png };
+        assert_eq!((deep.in_place(), tagged.in_place(), animated.in_place()), (None, None, None));
+        assert_eq!(tagged.copy_format(), Format::Jpeg, "a JPEG's copy is a JPEG");
+        // the suggested name
+        assert_eq!(Stored::plain(Format::Gif).copy_name("a.gif"), "a.png");
+        assert_eq!(Stored::plain(Format::Tiff).copy_name("scan.2.tiff"), "scan.2.png");
+        assert_eq!(Stored::unknown().copy_name("drawing.svg"), "drawing.png");
+        assert_eq!(deep.copy_name("a.png"), "a copy.png", "not the file's own name");
+        assert_eq!(Stored::plain(Format::Gif).copy_name("a.PNG"), "a copy.png", "a GIF that is called a PNG");
+        assert_eq!(tagged.copy_name("p.jpeg"), "p copy.jpg");
+        assert_eq!(tagged.copy_name("p.png"), "p.jpg", "a JPEG that is called a PNG");
+        assert_eq!(Stored::plain(Format::Gif).copy_name("noext"), "noext.png");
+        // what the status line says
+        assert!(deep.copy_reason("a.png").starts_with("Viewer saves 8 bits a sample and this file has more, so"));
+        assert!(tagged.copy_reason("p.jpg").contains("colour profile") && tagged.copy_reason("p.jpg").contains("saved as a JPEG copy"));
+        assert!(animated.copy_reason("a.png").starts_with("Viewer cannot save an animation") && animated.copy_reason("a.png").ends_with("Only the first of its 3 frames is in the copy."));
+        let pages = Stored { frames: 4, ..Stored::plain(Format::Tiff) };
+        assert!(pages.copy_reason("scan.tif").starts_with("Viewer cannot save TIFF files") && pages.copy_reason("scan.tif").ends_with("Only the first of its 4 pages is in the copy."));
+        assert!(!Stored::plain(Format::Gif).copy_reason("a.gif").contains("first of"), "one frame: nothing is left out");
     }
 
     #[test]
@@ -781,6 +964,7 @@ mod tests {
             FormWidget { page: 0, rect: crate::model::Norm { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }, name: "agree".into(), kind: Kind::Check, obj: 5, node: 5, on_name: "Yes".into() },
         ];
         assert!(doc.field_edits().is_empty(), "an untouched form saves nothing");
+        let as_opened = doc.form.clone();
         assert_eq!(doc.widget_at(0, (0.25, 0.25)), Some(0));
         assert_eq!(doc.widget_at(0, (0.75, 0.75)), Some(1));
         assert_eq!(doc.widget_at(1, (0.25, 0.25)), None);
@@ -793,6 +977,16 @@ mod tests {
         assert_eq!(edits[1].value, FieldValue::State("Yes".into()));
         assert_eq!(edits[1].widgets, vec![(5, "Yes".to_string())]);
         assert!(!doc.toggle_field(9), "no such widget");
+        // Revert and Don't Save put the fields back as the file has them, with nothing left to save
+        assert!(doc.edited());
+        doc.restore_original();
+        assert_eq!(doc.form, as_opened);
+        assert!(!doc.edited() && doc.field_edits().is_empty());
+        // a change made after that is taken back by the next one, to the same values
+        assert!(doc.set_field_text(0, "Bo") && doc.edited());
+        doc.restore_original();
+        assert_eq!(doc.form, as_opened);
+        assert!(!doc.edited());
     }
 
     #[test]

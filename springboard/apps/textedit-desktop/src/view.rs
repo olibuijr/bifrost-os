@@ -629,6 +629,10 @@ pub fn weight_of(style: &Style) -> Weight {
 
 /// The face name a font index stands for, for the menu and the readout.
 pub fn family_name(font: u8) -> &'static str {
+    // a base family is named without the installed ones (`text::preload_families` reads those off the app loop)
+    if let Some(base) = FAMILIES.get(font as usize) {
+        return *base;
+    }
     crate::text::families().get(font as usize).map_or(FAMILIES[0], String::as_str)
 }
 
@@ -1211,13 +1215,20 @@ pub fn ruler_tab(geom: &Geometry, x: f32, y: f32) -> Option<f32> {
     Some(((x - geom.text_x) / 6.0).round() * 6.0)
 }
 
+/// The counts as the status bar writes them: "1 word, 5 characters". Each noun takes the form its count asks for
+/// (`inflection::inflect_noun`, the kit's plural rules).
+pub fn status_counts(words: usize, chars: usize) -> String {
+    let noun = |one: &str, n: usize| bifrost_app::inflection::inflect_noun(bifrost_app::controls::language::Language::English, one, n as u64);
+    format!("{words} {}, {chars} {}", noun("word", words), noun("character", chars))
+}
+
 /// The word count at the bottom of the window, centred.
 pub fn draw_status(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, words: usize, chars: usize, note: Option<&str>) {
     let top = geom.height - STATUS_H;
     c.fill_rect(RectF::new(0.0, ui.pt(top).floor(), ui.pt(geom.width).ceil(), ui.pt(STATUS_H).ceil()), DETAIL_BG.now());
     let text = match note {
         Some(note) => note.to_string(),
-        None => format!("{words} words, {chars} characters"),
+        None => status_counts(words, chars),
     };
     let img = ui.text(&text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_3.now());
     let x = (ui.pt(geom.width) - img.w as f32) / 2.0;
@@ -1229,6 +1240,15 @@ pub fn draw_status(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, words: usize, c
 mod tests {
     use super::*;
     use bifrost_app::document::item;
+
+    /// E2E rev 9 (R13a): one word read "1 words, 5 characters".
+    #[test]
+    fn the_status_counts_use_the_singular_for_one() {
+        assert_eq!(status_counts(1, 5), "1 word, 5 characters");
+        assert_eq!(status_counts(2, 1), "2 words, 1 character");
+        assert_eq!(status_counts(0, 0), "0 words, 0 characters");
+        assert_eq!(status_counts(1, 1), "1 word, 1 character");
+    }
 
     #[test]
     fn menu_ids_round_trip() {

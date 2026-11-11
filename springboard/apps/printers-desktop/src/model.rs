@@ -625,25 +625,36 @@ pub fn job_progress(j: &Job) -> Option<f32> {
 
 const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/// When a job was submitted, for its column: the time today, else the date. `created` and `now` are Unix seconds and
-/// `offset` is the zone's offset from UTC in seconds. "" when the scheduler gave no time.
-pub fn created_text(created: i32, offset: i32, now: i64) -> String {
+/// When a job was submitted, for its column: the time today, else the date. `created` and `now` are Unix seconds. The
+/// time is told in the system zone and the person's clock style, both as the shell tells the app
+/// (`bifrost_app::time_zone`), and read when called, so the column follows a change of either: "11:00", or
+/// "11:00 AM" with Settings > Date & Time > 24-Hour Time off. "" when the scheduler gave no time.
+pub fn created_text(created: i32, now: i64) -> String {
+    // each instant at the zone's offset then: a job sent before a daylight saving change keeps its time
+    let offset = |unix: i64| bifrost_app::time_zone::TimeZone::auto_updating_current().seconds_from_gmt(bifrost_app::coding::Date(unix as f64));
+    created_text_in(created, offset(i64::from(created)), now, offset(now), bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `created_text` with the zone's offset from UTC in seconds at each of the two instants, and a given clock style.
+/// The time is written by the formatter of `time_zone::time_text`.
+pub fn created_text_in(created: i32, created_offset: i32, now: i64, now_offset: i32, h24: bool) -> String {
     if created <= 0 {
         return String::new();
     }
-    let local = i64::from(created) + i64::from(offset);
+    let local = i64::from(created) + i64::from(created_offset);
     let days = local.div_euclid(86_400);
     let secs = local.rem_euclid(86_400);
-    let (hour, minute) = (secs / 3600, secs % 3600 / 60);
-    let today = (now + i64::from(offset)).div_euclid(86_400);
+    let style = bifrost_app::controls::menu_extras::ClockStyle { use_24h: h24, ..Default::default() };
+    let time = style.time_text((secs / 3600) as i32, (secs % 3600 / 60) as i32);
+    let today = (now + i64::from(now_offset)).div_euclid(86_400);
     if days == today {
-        return format!("{hour:02}:{minute:02}");
+        return time;
     }
     let (year, month, day) = bifrost_app::calendar_system::civil_from_days(days);
     let (this_year, _, _) = bifrost_app::calendar_system::civil_from_days(today);
     let name = MONTHS[(month.clamp(1, 12) - 1) as usize];
     if year == this_year {
-        format!("{name} {day}, {hour:02}:{minute:02}")
+        format!("{name} {day}, {time}")
     } else {
         format!("{name} {day}, {year}")
     }
@@ -1220,11 +1231,26 @@ mod tests {
     fn submitted_times_show_the_clock_today_and_the_date_before() {
         // 2026-10-13 12:00:00 UTC
         let now = 1_791_892_800_i64;
-        assert_eq!(created_text(0, 0, now), "");
-        assert_eq!(created_text((now - 3600) as i32, 0, now), "11:00");
-        assert_eq!(created_text((now - 3600) as i32, 3600, now), "12:00", "the zone offset moves the clock");
-        assert_eq!(created_text((now - 86_400) as i32, 0, now), "Oct 12, 12:00");
-        assert_eq!(created_text((now - 400 * 86_400) as i32, 0, now), "Sep 8, 2025");
+        assert_eq!(created_text_in(0, 0, now, 0, true), "");
+        assert_eq!(created_text(0, now), "");
+        assert_eq!(created_text_in((now - 3600) as i32, 0, now, 0, true), "11:00");
+        assert_eq!(created_text_in((now - 3600) as i32, 3600, now, 3600, true), "12:00", "the zone offset moves the clock");
+        assert_eq!(created_text_in((now - 86_400) as i32, 0, now, 0, true), "Oct 12, 12:00");
+        assert_eq!(created_text_in((now - 400 * 86_400) as i32, 0, now, 0, true), "Sep 8, 2025");
+    }
+
+    #[test]
+    fn submitted_times_follow_the_clock_style_and_the_offset_of_their_own_instant() {
+        // 2026-10-13 00:00:00 UTC, then a morning, noon, an afternoon and midnight of that day
+        let day = 1_791_849_600_i64;
+        let at = |h: i64, m: i64| (day + h * 3600 + m * 60) as i32;
+        let now = day + 23 * 3600 + 59 * 60;
+        let times = |h24: bool| [at(8, 5), at(12, 0), at(15, 58), at(0, 0)].map(|t| created_text_in(t, 0, now, 0, h24));
+        assert_eq!(times(true), ["08:05", "12:00", "15:58", "00:00"]);
+        assert_eq!(times(false), ["8:05 AM", "12:00 PM", "3:58 PM", "12:00 AM"]);
+        assert_eq!(created_text_in(at(15, 58) - 86_400, 0, now, 0, false), "Oct 12, 3:58 PM");
+        // sent at 23:30 UTC+2 the day before, read after the clocks went back to UTC+1: still that day's 23:30
+        assert_eq!(created_text_in(at(21, 30) - 86_400, 7200, now, 3600, true), "Oct 12, 23:30");
     }
 
     #[test]

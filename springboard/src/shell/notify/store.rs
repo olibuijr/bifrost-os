@@ -47,6 +47,10 @@ pub struct Notification {
     pub thread: String,
     /// the thumbnail of the request's first attachment, decoded when it was delivered
     pub image: Option<crate::gfx::Image>,
+    /// the file or folder a click on the notification shows in Files (a notice the shell posts about a file, such as
+    /// "Moved to Desktop"); kept with the notification, so the click works from the banner and, for as long as the
+    /// entry is listed, from Notification Center. None opens the app as usual.
+    pub reveal: Option<PathBuf>,
 }
 
 /// Which part of the file the parser is in.
@@ -61,7 +65,13 @@ enum Section {
 
 impl Notification {
     pub fn new(app: AppId, title: impl Into<String>, body: impl Into<String>, time: i64) -> Self {
-        Notification { image: None, app, title: title.into(), body: body.into(), time, id: 0, thread: String::new() }
+        Notification { image: None, app, title: title.into(), body: body.into(), time, id: 0, thread: String::new(), reveal: None }
+    }
+
+    /// The same notification, whose click shows `path` in Files (`reveal`).
+    pub fn revealing(mut self, path: impl Into<PathBuf>) -> Self {
+        self.reveal = Some(path.into());
+        self
     }
 }
 
@@ -159,7 +169,7 @@ impl Store {
                     _ => Section::Item,
                 };
                 if section == Section::Item {
-                    current = id.parse().ok().map(|id| Notification { image: None, app: AppId::Settings, title: String::new(), body: String::new(), time: 0, id, thread: String::new() });
+                    current = id.parse().ok().map(|id| Notification { image: None, app: AppId::Settings, title: String::new(), body: String::new(), time: 0, id, thread: String::new(), reveal: None });
                 }
                 continue;
             }
@@ -204,6 +214,7 @@ impl Store {
                         "title" => n.title = v.to_string(),
                         "body" => n.body = v.to_string(),
                         "thread" => n.thread = v.to_string(),
+                        "reveal" => n.reveal = (!v.is_empty()).then(|| PathBuf::from(v)),
                         _ => {}
                     }
                 }
@@ -247,6 +258,9 @@ impl Store {
             out.push_str(&format!("[{}]\napp={}\ntime={}\ntitle={}\nbody={}\n", n.id, app_key(n.app), n.time, clean(&n.title), clean(&n.body)));
             if !n.thread.is_empty() {
                 out.push_str(&format!("thread={}\n", clean(&n.thread)));
+            }
+            if let Some(path) = &n.reveal {
+                out.push_str(&format!("reveal={}\n", clean(&path.to_string_lossy())));
             }
         }
         out
@@ -585,6 +599,22 @@ mod tests {
         for app in apps() {
             assert_eq!(again.count(app.id), 1, "{}", app.name);
         }
+    }
+
+    #[test]
+    fn the_file_a_click_shows_is_kept_with_its_notification() {
+        let path = scratch("reveal.ini");
+        let _ = std::fs::remove_file(&path);
+        let mut s = Store::load(&path);
+        let moved = s.push(Notification::new(AppId::Settings, "Moved to Desktop", "Plan.pdf", 10).revealing("/home/a/Desktop/Plan = final.pdf"));
+        let plain = s.push(note(AppId::Settings, "Wi-Fi", 20));
+        assert_eq!(s.get(moved).unwrap().reveal.as_deref(), Some(std::path::Path::new("/home/a/Desktop/Plan = final.pdf")));
+        assert_eq!(s.get(plain).unwrap().reveal, None);
+        // it survives a restart of the shell, and a later notification does not take it over
+        let again = Store::load(&path);
+        assert_eq!(again.get(moved).unwrap().reveal.as_deref(), Some(std::path::Path::new("/home/a/Desktop/Plan = final.pdf")), "only the first '=' splits a line");
+        assert_eq!(again.get(plain).unwrap().reveal, None);
+        assert_eq!(again.get(moved), s.get(moved));
     }
 
     #[test]

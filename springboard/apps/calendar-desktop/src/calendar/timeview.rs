@@ -23,7 +23,19 @@ const DAY_NUM_Y_PT: f32 = 173.0;
 /// Year view: the top of the month grid.
 const YEAR_TOP_PT: f32 = 140.0;
 pub(super) const ALLDAY_H: f32 = 28.0;
+/// The width of the hour gutter in 24-hour style ("23:59" fits).
 const GUTTER: f32 = 52.0;
+/// The width of the hour gutter with AM and PM: the red time of the current-time line ("10:05 AM") fits.
+const GUTTER_12H: f32 = 68.0;
+
+/// The width of the hour gutter in points for a clock style.
+fn gutter_pt(h24: bool) -> f32 {
+    if h24 {
+        GUTTER
+    } else {
+        GUTTER_12H
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum View {
@@ -49,15 +61,6 @@ impl View {
             View::Month => "Month",
             View::Year => "Year",
         }
-    }
-}
-
-fn hour_label(h: u32) -> String {
-    match h {
-        0 => "12 AM".into(),
-        1..=11 => format!("{h} AM"),
-        12 => "Noon".into(),
-        _ => format!("{} PM", h - 12),
     }
 }
 
@@ -125,7 +128,7 @@ impl Calendar {
 
     pub(super) fn col_geometry(&self, ui: &Ui) -> (f32, f32) {
         let n = if self.view == View::Day { 1.0 } else { f32::from(self.prefs.days_per_week) };
-        let gut = ui.pt(GUTTER);
+        let gut = ui.pt(gutter_pt(bifrost_app::time_zone::uses_24_hour_clock()));
         (gut, (self.w as f32 - gut - ui.pt(SPACE_S)) / n)
     }
 
@@ -261,7 +264,7 @@ impl Calendar {
                 let y = hours_top + hh * h as f32;
                 g.fill_rrect(gut, y, w - gut, ui.pt(0.5), 0.0, SEPARATOR_C.now());
                 if (1..24).contains(&h) {
-                    self.text(&mut g, ui, &hour_label(h), MAC_SUBHEAD_PT, LABEL_2.now(), ui.pt(SPACE_S), y);
+                    self.text(&mut g, ui, &super::hour_label(h), MAC_SUBHEAD_PT, LABEL_2.now(), ui.pt(SPACE_S), y);
                 }
             }
             if n > 1 {

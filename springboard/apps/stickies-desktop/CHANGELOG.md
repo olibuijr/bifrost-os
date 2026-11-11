@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.10
+
+- A note that was moved, resized, collapsed or closed no longer leaves a copy of itself behind, on screen or under the pointer: clicks where a note used to be reach the window beneath, and only the notes themselves take clicks.
+- The Created and Modified lines in the Window menu are in your time zone and follow Settings > Date & Time > 24-Hour Time.
+
 ## 0.10.9
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

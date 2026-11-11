@@ -44,7 +44,7 @@ pub fn line(cities: &[&City], unix: i64) -> String {
         .take(WIDGET_CITIES)
         .map(|city| {
             let now = city.local(unix);
-            format!("{} {:02}:{:02}", city.name, now.hour, now.min)
+            format!("{} {}", city.name, crate::clock::time_text(now.hour, now.min))
         })
         .collect::<Vec<_>>()
         .join(", ")
@@ -57,16 +57,21 @@ pub struct System {
     shown: Option<Vec<&'static str>>,
     /// whether the Dock icon shows the timer progress bar
     dock_bar: bool,
+    /// `time_zone::conventions_revision` when the timeline was last sent: its lines carry times of day
+    conventions: u32,
 }
 
 impl System {
-    /// Sends the World Clock timeline when the chosen cities differ from the ones last sent, or always when `force`
-    /// is set (the shell asked for a new timeline). No cities removes the timeline.
+    /// Sends the World Clock timeline when the chosen cities differ from the ones last sent, when the clock style or
+    /// the system zone changed since (the lines are times of day), or always when `force` is set (the shell asked for
+    /// a new timeline). No cities removes the timeline.
     pub fn sync_world(&mut self, ctx: &Ctx, cities: &[&City], unix: i64, force: bool) {
         let names: Vec<&'static str> = cities.iter().map(|city| city.name).collect();
-        if !force && self.shown.as_deref() == Some(names.as_slice()) {
+        let conventions = bifrost_app::time_zone::conventions_revision();
+        if !force && self.shown.as_deref() == Some(names.as_slice()) && self.conventions == conventions {
             return;
         }
+        self.conventions = conventions;
         if names.is_empty() {
             wt::remove(ctx, WORLD_KIND);
         } else {

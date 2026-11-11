@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.27
+
+- Opening another file while the document has unsaved changes asks whether to save them first: Save, Don't Save or Cancel. This covers a file opened from the file manager, File > Open, Open Recent, a dropped file and New from Clipboard. The other file used to open at once and the changes were lost.
+- A document whose save the last quit cut off is not asked about when another file opens and nothing was changed in it since: the file opens under the message, and the document stays in Open Recent as an edited one. When it was changed, the question comes after the message is answered, never together with it.
+- Don't Save and Revert put the fields of a PDF form back as the file has them; what was typed stayed in the fields.
+- In a narrow window no toolbar button is left out: Actual Size and Rotate Left move into the » menu at the end of the bar when there is no room for them. The last button keeps a margin to the window's edge. The window's minimum width is 760 points.
+- Saving a PNG keeps its physical pixel size, its text, its EXIF block and, for a picture without a colour profile, its gamma and colour space. Only the pixels were written before.
+- A picture whose EXIF orientation says it is to be turned opens upright, and is saved upright.
+- File > Save no longer writes PNG data into a GIF, WebP, TIFF, BMP, icon or SVG file, which left the file unreadable for other apps. For these, for an animated PNG, for a PNG of 16 bits a sample and for a picture with a colour profile, Save asks where to save a copy (a PNG, or a JPEG for a JPEG) and leaves the file as it is; the copy is the document from then on. The status line says why, and that only the first frame or page of the file is in the copy. A PNG or JPEG is saved in the format its content has, whatever its name ends in.
+- After Save As the colour adjustment is no longer applied a second time to the saved picture.
+
 ## 0.11.26
 
 - A page fitted to the window keeps an even margin on all four sides, so a tall or turned page no longer sits flush under the toolbar and on the window's bottom edge, where it looked cut off.

@@ -1014,7 +1014,8 @@ impl Mail {
 
     /// Mailbox > Show Activity: a sheet with the activity list, the newest line last.
     pub fn open_activity(&mut self) {
-        let text = if self.activity.is_empty() { "Nothing has happened yet".to_string() } else { self.activity.join("\n") };
+        // each line's time is written now, in the system zone and the person's clock style
+        let text = if self.activity.is_empty() { "Nothing has happened yet".to_string() } else { self.activity.iter().map(|line| crate::message::activity_text(line)).collect::<Vec<_>>().join("\n") };
         self.open_prompt(PromptKind::Activity, vec![Field::new("Activity", "", &text)]);
     }
 

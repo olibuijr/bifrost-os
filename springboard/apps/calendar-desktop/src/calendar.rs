@@ -382,8 +382,36 @@ fn today(wall: Wall, t: f64) -> Date {
     }
 }
 
+/// The time of day at `minute` of a day, in the person's clock style (Settings > Date & Time > 24-Hour Time, which
+/// the shell tells the app; `bifrost_app::time_zone`): "09:05", or "9:05 AM" with the switch off.
 fn time_label(minute: u16) -> String {
-    format!("{:02}:{:02}", minute / 60, minute % 60)
+    time_label_in(minute, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `time_label` in a given clock style, written by the formatter of `time_zone::time_text`. An end at the day's last
+/// minute plus one stays "24:00" in 24-hour style and is "12:00 AM" with AM and PM.
+fn time_label_in(minute: u16, h24: bool) -> String {
+    let (hour, min) = (i32::from(minute / 60), i32::from(minute % 60));
+    springboard::status::clock_in(if h24 { hour } else { hour % 24 }, min, h24)
+}
+
+/// The label of the hour line `h` (0 to 24) of a day grid and of the "Day Starts at" choices, in the person's clock
+/// style: "08:00", or "8 AM" with 24-Hour Time off, where 12 is "Noon".
+fn hour_label(h: u32) -> String {
+    hour_label_in(h, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `hour_label` in a given clock style.
+fn hour_label_in(h: u32, h24: bool) -> String {
+    if h24 {
+        return springboard::status::clock_in(h as i32, 0, true);
+    }
+    match h % 24 {
+        0 => "12 AM".into(),
+        h @ 1..=11 => format!("{h} AM"),
+        12 => "Noon".into(),
+        h => format!("{} PM", h - 12),
+    }
 }
 
 impl Calendar {

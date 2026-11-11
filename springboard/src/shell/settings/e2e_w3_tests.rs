@@ -54,6 +54,28 @@ fn the_split_layout_pill_goes_back_and_forward() {
     assert_eq!(st.page(), PageId::About);
 }
 
+/// E2E rev 9: the Wallpaper pane's header was a centred title with no back and forward buttons, unlike every other
+/// pane: its bar was built without the pane's toolbar style.
+#[test]
+fn the_wallpaper_pane_has_the_toolbar_of_the_other_panes() {
+    let ui = crate::shell::tests::ui();
+    let (mut st, mut prefs) = split(&ui);
+    st.open_page(&ui, "About", 0.0);
+    settle(&mut st, &ui);
+    assert!(st.list().expect("list").nav().is_toolbar(), "a list pane in the split layout has the pill");
+    st.open_page_id(&ui, PageId::Wallpaper, 0.0);
+    settle(&mut st, &ui);
+    assert_eq!(st.page(), PageId::Wallpaper);
+    let nav = &st.stack.last().expect("the pane").nav;
+    assert!(nav.is_toolbar(), "the Wallpaper pane has the back and forward pill and the title beside it");
+    // a click on the pill's dimmed halves does nothing and leaves the pane
+    let (bx, by) = pill(&st, &ui, false);
+    tap(&mut st, &ui, &mut prefs, bx, by);
+    let (fx, fy) = pill(&st, &ui, true);
+    tap(&mut st, &ui, &mut prefs, fx, fy);
+    assert_eq!(st.page(), PageId::Wallpaper);
+}
+
 /// W3-3: Esc pops a sub-page in the split layout, and is not used at the pane (so the shell leaves it alone).
 #[test]
 fn escape_pops_a_split_sub_page_and_stops_at_its_pane() {

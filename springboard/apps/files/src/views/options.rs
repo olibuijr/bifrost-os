@@ -8,6 +8,7 @@ use std::rc::Rc;
 use bifrost_app::thumbnails;
 use bifrost_app::time_zone::TimeZone;
 use springboard::shell::search_thumbs::FileThumbs;
+use springboard::shell::ui::HAIRLINE_C;
 
 /// What the thumbnail providers drew for one file at one pixel edge.
 pub(crate) enum Thumb {
@@ -342,6 +343,18 @@ impl ViewOpts {
     }
 }
 
+/// Whether the thumbnail of the file `name` of kind `kind` is a page (a text file, a PDF, any other document) and gets
+/// the hairline outline. A picture has none: a photo, a video frame, a cover, and an image of a format the viewer
+/// does not decode, which the listing calls a document (`fs::kind_of`) but whose thumbnail is still the image.
+pub(crate) fn page_thumb(name: &str, kind: Kind) -> bool {
+    use bifrost_app::controls::uttype::{conforms, type_for_extension};
+    if matches!(kind, Kind::Image | Kind::Video | Kind::Audio | Kind::Folder | Kind::Application) {
+        return false;
+    }
+    let image = fs::extension(name).and_then(|ext| type_for_extension(&ext)).is_some_and(|id| conforms(id, "public.image"));
+    !image
+}
+
 /// True when a picture of `size` pixels lies inside a box of `room` pixels. One pixel over is the rounding of the
 /// box and of the picture's edge, not a picture of another shape.
 fn thumb_fits(size: (usize, usize), room: (i32, i32)) -> bool {
@@ -452,6 +465,11 @@ impl Files {
         let x = ui.pt(b.0) as i32 + (pw - im.w as i32) / 2;
         let y = ui.pt(b.1) as i32 + (ph - im.h as i32) / 2;
         s.blit(&im, x, y, 255, 255);
+        // a document's thumbnail is a page: it gets the hairline outline, so a white page shows on the white content
+        // of the Light appearance (it had no edge there) and reads as a sheet in Dark
+        if page_thumb(&e.name, e.kind) {
+            s.stroke_rrect(x as f32, y as f32, im.w as f32, im.h as f32, 0., ui.pt(1.0).max(1.0), HAIRLINE_C.now());
+        }
         true
     }
     /// An entry's icon (folder or file type) in a square of `side` pt, or its picture thumbnail.
@@ -473,10 +491,21 @@ impl Files {
 
     // ---- gallery ----
 
-    /// The strip's top edge, how many thumbnails fit, and the first one shown (the focus is kept in view).
+    /// The item the gallery shows large and lays its strip out around: the focused item, or the first one when
+    /// nothing is focused. With everything selected (Select All) it is the first item too, as every other view starts
+    /// at its top then: the focus is the last item picked, so the gallery opened on the last item with its strip at
+    /// the end.
+    pub(crate) fn gallery_current(&self, visible: &[usize]) -> Option<usize> {
+        let everything = self.selection.len() > 1 && self.selection.len() >= visible.len();
+        if everything {
+            return visible.first().copied();
+        }
+        self.focus().filter(|f| visible.contains(f)).or(visible.first().copied())
+    }
+    /// The strip's top edge, how many thumbnails fit, and the first one shown (the current item is kept in view).
     pub(crate) fn strip_geom(&self, visible: &[usize]) -> (f32, usize, usize) {
         let cols = (((self.w - (self.side() + 16.) - 8.) / STRIP_CELL).floor().max(1.)) as usize;
-        let at = self.focus().and_then(|f| visible.iter().position(|&j| j == f)).unwrap_or(0);
+        let at = self.gallery_current(visible).and_then(|c| visible.iter().position(|&j| j == c)).unwrap_or(0);
         let first = at.saturating_sub(cols / 2).min(visible.len().saturating_sub(cols));
         (self.bottom() - STRIP_H, cols, first)
     }
@@ -494,13 +523,11 @@ impl Files {
             }
             return None;
         }
-        self.focus().filter(|f| visible.contains(f))
+        // the large preview is the current item's, when anything is selected
+        self.focus().filter(|f| visible.contains(f)).and(self.gallery_current(&visible))
     }
     pub(crate) fn paint_gallery(&self, ui: &Ui, s: &mut Surface, visible: &[usize]) {
-        let cur = match self.focus().filter(|f| visible.contains(f)).or(visible.first().copied()) {
-            Some(i) => i,
-            None => return,
-        };
+        let Some(cur) = self.gallery_current(visible) else { return };
         let (top, cols, first) = self.strip_geom(visible);
         let (x0, y0, x1) = (self.side() + 16., self.body_top() + 6., self.w - 16.);
         let y1 = top - 8.;
@@ -541,10 +568,10 @@ impl Files {
             let x = x0 + k as f32 * STRIP_CELL;
             let selected = i == cur;
             if selected {
-                s.fill_rrect(ui.pt(x + 2.), ui.pt(top + 6.), ui.pt(STRIP_CELL - 4.), ui.pt(STRIP_H - 10.), ui.pt(SPACE_S), SELECTION.now());
+                s.fill_rrect(ui.pt(x + 2.), ui.pt(top + 6.), ui.pt(STRIP_CELL - 4.), ui.pt(STRIP_H - 10.), ui.pt(SPACE_S), self.selection_plate());
             }
             self.paint_entry_icon(ui, s, e, x + 10., top + 10., 56., true);
-            self.centred(s, ui, &e.name, 10., ink(selected), x + STRIP_CELL / 2., top + 68., STRIP_CELL - 8.);
+            self.centred(s, ui, &e.name, 10., self.name_ink(selected), x + STRIP_CELL / 2., top + 68., STRIP_CELL - 8.);
         }
     }
 

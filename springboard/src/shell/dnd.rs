@@ -271,9 +271,6 @@ pub struct State {
     /// copies) and where its thread reports (`Shell::dnd_desktop_tick`)
     #[cfg(feature = "desktop-wayland")]
     pub desktop_jobs: Vec<(bool, std::sync::mpsc::Receiver<batch::Report>)>,
-    /// the banner of the last drop on the desktop and the item a click on it shows in Files
-    #[cfg(feature = "desktop-wayland")]
-    pub desktop_note: Option<(u64, PathBuf)>,
 }
 
 /// What the banner says after a drop on the desktop: its title, its text and the item a click shows in Files. The
@@ -579,29 +576,36 @@ impl super::Shell {
             for (moved, report) in reports {
                 let Some((title, body, shown)) = desktop_drop_banner(moved, &report) else { continue };
                 let time = self.notify.now();
-                let id = self.notify_id(super::notify::Notification::new(AppId::Files, title, body, time));
-                self.dnd.desktop_note = shown.map(|p| (id, p));
+                // the item goes with the notification (`Notification::reveal`), so a click shows it from the banner and
+                // from Notification Center alike, for as long as the entry is there
+                let mut note = super::notify::Notification::new(AppId::Files, title, body, time);
+                note.reveal = shown;
+                self.notify(note);
                 self.dirty = true;
             }
         }
     }
 
-    /// A notification of Files was opened: when it is the banner of the last drop on the desktop (still the newest
-    /// one of Files), the dropped item is shown in Files, selected in the Desktop folder. True when it was shown;
-    /// the caller then opens nothing else.
-    pub(super) fn dnd_desktop_reveal(&mut self, t: f64) -> bool {
+    /// Notification `id` of `app` was clicked (None: the app's newest one): when it names a file (`Notification::reveal`,
+    /// the notice of a drop on the desktop), the item is shown in Files, selected in its folder. The path lives with
+    /// the stored notification, so this works from the banner and from Notification Center for as long as the entry
+    /// exists. True when it was shown; the caller then opens nothing else (an item that is gone opens the app).
+    pub(super) fn dnd_desktop_reveal(&mut self, id: Option<u64>, app: AppId, t: f64) -> bool {
         #[cfg(feature = "desktop-wayland")]
         {
-            let Some((id, path)) = self.dnd.desktop_note.take() else { return false };
-            let newest = self.notify.store.groups().iter().find(|g| g.app == AppId::Files).map(|g| g.latest().id);
-            if newest != Some(id) || !self.desk_active() || self.is_locked() {
+            let path = match id {
+                Some(id) => self.notify.store.get(id).and_then(|n| n.reveal.clone()),
+                None => self.notify.store.groups().iter().find(|g| g.app == app).and_then(|g| g.latest().reveal.clone()),
+            };
+            let Some(path) = path else { return false };
+            if !self.desk_active() || self.is_locked() {
                 return false;
             }
             return self.desktop_show_in_files(&path, t).is_ok();
         }
         #[cfg(not(feature = "desktop-wayland"))]
         {
-            let _ = t;
+            let _ = (id, app, t);
             false
         }
     }

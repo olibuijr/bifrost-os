@@ -337,6 +337,7 @@ impl App for KeychainAccessApp {
             let hint = ui.text(text, ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
             s.blit_colored(&hint, pi(SIDE_PT + PAD_PT), pi(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
         }
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
         for (i, row) in self.rows.iter().enumerate() {
             let y = HEADER_PT + i as f32 * ROW_PT;
             if y + ROW_PT > height_pt {
@@ -359,7 +360,7 @@ impl App for KeychainAccessApp {
                 ui::LABEL_2.now(),
             );
             s.blit_colored(&account, pi(SIDE_PT + PAD_PT), pi(y + 24.0), ui::LABEL_2.now(), 255);
-            let when = ui.text(&model::stamp(row.modified), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
+            let when = ui.text(&model::stamp(row.modified, now), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
             s.blit_colored(&when, pi(SIDE_PT + content_w * 0.65), pi(y + 14.0), ui::LABEL_2.now(), 255);
             s.fill_rect(p(SIDE_PT + PAD_PT), p(y + ROW_PT) - 1, p(content_w - 2.0 * PAD_PT), 1, ui::SEPARATOR_C.now());
         }
