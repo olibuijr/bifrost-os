@@ -24,6 +24,7 @@
   "effectcraft-desktop": {},
   "files": {},
   "filmcraft-desktop": {},
+  "folder-actions-desktop": {},
   "fontbook-desktop": {},
   "freeform-desktop": {},
   "games-desktop": {},
@@ -32,6 +33,7 @@
   "image-capture-desktop": {},
   "journal-desktop": {},
   "keyboard": {},
+  "keychain-access-desktop": {},
   "lightcraft-desktop": {},
   "locate-desktop": {},
   "mail-desktop": {},
@@ -50,9 +52,7 @@
   "reminders-desktop": {},
   "remote": {},
   "screen-sharing": {},
-  "screenshot-desktop": {
-    "APP-11": 1
-  },
+  "screenshot-desktop": {},
   "script-editor-desktop": {},
   "setup-assistant": {},
   "shortcuts-desktop": {},
