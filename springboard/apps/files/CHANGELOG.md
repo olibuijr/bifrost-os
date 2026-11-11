@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.20
+
+- Dates follow Date & Time > 24-Hour Time and the system time zone, and change with them while a window is open: the list, the columns preview, the gallery, Get Info and the preview panel. Files gets both from the system (shell 0.10.52 or later; on an older shell the times stay in 24-hour style). The list, the gallery and Get Info write a date the same way: "Today at 2:05 PM", "4 Oct 2026 at 00:22".
+
 ## 1.34.19
 
 - The gallery's preview stays inside its card: an upright page or picture no longer covers the toolbar and the strip. In the columns view the selected row's highlight ends at its column, and a long column shows its scroll knob. The list, icon and columns views scroll until the last line reaches the bottom edge, with no blank band under it, and follow the window when it grows or the folder gets shorter. Dates in the list, the gallery, the preview and Get Info are in the system's time zone and follow Date & Time > 24-Hour Time.
