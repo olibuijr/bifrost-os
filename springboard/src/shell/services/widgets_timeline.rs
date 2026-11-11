@@ -139,7 +139,7 @@ impl Text {
             }
         }
         let background = match j.str_field("background") {
-            Some(key) => Some(ContainerTint::from_key(&key).ok_or_else(|| format!("no widget background {key:?}: a system colour name such as blue"))?),
+            Some(key) => Some(ContainerTint::from_key(&key).ok_or_else(|| format!("no widget background {key:?}: a system color name such as blue"))?),
             None => None,
         };
         Ok(Text { clock, buttons, detail: j.str_field("detail").unwrap_or_default(), variants, background, ..Text::of(j) })

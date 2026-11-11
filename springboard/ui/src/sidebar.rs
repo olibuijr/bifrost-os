@@ -364,7 +364,7 @@ mod tests {
     fn a_collapsed_section_hides_its_rows_until_the_next_header() {
         let mut l = SourceList::new(
             vec![
-                SidebarItem::section(10, "Favourites", false),
+                SidebarItem::section(10, "Favorites", false),
                 SidebarItem::row(1, "A"),
                 SidebarItem::row(2, "B"),
                 SidebarItem::header("Other"),

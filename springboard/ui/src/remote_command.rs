@@ -459,9 +459,9 @@ mod tests {
 
     #[test]
     fn disabled_feedback_keeps_its_state_and_titles_are_kept() {
-        let mut fb = FeedbackCommand::new("Add to favourites", "Favourite");
-        assert_eq!(fb.title(), "Add to favourites");
-        assert_eq!(fb.short_title(), "Favourite");
+        let mut fb = FeedbackCommand::new("Add to favorites", "Favorite");
+        assert_eq!(fb.title(), "Add to favorites");
+        assert_eq!(fb.short_title(), "Favorite");
         fb.request(true).expect("enabled");
         fb.set_enabled(false);
         assert_eq!(fb.toggle(), Err(CommandError::Disabled));

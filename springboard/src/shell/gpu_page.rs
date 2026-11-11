@@ -128,7 +128,7 @@ pub fn spec(gpus: Option<&[Gpu]>) -> Spec {
             rows.push(Item::new("Clock Speed").value(format!("{cur} of {max} MHz")));
         }
         if let Some(b) = g.busy {
-            rows.push(Item::new("Utilisation").value(format!("{b}%")));
+            rows.push(Item::new("Utilization").value(format!("{b}%")));
         }
         if let Some(v) = g.vram {
             rows.push(Item::new("Video Memory").value(human(v)));

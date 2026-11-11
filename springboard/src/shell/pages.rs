@@ -1433,7 +1433,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Dictation").link(PageId::Dictation),
                 ]),
                 Group::new(vec![
-                    Item::new("Auto-Capitalisation").switch(o.auto_caps, Action::Toggle(Toggle::AutoCaps)),
+                    Item::new("Auto-Capitalization").switch(o.auto_caps, Action::Toggle(Toggle::AutoCaps)),
                     Item::new("Enable Caps Lock").switch(o.enable_caps_lock, Action::Toggle(Toggle::EnableCapsLock)),
                     Item::new("\".\" Shortcut").switch(o.period_shortcut, Action::Toggle(Toggle::PeriodShortcut)),
                 ])

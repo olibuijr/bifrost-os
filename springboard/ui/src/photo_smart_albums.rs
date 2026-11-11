@@ -33,7 +33,7 @@ impl SmartAlbum {
         match self {
             SmartAlbum::Screenshots => "Screenshots",
             SmartAlbum::RecentlyAdded => "Recents",
-            SmartAlbum::Favourites => "Favourites",
+            SmartAlbum::Favourites => "Favorites",
             SmartAlbum::RecentlyDeleted => "Recently Deleted",
         }
     }
