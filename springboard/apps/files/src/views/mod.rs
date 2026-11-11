@@ -1,5 +1,6 @@
 //! The content views (icon, list, column, gallery) and the drawing helpers they share.
 use crate::*;
+use springboard::shell::ui::SELECTION_INACTIVE;
 
 pub(crate) mod column;
 pub(crate) mod gallery;
@@ -46,6 +47,29 @@ pub(crate) fn ink(selected: bool) -> u32 {
 }
 
 impl Files {
+    /// Tells the window whether it is the key window (the one with the keys, of the app in front). A window that is
+    /// not draws its selection unemphasised; a change repaints it.
+    pub(crate) fn set_key(&mut self, key: bool) {
+        if self.fx.inactive == key {
+            self.fx.inactive = !key;
+            self.revision += 1;
+        }
+    }
+    /// The plate behind a selected item: the accent in the key window, the neutral unemphasised plate in a window
+    /// that is not key (`SELECTION_INACTIVE`, what a column without focus and the sidebar use).
+    pub(crate) fn selection_plate(&self) -> u32 {
+        if self.fx.inactive { SELECTION_INACTIVE.now() } else { SELECTION.now() }
+    }
+    /// The colour of a name: white on the accent plate of the key window's selection, else the scheme's label (the
+    /// unemphasised plate keeps the normal text).
+    pub(crate) fn name_ink(&self, selected: bool) -> u32 {
+        ink(selected && !self.fx.inactive)
+    }
+    /// The colour of secondary text (dates, sizes, captions, disclosure triangles): white on the accent plate, else
+    /// the secondary grey.
+    pub(crate) fn detail_ink(&self, selected: bool) -> u32 {
+        if selected && !self.fx.inactive { WHITE } else { LABEL_2.now() }
+    }
     pub(crate) fn item_at(&self, x: f32, y: f32) -> Option<usize> {
         if self.vo.gallery {
             return self.gallery_hit(x, y);
@@ -87,6 +111,24 @@ mod kind_tests {
     /// A row as the listing makes it: the coarse kind is the one the name gives.
     fn row(name: &str) -> Entry {
         Entry { name: name.into(), path: Path::new("/fixture").join(name), is_dir: false, size: 1, mtime: 0, kind: fs::kind_of(name, false), items: None }
+    }
+
+    /// E2E8 R09: the thumbnail of a text file is a white page, which had no edge on the white content of the Light
+    /// appearance. Pages get the outline; pictures do not.
+    #[test]
+    fn only_the_thumbnail_of_a_page_gets_the_outline() {
+        assert!(page_thumb("notes.txt", Kind::Text));
+        assert!(page_thumb("paper.pdf", fs::kind_of("paper.pdf", false)));
+        assert!(page_thumb("README", Kind::Other), "a name without a type");
+        assert!(!page_thumb("photo.png", Kind::Image));
+        assert!(!page_thumb("film.mp4", Kind::Video));
+        assert!(!page_thumb("song.mp3", Kind::Audio));
+        assert!(!page_thumb("Pictures", Kind::Folder));
+        assert!(!page_thumb("Notes", Kind::Application));
+        // an image the viewer does not decode is listed as a document, and its thumbnail is still a picture
+        for name in ["a.gif", "a.webp", "a.bmp", "a.svg"] {
+            assert!(!page_thumb(name, fs::kind_of(name, false)), "{name}");
+        }
     }
 
     #[test]

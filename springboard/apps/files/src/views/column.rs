@@ -90,6 +90,31 @@ impl Files {
         let row = ((y - self.rows_top() + self.ancestor_scroll(index)) / ROW_H).floor() as usize;
         self.ancestor_rows(index).get(row).filter(|e| e.is_dir).map(|e| e.path.clone())
     }
+    /// The columns view, during a drag: the folder a drop at (x, y) over one of the columns above the open folder's
+    /// goes into. That is the folder row under the pointer, else the folder the column lists (a file's row and the
+    /// empty part of a column are the column's folder). None outside those columns: the open folder's own column and
+    /// what is right of it belong to the open folder (`item_at`, `background_target`).
+    pub(crate) fn ancestor_drop_folder(&self, x: f32, y: f32) -> Option<PathBuf> {
+        if !self.columns || x < self.side() + 16. || y < self.body_top() || y >= self.bottom() {
+            return None;
+        }
+        let n = self.ancestor_shown();
+        let col = ((x - (self.side() + 16.)) / self.vo.col_w).floor() as usize;
+        if col >= n {
+            return None;
+        }
+        let index = self.ancestors.len() - n + col;
+        Some(self.ancestor_hit(x, y).unwrap_or_else(|| self.ancestors[index].0.clone()))
+    }
+    /// Whether the folder `folder` of a column takes the dragged items: a folder on disk that is not the Trash, that
+    /// none of the items is in already, and that is neither one of them nor inside one. (The same rule as the open
+    /// folder's background, `background_target`.)
+    pub(crate) fn takes_drop(&self, folder: &Path) -> bool {
+        if folder == self.bin() || !folder.is_dir() {
+            return false;
+        }
+        !self.fx.drag_paths.iter().any(|p| p.parent() == Some(folder) || folder.starts_with(p))
+    }
     /// How far the `index`th ancestor column is scrolled: not at all while the row that leads to the next column fits
     /// in the view, else far enough to put that row in the middle (a folder far down a long parent would otherwise
     /// show a column without its highlighted row).
@@ -148,8 +173,9 @@ impl Files {
                     break;
                 }
                 let e = &self.rows[i];
-                // the open folder's column has the keyboard focus: its selection is the accent plate
-                let state = RowState::of(self.selection.contains(&i), true);
+                // the open folder's column has the keyboard focus while the window is key: its selection is the accent
+                // plate. In a window that is not key no column has the keys, and it is the inactive plate
+                let state = RowState::of(self.selection.contains(&i), !self.fx.inactive);
                 // the plate is as wide as the column, as in the folders above: what is right of the divider is the
                 // preview of the selected file, not a part of its row
                 if let Some(plate) = state.plate() {

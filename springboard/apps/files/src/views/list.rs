@@ -47,7 +47,7 @@ impl Files {
             rect(s, ui, self.side(), y, w - self.side(), 32., accent_now())
         }
         if selected {
-            rect(s, ui, self.side(), y, w - self.side(), 32., SELECTION.now())
+            rect(s, ui, self.side(), y, w - self.side(), 32., self.selection_plate())
         }
         // Group By: a caption where a new group starts
         let group = self.vo.group;
@@ -57,11 +57,11 @@ impl Files {
         let name_dy = if caption.is_some() { 11. } else { 8. };
         if let Some((_, label)) = caption {
             rect(s, ui, self.side(), y, w - self.side(), 1., SEPARATOR_C.now());
-            text(s, ui, &label, 10., if selected { WHITE } else { LABEL_2.now() }, self.side() + 48., y + 1., 200.);
+            text(s, ui, &label, 10., self.detail_ink(selected), self.side() + 48., y + 1., 200.);
         }
         if e.is_dir {
             let open = self.vo.expanded.contains(&e.path);
-            triangle(s, ui, self.side() + 4. + indent, y + 12., if open { 1 } else { 0 }, if selected { WHITE } else { LABEL_2.now() });
+            triangle(s, ui, self.side() + 4. + indent, y + 12., if open { 1 } else { 0 }, self.detail_ink(selected));
         }
         applications::entry_icon(
             s,
@@ -74,10 +74,10 @@ impl Files {
         if let Some(field) = name_field {
             bifrost_app::widgets::text_field(s, ui, field, Rect { x: (self.side() + 46. + indent), y: y + 3., w: name_w + 10., h: 26. }, "", true);
         } else {
-            cached_text(s, ui, &self.row_text, &e.name, self.vo.text + 1., ink(selected), self.side() + 48. + indent, y + name_dy, name_w);
+            cached_text(s, ui, &self.row_text, &e.name, self.vo.text + 1., self.name_ink(selected), self.side() + 48. + indent, y + name_dy, name_w);
         }
         let small = (self.vo.text).max(10.);
-        let secondary = if selected { WHITE } else { LABEL_2.now() };
+        let secondary = self.detail_ink(selected);
         let row_text = &self.row_text;
         cached_text(s, ui, row_text, &date_text(e.mtime), small, secondary, w - 430., y + 8., 135.);
         cached_text(s, ui, row_text, &if e.is_dir { "—".into() } else { fs::size_text(e.size) }, small, secondary, w - 290., y + 8., 105.);
@@ -88,6 +88,49 @@ impl Files {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use springboard::shell::ui::SELECTION_INACTIVE;
+
+    /// E2E8 R05b: a Files window behind another one drew its selected row in the accent colour, like the key window.
+    #[test]
+    fn a_window_that_is_not_key_draws_its_selection_unemphasised() {
+        let font = springboard::font::Font::parse(Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice())).unwrap();
+        let ui = Ui::new(font, 1.0);
+        let mut files = crate::tests::fixture((0..5).map(|i| crate::tests::folder(&format!("f{i:02}"))).collect());
+        files.select_only(1);
+        let (w, h) = (1200usize, 800usize);
+        let mut px = vec![0u32; w * h];
+        let mut plate = |files: &mut Files, x: f32, y: f32| {
+            px.fill(0);
+            files.paint(&ui, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 });
+            px[y as usize * w + x as usize]
+        };
+        assert_ne!(SELECTION_INACTIVE.now(), SELECTION.now());
+        // the list view: a point of the second row right of its Kind text
+        files.grid = false;
+        let list = (files.w - 12., files.rows_top() + 48.);
+        assert_eq!(plate(&mut files, list.0, list.1), SELECTION.now(), "the key window: the accent plate");
+        let before = files.revision;
+        files.set_key(false);
+        assert!(files.fx.inactive && files.revision != before, "the change repaints the window");
+        assert_eq!(plate(&mut files, list.0, list.1), SELECTION_INACTIVE.now(), "not key: the unemphasised plate");
+        assert_eq!(files.name_ink(true), LABEL.now(), "under the normal text");
+        assert_eq!(files.detail_ink(true), LABEL_2.now());
+        // the columns view: a point of the second row between its name and its chevron
+        files.columns = true;
+        let (x0, x1) = files.open_column();
+        let column = (x1 - 30., files.rows_top() + 1.5 * ROW_H);
+        assert!(column.0 > x0);
+        assert_eq!(plate(&mut files, column.0, column.1), SELECTION_INACTIVE.now(), "the columns view too");
+        let seen = files.revision;
+        files.set_key(false);
+        assert_eq!(files.revision, seen, "told the same again, nothing is repainted");
+        files.set_key(true);
+        assert!(!files.fx.inactive);
+        assert_eq!(plate(&mut files, column.0, column.1), SELECTION.now(), "key again: the accent plate");
+        assert_eq!(files.name_ink(true), WHITE);
+        assert_eq!(files.detail_ink(true), WHITE);
+        assert_eq!(files.name_ink(false), LABEL.now());
+    }
 
     #[test]
     fn rows_that_only_partly_fit_are_drawn_cut_at_the_header_and_at_the_bottom() {

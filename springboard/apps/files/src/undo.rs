@@ -203,6 +203,11 @@ impl Files {
         }
         let dir = self.path.clone();
         self.navigate(dir, false);
+        // what the undo put back (the items out of the Trash, the items moved back) is selected where it is shown
+        self.fx.added = match &step {
+            Undo::Trash(pairs) | Undo::Move(pairs) => pairs.iter().map(|(from, _)| from.clone()).collect(),
+            _ => Vec::new(),
+        };
     }
 }
 

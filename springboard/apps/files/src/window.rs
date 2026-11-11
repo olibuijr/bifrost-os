@@ -490,14 +490,26 @@ impl Files {
     pub(crate) fn drop_target_at(&self, x: f32, y: f32) -> Option<PathBuf> {
         let target = if x < self.side() {
             self.sidebar().hit(self.sidebar_bounds(), self.sidebar_scroll(), x, y).and_then(|id| self.sidebar_path(id))
+        } else if let Some(folder) = self.ancestor_drop_folder(x, y) {
+            // the columns view: over a column of a folder above the open one the drop goes into that column's folder,
+            // or into the folder row under the pointer
+            return self.takes_drop(&folder).then_some(folder);
         } else {
+            // a drag from another window or another app: the selection here is not what is dragged
+            let foreign = self.dnd.foreign.is_some();
             match self.item_at(x, y) {
-                // a selected folder is one of the dragged items in this window's own drag; under a drag from another
-                // window the selection here is not what is dragged
-                Some(i) => Some(i).filter(|i| (self.dnd.foreign.is_some() || !self.selection.contains(i)) && self.rows[*i].is_dir && !self.fx.drag_paths.contains(&self.rows[*i].path)).map(|i| self.rows[i].path.clone()),
-                // the view's background is the open folder itself: where a drop goes after a folder sprang open
-                // under the drag, and where files from another window go
-                None => return self.background_target(x, y),
+                // a folder takes the drop, unless it is one of the dragged items (in this window's own drag, a
+                // selected one)
+                Some(i) if self.rows[i].is_dir && (foreign || !self.selection.contains(&i)) && !self.fx.drag_paths.contains(&self.rows[i].path) => Some(self.rows[i].path.clone()),
+                // this window's own drag let go over one of the items it drags: nothing moves
+                Some(i) if !foreign && self.selection.contains(&i) => None,
+                // the rows of a search are items of many folders: only a folder among them takes a drop
+                Some(_) if self.hits.is_some() => None,
+                // a file's row or icon, a dragged folder under a drag from elsewhere, and the empty part of the
+                // view are the open folder itself, in every view: where a drop goes after a folder sprang open
+                // under the drag, and where files from another window or app go. (A drop on a file's row was no
+                // target at all, so a list view full of files took no drop: only the empty part of a view did.)
+                _ => return self.background_target(x, y),
             }
         }?;
         // never into the bin (use Delete), the stand-in listings, or the folder already open

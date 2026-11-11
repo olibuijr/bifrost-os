@@ -338,6 +338,16 @@ impl Files {
             bifrost_app::AppMenuItem::new(MENU_NEW_WINDOW, "New Window").key("cmd+n").enabled(!typing && !self.searching),
             bifrost_app::AppMenuItem::new(MENU_NEW_TAB, "New Tab").key("cmd+t").enabled(!typing),
             new_folder,
+        ];
+        // File > Close Tab (⌘W) while the window has a tab to close. The shell closes the window with ⌘W unless an
+        // enabled item of the app has that key, and then shows its own Close Window with ⇧⌘W: without this item
+        // ⌘W closed the whole window, tabs and all, and reopening Files showed them again. With one tab the item
+        // is left out, so File has the one Close Window (⌘W). It stays enabled while a name is typed, where it does
+        // nothing: disabled, the key would be the shell's and close the window under the name field
+        if self.tabs.len() > 1 {
+            items.push(bifrost_app::AppMenuItem::new(MENU_CLOSE_TAB, "Close Tab").key("cmd+w"));
+        }
+        items.extend([
             bifrost_app::AppMenuItem::separator(),
             open,
             quick_look,
@@ -347,7 +357,7 @@ impl Files {
             bifrost_app::AppMenuItem::new(MENU_ALIAS, "Make Alias").key("ctrl+cmd+a").enabled(files_ok),
             bifrost_app::AppMenuItem::separator(),
             trash,
-        ];
+        ]);
         // a Get Info window shows no folder: none of the items has anything to act on there
         if self.info_window {
             for item in &mut items {
@@ -397,6 +407,8 @@ impl Files {
             // window's list (`adopt_opened`)
             MENU_NEW_WINDOW => return self.new_window(ctx),
             MENU_NEW_TAB if self.naming.is_none() => self.new_tab(),
+            // ⌘W with more than one tab: the open tab closes and the window stays
+            MENU_CLOSE_TAB if self.naming.is_none() && self.tabs.len() > 1 => self.close_tab(),
             MENU_OPEN => if let Some(i) = self.focus() { self.open(i) },
             MENU_QUICK_LOOK => self.quick_look(),
             MENU_NEW_FOLDER if !self.in_recents() && !self.in_bin() => self.new_folder(),
@@ -436,6 +448,13 @@ impl App for Files {
         match input {
             bifrost_app::proto::WindowInput::MenuAction(id) if !window.is_main() => {
                 let Some(at) = self.windows.iter().position(|e| e.id == window) else { return false };
+                // Close Tab for a window that has no second tab (the shell took the key from a menu that was still
+                // another window's): ⌘W closes that window, as the key itself does there (`window_event`)
+                let files = &self.windows[at].files;
+                if id == MENU_CLOSE_TAB && windows::closes_window(files.info_window, files.tabs.len(), files.naming.is_some()) {
+                    let _ = ctx.close_window(window);
+                    return self.close_extra(window);
+                }
                 let changed = self.windows[at].files.file_menu_action(ctx, id);
                 self.adopt_opened(at);
                 changed
@@ -567,10 +586,25 @@ impl App for Files {
         if window.is_main() {
             return self.draw(ctx, s, t);
         }
+        // the window that has the keys draws its selection in the accent colour, every other one unemphasised; none
+        // has them while another app is in front
+        let key = !self.fx.suspended && ctx.key_window() == window;
         match self.windows.iter_mut().find(|e| e.id == window) {
-            Some(e) => e.draw(ctx, s, t),
+            Some(e) => {
+                e.files.set_key(key);
+                e.draw(ctx, s, t)
+            }
             None => Damage::new(s.w, s.h),
         }
+    }
+    /// Another app came to the front: no window of Files is key, and each draws its selection unemphasised.
+    fn suspend(&mut self, _ctx: &Ctx) {
+        self.fx.suspended = true;
+        self.fx.emphasis_stale = true;
+    }
+    fn resume(&mut self, _ctx: &Ctx) {
+        self.fx.suspended = false;
+        self.fx.emphasis_stale = true;
     }
     fn window_closed(&mut self, _ctx: &Ctx, window: WindowId) -> bool {
         self.close_extra(window)
@@ -583,6 +617,17 @@ impl App for Files {
         self.spread_events(events);
         // a volume mounted or unmounted while the app runs: every sidebar follows the mount table
         let mut changed = self.follow_mounts(now, false);
+        // the app went to the background or came back: the windows are drawn again, with or without the emphasis
+        // of the key window's selection (`draw`, `draw_window`)
+        if std::mem::take(&mut self.fx.emphasis_stale) {
+            let key = !self.fx.suspended;
+            let window = ctx.key_window();
+            self.set_key(key && window.is_main());
+            for e in &mut self.windows {
+                e.files.set_key(key && e.id == window);
+            }
+            changed = true;
+        }
         // this window, then the New Window ones: each has its own listing, search, job and folder events
         let cut = self.clip.is_some();
         changed |= self.tick_view(ctx, t);
@@ -670,6 +715,9 @@ impl App for Files {
         true
     }
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _: f64) -> Damage {
+        // the main window is key unless a New Window window has the keys or another app is in front (the shell tells
+        // the app of a change of key window, and the runtime draws every window then)
+        self.set_key(!self.fx.suspended && ctx.key_window().is_main());
         self.render(&ctx.ui,s)
     }
 }
@@ -742,6 +790,8 @@ impl Files {
                         self.reselect(&keep);
                         // a folder read again in place is where it was: its scroll and its selection
                         self.restore_place();
+                        // what a paste, a drop, Duplicate or an undo just added is selected and scrolled into view
+                        self.apply_added();
                         // a renamed item stays selected, and a new folder opens its name for editing
                         self.apply_pending();
                     }
@@ -752,6 +802,7 @@ impl Files {
                         self.refresh_rows();
                         self.error = Some(e);
                         self.fx.pending = None;
+                        self.fx.added.clear();
                         self.fx.relist = None;
                     }
                 }
@@ -867,11 +918,22 @@ impl Files {
                 // a press while a drag is still held means the release of that drag never came (the shell owned the
                 // pointer and ended the session elsewhere): the old drag is over, it must not drop on this press
                 self.cancel_drag();
-                self.down = Some((x / ctx.ui.s, y / ctx.ui.s, t));
-                self.pan_y = y / ctx.ui.s;
-                // a finger that rests on an item lifts it after the hold time (`hold_tick`, or its first move after it)
-                let on_item = x / ctx.ui.s >= self.side() && self.item_at(x / ctx.ui.s, y / ctx.ui.s).is_some();
-                self.fx.hold = (source == bifrost_app::TouchSource::Finger && on_item).then_some(t);
+                // a mouse press on a toolbar pull-down (the view pop-up, Group and Sort, the action menu) opens its
+                // menu now, while the button is held: the shell then leaves the menu open on a quick release and
+                // chooses the row a held press is dragged to. The press is not kept, so a release that still reaches
+                // the window is no second click on the button. (The menus opened on the release, so press, drag,
+                // release showed nothing and chose nothing.) A finger's press is left to its release: the wheel
+                // arrives as a finger's press, move and release, and a scroll over the toolbar must open no menu.
+                if source == bifrost_app::TouchSource::Pointer && self.press_bar_menu(x / ctx.ui.s, y / ctx.ui.s) {
+                    self.down = None;
+                    self.fx.hold = None;
+                } else {
+                    self.down = Some((x / ctx.ui.s, y / ctx.ui.s, t));
+                    self.pan_y = y / ctx.ui.s;
+                    // a finger that rests on an item lifts it after the hold time (`hold_tick`, or its first move after it)
+                    let on_item = x / ctx.ui.s >= self.side() && self.item_at(x / ctx.ui.s, y / ctx.ui.s).is_some();
+                    self.fx.hold = (source == bifrost_app::TouchSource::Finger && on_item).then_some(t);
+                }
             }
             Input::Touch {
                 kind: TouchKind::Move,
@@ -980,8 +1042,11 @@ impl Files {
                 } else if self.searching {
                     self.query.push_str(&s);
                     self.query_changed();
-                } else if s == " " {
+                } else if s == " " && !self.typing_a_name(Instant::now()) {
                     self.quick_look();
+                } else if self.preview.is_none() && self.info.is_none() && self.open_with.is_none() && !self.tag_panel {
+                    // type-to-select, in every view: the letters typed pick the item whose name starts with them
+                    self.type_select(&s, Instant::now());
                 }
             }
             Input::Key(k) if k.as_chord().is_some() => {
@@ -1949,5 +2014,113 @@ mod tests {
         assert!(dir.join("Documents/report.txt").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
-}
 
+    /// E2E8 R12: press, hold, drag to a row and release on a toolbar pull-down opened and chose nothing: the menu was
+    /// asked for by the release. A mouse press asks for it at once and is not kept for a click; a finger's press (the
+    /// wheel arrives as one) still waits for its release.
+    #[test]
+    fn a_mouse_press_on_a_toolbar_pull_down_asks_for_its_menu_and_a_fingers_press_waits_for_the_release() {
+        let ctx = test_ctx();
+        for id in [BAR_SORT, BAR_MORE] {
+            let mut files = fixture(vec![folder("A")]);
+            files.update_controls();
+            let r = files.bar_layout().rect_of(id).unwrap();
+            let (x, y) = (r.x + r.w / 2., r.y + r.h / 2.);
+            assert_eq!(files.bar_menu_at(x, y), Some(id));
+            files.route_input(&ctx, pointer(TouchKind::Down, x, y, 0.));
+            assert_eq!(files.sys.effects.len(), 1, "the press asks for the menu");
+            assert!(matches!(files.sys.effects[0], Effect::PopUp(..)));
+            assert!(files.down.is_none(), "the press is not kept for a click");
+            // the shell has the pointer from here; a move and a release that still reach the window ask for nothing
+            files.route_input(&ctx, pointer(TouchKind::Move, x, y + 60., 16.));
+            files.route_input(&ctx, pointer(TouchKind::Up, x, y + 60., 32.));
+            files.route_input(&ctx, pointer(TouchKind::Up, x, y, 48.));
+            assert_eq!(files.sys.effects.len(), 1, "no second menu");
+            assert!(!files.dragging && files.selection.is_empty());
+            // a finger: nothing on the press, the menu on the release
+            let mut files = fixture(vec![folder("A")]);
+            files.update_controls();
+            files.route_input(&ctx, finger(TouchKind::Down, x, y, 0.));
+            assert!(files.sys.effects.is_empty(), "a finger's press opens nothing");
+            assert!(files.down.is_some());
+            files.route_input(&ctx, finger(TouchKind::Up, x, y, 50.));
+            assert_eq!(files.sys.effects.len(), 1, "its release does");
+            assert!(matches!(files.sys.effects[0], Effect::PopUp(..)));
+        }
+        // a press elsewhere is kept as before, and a sheet over the window takes the press
+        let mut files = fixture(vec![folder("A")]);
+        files.update_controls();
+        let r = files.bar_layout().rect_of(BAR_SORT).unwrap();
+        let (x, y) = (r.x + r.w / 2., r.y + r.h / 2.);
+        files.route_input(&ctx, pointer(TouchKind::Down, files.side() + 200., files.bottom() - 20., 0.));
+        assert!(files.sys.effects.is_empty() && files.down.is_some());
+        files.tag_panel = true;
+        assert_eq!(files.bar_menu_at(x, y), None, "the tags panel is open");
+        files.tag_panel = false;
+        files.info_window = true;
+        assert_eq!(files.bar_menu_at(x, y), None, "a Get Info window has no toolbar");
+    }
+
+    /// E2E8 R03: with two tabs the close key closed the whole window, and the tabs came back when Files was opened
+    /// again. File > Close Tab has the key while there is a tab to close, and only then.
+    #[test]
+    fn close_tab_takes_the_close_key_only_while_the_window_has_a_tab_to_close() {
+        let ctx = test_ctx();
+        let dir = temp("closetab");
+        let mut files = fixture(vec![]);
+        files.home = dir.clone();
+        files.path = dir.clone();
+        let close = |files: &Files| files.file_menu_items().into_iter().find(|i| i.id == MENU_CLOSE_TAB);
+        assert!(close(&files).is_none(), "one tab: the key is the shell's Close Window");
+        assert!(!files.file_menu_action(&ctx, MENU_CLOSE_TAB));
+        files.new_tab();
+        assert_eq!(files.tabs.len(), 2);
+        let item = close(&files).expect("two tabs: File has Close Tab");
+        assert_eq!((item.title.as_str(), item.key.as_str(), item.enabled), ("Close Tab", "cmd+w", true));
+        assert!(files.file_menu_action(&ctx, MENU_CLOSE_TAB));
+        assert_eq!(files.tabs.len(), 1, "the tab closed and the window stays");
+        assert!(close(&files).is_none());
+        assert!(!files.file_menu_action(&ctx, MENU_CLOSE_TAB), "the last tab is not closed by the item");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E2E8 R06: after a paste nothing was selected. What a job puts into the folder shown is selected once the
+    /// folder has been read again.
+    #[test]
+    fn what_a_job_adds_to_the_folder_shown_is_selected_once_it_is_listed() {
+        assert!(adds_items(JobKind::Transfer(Op::Copy)) && adds_items(JobKind::Transfer(Op::Move)));
+        assert!(adds_items(JobKind::Duplicate) && adds_items(JobKind::Receive) && adds_items(JobKind::Extract));
+        assert!(!adds_items(JobKind::Trash) && !adds_items(JobKind::Empty));
+        let dir = temp("added");
+        let mut files = fixture(vec![]);
+        files.home = dir.clone();
+        files.path = dir.clone();
+        let work = |kind: JobKind, dest: PathBuf, sources: Vec<PathBuf>| {
+            let (_events, rx) = mpsc::channel::<Event>();
+            let (answers, _asked) = mpsc::channel::<Answer>();
+            Work { rx, cancel: Arc::new(AtomicBool::new(false)), title: String::new(), kind, dest, sources, progress: Progress::default(), conflict: None, apply_all: false, answers }
+        };
+        let made = vec![dir.join("a 2.txt"), dir.join("b 2.txt")];
+        files.finish_job(work(JobKind::Duplicate, dir.clone(), vec![]), Report { done: made.clone(), ..Default::default() });
+        assert_eq!(files.fx.added, made, "the copies wait for the listing");
+        // a job that adds nothing to this folder leaves nothing to select
+        files.fx.added.clear();
+        files.finish_job(work(JobKind::Trash, files.bin(), vec![dir.join("a.txt")]), Report::default());
+        assert!(files.fx.added.is_empty(), "a move to the Trash");
+        files.finish_job(work(JobKind::Transfer(Op::Copy), dir.join("elsewhere"), vec![]), Report { done: vec![dir.join("elsewhere/a.txt")], ..Default::default() });
+        assert!(files.fx.added.is_empty(), "a copy into another folder");
+        let _ = std::fs::remove_dir_all(&dir);
+        // the folder read again: the new items are selected and in view, and the list is used once
+        let mut files = fixture((0..40).map(|i| folder(&format!("f{i:02}"))).collect());
+        files.grid = false;
+        files.fx.added = vec![PathBuf::from("/fixture/f30"), PathBuf::from("/fixture/f31"), PathBuf::from("/fixture/gone")];
+        files.apply_added();
+        assert_eq!(files.selection, vec![30, 31]);
+        assert!(files.scroll > 0., "the first of them is scrolled into view");
+        assert!(files.fx.added.is_empty());
+        assert!(files.edit_commands().supports(Command::Copy), "Copy is offered for what was pasted");
+        // nothing added: the selection is left alone
+        files.apply_added();
+        assert_eq!(files.selection, vec![30, 31]);
+    }
+}
