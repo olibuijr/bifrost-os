@@ -240,7 +240,7 @@ impl Files {
                     text(s, ui, "On", 13., accent_now(), tag_on_x(w), row_y + 6., 60.);
                 }
             }
-            text(s, ui, "Click a colour to turn it on or off for the selection. Click elsewhere to close.", 11., LABEL_2.now(), x + 20., TAG_ROWS_TOP + Tag::ALL.len() as f32 * TAG_ROW + 14., w - x - 56.);
+            text(s, ui, "Click a color to turn it on or off for the selection. Click elsewhere to close.", 11., LABEL_2.now(), x + 20., TAG_ROWS_TOP + Tag::ALL.len() as f32 * TAG_ROW + 14., w - x - 56.);
         }
     }
     /// The Get Info panel.

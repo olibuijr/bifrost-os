@@ -111,7 +111,7 @@ pub fn reply_text(organizer: &str, attendee: &Participant, uid: &str, stamp: &st
 /// who has not answered yet can answer, and only an event with an organiser has a reply to send.
 pub fn respond(rich: &mut IcsCalendar, index: usize, email: &str, answer: Answer, stamp: &str) -> Result<String, &'static str> {
     let event: &mut IcsEvent = rich.events.get_mut(index).ok_or("This event is not in the calendar file.")?;
-    let organizer = event.organizer.clone().ok_or("This invitation has no organiser to reply to.")?;
+    let organizer = event.organizer.clone().ok_or("This invitation has no organizer to reply to.")?;
     let at = event.attendees.iter().position(|p| address_of(p).eq_ignore_ascii_case(email.trim())).ok_or("You are not invited to this event.")?;
     let old = &event.attendees[at];
     if old.status() != Status::Pending {
@@ -354,7 +354,7 @@ mod tests {
     fn an_event_without_an_organiser_cannot_be_answered() {
         let text = ORGANISED.replace("ORGANIZER;CN=Bo:mailto:bo@example.is\r\n", "");
         let mut cal = ics::parse(&text);
-        assert_eq!(respond(&mut cal, 0, "ana@example.is", Answer::Accept, "t"), Err("This invitation has no organiser to reply to."));
+        assert_eq!(respond(&mut cal, 0, "ana@example.is", Answer::Accept, "t"), Err("This invitation has no organizer to reply to."));
     }
 
     #[test]

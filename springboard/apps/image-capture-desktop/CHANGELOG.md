@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9
+
+- The scan settings row is named Color, and the summary says "color" (en_US spelling).
+
 ## 0.1.8
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

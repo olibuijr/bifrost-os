@@ -129,7 +129,7 @@ fn run(command: &[&str], mut file: File, control: &Control) -> Result<Vec<LogEnt
     let mut chunk = vec![0u8; 64 << 10];
     let copied = loop {
         if control.cancelled.load(Ordering::Relaxed) {
-            break Err("The capture was cancelled.".to_string());
+            break Err("The capture was canceled.".to_string());
         }
         match stdout.read(&mut chunk) {
             Ok(0) => break Ok(()),
@@ -143,14 +143,14 @@ fn run(command: &[&str], mut file: File, control: &Control) -> Result<Vec<LogEnt
         }
     };
     let child = control.child.lock().ok().and_then(|mut slot| slot.take());
-    let Some(mut child) = child else { return Err("The capture was cancelled.".to_string()) };
+    let Some(mut child) = child else { return Err("The capture was canceled.".to_string()) };
     if copied.is_err() {
         let _ = child.kill();
     }
     let status = child.wait().map_err(|e| format!("{}: {e}", command[0]))?;
     copied?;
     if control.cancelled.load(Ordering::Relaxed) {
-        return Err("The capture was cancelled.".to_string());
+        return Err("The capture was canceled.".to_string());
     }
     if !status.success() {
         let kept = stderr.recv_timeout(std::time::Duration::from_secs(2)).unwrap_or_default();
@@ -236,7 +236,7 @@ mod tests {
         let started = std::time::Instant::now();
         let err = run(&["sh", "-c", "exec sleep 30"], file, &control).unwrap_err();
         killer.join().unwrap();
-        assert_eq!(err, "The capture was cancelled.");
+        assert_eq!(err, "The capture was canceled.");
         assert!(started.elapsed() < std::time::Duration::from_secs(10));
         let _ = std::fs::remove_dir_all(&dir);
     }

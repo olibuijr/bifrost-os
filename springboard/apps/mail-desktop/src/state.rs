@@ -2039,7 +2039,7 @@ impl Mail {
                 Field::new("Subject contains", "receipt", ""),
                 Field::new("Move to mailbox", "Receipts", ""),
                 Field::new("Mark as read", "yes", ""),
-                Field::new("Flag colour", "red, orange, yellow, green, blue, purple, gray", ""),
+                Field::new("Flag color", "red, orange, yellow, green, blue, purple, gray", ""),
             ],
         );
     }
@@ -2124,7 +2124,7 @@ impl Mail {
                 Field::new("Subject contains", "receipt", &rule.subject),
                 Field::new("Move to mailbox", "Receipts", &move_to.unwrap_or_default()),
                 Field::new("Mark as read", "yes", mark),
-                Field::new("Flag colour", "red, orange, yellow, green, blue, purple, gray", &flag.unwrap_or_default()),
+                Field::new("Flag color", "red, orange, yellow, green, blue, purple, gray", &flag.unwrap_or_default()),
             ],
         );
     }
@@ -2150,7 +2150,7 @@ impl Mail {
         } else {
             self.mailboxes.iter().find(|m| m.eq_ignore_ascii_case(target)).cloned().ok_or_else(|| format!("There is no mailbox named {target}"))?
         };
-        let actions = rules::actions_from(&target, form.value("Mark as read"), form.value("Flag colour"))?;
+        let actions = rules::actions_from(&target, form.value("Mark as read"), form.value("Flag color"))?;
         if self.prefs.rules.iter().enumerate().any(|(i, r)| Some(i) != except && r.name.eq_ignore_ascii_case(&name)) {
             return Err(format!("There is already a rule named {name}"));
         }

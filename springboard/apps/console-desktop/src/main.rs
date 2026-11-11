@@ -135,7 +135,7 @@ impl ConsoleApp {
         // choosing Capture Archive again while the journal is being read stops that capture
         if let Some(capture) = &self.capture {
             capture.cancel();
-            self.say("Cancelling the capture...");
+            self.say("Canceling the capture...");
             return;
         }
         if matches!(self.saving, Some((_, Saving::Archive))) {
@@ -383,7 +383,7 @@ fn home_dir() -> PathBuf {
 /// A sentence for a document request that failed.
 fn failure_text(code: DocErrorCode) -> &'static str {
     match code {
-        DocErrorCode::Cancelled => "It was cancelled.",
+        DocErrorCode::Cancelled => "It was canceled.",
         DocErrorCode::Denied => "Access was denied.",
         DocErrorCode::NotFound => "The file was not found.",
         DocErrorCode::Stale => "The file changed after it was chosen.",

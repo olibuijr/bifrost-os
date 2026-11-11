@@ -9,6 +9,7 @@ fn settings_results_draw_the_symbol_their_pane_has_in_settings() {
     assert_eq!(result_symbol(&Hit::Settings("About")), Some(Symbol::Glyph(Glyph::About)));
     assert_eq!(result_symbol(&Hit::Settings("Do Not Disturb")), Some(Symbol::Tile(Icon::Focus)));
     assert_eq!(pane_symbol(PageId::Wallpaper), Symbol::Tile(Icon::Wallpaper));
+    assert_eq!(pane_symbol(PageId::ScreenSaver), Symbol::Tile(Icon::ScreenSaver), "Screen Saver has its own tile");
     assert_eq!(pane_symbol(PageId::Keyboard), Symbol::Glyph(Glyph::Keyboard));
     assert_eq!(pane_symbol(PageId::Appearance), Symbol::Tile(Icon::Appearance), "Appearance has its own tile");
     assert_eq!(pane_symbol(PageId::Root), Symbol::Tile(Icon::General), "an unnamed pane keeps the general symbol");

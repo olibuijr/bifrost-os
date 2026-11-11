@@ -335,8 +335,18 @@ impl PhotoBooth {
         self.view = self.grab(w, h);
     }
 
+    /// Whether the shutter does anything: a camera is open, or a clip is recording and can be ended. With no camera
+    /// ("No camera found") it is drawn dimmed and a press, Space, Return and Take Photo are ignored (E2E 9: it looked
+    /// ready and started a countdown for a picture that could not be taken).
+    fn shutter_enabled(&self) -> bool {
+        self.device.is_some() || self.clip.is_some()
+    }
+
     /// The shutter. A timer starts the countdown; a clip already recording ends now.
     fn press_shutter(&mut self, t: f64) {
+        if !self.shutter_enabled() {
+            return;
+        }
         if let Some(clip) = self.clip.as_mut() {
             clip.ends_at = t;
             return;
@@ -826,7 +836,7 @@ impl App for PhotoBooth {
             }
             DocumentEvent::Failed { request, .. } => {
                 if self.export.as_ref().is_some_and(|(r, _)| *r == request) {
-                    self.status = "Export cancelled".to_string();
+                    self.status = "Export canceled".to_string();
                     self.export = None;
                     return true;
                 }
@@ -1129,10 +1139,19 @@ impl PhotoBooth {
         let shutter = model::button_rect(bar, Button::Shutter);
         let (cx, cy) = ((shutter.x + shutter.w / 2.0) * scale, (shutter.y + shutter.h / 2.0) * scale);
         let r = shutter.w * scale / 2.0;
-        fill_disc(s, cx, cy, r, ui::LABEL.now());
-        // compliance-allow: COL-03 the white center is the stock camera shutter face, not a scheme background.
-        fill_disc(s, cx, cy, r - 3.0 * scale, if self.clip.is_some() { ui::DESTRUCTIVE } else { WHITE });
+        let (ring, face) = shutter_colours(self.shutter_enabled(), self.clip.is_some());
+        fill_disc(s, cx, cy, r, ring);
+        fill_disc(s, cx, cy, r - 3.0 * scale, face);
     }
+}
+
+/// The shutter's ring and face. Without a camera it is a dim, hollow ring on the control bar: the disabled look.
+fn shutter_colours(enabled: bool, recording: bool) -> (u32, u32) {
+    if !enabled {
+        return (ui::LABEL_3.now(), ui::CONTENT_BG.now());
+    }
+    // compliance-allow: COL-03 the white center is the stock camera shutter face, not a scheme background.
+    (ui::LABEL.now(), if recording { ui::DESTRUCTIVE } else { WHITE })
 }
 
 fn main() {
@@ -1143,6 +1162,29 @@ fn main() {
 mod tests {
     use super::*;
     use crate::scratch::Scratch;
+
+    /// E2E 9: with no camera the shutter looked ready, and a press started a countdown for a picture nobody could take.
+    #[test]
+    fn the_shutter_is_dim_and_does_nothing_until_a_camera_is_open() {
+        let mut booth = PhotoBooth::new();
+        assert!(booth.device.is_none() && !booth.shutter_enabled());
+        while booth.timer.secs() == 0 {
+            booth.timer = booth.timer.next();
+        }
+        booth.selected = Some(0);
+        booth.press_shutter(1000.0);
+        assert!(booth.countdown.is_none() && booth.burst.is_none() && booth.clip.is_none(), "nothing starts");
+        assert_eq!(booth.selected, Some(0), "and the strip keeps its selection");
+        assert!(booth.status.is_empty(), "no message about a picture that was never asked for");
+
+        // dimmed: neither the ring nor the face is the live shutter's
+        let (live, off) = (shutter_colours(true, false), shutter_colours(false, false));
+        assert_ne!(live.0, off.0);
+        assert_ne!(live.1, off.1);
+        assert_eq!(off, (ui::LABEL_3.now(), ui::CONTENT_BG.now()), "a tertiary ring, hollow on the control bar");
+        assert_eq!(shutter_colours(true, true).1, ui::DESTRUCTIVE, "recording keeps its red face");
+        assert_eq!(shutter_colours(false, true), off, "the disabled look wins");
+    }
 
     /// A booth whose strip holds one capture per path, and whose Trash is the `Trash` folder of `dir`.
     fn booth_with(dir: &Scratch, paths: &[PathBuf]) -> PhotoBooth {

@@ -376,6 +376,10 @@ impl Files {
         if let Some((_, field)) = &self.naming {
             return field.commands(clipboard);
         }
+        // the Go to Folder sheet has the keys while it is open: the Edit menu is its field's (`goto_input`)
+        if let Some(field) = &self.fx.goto {
+            return field.commands(clipboard);
+        }
         if self.searching {
             return self.query.commands(clipboard);
         }
@@ -992,6 +996,9 @@ impl Files {
                 ..
             } => {
                 self.fx.hold = None;
+                // the press that opened the Tags panel (`press_bar_menu`) was not kept: its release chooses the
+                // colour row it was dragged to
+                let tag_press = std::mem::take(&mut self.fx.tag_press);
                 if self.dragging {
                     // drop the selection on the target under the finger, if any
                     self.dragging = false;
@@ -1019,6 +1026,8 @@ impl Files {
                     if (x - sx).abs() < 8. && (y - sy).abs() < 8. {
                         self.click(x, y, t)
                     }
+                } else if tag_press {
+                    self.tag_release(x / ctx.ui.s, y / ctx.ui.s);
                 }
             }
             Input::Key(KeyInput::Text(s)) if self.work.as_ref().is_some_and(|w| w.conflict.is_some()) => {
@@ -2059,6 +2068,77 @@ mod tests {
         files.tag_panel = false;
         files.info_window = true;
         assert_eq!(files.bar_menu_at(x, y), None, "a Get Info window has no toolbar");
+    }
+
+    /// E2E9: a held press on Share showed no menu, and Tags opened on the release only. A mouse press on either asks
+    /// for the menu (opens the panel) at once, as on the pull-downs; a button that is off takes an ordinary press.
+    #[test]
+    fn a_mouse_press_on_share_or_tags_opens_it_and_a_release_over_a_colour_row_chooses_it() {
+        let ctx = test_ctx();
+        let centre = |files: &Files, id: u32| {
+            let r = files.bar_layout().rect_of(id).unwrap();
+            (r.x + r.w / 2., r.y + r.h / 2.)
+        };
+        // nothing selected: both buttons are off, and the press is kept as any other
+        let mut files = fixture(vec![folder("A")]);
+        files.update_controls();
+        for id in [BAR_SHARE, BAR_TAGS] {
+            let (x, y) = centre(&files, id);
+            assert_eq!(files.bar_menu_at(x, y), None);
+            files.route_input(&ctx, pointer(TouchKind::Down, x, y, 0.));
+            assert!(files.down.is_some() && files.sys.effects.is_empty() && !files.tag_panel);
+            files.route_input(&ctx, pointer(TouchKind::Up, x, y, 20.));
+            assert!(files.sys.effects.is_empty() && !files.tag_panel);
+        }
+        // Share: the press asks for the share menu, and a release that still reaches the window asks for no second
+        files.select_only(0);
+        files.update_controls();
+        let (x, y) = centre(&files, BAR_SHARE);
+        assert_eq!(files.bar_menu_at(x, y), Some(BAR_SHARE));
+        files.route_input(&ctx, pointer(TouchKind::Down, x, y, 0.));
+        assert_eq!(files.sys.effects.len(), 1, "the press asks for the menu");
+        assert!(matches!(&files.sys.effects[0], Effect::Share(paths, _) if paths == &vec![PathBuf::from("/fixture/A")]));
+        assert!(files.down.is_none() && !files.fx.tag_press, "the press is not kept for a click");
+        files.route_input(&ctx, pointer(TouchKind::Move, x, y + 60., 16.));
+        files.route_input(&ctx, pointer(TouchKind::Up, x, y + 60., 32.));
+        files.route_input(&ctx, pointer(TouchKind::Up, x, y, 48.));
+        assert_eq!(files.sys.effects.len(), 1, "no second menu");
+        files.sys.effects.clear();
+        // a finger's press on Share waits for its release
+        files.route_input(&ctx, finger(TouchKind::Down, x, y, 100.));
+        assert!(files.sys.effects.is_empty() && files.down.is_some());
+        files.route_input(&ctx, finger(TouchKind::Up, x, y, 150.));
+        assert!(matches!(files.sys.effects.last(), Some(Effect::Share(..))));
+        files.sys.effects.clear();
+        // Tags: the press opens the panel, and the release on the button leaves it open (a click)
+        let (x, y) = centre(&files, BAR_TAGS);
+        assert_eq!(files.bar_menu_at(x, y), Some(BAR_TAGS));
+        files.route_input(&ctx, pointer(TouchKind::Down, x, y, 200.));
+        assert!(files.tag_panel && files.fx.tag_press && files.down.is_none(), "the press opens the panel");
+        files.route_input(&ctx, pointer(TouchKind::Up, x, y, 250.));
+        assert!(files.tag_panel && !files.fx.tag_press, "a click leaves it open");
+        let path = PathBuf::from("/fixture/A");
+        assert!(Tag::ALL.into_iter().all(|tag| !files.tag_index.has(&path, tag)), "and chooses nothing");
+        // a click on the button while the panel is open closes it, as before
+        assert_eq!(files.bar_menu_at(x, y), None, "the panel takes the pointer");
+        files.route_input(&ctx, pointer(TouchKind::Down, x, y, 300.));
+        files.route_input(&ctx, pointer(TouchKind::Up, x, y, 350.));
+        assert!(!files.tag_panel);
+        // press, drag to the second colour row and release: that colour is turned on, and the panel stays
+        files.route_input(&ctx, pointer(TouchKind::Down, x, y, 400.));
+        assert!(files.tag_panel && files.fx.tag_press);
+        let (rx, ry) = (files.side() + 60., TAG_ROWS_TOP + TAG_ROW * 1.5);
+        assert_eq!(files.tag_row_at(rx, ry), Some(Tag::ALL[1]));
+        files.route_input(&ctx, pointer(TouchKind::Move, rx, ry, 420.));
+        files.route_input(&ctx, pointer(TouchKind::Up, rx, ry, 440.));
+        assert!(files.tag_panel && !files.fx.tag_press);
+        assert!(files.tag_index.has(&path, Tag::ALL[1]), "the colour under the release is on");
+        assert!(!files.tag_index.has(&path, Tag::ALL[0]));
+        // a later release elsewhere chooses nothing more
+        files.route_input(&ctx, pointer(TouchKind::Up, rx, ry + TAG_ROW, 460.));
+        assert!(!files.tag_index.has(&path, Tag::ALL[2]));
+        assert_eq!(files.tag_row_at(rx, TAG_ROWS_TOP - 4.), None, "above the rows");
+        assert_eq!(files.tag_row_at(1., ry), None, "over the sidebar");
     }
 
     /// E2E8 R03: with two tabs the close key closed the whole window, and the tabs came back when Files was opened

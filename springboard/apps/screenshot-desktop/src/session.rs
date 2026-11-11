@@ -95,7 +95,7 @@ impl Session {
             }
             Phase::Armed(_) | Phase::Until(_) => {
                 self.phase = Phase::Idle;
-                self.status = "Timer cancelled.".into();
+                self.status = "Timer canceled.".into();
                 Step::Redraw
             }
             Phase::Waiting => Step::Idle,
@@ -186,7 +186,7 @@ mod tests {
         s.tick(1.0);
         assert_eq!(s.press(), Step::Redraw);
         assert!(!s.counting());
-        assert_eq!(s.status(), "Timer cancelled.");
+        assert_eq!(s.status(), "Timer canceled.");
         assert_eq!(s.tick(20.0), Step::Idle, "a cancelled timer never fires");
     }
 

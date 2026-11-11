@@ -844,6 +844,8 @@ pub struct Shell {
     window_grab: Option<capture_flow::WindowGrab>,
     /// A capture waiting for the window server's composed screen (`capture_flow`).
     grab: Option<capture_flow::Grab>,
+    /// The answers of the workers writing captured pictures: an error names the file that was not written (`capture_flow`).
+    shot_writes: Vec<std::sync::mpsc::Receiver<Result<(), (PathBuf, String)>>>,
     /// The capture session and the thumbnail as surfaces of their own above the windows (the desktop; `capture_flow`).
     capture_layer: Option<capture_flow::Layer>,
     shot_layer: Option<capture_flow::Layer>,
@@ -1369,6 +1371,7 @@ impl Shell {
             shots_gc: 0.0,
             window_grab: None,
             grab: None,
+            shot_writes: Vec::new(),
             capture_layer: None,
             shot_layer: None,
             modal_layer: None,

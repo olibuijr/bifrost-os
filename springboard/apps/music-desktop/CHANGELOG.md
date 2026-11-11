@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.10
+
+- The text is in en_US spelling: Favorite, Favorite Songs, No Favorites, Add to Favorites and Remove from Favorites. Saved smart playlists are unchanged.
+
 ## 1.14.9
 
 - Compliance: the mini player uses the spacing token; no change in behaviour.

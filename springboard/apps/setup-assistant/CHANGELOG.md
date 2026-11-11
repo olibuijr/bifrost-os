@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.11
+
+- The Appearance step says "color" and "Accent color" (en_US spelling).
+
 ## 0.1.10
 
 - A time zone picked on the Region page is set. The assistant tried to set it itself, which its sandbox does not allow, so Get Started stopped with "The time zone could not be changed". It now records the zone and the system sets it when the assistant closes.

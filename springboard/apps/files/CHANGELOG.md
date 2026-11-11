@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.34.24
+
+- The Share and Tags buttons open when the mouse button goes down, as the toolbar's other pull-downs do: press, drag to a row and release chooses it, and a click leaves the menu or the Tags panel open (for Share this needs a shell that keeps a share menu open after the click that opened it). File > New Window (Cmd+N) opens at the home folder, in the view and at the size of the window in front; it opened at the folder of the window in front. Go to Folder starts with its path selected, so typing a path replaces it and the Right arrow keeps it to add to; Select All (Cmd+A), Cut, Copy, Paste and Undo act on the sheet's field instead of the folder behind it.
+
+## 1.34.23
+
+- The text is in en_US spelling: "Click a color" in the tags panel of Get Info, "Canceled" for a stopped copy or server connection, and "unknown tag color" in the control socket error. The control socket fields are unchanged.
+
 ## 1.34.22
 
 - The toolbar's pull-downs (the view pop-up, Group and Sort, the action menu) open when the mouse button goes down: press, drag to a row and release chooses it. Files dropped on a file's row or icon go into the folder the window shows, in every view, and in the columns view a drop over a parent column goes into that column's folder; a list full of files took no drop. File > Close Tab (Cmd+W) closes the open tab while the window has more than one, and Close Window moves to Shift+Cmd+W; with one tab Cmd+W closes the window as before. The gallery starts at the first item after Select All. A window that is not in front draws its selection in grey. What a paste, a drop, Duplicate or an undo adds to the folder is selected and scrolled into view. File > New Window opens at the folder, in the view and at the size of the window in front. The thumbnail of a text file or another document has a thin outline, so a white page shows on a white background. Go to Folder opens the folder of a file's path and selects the file, and says inside the sheet when a path cannot be found. Typing the first letters of a name selects the item, in every view. Needs shell 0.10.53 or later.

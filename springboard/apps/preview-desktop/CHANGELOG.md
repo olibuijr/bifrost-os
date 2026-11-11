@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.29
+
+- The status line is on a strip of its own along the bottom of the window and takes as many lines as its text needs, in the label color. A long message, such as why a picture is saved as a PNG copy, was one grey line over the picture and was cut off at the window's right edge.
+
+## 0.11.28
+
+- The text is in en_US spelling: Reset Color in the adjust menu and "color profile" in the save-a-copy message.
+
 ## 0.11.27
 
 - Opening another file while the document has unsaved changes asks whether to save them first: Save, Don't Save or Cancel. This covers a file opened from the file manager, File > Open, Open Recent, a dropped file and New from Clipboard. The other file used to open at once and the changes were lost.

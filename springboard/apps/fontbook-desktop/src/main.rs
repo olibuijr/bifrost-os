@@ -14,6 +14,8 @@ mod validate;
 
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{Damage, Font, Surface};
+use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
+use bifrost_app::controls::sheet;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{ax, Rect, Role, TextField};
 use bifrost_app::layout::UNIFIED_BAR_PT;
@@ -43,13 +45,20 @@ const LIST_TOP_PT: f32 = HEADER_PT + 22.0;
 const BAR_BUTTON_H_PT: f32 = 28.0;
 const BAR_BUTTON_Y_PT: f32 = (UNIFIED_BAR_PT - BAR_BUTTON_H_PT) / 2.0;
 const PAD_PT: f32 = 12.0;
-/// Width of the preview's buttons (On/Off, Remove Font), and the gap from the switch to the remove button.
-const BUTTON_PT: f32 = 120.0;
-const BUTTON_GAP_PT: f32 = 130.0;
-/// The mode tabs under the family name, and where a mode's content starts.
+/// Ids of the preview column's toolbar buttons (`preview_bar`).
+const B_SWITCH: u32 = 1;
+const B_REMOVE: u32 = 2;
+const B_INSTALL: u32 = 3;
+const B_CANCEL: u32 = 4;
+/// The mode control under the family name (the kit's segmented control), and where a mode's content starts.
 const TABS_TOP_PT: f32 = HEADER_PT + 44.0;
 const TAB_PT: f32 = 100.0;
-const TAB_H_PT: f32 = 24.0;
+const TAB_H_PT: f32 = sheet::SEGMENT_H_PT;
+/// The segments of the mode control, in order. Validation is a result view, not a segment.
+const MODE_TABS: [(&str, Mode); 3] = [("Sample", Mode::Sample), ("Repertoire", Mode::Repertoire), ("Info", Mode::Info)];
+/// A wrapped sample's line step, and the room under a sample before the next one, as multiples of its size.
+const SAMPLE_LINE: f32 = 1.25;
+const SAMPLE_GAP: f32 = 0.35;
 const CONTENT_TOP_PT: f32 = HEADER_PT + 84.0;
 /// The sample field and its size buttons (Sample mode).
 const FIELD_W_PT: f32 = 360.0;
@@ -575,7 +584,7 @@ impl FontBookApp {
         }
         let preview_x = SIDEBAR_PT + LIST_PT + PAD_PT;
         if self.pending.is_some() {
-            return self.pending_touch(ctx, x, y, preview_x);
+            return self.pending_touch(ctx, x, y);
         }
         if x < SIDEBAR_PT + LIST_PT {
             self.checked = None;
@@ -617,25 +626,22 @@ impl FontBookApp {
             return false;
         }
         let Some(name) = self.selected.clone() else { return false };
-        let remove_x = preview_x + BUTTON_GAP_PT;
-        // the on/off switch and Remove Font sit at the top of the preview column
-        if (BAR_BUTTON_Y_PT..BAR_BUTTON_Y_PT + BAR_BUTTON_H_PT).contains(&y) {
-            if (preview_x..preview_x + BUTTON_PT).contains(&x) {
+        // the on/off switch and Remove Font are the preview column's toolbar buttons
+        match self.bar_hit(ctx, x, y) {
+            Some(B_SWITCH) => {
                 self.toggle_enabled(&ctx.data_dir, &name);
                 return true;
             }
-            if (remove_x..remove_x + BUTTON_PT).contains(&x) && self.is_user_font(&name) {
+            Some(B_REMOVE) => {
                 self.remove(&ctx.data_dir, &name);
                 return true;
             }
+            _ => {}
         }
-        // the mode tabs
-        if (TABS_TOP_PT..TABS_TOP_PT + TAB_H_PT).contains(&y) && x >= preview_x {
-            let index = ((x - preview_x) / TAB_PT).floor() as usize;
-            if let Some(mode) = [Mode::Sample, Mode::Repertoire, Mode::Info].get(index) {
-                self.mode = *mode;
-                return true;
-            }
+        // the mode control
+        if let Some(mode) = tab_at(x, y) {
+            self.mode = mode;
+            return true;
         }
         match self.mode {
             Mode::Sample => self.sample_touch(ctx, x, y, preview_x),
@@ -678,25 +684,45 @@ impl FontBookApp {
         false
     }
 
+    /// Whether the file in the install preview may be installed.
+    fn can_install(&self) -> bool {
+        self.pending.as_ref().is_some_and(|p| p.family.is_some() && (!self.prefs.validate_before_install || p.report.is_valid()))
+    }
+
+    /// What the preview column's toolbar is for now: the same choice `draw` makes for the column.
+    fn bar_for(&self) -> BarFor {
+        if self.pending.is_some() {
+            return BarFor::Pending { can: self.can_install() };
+        }
+        match (&self.checked, self.selected.as_deref()) {
+            (None, Some(name)) => BarFor::Family { on: self.library.as_ref().is_none_or(|l| l.is_enabled(name)), removable: self.is_user_font(name) },
+            _ => BarFor::Nothing,
+        }
+    }
+
+    /// The preview toolbar button under a press (window points), laid out as `draw` lays it out.
+    fn bar_hit(&self, ctx: &Ctx, x: f32, y: f32) -> Option<u32> {
+        let bar = preview_bar(self.bar_for());
+        widgets::toolbar_layout(&ctx.ui, preview_bar_bounds(ctx.cfg.w as f32 / ctx.ui.s), &bar).hit(x, y)
+    }
+
     /// A press while the install preview is up: Install or Cancel.
-    fn pending_touch(&mut self, ctx: &Ctx, x: f32, y: f32, preview_x: f32) -> bool {
-        if !(BAR_BUTTON_Y_PT..BAR_BUTTON_Y_PT + BAR_BUTTON_H_PT).contains(&y) {
-            return false;
-        }
-        if (preview_x..preview_x + BUTTON_PT).contains(&x) {
-            let can = self.pending.as_ref().is_some_and(|p| p.family.is_some() && (!self.prefs.validate_before_install || p.report.is_valid()));
-            if can {
-                self.install_pending(ctx);
-            } else {
-                self.status = "This font fails validation and cannot be installed.".to_string();
+    fn pending_touch(&mut self, ctx: &Ctx, x: f32, y: f32) -> bool {
+        match self.bar_hit(ctx, x, y) {
+            Some(B_INSTALL) => {
+                if self.can_install() {
+                    self.install_pending(ctx);
+                } else {
+                    self.status = "This font fails validation and cannot be installed.".to_string();
+                }
+                true
             }
-            return true;
+            Some(B_CANCEL) => {
+                self.cancel_install(ctx);
+                true
+            }
+            _ => false,
         }
-        if (preview_x + BUTTON_GAP_PT..preview_x + BUTTON_GAP_PT + BUTTON_PT).contains(&x) {
-            self.cancel_install(ctx);
-            return true;
-        }
-        false
     }
 
     /// Selects the family a `fontbook:` link names.
@@ -735,6 +761,71 @@ fn sidebar_sources(lib: &Library) -> Vec<(String, Source)> {
 /// The toolbar's search capsule in window points: the list column's width less its padding, centred in the unified bar.
 fn search_bounds() -> Rect {
     Rect { x: SIDEBAR_PT + PAD_PT, y: BAR_BUTTON_Y_PT, w: LIST_PT - 2.0 * PAD_PT, h: BAR_BUTTON_H_PT }
+}
+
+/// What the preview column's part of the toolbar is for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BarFor {
+    /// Nothing selected, or a checked file's result: no buttons.
+    Nothing,
+    /// An install preview; `can` when the file may be installed.
+    Pending { can: bool },
+    /// The selected family: turned `on`, and `removable` when it is a font of the user's.
+    Family { on: bool, removable: bool },
+}
+
+/// The preview column's toolbar buttons, drawn and hit-tested by the kit (`widgets::toolbar`): Install and Cancel
+/// over an install preview; the switch, and Remove Font for a font of the user's, for the selected family.
+fn preview_bar(what: BarFor) -> Toolbar {
+    Toolbar::new(match what {
+        BarFor::Nothing => Vec::new(),
+        BarFor::Pending { can } => vec![ToolbarItem::button(B_INSTALL, "Install").enabled(can), ToolbarItem::button(B_CANCEL, "Cancel")],
+        BarFor::Family { on, removable } => {
+            let mut items = vec![ToolbarItem::button(B_SWITCH, if on { "Turn Off" } else { "Turn On" })];
+            if removable {
+                items.push(ToolbarItem::button(B_REMOVE, "Remove Font"));
+            }
+            items
+        }
+    })
+}
+
+/// The preview column's part of the unified bar, in a window `width` points wide.
+fn preview_bar_bounds(width: f32) -> Rect {
+    let x = SIDEBAR_PT + LIST_PT + PAD_PT;
+    Rect { x, y: 0.0, w: (width - x - PAD_PT).max(0.0), h: UNIFIED_BAR_PT }
+}
+
+/// The mode control's bounds in window points.
+fn tabs_bounds() -> Rect {
+    Rect { x: SIDEBAR_PT + LIST_PT + PAD_PT, y: TABS_TOP_PT, w: TAB_PT * MODE_TABS.len() as f32, h: TAB_H_PT }
+}
+
+/// The mode whose segment is under the point, if any.
+fn tab_at(x: f32, y: f32) -> Option<Mode> {
+    sheet::segment_hit(tabs_bounds(), MODE_TABS.len(), x, y).map(|i| MODE_TABS[i].1)
+}
+
+/// The sample `text` in `font` at `size` points as the lines that fit `max_w` points: it wraps at the spaces and is
+/// never cut (E2E 9: a large sample ended in an ellipsis).
+fn sample_lines(font: &Ui, text: &str, size: f32, max_w: f32) -> Vec<String> {
+    font.wrap(text, size, Weight::Regular, font.pt(max_w))
+}
+
+/// Draws the sample `text` in `font` at `size` points from (`x`, `y`) points down, wrapped to `max_w` points; lines
+/// that would start below `bottom` are left out. Returns the y where the next sample starts.
+#[allow(clippy::too_many_arguments)]
+fn put_sample(s: &mut Surface, ui: &Ui, font: &Ui, text: &str, size: f32, x: f32, y: f32, max_w: f32, bottom: f32) -> f32 {
+    let mut y = y;
+    for line in sample_lines(font, text, size, max_w) {
+        if y > bottom {
+            break;
+        }
+        let img = font.text(&line, size, Weight::Regular, ui::LABEL.now());
+        s.blit_colored(&img, (x * ui.s) as i32, (y * ui.s) as i32, ui::LABEL.now(), 255);
+        y += size * SAMPLE_LINE;
+    }
+    y + size * SAMPLE_GAP
 }
 
 /// Draws `text` at (`x`, `y`) points, cut to `max_w` points.
@@ -1105,6 +1196,11 @@ impl App for FontBookApp {
         // preview column
         let px = SIDEBAR_PT + LIST_PT + PAD_PT;
         let avail = wp - px - PAD_PT;
+        // the column's buttons are the kit's toolbar buttons, in its part of the unified bar
+        let bar = preview_bar(self.bar_for());
+        if !bar.items.is_empty() {
+            widgets::toolbar(s, ui, preview_bar_bounds(wp), &bar, None);
+        }
         if self.pending.is_some() {
             self.draw_pending(ui, s, px, avail);
         } else if let Some((name, report)) = &self.checked {
@@ -1129,9 +1225,7 @@ impl FontBookApp {
     /// The install preview: Install and Cancel, the validation verdict, and a sample in the candidate font.
     fn draw_pending(&self, ui: &Ui, s: &mut Surface, px: f32, avail: f32) {
         let Some(pending) = &self.pending else { return };
-        let can = pending.family.is_some() && (!self.prefs.validate_before_install || pending.report.is_valid());
-        button(s, ui, "Install", if can { ui::LINK } else { ui::SEPARATOR_C.now() }, px, BAR_BUTTON_Y_PT, BUTTON_PT, BAR_BUTTON_H_PT);
-        button(s, ui, "Cancel", ui::SEPARATOR_C.now(), px + BUTTON_GAP_PT, BAR_BUTTON_Y_PT, BUTTON_PT, BAR_BUTTON_H_PT);
+        let can = self.can_install();
         let title = pending.family.clone().unwrap_or_else(|| pending.name.clone());
         put(s, ui, &title, ui::MAC_TITLE2_PT, ui::LABEL.now(), px, HEADER_PT + PAD_PT, avail);
         let verdict = match pending.report.verdict() {
@@ -1142,10 +1236,7 @@ impl FontBookApp {
         put(s, ui, &format!("{} - {verdict}", pending.name), ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, HEADER_PT + 44.0, avail);
         let mut y = CONTENT_TOP_PT;
         if let Some(font) = &pending.font {
-            let size = self.prefs.sample_size;
-            let img = font.text(&font.fit(self.prefs.sample(), size, font.pt(avail)), size, Weight::Regular, ui::LABEL.now());
-            s.blit_colored(&img, (px * ui.s) as i32, (y * ui.s) as i32, ui::LABEL.now(), 255);
-            y += size * 1.6 + 8.0;
+            y = put_sample(s, ui, font, self.prefs.sample(), self.prefs.sample_size, px, y, avail, f32::MAX) + 8.0;
         }
         let mut rows = model::repertoire_rows(&pending.report);
         if pending.family.is_none() {
@@ -1162,21 +1253,11 @@ impl FontBookApp {
 
     /// The selected family: switch and Remove Font, the name, the mode tabs and the mode's content.
     fn draw_selected(&self, ui: &Ui, s: &mut Surface, name: &str, px: f32, avail: f32, hp: f32) {
-        let on = self.library.as_ref().is_none_or(|l| l.is_enabled(name));
-        button(s, ui, if on { "Turn Off" } else { "Turn On" }, if on { ui::LINK } else { ui::SEPARATOR_C.now() }, px, BAR_BUTTON_Y_PT, BUTTON_PT, BAR_BUTTON_H_PT);
-        if self.is_user_font(name) {
-            button(s, ui, "Remove Font", ui::DESTRUCTIVE, px + BUTTON_GAP_PT, BAR_BUTTON_Y_PT, BUTTON_PT, BAR_BUTTON_H_PT);
-        }
         put(s, ui, name, ui::MAC_TITLE2_PT, ui::LABEL.now(), px, HEADER_PT + PAD_PT, avail);
-        for (i, (label, mode)) in [("Sample", Mode::Sample), ("Repertoire", Mode::Repertoire), ("Info", Mode::Info)].iter().enumerate() {
-            let x = px + i as f32 * TAB_PT;
-            let active = self.mode == *mode;
-            let p = |v: f32| (v * ui.s) as usize;
-            if active {
-                s.fill_rect(p(x), p(TABS_TOP_PT), p(TAB_PT - 4.0), p(TAB_H_PT), ui::SIDEBAR_PLATE.now());
-            }
-            put(s, ui, label, ui::MAC_BODY_PT, ui::LABEL.now(), x + 10.0, TABS_TOP_PT + 4.0, TAB_PT - 20.0);
-        }
+        // the kit's segmented control; no segment is chosen while a validation result shows
+        let labels = MODE_TABS.map(|(label, _)| label);
+        let chosen = MODE_TABS.iter().position(|(_, mode)| *mode == self.mode).unwrap_or(MODE_TABS.len());
+        widgets::segmented(s, ui, tabs_bounds(), &labels, chosen, true);
         let preview = self.preview.as_ref().filter(|(n, _)| n == name).map(|(_, u)| u);
         let report = self.report.as_ref().filter(|(n, _)| n == name).map(|(_, r)| r);
         match self.mode {
@@ -1211,9 +1292,7 @@ impl FontBookApp {
             if y > hp {
                 break;
             }
-            let img = font.text(&font.fit(self.prefs.sample(), size, font.pt(avail)), size, Weight::Regular, ui::LABEL.now());
-            s.blit_colored(&img, (px * ui.s) as i32, (y * ui.s) as i32, ui::LABEL.now(), 255);
-            y += size * 1.6;
+            y = put_sample(s, ui, font, self.prefs.sample(), size, px, y, avail, hp);
         }
     }
 
@@ -1311,6 +1390,72 @@ mod tests {
         assert!(r.bottom() < UNIFIED_BAR_PT);
         // the rows and the preview start below the bar
         assert!(LIST_TOP_PT > UNIFIED_BAR_PT && HEADER_PT >= UNIFIED_BAR_PT);
+    }
+
+    fn test_ui(scale: f32) -> Ui {
+        let assets = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets");
+        let data: &'static [u8] = Box::leak(std::fs::read(format!("{assets}/SFUI.ttf")).unwrap().into_boxed_slice());
+        Ui::new(Font::parse(data).unwrap(), scale)
+    }
+
+    /// E2E 9: a large sample line ended in an ellipsis instead of wrapping.
+    #[test]
+    fn a_sample_wider_than_the_preview_wraps_and_keeps_all_of_its_words() {
+        let text = "The quick brown fox jumps over the lazy dog and keeps running for a long while";
+        for scale in [1.0, 1.5625] {
+            let font = test_ui(scale);
+            let one = sample_lines(&font, text, 12.0, 2000.0);
+            assert_eq!(one, [text], "a sample that fits is one line");
+            let lines = sample_lines(&font, text, 64.0, 300.0);
+            assert!(lines.len() > 1, "a large sample takes more lines");
+            assert!(lines.iter().all(|l| !l.contains('\u{2026}')), "no line is cut with an ellipsis");
+            let words: Vec<&str> = lines.iter().flat_map(|l| l.split_whitespace()).collect();
+            assert_eq!(words, text.split_whitespace().collect::<Vec<_>>(), "every word is shown, in order");
+            for l in &lines {
+                assert!(font.measure(l, 64.0, Weight::Regular) <= font.pt(300.0), "{l:?} fits the preview");
+            }
+        }
+    }
+
+    /// E2E 9: the mode tabs and the preview's buttons were flat rectangles; they are the kit's controls now.
+    #[test]
+    fn the_mode_control_is_a_segmented_control_with_one_segment_per_mode() {
+        let b = tabs_bounds();
+        assert_eq!(b.h, sheet::SEGMENT_H_PT, "the kit's control height");
+        assert!(b.y >= HEADER_PT && b.bottom() <= CONTENT_TOP_PT, "between the family name and the content");
+        let segs = sheet::segments(b, MODE_TABS.len());
+        for (seg, (_, mode)) in segs.iter().zip(MODE_TABS) {
+            assert_eq!(tab_at(seg.x + seg.w / 2.0, seg.y + seg.h / 2.0), Some(mode));
+        }
+        assert_eq!(tab_at(b.x - 1.0, b.y + 1.0), None);
+        assert_eq!(tab_at(b.right() + 1.0, b.y + 1.0), None);
+        assert_eq!(tab_at(b.x + 1.0, b.bottom() + 1.0), None);
+        assert!(!MODE_TABS.iter().any(|(_, mode)| *mode == Mode::Validation), "a validation result chooses no segment");
+    }
+
+    #[test]
+    fn the_preview_buttons_are_toolbar_buttons_laid_out_by_the_kit() {
+        let labels = |what: BarFor| preview_bar(what).items.iter().map(|i| (i.id, i.label.clone(), i.enabled)).collect::<Vec<_>>();
+        assert!(labels(BarFor::Nothing).is_empty());
+        assert_eq!(labels(BarFor::Family { on: true, removable: false }), [(B_SWITCH, "Turn Off".to_string(), true)]);
+        assert_eq!(labels(BarFor::Family { on: false, removable: true }), [(B_SWITCH, "Turn On".to_string(), true), (B_REMOVE, "Remove Font".to_string(), true)]);
+        assert_eq!(labels(BarFor::Pending { can: false }), [(B_INSTALL, "Install".to_string(), false), (B_CANCEL, "Cancel".to_string(), true)]);
+        assert_eq!(labels(BarFor::Pending { can: true })[0], (B_INSTALL, "Install".to_string(), true));
+
+        // at the default window size both buttons are in the preview column's part of the bar, and a press on one hits it
+        for scale in [1.0, 1.5625] {
+            let ui = test_ui(scale);
+            let bounds = preview_bar_bounds(1200.0 / scale);
+            let bar = preview_bar(BarFor::Family { on: true, removable: true });
+            let layout = widgets::toolbar_layout(&ui, bounds, &bar);
+            for id in [B_SWITCH, B_REMOVE] {
+                let r = layout.rect_of(id).expect("the button is shown, not behind the overflow button");
+                assert!(r.x >= bounds.x && r.right() <= bounds.right(), "inside the preview column");
+                assert!(r.y >= 0.0 && r.bottom() <= UNIFIED_BAR_PT, "inside the unified bar");
+                assert_eq!(layout.hit(r.x + r.w / 2.0, r.y + r.h / 2.0), Some(id));
+            }
+            assert_eq!(layout.hit(bounds.x + 1.0, UNIFIED_BAR_PT + 10.0), None, "nothing below the bar");
+        }
     }
 
     #[test]

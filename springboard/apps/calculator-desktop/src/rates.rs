@@ -160,7 +160,7 @@ fn fetch() -> Result<Rates, String> {
         return Err(format!("status {}", resp.status_code));
     }
     let text = String::from_utf8(body).map_err(|_| "rates file is not text".to_string())?;
-    Rates::parse_xml(&text).ok_or_else(|| "rates file not recognised".to_string())
+    Rates::parse_xml(&text).ok_or_else(|| "rates file not recognized".to_string())
 }
 
 /// The rates for the Convert panel: the cached copy at once, and a check running in the background when one is due.

@@ -491,7 +491,7 @@ impl Stored {
         } else if self.deep {
             "Viewer saves 8 bits a sample and this file has more".to_string()
         } else {
-            "Viewer cannot save this file\u{2019}s colour profile".to_string()
+            "Viewer cannot save this file\u{2019}s color profile".to_string()
         };
         let first = if self.frames > 1 { format!(" Only the first of its {} {parts} is in the copy.", self.frames) } else { String::new() };
         format!("{why}, so the picture is saved as a {copy} copy and {name} stays as it is.{first}")
@@ -724,7 +724,7 @@ mod tests {
         assert_eq!(Stored::plain(Format::Gif).copy_name("noext"), "noext.png");
         // what the status line says
         assert!(deep.copy_reason("a.png").starts_with("Viewer saves 8 bits a sample and this file has more, so"));
-        assert!(tagged.copy_reason("p.jpg").contains("colour profile") && tagged.copy_reason("p.jpg").contains("saved as a JPEG copy"));
+        assert!(tagged.copy_reason("p.jpg").contains("color profile") && tagged.copy_reason("p.jpg").contains("saved as a JPEG copy"));
         assert!(animated.copy_reason("a.png").starts_with("Viewer cannot save an animation") && animated.copy_reason("a.png").ends_with("Only the first of its 3 frames is in the copy."));
         let pages = Stored { frames: 4, ..Stored::plain(Format::Tiff) };
         assert!(pages.copy_reason("scan.tif").starts_with("Viewer cannot save TIFF files") && pages.copy_reason("scan.tif").ends_with("Only the first of its 4 pages is in the copy."));

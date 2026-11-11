@@ -125,19 +125,36 @@ fn spawn_grab() -> Receiver<Option<Image>> {
         // its screen capture global: the shell connects for it and hands the descriptor down
         let fd = crate::bare::privileged::helper_fd();
         let mut grab = Command::new(GRAB_TOOL);
-        grab.arg("--screenshot").stdin(Stdio::null()).stderr(Stdio::null());
+        grab.arg("--screenshot").stdin(Stdio::null());
         if let Some(fd) = fd.as_ref() {
             crate::bare::privileged::give_to(&mut grab, fd);
         }
-        let png = grab
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| o.stdout);
+        // the grabber's own words go to the log: a grab that fails says why (`grab_failure`)
+        let png = match grab.output() {
+            Ok(o) if o.status.success() => Some(o.stdout),
+            Ok(o) => {
+                bifrost_core::log::shell_logger("capture").error(grab_failure(&o.status.to_string(), &o.stderr));
+                None
+            }
+            Err(e) => {
+                bifrost_core::log::shell_logger("capture").error(format!("the screen grabber did not start: {e}"));
+                None
+            }
+        };
         let _ = tx.send(png.and_then(|b| crate::cg::imageio::decode(&b)));
     });
     rx
 }
+
+/// The log line of a grabber that ended with `status`: what it printed on its standard error, shortened to one line.
+fn grab_failure(status: &str, stderr: &[u8]) -> String {
+    let said = String::from_utf8_lossy(stderr);
+    let said: String = said.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(300).collect();
+    if said.is_empty() { format!("the screen grabber failed ({status})") } else { format!("the screen grabber failed ({status}): {said}") }
+}
+
+/// The title of the notice a capture that made no picture posts.
+pub const FAILED_TITLE: &str = "Screenshot Not Taken";
 
 /// The thumbnail animation as a surface of its own, clipped to the part of the screen it covers; None once it has gone.
 pub(super) fn shot_layer(o: &Overlay, t: f64) -> Option<Layer> {
@@ -270,13 +287,14 @@ impl Shell {
                 self.window_grab_fallback(g, t);
             }
         }
+        self.capture_write_results();
         let Some(g) = self.grab.as_mut() else { return };
         match phase(g.due, g.started.as_ref().map(|(at, _)| *at), t) {
             Phase::Settling => {}
             Phase::Start => g.started = Some((t, spawn_grab())),
             Phase::TimedOut => {
                 self.grab = None;
-                eprintln!("springboard: screenshot: the window server did not answer");
+                self.capture_failed("The screen could not be read in time.");
             }
             Phase::Waiting => {
                 let answer = g.started.as_ref().map(|(_, rx)| rx.try_recv());
@@ -288,11 +306,43 @@ impl Shell {
                     }
                     Some(Ok(None)) | Some(Err(TryRecvError::Disconnected)) => {
                         self.grab = None;
-                        eprintln!("springboard: screenshot: the screen could not be read from the window server");
+                        self.capture_failed("The screen could not be read.");
                     }
                     _ => {}
                 }
             }
+        }
+    }
+
+    /// A capture made no picture or its file could not be written: the person is told with a notice (a banner, listed in
+    /// Notification Center) and the reason goes to the log. Nothing used to show, so the shortcut seemed dead.
+    pub(super) fn capture_failed(&mut self, why: &str) {
+        bifrost_core::log::shell_logger("capture").error(format!("screenshot not taken: {why}"));
+        let time = self.notify.now();
+        self.notify(super::notify::Notification::new(super::AppId::Settings, FAILED_TITLE, why, time));
+        self.dirty = true;
+    }
+
+    /// Reads the answers of the workers that write pictures: one that failed takes its thumbnail off the screen (there is
+    /// no file behind it) and tells the person.
+    fn capture_write_results(&mut self) {
+        let mut failed = Vec::new();
+        self.shot_writes.retain(|rx| match rx.try_recv() {
+            Ok(Ok(())) | Err(TryRecvError::Disconnected) => false,
+            Ok(Err(lost)) => {
+                failed.push(lost);
+                false
+            }
+            Err(TryRecvError::Empty) => true,
+        });
+        for (path, why) in failed {
+            bifrost_core::log::shell_logger("capture").error(format!("screenshot not saved: {why}"));
+            if self.shot.as_ref().is_some_and(|o| o.path == path) {
+                self.shot = None;
+            }
+            self.shot_saved.retain(|p| *p != path);
+            let folder = path.parent().and_then(Path::file_name).map_or_else(|| "its folder".to_string(), |n| n.to_string_lossy().into_owned());
+            self.capture_failed(&format!("The picture could not be saved in {folder}."));
         }
     }
 
@@ -301,7 +351,8 @@ impl Shell {
         if let Some(w) = self.window_grab.as_ref() {
             return Some(w.deadline.max(t));
         }
-        let g = self.grab.as_ref()?;
+        // a picture being written: its worker's answer is read on the next pass
+        let Some(g) = self.grab.as_ref() else { return (!self.shot_writes.is_empty()).then_some(t + POLL_MS) };
         Some(match g.started {
             None => g.due.max(t),
             Some(_) => t + POLL_MS,
@@ -321,7 +372,7 @@ impl Shell {
             }
             None => {
                 let Some(r) = capture::region_in(g.region, from, (shot.w, shot.h)) else {
-                    eprintln!("springboard: screenshot: nothing of the chosen area is on the screen");
+                    self.capture_failed("Nothing of the chosen area is on the screen.");
                     return;
                 };
                 let mut img = if (r.w as usize, r.h as usize) == (shot.w, shot.h) { shot } else { shot.crop(r.x as usize, r.y as usize, r.w as usize, r.h as usize) };
@@ -369,11 +420,12 @@ impl Shell {
         let photo = photos::library::Photo { path: path.clone(), mtime: unix, size: bytes.len() as u64 };
         let in_library = self.photo_dirs.iter().any(|d| dir.starts_with(d));
         let owner = screenshot::account_owner();
+        let (tx, rx) = channel();
+        self.shot_writes.push(rx);
+        let lost = path.clone();
         crate::bare::sys::spawn_named("photo-save", move || {
             crate::gfx::affinity::background_thread();
-            if let Err(e) = screenshot::write_as(&dir, &name, &bytes, unix, owner) {
-                eprintln!("springboard: screenshot: {e}");
-            }
+            let _ = tx.send(screenshot::write_as(&dir, &name, &bytes, unix, owner).map(|_| ()).map_err(|e| (lost, e.to_string())));
         });
         if in_library {
             if self.photos.is_none() {
@@ -477,6 +529,67 @@ mod tests {
         let elsewhere = Rect { x: win.x + 1, ..win };
         sh.begin_capture(elsewhere, None, Some(elsewhere), 1000.0);
         assert!(sh.take_capture_requests().is_empty(), "no request for a rectangle the desk does not know");
+    }
+
+    /// The notices the shell posted, newest of each app: (title, body).
+    fn notices(sh: &Shell) -> Vec<(String, String)> {
+        sh.notify.store().groups().iter().map(|g| (g.latest().title.clone(), g.latest().body.clone())).collect()
+    }
+
+    #[test]
+    fn a_grab_the_grabber_fails_tells_the_person_instead_of_doing_nothing() {
+        let mut sh = crate::shell::tests::shell();
+        let whole = Rect { x: 0, y: 0, w: sh.w, h: sh.h };
+        let (tx, rx) = channel();
+        tx.send(None).unwrap();
+        sh.grab = Some(Grab { region: whole, pointer: None, window: None, due: 1000.0, started: Some((1000.0, rx)) });
+        sh.grab_tick(1100.0);
+        assert!(sh.grab.is_none() && sh.shot.is_none(), "no picture and nothing left waiting");
+        assert_eq!(notices(&sh), [(FAILED_TITLE.to_string(), "The screen could not be read.".to_string())]);
+    }
+
+    #[test]
+    fn a_grab_that_never_answers_tells_the_person_when_it_is_given_up() {
+        let mut sh = crate::shell::tests::shell();
+        let whole = Rect { x: 0, y: 0, w: sh.w, h: sh.h };
+        let (_tx, rx) = channel();
+        sh.grab = Some(Grab { region: whole, pointer: None, window: None, due: 1000.0, started: Some((1000.0, rx)) });
+        sh.grab_tick(1000.0 + GRAB_TIMEOUT_MS);
+        assert!(sh.grab.is_some() && notices(&sh).is_empty(), "still waiting, nothing said");
+        sh.grab_tick(1001.0 + GRAB_TIMEOUT_MS);
+        assert!(sh.grab.is_none());
+        assert_eq!(notices(&sh), [(FAILED_TITLE.to_string(), "The screen could not be read in time.".to_string())]);
+    }
+
+    #[test]
+    fn a_picture_that_could_not_be_written_loses_its_thumbnail_and_says_so() {
+        let mut sh = crate::shell::tests::shell();
+        let path = PathBuf::from("/nowhere/Desktop/Screenshot-20261111-120000.png");
+        sh.shot = Some(Overlay::new(Image::new(640, 400), path.clone(), sh.ui.s, 1000.0));
+        sh.shot_saved.push(path.clone());
+        let (tx, rx) = channel();
+        sh.shot_writes.push(rx);
+        assert_eq!(sh.grab_wake(1000.0), Some(1000.0 + POLL_MS), "the loop comes back for the worker's answer");
+        sh.grab_tick(1010.0);
+        assert!(sh.shot.is_some() && notices(&sh).is_empty(), "no answer yet");
+        tx.send(Err((path, "Permission denied".to_string()))).unwrap();
+        sh.grab_tick(1040.0);
+        assert!(sh.shot.is_none() && sh.shot_saved.is_empty() && sh.shot_writes.is_empty(), "there is no file behind the thumbnail");
+        assert_eq!(notices(&sh), [(FAILED_TITLE.to_string(), "The picture could not be saved in Desktop.".to_string())]);
+        // a picture that was written says nothing
+        let (tx, rx) = channel();
+        sh.shot_writes.push(rx);
+        tx.send(Ok(())).unwrap();
+        sh.grab_tick(1070.0);
+        assert!(sh.shot_writes.is_empty());
+        assert_eq!(notices(&sh).len(), 1);
+    }
+
+    #[test]
+    fn the_grabbers_own_words_reach_the_log_on_one_line() {
+        assert_eq!(grab_failure("exit status: 1", b"The Wayland session\nis not ready\n"), "the screen grabber failed (exit status: 1): The Wayland session is not ready");
+        assert_eq!(grab_failure("exit status: 127", b"  \n"), "the screen grabber failed (exit status: 127)");
+        assert!(grab_failure("signal: 9", "x".repeat(900).as_bytes()).len() < 400, "a long complaint is cut");
     }
 
     #[test]

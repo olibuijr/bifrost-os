@@ -32,7 +32,7 @@ impl Place {
             Place::Playlists => "Playlists",
             Place::RecentlyAdded => "Recently Added",
             Place::RecentlyPlayed => "Recently Played",
-            Place::Favourites => "Favourite Songs",
+            Place::Favourites => "Favorite Songs",
             Place::UpNext => "Up Next",
             Place::History => "History",
         }
@@ -269,7 +269,7 @@ pub fn build(s: &MenuState) -> Vec<AppMenu> {
     let mut song_items = vec![item(Command::PlayNext, "Play Next", "").enabled(song), item(Command::PlayLast, "Play Last", "").enabled(song), AppMenuItem::separator()];
     song_items.extend(add_to);
     song_items.extend(rate);
-    song_items.push(item(Command::Favourite, "Favourite", "cmd+l").enabled(song).checked(s.favourite));
+    song_items.push(item(Command::Favourite, "Favorite", "cmd+l").enabled(song).checked(s.favourite));
     song_items.push(AppMenuItem::separator());
     song_items.push(item(Command::GetInfo, "Get Info", "cmd+i").enabled(song));
     let mut controls = vec![
@@ -444,7 +444,7 @@ mod tests {
     fn the_view_menu_marks_the_place_and_the_sort() {
         let view = build(&MenuState { place: Place::Favourites, sort: SortKey::Plays, lyrics_shown: true, ..full() }).remove(3).items;
         let checked: Vec<&str> = view.iter().filter(|i| i.checked).map(|i| i.title.as_str()).collect();
-        assert_eq!(checked, ["Favourite Songs", "Show Lyrics", "Plays"]);
+        assert_eq!(checked, ["Favorite Songs", "Show Lyrics", "Plays"]);
         let sorts = view.iter().filter(|i| i.id != 0 && i.depth == 1).count();
         assert_eq!(sorts, SortKey::ALL.len() + 1, "every order, then Descending");
         let descending = build(&MenuState { descending: true, ..full() }).remove(3).items;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.19
+
+- The plain-text warning says "fonts and colors" (en_US spelling).
+
 ## 1.13.18
 
 - The window opens sooner: the list of installed fonts is read in the background instead of before the first frame. Until it is ready Format > Font lists Helvetica, Times and Courier; the other families follow a moment later.

@@ -1879,7 +1879,15 @@ impl super::Shell {
 
     /// A sheet blocks the window it belongs to: the window under the panel is dimmed, as a sheet dims its parent. The panel
     /// itself hangs from the top of that window (`doc_panel_rect`). Drawn before the panel's material.
+    ///
+    /// Not under the window server (`overlays_on_desk`): there the shell's frame lies under every window, so the dim was
+    /// never seen on the window, and the panel's own surface is cut from this frame with room for its shadow
+    /// (`popup_surface_rect`), which took the dim inside that margin along: a darker rectangle behind the sheet, larger
+    /// than it and cut off at the top of the window's body (E2E9, seen over an installed app's window).
     pub(super) fn draw_doc_dim(&self, s: &mut crate::gfx::Surface) {
+        if self.overlays_on_desk() {
+            return;
+        }
         let Some((x, y, w, h)) = self.doc_dim_rect() else { return };
         let radius = self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
         s.fill_rrect(x as f32, y as f32, w as f32, h as f32, radius, crate::gfx::rgba(0, 0, 0, SHEET_DIM_ALPHA));
@@ -2529,6 +2537,50 @@ pub(crate) mod tests {
         // answered or gone with its app: the region goes with the panel (the frame after it clears the last one)
         sh.doc_app_gone(0);
         assert!(sh.doc_dim_rect().is_none());
+        ALLOW.with(|a| a.set(false));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// E2E9: the sheet's surface is cut from the frame with a margin for its shadow, and the dim painted over the
+    /// window's body came along inside that margin: a darker rectangle behind the sheet. Under the window server no
+    /// dim is painted into the frame, so the margin holds the shadow alone and the rest of the body nothing.
+    #[test]
+    fn the_sheet_surface_carries_no_dim_of_the_window_behind_it() {
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                bifrost_render::glass::set_thread_gpu(None);
+            }
+        }
+        let _reset = Reset;
+        bifrost_render::glass::set_thread_gpu(Some(true));
+        ALLOW.with(|a| a.set(true));
+        let (d, mut sh, peer) = shell_with_app("e2e9-dim");
+        let m = sh.desk_metrics();
+        let app = super::super::AppId::External(0);
+        sh.desk.as_mut().unwrap().open(&m, app, (1000, 1400));
+        ask(&peer, &mut sh, ToShell::DocSave { request: 4, suggested_name: "a.txt".into(), filters: vec![] });
+        assert!(sh.overlays_on_desk(), "the sheet is a surface of its own here");
+        let (bx, by, bw, bh) = sh.doc_dim_rect().expect("the panel hangs from its window");
+        let (px, py, pw, ph) = sh.doc_panel_rect().unwrap();
+        let (w, h) = (sh.w as usize, sh.h as usize);
+        let mut buf = vec![0u32; w * h];
+        sh.draw_desktop_popup(&mut crate::gfx::Surface { w, h, stride: w, px: &mut buf, y0: 0 });
+        // everything the sheet may paint: itself and its shadow's reach (as `desktop_chrome_frames` cuts it), and more
+        let reach = sh.ui.pt(super::super::desk::SHADOW_REACH_PT + 8.0) as i32 + 8;
+        let near = |x: i32, y: i32| x >= px as i32 - reach && x < (px + pw) as i32 + reach && y >= py as i32 - reach && y < (py + ph) as i32 + reach;
+        let (mut seen, mut painted) = (0, 0);
+        for y in by.max(0)..(by + bh).min(h as i32) {
+            for x in bx.max(0)..(bx + bw).min(w as i32) {
+                if !near(x, y) {
+                    seen += 1;
+                    painted += usize::from(buf[y as usize * w + x as usize] != 0);
+                }
+            }
+        }
+        assert!(seen > 0, "the window's body is larger than the sheet and its shadow");
+        assert_eq!(painted, 0, "no dim in the frame under the window");
+        sh.doc_app_gone(0);
         ALLOW.with(|a| a.set(false));
         fs::remove_dir_all(&d).unwrap();
     }

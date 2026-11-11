@@ -2,7 +2,8 @@
 
 pub use bifrost_app::controls::geo::{format_distance, DistanceUnits};
 
-/// The Units setting of the View menu: follow the region, or force one system.
+/// The Units setting of the View menu: Automatic, or one system by choice. Automatic is metric until the system tells
+/// apps the region's measurement system (`state::AUTOMATIC_IS_METRIC`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnitsSetting {
     Automatic,
@@ -16,7 +17,7 @@ impl UnitsSetting {
     pub fn label(self) -> &'static str {
         match self {
             UnitsSetting::Automatic => "Automatic",
-            UnitsSetting::Kilometres => "Kilometres",
+            UnitsSetting::Kilometres => "Kilometers",
             UnitsSetting::Miles => "Miles",
         }
     }

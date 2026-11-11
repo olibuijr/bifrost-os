@@ -60,7 +60,7 @@ impl Field {
             Field::Plays => "Plays",
             Field::DaysSinceAdded => "Days Since Added",
             Field::DaysSincePlayed => "Days Since Played",
-            Field::Favourite => "Favourite",
+            Field::Favourite => "Favorite",
         }
     }
 

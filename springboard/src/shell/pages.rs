@@ -1043,7 +1043,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Item::new("Users & Groups").icon(Icon::Passcode).link(PageId::Users),
                 Item::new("Accessibility").icon(Icon::Accessibility).link(PageId::Accessibility),
                 Item::new("Wallpaper").icon(Icon::Wallpaper).value(m.wallpaper.as_str()).link(PageId::Wallpaper),
-                Item::new("Screen Saver").icon(Icon::Wallpaper).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
+                Item::new("Screen Saver").icon(Icon::ScreenSaver).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
                 power,
                 Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
                 Item::new("Search").icon(Icon::Search).link(PageId::Search),
@@ -1433,7 +1433,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Dictation").link(PageId::Dictation),
                 ]),
                 Group::new(vec![
-                    Item::new("Auto-Capitalisation").switch(o.auto_caps, Action::Toggle(Toggle::AutoCaps)),
+                    Item::new("Auto-Capitalization").switch(o.auto_caps, Action::Toggle(Toggle::AutoCaps)),
                     Item::new("Enable Caps Lock").switch(o.enable_caps_lock, Action::Toggle(Toggle::EnableCapsLock)),
                     Item::new("\".\" Shortcut").switch(o.period_shortcut, Action::Toggle(Toggle::PeriodShortcut)),
                 ])

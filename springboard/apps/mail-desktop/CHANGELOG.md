@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.21
+
+- The rule sheet field is named "Flag color", and its messages say "flag color" (en_US spelling).
+
 ## 0.17.20
 
 - The message list shows the time of day for a message of today ("09:30", or "9:30 AM" with Settings > Date & Time > 24-Hour Time off) and the day and month before that, in the system time zone instead of the sender's. Mailbox > Show Activity tells its times in the system zone and the same clock style (they were in UTC). Both follow a change of the setting or the zone. The Date header of an open message is shown as it was sent.

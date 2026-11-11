@@ -76,6 +76,26 @@ fn the_wallpaper_pane_has_the_toolbar_of_the_other_panes() {
     assert_eq!(st.page(), PageId::Wallpaper);
 }
 
+/// E2E rev 9: the Wallpaper pane's first row started 64 pt down (under the single-column status and navigation bars)
+/// where every other pane starts under the split layout's toolbar.
+#[test]
+fn the_wallpaper_pane_starts_under_the_toolbar_like_the_other_panes() {
+    use crate::shell::list::{nav_bottom, GROUP_GAP_PT};
+    use crate::shell::wallpaper_page::{dynamic_row, Tap};
+    let ui = crate::shell::tests::ui();
+    let (mut st, _prefs) = split(&ui);
+    st.open_page_id(&ui, PageId::Wallpaper, 0.0);
+    settle(&mut st, &ui);
+    let pane = st.pane();
+    let bar = ui.pt(pane.status_pt + pane.nav_pt);
+    assert!(bar < nav_bottom(&ui), "the split layout's toolbar is shorter than the single-column bars");
+    let (w, h) = (st.w, st.h);
+    let View::Wallpaper(page) = &st.stack.last().expect("the pane").view else { panic!("wallpaper page") };
+    let (x, y, rw, _) = page.placed(dynamic_row(&ui, w));
+    assert!((y - (bar + ui.pt(GROUP_GAP_PT))).abs() < 0.01, "the first row is one group gap under the toolbar: {y} px, toolbar {bar} px");
+    assert_eq!(page.tap(&ui, w, h, x + rw / 2.0, y + 1.0), Some(Tap::Dynamic), "and it answers a click where it is drawn");
+}
+
 /// W3-3: Esc pops a sub-page in the split layout, and is not used at the pane (so the shell leaves it alone).
 #[test]
 fn escape_pops_a_split_sub_page_and_stops_at_its_pane() {
@@ -624,4 +644,45 @@ fn dock_changes_from_a_filled_settings_window_use_the_output_size() {
         let expected = Desk::area(&sh.desk_metrics());
         assert_eq!(sh.desk.as_ref().unwrap().wins[index].r, expected);
     }
+}
+
+/// E2E9: a pop-up menu opened with the pointer (no control has the keyboard focus then) ignored Escape, the arrows and
+/// Return: Escape did nothing at a first-level pane, the arrows moved the sidebar and Return was dropped.
+#[test]
+fn a_pop_up_menu_opened_with_the_pointer_takes_escape_the_arrows_and_return() {
+    let ui = crate::shell::tests::ui();
+    let keep = bifrost_render::ui::sidebar_icon_size();
+    bifrost_render::ui::set_sidebar_icon_size(1);
+    let desk = Info { display_mode: Some((2560, 1440, 60)), ..info() };
+    let mut st = Settings::new(&ui, &desk, &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
+    let mut prefs = Prefs::memory();
+    st.open_page_id(&ui, PageId::Appearance, 0.0);
+    settle(&mut st, &ui);
+    let stack = st.stack();
+    let size = bifrost_render::ui::sidebar_icon_size();
+    let popup_open = |st: &Settings| st.list().is_some_and(ListPage::popup_open);
+    let (x, y) = st.row_centre(&ui, "Sidebar icon size").expect("the size row");
+    tap(&mut st, &ui, &mut prefs, x, y);
+    assert!(popup_open(&st), "the click opens the menu");
+    assert_eq!(st.valid_pane_focus(), None, "and gives the pane no keyboard focus");
+    // Escape closes it and changes nothing
+    assert!(st.back_page(1.0), "Escape is used up by the menu");
+    assert!(!popup_open(&st), "the menu is closed");
+    assert_eq!(st.stack(), stack, "the page stays");
+    assert_eq!(bifrost_render::ui::sidebar_icon_size(), size, "nothing was chosen");
+    // the arrows move the menu's highlight, not the sidebar's selection, and Return chooses
+    tap(&mut st, &ui, &mut prefs, x, y);
+    assert!(popup_open(&st));
+    let first = st.list().and_then(ListPage::popup_choice).expect("the menu highlights its selected choice");
+    let side = st.side_selected();
+    st.key_with_prefs(&ui, &mut prefs, Out::Named("Down"), 2.0);
+    let next = st.list().and_then(ListPage::popup_choice).expect("a highlighted choice");
+    assert_eq!(st.side_selected(), side, "Down stays in the menu");
+    assert_ne!(next, first, "and moves its highlight");
+    st.key_with_prefs(&ui, &mut prefs, Out::Enter, 3.0);
+    settle(&mut st, &ui);
+    let chosen = bifrost_render::ui::sidebar_icon_size();
+    bifrost_render::ui::set_sidebar_icon_size(keep);
+    assert!(!popup_open(&st), "Return closes the menu");
+    assert_eq!(chosen as usize, next, "and takes the highlighted choice");
 }

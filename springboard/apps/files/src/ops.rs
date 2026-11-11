@@ -212,7 +212,7 @@ fn copy_chunks(src: &mut std::fs::File, out: &mut std::fs::File, tick: &mut dyn 
         out.write_all(&buf[..n])?;
         done += n as u64;
         if !tick(done) {
-            return Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "cancelled"));
+            return Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "canceled"));
         }
     }
 }
@@ -445,7 +445,7 @@ impl Files {
             let name = report.failed.first().and_then(|(p, _)| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             Some(format!("Stopped: the disk is full. {} of {} items {verb}; {name} and the rest were not", report.done.len(), work.sources.len()))
         } else if report.cancelled {
-            Some(format!("Cancelled after {} of {} items", report.done.len(), work.sources.len()))
+            Some(format!("Canceled after {} of {} items", report.done.len(), work.sources.len()))
         } else if let Some((path, why)) = report.failed.first() {
             let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             Some(format!("{} of {} items could not be {verb}. {name}: {why}", report.failed.len(), work.sources.len()))

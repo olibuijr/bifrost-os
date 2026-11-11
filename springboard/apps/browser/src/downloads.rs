@@ -312,7 +312,7 @@ impl Item {
             },
             State::Done => size_text(self.received),
             State::Failed(e) => format!("Failed: {e}"),
-            State::Cancelled => "Cancelled".into(),
+            State::Cancelled => "Canceled".into(),
         }
     }
 

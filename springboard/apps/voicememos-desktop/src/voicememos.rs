@@ -707,7 +707,7 @@ impl VoiceMemos {
     fn place_title(scope: &Scope) -> String {
         match scope {
             Scope::All => "All Recordings".into(),
-            Scope::Favorites => "Favourites".into(),
+            Scope::Favorites => "Favorites".into(),
             Scope::Folder(name) => name.clone(),
             Scope::Deleted => "Recently Deleted".into(),
         }
@@ -1291,7 +1291,7 @@ impl VoiceMemos {
                 self.selected = self.memos.iter().position(|m| m.path == memo.path);
                 self.drop_hidden_selection();
             }
-            Err(e) => self.error = format!("Cannot change the favourite: {e}"),
+            Err(e) => self.error = format!("Cannot change the favorite: {e}"),
         }
     }
 
@@ -1787,7 +1787,7 @@ impl VoiceMemos {
         }
         let delete = if self.confirm_delete { ToolbarItem::button(BAR_DELETE, "Confirm Delete") } else { ToolbarItem::icon(BAR_DELETE, "Delete", "trash") };
         let favorite = self.selected_memo().is_some_and(|m| m.favorite);
-        let star_label = if favorite { "Remove from Favourites" } else { "Add to Favourites" };
+        let star_label = if favorite { "Remove from Favorites" } else { "Add to Favorites" };
         Toolbar::new(vec![
             ToolbarItem::flexible_space(),
             ToolbarItem::button(BAR_TRIM, "Trim").enabled(on),
@@ -2433,7 +2433,7 @@ impl VoiceMemos {
                 } else {
                     match self.scope {
                         Scope::All => "No Recordings",
-                        Scope::Favorites => "No Favourites",
+                        Scope::Favorites => "No Favorites",
                         Scope::Folder(_) => "Folder Is Empty",
                         Scope::Deleted => "Nothing Deleted",
                     }

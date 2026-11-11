@@ -163,7 +163,7 @@ fn zone_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
 
 /// File > Calendar Colour: one choice per calendar, the built-in one first; each opens the colour sheet.
 fn colour_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
-    let mut items = vec![AppMenuItem::submenu("Calendar Colour")];
+    let mut items = vec![AppMenuItem::submenu("Calendar Color")];
     items.extend(c.extras().choices().iter().map(|(id, name)| AppMenuItem::new(COLOUR_BASE + id, name).enabled(c.settings_enabled()).depth(1)));
     items
 }

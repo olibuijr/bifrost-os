@@ -117,7 +117,7 @@ mod tests {
         board = board_with("b");
         h.undo(&mut board);
         assert!(h.can_redo());
-        h.push("Colour", board.clone());
+        h.push("Color", board.clone());
         assert!(!h.can_redo());
     }
 
@@ -158,7 +158,7 @@ mod tests {
     fn the_stack_keeps_only_the_latest_steps() {
         let mut h = History::default();
         for i in 0..(LIMIT + 10) {
-            h.push("Colour", board_with(&i.to_string()));
+            h.push("Color", board_with(&i.to_string()));
         }
         let mut b = Board::default();
         let mut steps = 0;

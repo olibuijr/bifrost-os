@@ -173,6 +173,10 @@ impl super::Shell {
         let body = self.desk.as_ref().and_then(|d| d.index_of(super::AppId::External(slot)).map(|i| d.wins[i].body(&self.desk_metrics())));
         let Some(body) = body else { return self.share_finish(slot, request, "") };
         let (x, y) = (anchor.x + body.x as f32, anchor.y + anchor.h + body.y as f32);
+        // opened while the press on the app's Share button is still down (Files 1.34.24 asks on the press): that
+        // press's release ends the click and leaves the menu open, as for a context menu (`ext_context_menu`)
+        let held = self.desk.as_ref().is_some_and(|d| d.content_press().is_some_and(|a| a.parent() == super::AppId::External(slot)));
+        self.desktop_menu_press = if held { self.desktop_press } else { None };
         self.desktop_context = Some(super::desktop_bar::ContextMenu { slot, window: 0, x, y, items: menu(&list) });
         self.desktop_menu = Some(super::desktop_bar::Menu::Context);
         #[cfg(feature = "desktop-wayland")]

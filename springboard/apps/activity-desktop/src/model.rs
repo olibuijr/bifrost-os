@@ -432,7 +432,7 @@ pub fn cell_text(p: &ProcSample, key: Option<SortKey>, base: Option<&ProcSample>
     match key {
         Some(SortKey::Name) => p.name.clone(),
         Some(SortKey::User) => p.user.clone(),
-        Some(SortKey::Cpu) => format!("{:.1}", p.cpu),
+        Some(SortKey::Cpu) => cpu_text(p, false),
         Some(SortKey::CpuTime) => cpu_time(since(p.cpu_ticks, base.map(|b| b.cpu_ticks))),
         Some(SortKey::Memory) => bytes(p.rss),
         Some(SortKey::Virtual) => bytes(p.vsize),
@@ -463,6 +463,18 @@ pub fn cell_text(p: &ProcSample, key: Option<SortKey>, base: Option<&ProcSample>
     }
 }
 
+/// A process's CPU share as text, with its percent sign when `sign` is set. A share needs two readings, so a process
+/// read once (every process on the first frame) shows a dash, not "0.0".
+pub fn cpu_text(p: &ProcSample, sign: bool) -> String {
+    if p.cpu_pending {
+        "-".to_string()
+    } else if sign {
+        percent(p.cpu)
+    } else {
+        format!("{:.1}", p.cpu)
+    }
+}
+
 /// One table row as tab-separated text (Edit > Copy): the columns the tab shows, in order. The CPU figure carries its
 /// percent sign, as it does in the footer and the graph. `since` is the Since Baseline column's text (empty without a
 /// baseline).
@@ -474,7 +486,7 @@ pub fn row_text(p: &ProcSample, tab: Tab, set: &ColumnSet, base: Option<&ProcSam
             if c.title == SINCE_BASELINE {
                 since.to_string()
             } else if c.key == Some(SortKey::Cpu) {
-                percent(p.cpu)
+                cpu_text(p, true)
             } else {
                 cell_text(p, c.key, base)
             }
@@ -892,6 +904,20 @@ pub fn counted(n: usize, one: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// E2E 9: the first frame showed 0.0 for every process; a share needs two readings.
+    #[test]
+    fn a_process_read_once_shows_a_dash_for_its_cpu_share() {
+        let mut p = proc(7, "sh", 1000, 0.0, 0);
+        p.cpu_pending = true;
+        assert_eq!(cell_text(&p, Some(SortKey::Cpu), None), "-");
+        assert_eq!(cpu_text(&p, true), "-", "Copy and the inspector show the dash too");
+        p.cpu_pending = false;
+        assert_eq!(cell_text(&p, Some(SortKey::Cpu), None), "0.0", "an idle process read twice is at 0.0");
+        p.cpu = 12.5;
+        assert_eq!(cell_text(&p, Some(SortKey::Cpu), None), "12.5");
+        assert_eq!(cpu_text(&p, true), percent(12.5));
+    }
 
     fn proc(pid: u32, name: &str, uid: u32, cpu: f32, rss: u64) -> ProcSample {
         ProcSample { pid, name: name.into(), user: if uid == 0 { "root".into() } else { "olibuijr".into() }, uid, cpu, rss, threads: 1, ..ProcSample::default() }

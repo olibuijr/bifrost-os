@@ -71,6 +71,9 @@ pub(crate) struct FileManagerState {
     pub(crate) typed: Option<(String, Instant)>,
     /// Go to Folder: why the path typed could not be opened, shown in the sheet until the path is edited.
     pub(crate) goto_error: Option<String>,
+    /// The mouse press that opened the Tags panel is still down: its release over a colour row chooses the colour
+    /// (`Files::tag_release`).
+    pub(crate) tag_press: bool,
 }
 
 /// Expands a typed path: `~` is the home folder, a relative path is taken from `base`.
@@ -112,6 +115,23 @@ pub(crate) fn goto_target(home: &Path, base: &Path, typed: &str) -> Option<GotoT
     dest.symlink_metadata().is_ok().then(|| GotoTarget::Item(folder, dest))
 }
 
+/// The Edit command a Cmd or Ctrl chord means in a text field: A, C, X, V, Z and Shift+Z (evdev key codes). None
+/// for any other chord, and with Option held.
+pub(crate) fn field_chord(key: u32, mods: u32) -> Option<Command> {
+    if mods & (CHORD_META | CHORD_CTRL) == 0 || mods & CHORD_ALT != 0 {
+        return None;
+    }
+    match (key, mods & CHORD_SHIFT != 0) {
+        (30, false) => Some(Command::SelectAll),
+        (46, false) => Some(Command::Copy),
+        (45, false) => Some(Command::Cut),
+        (47, false) => Some(Command::Paste),
+        (44, false) => Some(Command::Undo),
+        (44, true) => Some(Command::Redo),
+        _ => None,
+    }
+}
+
 /// The sheet's line for a path that leads nowhere, in the sentence style of the other notices.
 pub(crate) fn goto_missing_message(typed: &str) -> String {
     format!("The folder \u{201C}{}\u{201D} can\u{2019}t be found.", typed.trim())
@@ -145,7 +165,9 @@ pub(crate) fn complete_path(home: &Path, base: &Path, typed: &str) -> Option<Str
 }
 
 impl Files {
-    /// Go > Go to Folder: opens the path sheet, pre-filled with the open folder.
+    /// Go > Go to Folder: opens the path sheet, pre-filled with the open folder. The path is selected, so typing a
+    /// path replaces it and an arrow key keeps it to add to. (The caret stood after it with nothing selected, so a
+    /// path typed from `~` came after the `~/` already there.)
     pub(crate) fn open_goto(&mut self) {
         let mut field = TextField::new();
         let open = if self.in_recents() { self.home.clone() } else { self.path.clone() };
@@ -155,6 +177,7 @@ impl Files {
             Err(_) => format!("{}/", open.display()),
         };
         field.push_str(&shown);
+        field.select(0..shown.len());
         self.preview = None;
         self.info = None;
         self.tag_panel = false;
@@ -190,6 +213,25 @@ impl Files {
         // an edit of the path takes the last answer away; Return gives a new one
         if matches!(input, Input::Key(_)) {
             self.fx.goto_error = None;
+        }
+        // the Edit commands act on the field: Select All (Cmd+A), Cut, Copy, Paste, Undo and Redo, as the shell sends
+        // them and as a chord it left to the app. (They fell through to the folder behind the sheet: Select All
+        // selected its items, and the chord was dropped.)
+        let command = match input {
+            Input::Command(command) => Some(*command),
+            Input::Key(key) => key.as_chord().and_then(|(key, mods)| field_chord(key, mods)),
+            _ => None,
+        };
+        if let Some(command) = command {
+            let clipboard = bifrost_app::kit::clipboard::text().unwrap_or_default();
+            if let Some(text) = field.command(command, &clipboard) {
+                bifrost_app::kit::clipboard::set_text(&text);
+            }
+            if matches!(command, Command::Cut | Command::Paste | Command::Undo | Command::Redo) {
+                self.fx.goto_error = None;
+            }
+            self.revision += 1;
+            return true;
         }
         match input {
             Input::Key(KeyInput::Text(s)) => field.push_str(s),
@@ -418,6 +460,60 @@ mod tests {
         assert_eq!(files.history.len(), steps);
         assert!(files.fx.pending.is_none());
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// E2E9: the sheet opened with `~/` and the caret after it, so a path typed from `~` gave `~/~/...`; Select All
+    /// selected the items of the folder behind the sheet and left the field as it was.
+    #[test]
+    fn go_to_folder_starts_with_its_path_selected_and_select_all_acts_on_the_field() {
+        let mut files = crate::tests::fixture(vec![crate::tests::folder("A"), crate::tests::folder("B")]);
+        let text = |s: &str| Input::Key(KeyInput::Text(s.into()));
+        let shown = |files: &Files| files.fx.goto.as_ref().map(|f| (f.to_string(), f.selection())).unwrap();
+        files.open_goto();
+        assert_eq!(shown(&files), ("~/".to_string(), 0..2), "the path of the folder shown, selected");
+        for part in ["~", "/", "Documents"] {
+            assert!(files.goto_input(&text(part)));
+        }
+        assert_eq!(shown(&files), ("~/Documents".to_string(), 11..11), "typing replaces what the sheet opened with");
+        // Edit > Select All, as the shell sends it: the Edit menu is the field's while the sheet is open
+        assert!(files.edit_commands().supports(Command::SelectAll));
+        assert!(!files.edit_commands().supports(Command::Copy), "nothing is selected in the field");
+        assert!(files.goto_input(&Input::Command(Command::SelectAll)));
+        assert_eq!(shown(&files), ("~/Documents".to_string(), 0..11));
+        assert!(files.selection.is_empty(), "the folder behind the sheet keeps its selection");
+        assert!(files.edit_commands().supports(Command::Copy));
+        assert!(files.goto_input(&text("/")));
+        assert!(files.goto_input(&text("tmp")));
+        assert_eq!(shown(&files), ("/tmp".to_string(), 4..4));
+        // the chord, where the shell leaves the key to the app
+        assert!(files.goto_input(&Input::Key(KeyInput::chord(30, CHORD_META))));
+        assert_eq!(shown(&files), ("/tmp".to_string(), 0..4));
+        assert!(files.selection.is_empty());
+        assert!(files.goto_input(&text("~")));
+        assert_eq!(shown(&files), ("~".to_string(), 1..1));
+        // Right keeps the path the sheet opened with, to add to
+        files.open_goto();
+        assert!(files.goto_input(&Input::Key(KeyInput::Code(39))));
+        assert!(files.goto_input(&text("A")));
+        assert_eq!(shown(&files), ("~/A".to_string(), 3..3));
+        // with the sheet closed the command is the window's again
+        files.fx.goto = None;
+        assert!(!files.goto_input(&Input::Command(Command::SelectAll)));
+    }
+
+    #[test]
+    fn a_chord_in_a_field_is_its_edit_command() {
+        assert_eq!(field_chord(30, CHORD_META), Some(Command::SelectAll));
+        assert_eq!(field_chord(30, CHORD_CTRL), Some(Command::SelectAll));
+        assert_eq!(field_chord(46, CHORD_META), Some(Command::Copy));
+        assert_eq!(field_chord(45, CHORD_META), Some(Command::Cut));
+        assert_eq!(field_chord(47, CHORD_META), Some(Command::Paste));
+        assert_eq!(field_chord(44, CHORD_META), Some(Command::Undo));
+        assert_eq!(field_chord(44, CHORD_META | CHORD_SHIFT), Some(Command::Redo));
+        assert_eq!(field_chord(30, CHORD_META | CHORD_SHIFT), None);
+        assert_eq!(field_chord(30, CHORD_META | CHORD_ALT), None, "Option makes another command");
+        assert_eq!(field_chord(30, 0), None);
+        assert_eq!(field_chord(34, CHORD_META | CHORD_SHIFT), None, "Go to Folder's own key");
     }
 
     #[test]
