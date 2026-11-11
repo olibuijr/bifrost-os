@@ -1128,9 +1128,7 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
         }
     }
     if scene.doc.is_some() && !scene.status.is_empty() && !show {
-        let img = ui.text(scene.status, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
-        let pad = ui.pt(ui::SPACE_S) as i32;
-        s.blit_colored(&img, cx + pad, cy + ch - img.h as i32 - pad, ui::LABEL_2.now(), 255);
+        draw_status(s, ui, (cx, cy, cw, ch), scene.status);
     }
     draw_sidebar(s, ui, lay, scene);
     if !show {
@@ -1549,6 +1547,57 @@ fn draw_pages(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, doc: &Docum
     }
 }
 
+/// The status line: `text` on an opaque strip along the canvas's bottom edge, on as many lines as it needs. A long
+/// message (why a picture is saved as a copy, shown while the save panel is up) ran past the canvas's right edge on
+/// one line and was drawn straight over the picture, in grey.
+fn draw_status(s: &mut Surface, ui: &Ui, (cx, cy, cw, ch): (i32, i32, i32, i32), text: &str) {
+    let pad = ui.pt(ui::SPACE_S) as i32;
+    let lines = wrap_lines(text, (cw - 2 * pad) as f32, |t| ui.measure(t, ui::MAC_FOOTNOTE_PT, Weight::Regular));
+    let imgs: Vec<Image> = lines.iter().map(|l| ui.text(l, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE)).collect();
+    let gap = ui.pt(ui::SPACE_XS) as i32;
+    let text_h = imgs.iter().map(|i| i.h as i32).sum::<i32>() + gap * (imgs.len() as i32 - 1).max(0);
+    // never taller than the canvas: the strip stays under the toolbar
+    let strip_h = (text_h + 2 * pad).min(ch);
+    let top = cy + ch - strip_h;
+    fill(s, cx, top, cw, strip_h, ui::CARD_BG.now());
+    fill(s, cx, top, cw, ui.pt(1.0).max(1.0) as i32, ui::SEPARATOR_C.now());
+    let mut y = top + pad;
+    for img in &imgs {
+        s.blit_colored(img, cx + pad, y, ui::LABEL.now(), 255);
+        y += img.h as i32 + gap;
+    }
+}
+
+/// `text` broken at its spaces into lines no wider than `max_w`, as `measure` gives a line's width. A word wider than
+/// a line is broken where it has to be, so nothing runs past the edge; every character but the spaces at a break is
+/// kept. A text that fits is one line.
+fn wrap_lines(text: &str, max_w: f32, measure: impl Fn(&str) -> f32) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let joined = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
+        if measure(&joined) <= max_w {
+            line = joined;
+            continue;
+        }
+        if !line.is_empty() {
+            lines.push(std::mem::take(&mut line));
+        }
+        // the word starts a line; what does not fit of it goes on, one character a line at the least
+        for c in word.chars() {
+            line.push(c);
+            if line.chars().count() > 1 && measure(&line) > max_w {
+                line.pop();
+                lines.push(std::mem::replace(&mut line, c.to_string()));
+            }
+        }
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
 /// `text`, shortened with an ellipsis until it fits `max_w` points wide.
 fn fit_text(ui: &Ui, text: &str, pt: f32, max_w: f32) -> String {
     if ui.measure(text, pt, Weight::Regular) <= max_w {
@@ -1626,6 +1675,27 @@ mod tests {
         assert_ne!(chosen.0, ui::TINT);
         assert_eq!(segment_colours(true, false).0, ui::FIELD_BG.now());
         assert_eq!(segment_colours(false, true).0, ui::FIELD_BG.now(), "a disabled segment is never tinted");
+    }
+
+    /// E2E rev 9: the reason a GIF is saved as a PNG copy was cut off at the window's right edge ("Only the first of
+    /// its 3 frame…"). The status is wrapped: every word is on some line and no line is wider than the canvas.
+    #[test]
+    fn a_long_status_is_wrapped_onto_lines_that_fit_and_loses_no_word() {
+        // ten units a character
+        let measure = |t: &str| t.chars().count() as f32 * 10.0;
+        let text = "Viewer cannot save GIF files, so the picture is saved as a PNG copy and gamma.gif stays as it is. Only the first of its 3 frames is in the copy.";
+        let lines = wrap_lines(text, 400.0, measure);
+        assert!(lines.len() > 1, "{lines:?}");
+        assert!(lines.iter().all(|l| !l.is_empty() && measure(l) <= 400.0), "{lines:?}");
+        assert_eq!(lines.join(" "), text, "nothing is left out");
+        assert!(lines.last().unwrap().ends_with("is in the copy."));
+        assert_eq!(wrap_lines("Saved a.png", 400.0, measure), ["Saved a.png"], "a short status stays one line");
+        assert!(wrap_lines("", 400.0, measure).is_empty());
+        // a name longer than a line is broken, not cut
+        let long = wrap_lines("a abcdefghij b", 40.0, measure);
+        assert_eq!(long, ["a", "abcd", "efgh", "ij b"]);
+        // a canvas narrower than a character still ends: one character a line
+        assert_eq!(wrap_lines("abc", 0.0, measure), ["a", "b", "c"]);
     }
 
     #[test]
