@@ -422,6 +422,8 @@ fn the_desktop_has_an_appearance_tile_and_lists_keyboard_once() {
     let root = desktop_sidebar(spec(PageId::Root, &model(&info, &opts)), true);
     let row = |label: &str| root.groups.iter().flat_map(|g| g.items.iter()).find(|i| i.label == label).cloned();
     assert_eq!(row("Appearance").and_then(|i| i.icon), Some(Icon::Appearance), "Appearance has its own tile, not the Displays one");
+    assert_eq!(row("Screen Saver").and_then(|i| i.icon), Some(Icon::ScreenSaver), "Screen Saver has its own tile, not the Wallpaper one");
+    assert_eq!(row("Wallpaper").and_then(|i| i.icon), Some(Icon::Wallpaper));
     assert_eq!(row("Keyboard").map(|i| i.action), Some(Action::Push(PageId::Keyboard)), "Keyboard is a sidebar pane");
     let keyboard_in = |s: &Spec| s.groups.iter().flat_map(|g| g.items.iter()).any(|i| i.action == Action::Push(PageId::Keyboard));
     assert!(!keyboard_in(&spec(PageId::General, &model(&info, &opts))), "General does not repeat the Keyboard pane");

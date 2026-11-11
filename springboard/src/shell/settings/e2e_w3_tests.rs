@@ -645,3 +645,44 @@ fn dock_changes_from_a_filled_settings_window_use_the_output_size() {
         assert_eq!(sh.desk.as_ref().unwrap().wins[index].r, expected);
     }
 }
+
+/// E2E9: a pop-up menu opened with the pointer (no control has the keyboard focus then) ignored Escape, the arrows and
+/// Return: Escape did nothing at a first-level pane, the arrows moved the sidebar and Return was dropped.
+#[test]
+fn a_pop_up_menu_opened_with_the_pointer_takes_escape_the_arrows_and_return() {
+    let ui = crate::shell::tests::ui();
+    let keep = bifrost_render::ui::sidebar_icon_size();
+    bifrost_render::ui::set_sidebar_icon_size(1);
+    let desk = Info { display_mode: Some((2560, 1440, 60)), ..info() };
+    let mut st = Settings::new(&ui, &desk, &Prefs::memory(), 1200, 1920, Rc::new(vec![]));
+    let mut prefs = Prefs::memory();
+    st.open_page_id(&ui, PageId::Appearance, 0.0);
+    settle(&mut st, &ui);
+    let stack = st.stack();
+    let size = bifrost_render::ui::sidebar_icon_size();
+    let popup_open = |st: &Settings| st.list().is_some_and(ListPage::popup_open);
+    let (x, y) = st.row_centre(&ui, "Sidebar icon size").expect("the size row");
+    tap(&mut st, &ui, &mut prefs, x, y);
+    assert!(popup_open(&st), "the click opens the menu");
+    assert_eq!(st.valid_pane_focus(), None, "and gives the pane no keyboard focus");
+    // Escape closes it and changes nothing
+    assert!(st.back_page(1.0), "Escape is used up by the menu");
+    assert!(!popup_open(&st), "the menu is closed");
+    assert_eq!(st.stack(), stack, "the page stays");
+    assert_eq!(bifrost_render::ui::sidebar_icon_size(), size, "nothing was chosen");
+    // the arrows move the menu's highlight, not the sidebar's selection, and Return chooses
+    tap(&mut st, &ui, &mut prefs, x, y);
+    assert!(popup_open(&st));
+    let first = st.list().and_then(ListPage::popup_choice).expect("the menu highlights its selected choice");
+    let side = st.side_selected();
+    st.key_with_prefs(&ui, &mut prefs, Out::Named("Down"), 2.0);
+    let next = st.list().and_then(ListPage::popup_choice).expect("a highlighted choice");
+    assert_eq!(st.side_selected(), side, "Down stays in the menu");
+    assert_ne!(next, first, "and moves its highlight");
+    st.key_with_prefs(&ui, &mut prefs, Out::Enter, 3.0);
+    settle(&mut st, &ui);
+    let chosen = bifrost_render::ui::sidebar_icon_size();
+    bifrost_render::ui::set_sidebar_icon_size(keep);
+    assert!(!popup_open(&st), "Return closes the menu");
+    assert_eq!(chosen as usize, next, "and takes the highlighted choice");
+}

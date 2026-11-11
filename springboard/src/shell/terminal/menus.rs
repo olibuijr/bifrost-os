@@ -321,3 +321,68 @@ impl Shell {
         }
     }
 }
+
+/// The rows of the Terminal's context menu, by id.
+pub(in crate::shell) const CONTEXT_COPY: u32 = 1;
+pub(in crate::shell) const CONTEXT_PASTE: u32 = 2;
+pub(in crate::shell) const CONTEXT_SELECT_ALL: u32 = 3;
+pub(in crate::shell) const CONTEXT_CLEAR: u32 = 4;
+
+/// The Terminal's context menu: Copy (a choice only with a `selection`), Paste, Select All, then Clear.
+pub(in crate::shell) fn context_items(selection: bool) -> Vec<bifrost_proto::ContextItem> {
+    use bifrost_proto::ContextItem;
+    vec![
+        ContextItem::new(CONTEXT_COPY, "Copy").enabled(selection).key("cmd+c"),
+        ContextItem::new(CONTEXT_PASTE, "Paste").key("cmd+v"),
+        ContextItem::new(CONTEXT_SELECT_ALL, "Select All").key("cmd+a"),
+        ContextItem::separator(),
+        ContextItem::new(CONTEXT_CLEAR, "Clear").key("cmd+k"),
+    ]
+}
+
+impl Shell {
+    /// A secondary click at (x, y) px of the screen in the Terminal's window: its context menu opens there, through the
+    /// menu the installed apps' context menus use. Not while one of the Terminal's own panels is up. The Terminal comes
+    /// to the front first, so Paste types into it.
+    pub(in crate::shell) fn terminal_context_menu(&mut self, x: f32, y: f32, t: f64) {
+        if self.term.as_ref().is_none() || !matches!(self.terminal_ui.panel, Panel::None | Panel::Find) {
+            return;
+        }
+        if self.screen != crate::shell::Screen::App(crate::shell::AppId::Terminal) {
+            self.desk_open(crate::shell::AppId::Terminal, t);
+        }
+        let selection = self.term.as_ref().is_some_and(|term| term.selected_text().is_some());
+        self.desktop_menu_press = None;
+        self.desktop_context = Some(super::super::desktop_bar::ContextMenu { slot: CONTEXT_SLOT, window: 0, x, y, items: context_items(selection) });
+        self.desktop_menu = Some(super::super::desktop_bar::Menu::Context);
+        #[cfg(feature = "desktop-wayland")]
+        {
+            self.desktop_menu_row = None;
+        }
+        self.dirty = true;
+    }
+
+    /// Row `id` of the Terminal's context menu was chosen. Clear empties the scrollback and has the program redraw at
+    /// the top of the screen (Ctrl+L), so nothing of the old output is left.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
+    pub(in crate::shell) fn terminal_context_action(&mut self, id: u32, t: f64) -> Vec<super::super::Effect> {
+        use crate::shell::hwkeys::TermKey;
+        self.dirty = true;
+        match id {
+            CONTEXT_COPY => self.terminal_hw_key(TermKey::Copy, t),
+            CONTEXT_SELECT_ALL => self.terminal_hw_key(TermKey::SelectAll, t),
+            CONTEXT_PASTE => {
+                self.type_out(Out::Named("Paste"), t);
+                vec![]
+            }
+            CONTEXT_CLEAR => {
+                if let Some(term) = self.term.as_mut() {
+                    term.clear_history();
+                    term.write(b"\x0c");
+                }
+                vec![]
+            }
+            _ => vec![],
+        }
+    }
+}
