@@ -332,7 +332,11 @@ impl Files {
         } else {
             bifrost_app::AppMenuItem::new(MENU_TRASH, "Move to Trash").key("cmd+backspace").enabled(has && !typing)
         };
+        // File > New Window (⌘N) and New Tab (⌘T) come first, as in the reference file manager's File menu: both had
+        // their keys and no menu item
         let mut items = vec![
+            bifrost_app::AppMenuItem::new(MENU_NEW_WINDOW, "New Window").key("cmd+n").enabled(!typing && !self.searching),
+            bifrost_app::AppMenuItem::new(MENU_NEW_TAB, "New Tab").key("cmd+t").enabled(!typing),
             new_folder,
             bifrost_app::AppMenuItem::separator(),
             open,
@@ -389,6 +393,10 @@ impl Files {
             return false;
         }
         match id {
+            // the window is opened by the window that has the keys; an extra window's new window joins the main
+            // window's list (`adopt_opened`)
+            MENU_NEW_WINDOW => return self.new_window(ctx),
+            MENU_NEW_TAB if self.naming.is_none() => self.new_tab(),
             MENU_OPEN => if let Some(i) = self.focus() { self.open(i) },
             MENU_QUICK_LOOK => self.quick_look(),
             MENU_NEW_FOLDER if !self.in_recents() && !self.in_bin() => self.new_folder(),
@@ -1185,6 +1193,26 @@ mod tests {
         let at = files.painted_state.rfind(':').unwrap();
         files.painted_state.replace_range(at.., &stale);
         assert!(files.render(&ui, &mut Surface { w, h, stride: w, px: &mut pixels, y0: 0 }).is_all());
+    }
+    #[test]
+    fn the_file_menu_starts_with_new_window_and_new_tab() {
+        let mut files = fixture(vec![folder("a")]);
+        let items = files.file_menu_items();
+        let head: Vec<(&str, &str, bool)> = items.iter().take(3).map(|i| (i.title.as_str(), i.key.as_str(), i.enabled)).collect();
+        assert_eq!(head, vec![("New Window", "cmd+n", true), ("New Tab", "cmd+t", true), ("New Folder", "cmd+shift+n", true)]);
+        // Preview's key equivalent is the bare space bar, a name the shell's key parser knows
+        let preview = items.iter().find(|i| i.id == MENU_QUICK_LOOK).unwrap();
+        assert_eq!(preview.key, "space");
+        assert_eq!(bifrost_app::controls::keys::KeyCombo::parse(&preview.key).map(|c| c.to_string()).as_deref(), Some("Space"));
+        assert_eq!((items[0].id, items[1].id), (MENU_NEW_WINDOW, MENU_NEW_TAB));
+        // while a name is typed the chords are the field's
+        files.naming = Some((PathBuf::from("/fixture/a"), TextField::new()));
+        let typing = files.file_menu_items();
+        assert!(typing.iter().filter(|i| i.id == MENU_NEW_WINDOW || i.id == MENU_NEW_TAB).all(|i| !i.enabled));
+        // a Get Info window offers neither
+        files.naming = None;
+        files.info_window = true;
+        assert!(files.file_menu_items().iter().all(|i| !i.enabled));
     }
     #[test]
     fn partial_selection_matches_full_repaint_in_both_views() {
