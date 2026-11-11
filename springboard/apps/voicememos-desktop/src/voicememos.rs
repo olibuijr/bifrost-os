@@ -1641,7 +1641,7 @@ impl VoiceMemos {
         items.push(SidebarItem::header("Recordings"));
         for &i in &self.visible {
             let memo = &self.memos[i];
-            let day = library::day_title(&library::civil(memo.mtime, self.wall.offset));
+            let day = library::day_title(&library::civil(memo.mtime, store::zone_offset(memo.mtime)));
             let shown = if self.playing.as_deref() == Some(memo.path.as_path()) {
                 format!("{} / {}", store::clock(self.position_ms as u64), store::clock(memo.duration_ms))
             } else {
@@ -2299,10 +2299,11 @@ impl VoiceMemos {
                 self.peaks = store::peaks(&memo.path, 256);
                 self.peaks_for = Some(memo.path.clone());
             }
-            let d = library::civil(memo.mtime, self.wall.offset);
+            // the day and the time of the recording, at the zone's offset when it was made
+            let d = library::civil(memo.mtime, store::zone_offset(memo.mtime));
             let title = ui.fit(&memo.title, MAC_TITLE1_PT, pw - 2.0 * m);
             self.text(s, ui, &title, MAC_TITLE1_PT, Weight::Bold, LABEL.now(), px + m, ui.pt(TITLE_Y));
-            let mut sub = format!("{}  {}", library::day_title(&d), library::time_title(&d));
+            let mut sub = format!("{}  {}", library::day_title(&d), store::time_title(d.hour, d.min));
             let format = store::format_title(memo.rate, memo.channels);
             if !format.is_empty() {
                 sub = format!("{sub}  ·  {format}");

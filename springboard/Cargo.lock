@@ -547,7 +547,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calendar"
-version = "1.19.13"
+version = "1.19.14"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -578,7 +578,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-clock"
-version = "1.6.10"
+version = "1.6.11"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -771,7 +771,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-keychain-access"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -801,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.17.19"
+version = "0.17.20"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -810,7 +810,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-maps"
-version = "0.7.9"
+version = "0.7.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -867,7 +867,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-news"
-version = "1.6.14"
+version = "1.6.15"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -876,7 +876,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.24.15"
+version = "1.24.16"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -915,7 +915,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-printers"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -932,7 +932,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-reminders"
-version = "1.20.15"
+version = "1.20.16"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1021,7 +1021,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stocks"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1085,7 +1085,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.11.9"
+version = "1.11.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -1094,7 +1094,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-weather"
-version = "1.9.9"
+version = "1.9.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

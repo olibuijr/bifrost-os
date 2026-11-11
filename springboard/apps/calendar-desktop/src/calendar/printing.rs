@@ -10,6 +10,17 @@ use std::borrow::Cow;
 
 /// The width of the time column in the agenda: "23:00 - 01:00 +1" and a space.
 const TIME_W: usize = 17;
+/// The same with AM and PM: "11:00 PM - 12:30 AM +1" and a space.
+const TIME_W_12H: usize = 23;
+
+/// The width of the agenda's time column in the person's clock style.
+fn time_w() -> usize {
+    if bifrost_app::time_zone::uses_24_hour_clock() {
+        TIME_W
+    } else {
+        TIME_W_12H
+    }
+}
 
 /// The days a view of `selected` covers: the day, its week (starting on `week_start`), the month or the year.
 pub fn range_days(view: View, selected: Date, week_start: Date) -> Vec<Date> {
@@ -39,7 +50,8 @@ pub fn time_range(e: &CalendarEvent) -> String {
 /// location and notes when there are some). "No events." when the range has none.
 pub fn agenda_text(title: &str, days: &[Date], events: &[CalendarEvent]) -> String {
     let mut out = format!("{title}\n{}\n", "=".repeat(title.chars().count()));
-    let indent = " ".repeat(2 + TIME_W);
+    let time_w = time_w();
+    let indent = " ".repeat(2 + time_w);
     let mut any = false;
     for &day in days {
         let mut today: Vec<&CalendarEvent> = events.iter().filter(|e| e.occurs_on(day)).collect();
@@ -50,7 +62,7 @@ pub fn agenda_text(title: &str, days: &[Date], events: &[CalendarEvent]) -> Stri
         today.sort_by_key(|e| (!e.all_day, e.minute, e.id));
         out.push_str(&format!("\n{} {} {} {}\n", WEEKDAYS[day.weekday()], day.day, MONTHS[(day.month - 1) as usize], day.year));
         for e in today {
-            out.push_str(&format!("  {:<width$}{}\n", time_range(e), e.title, width = TIME_W));
+            out.push_str(&format!("  {:<width$}{}\n", time_range(e), e.title, width = time_w));
             if !e.location.is_empty() {
                 out.push_str(&format!("{indent}Location: {}\n", e.location));
             }

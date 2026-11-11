@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.20.16
+
+- Due times follow Settings > Date & Time > 24-Hour Time, at once when it changes: the rows, the All-Day Reminders Alert At setting, the Today widget and the alert texts read "09:05" with the switch on (they always read "9:05 AM" before). Pending alerts are sent again when the setting changes, so their text matches.
+
 ## 1.20.15
 
 - Compliance: the Recently Deleted title is recorded as a tinted title with a count; no change in behaviour.

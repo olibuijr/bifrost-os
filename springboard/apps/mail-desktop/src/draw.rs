@@ -688,6 +688,34 @@ pub fn row_tag(muted: bool, priority: Priority) -> String {
     tags.join(", ")
 }
 
+const LIST_MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/// The date column of a message row from its Date header, at `now` (Unix seconds): the time of day for a message of
+/// today ("09:30", or "9:30 AM" with Settings > Date & Time > 24-Hour Time off), else the day and month ("13 Oct").
+/// Both are told in the system zone and the person's clock style as the shell tells the app
+/// (`bifrost_app::time_zone`), read when the row is drawn. A header that is not a date is shortened as it is written.
+fn list_date(date: &str, now: i64) -> String {
+    match crate::index::parse_date(date) {
+        Some(unix) => {
+            let zone = crate::message::zone_offset;
+            list_date_in(unix, zone(unix), now, zone(now), bifrost_app::time_zone::uses_24_hour_clock())
+        }
+        None => short_date(date),
+    }
+}
+
+/// `list_date` for a message sent at `unix`, with the zone's offset from UTC in seconds at each of the two instants
+/// and a given clock style. The time is written by the formatter of `time_zone::time_text`.
+fn list_date_in(unix: i64, offset: i32, now: i64, now_offset: i32, h24: bool) -> String {
+    let local = unix + i64::from(offset);
+    let (days, secs) = (local.div_euclid(86_400), local.rem_euclid(86_400));
+    if days == (now + i64::from(now_offset)).div_euclid(86_400) {
+        return springboard::status::clock_in((secs / 3600) as i32, (secs % 3600 / 60) as i32, h24);
+    }
+    let (_, month, day) = crate::message::civil_from_days(days);
+    format!("{day} {}", LIST_MONTHS[(month.clamp(1, 12) - 1) as usize])
+}
+
 /// The day and month of a Date header (`Tue, 13 Oct 2026 ...` gives `13 Oct`), or the header as it is.
 fn short_date(date: &str) -> String {
     let parts: Vec<&str> = date.split_whitespace().collect();
@@ -952,6 +980,7 @@ impl MailWindow {
         let offset = self.list_scroll.offset();
         s.fill_rect(px(x0), px(top), px(width), px(area), CONTENT_BG.now());
         let right = x0 + width - pad;
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
         for (i, line) in lines.iter().enumerate() {
             let r = &line.row;
             let y = top + i as f32 * row - offset;
@@ -974,7 +1003,7 @@ impl MailWindow {
                 disclosure(s, x0 + ui.pt(3.0), y + row * 0.3 - ui.pt(3.0), ui.pt(7.0), self.mail.collapsed.contains(&r.uid), tint);
             }
             let (c_name, c_sub, c_date) = if selected { (WHITE, WHITE, WHITE) } else { (LABEL.now(), LABEL.now(), LABEL_2.now()) };
-            let date = short_date(&r.summary.date);
+            let date = list_date(&r.summary.date, now);
             let date_w = ui.measure(&date, MAC_FOOTNOTE_PT, Weight::Regular);
             let name_max = (right - text_x - date_w - inset).max(0.0);
             let name_weight = if self.mail.prefs.bold_unread && !r.flags.contains(Flag::Seen) { Weight::Semibold } else { Weight::Regular };
@@ -1735,6 +1764,27 @@ mod tests {
         assert_eq!(display_name("bo@example.com"), "bo@example.com");
         assert_eq!(short_date("Tue, 13 Oct 2026 09:30:00 +0000"), "13 Oct");
         assert_eq!(short_date("13 Oct"), "13 Oct");
+    }
+
+    #[test]
+    fn the_date_column_tells_the_time_today_in_the_clock_style_and_the_day_before() {
+        // 2026-10-13 00:00:00 UTC, then a morning, noon, an afternoon and midnight of that day
+        let day = 1_791_849_600_i64;
+        let at = |h: i64, m: i64| day + h * 3600 + m * 60;
+        let now = at(23, 59);
+        let today = |h24: bool| [at(8, 5), at(12, 0), at(15, 58), at(0, 0)].map(|t| list_date_in(t, 0, now, 0, h24));
+        assert_eq!(today(true), ["08:05", "12:00", "15:58", "00:00"]);
+        assert_eq!(today(false), ["8:05 AM", "12:00 PM", "3:58 PM", "12:00 AM"]);
+        assert_eq!(list_date_in(at(8, 5) - 86_400, 0, now, 0, false), "12 Oct");
+        // read two hours east it is the 14th at 01:59: a message of 23:30 UTC is today's 01:30 there, and one sent a
+        // day earlier is the 13th's
+        assert_eq!(list_date_in(at(23, 30), 7200, now, 7200, true), "01:30");
+        assert_eq!(list_date_in(at(23, 30) - 86_400, 7200, now, 7200, true), "13 Oct");
+        assert_eq!(list_date_in(at(23, 30) - 86_400, 0, now, 0, true), "12 Oct", "in UTC that message is the 12th's");
+        // the header is read as an instant, whatever zone it was written in; one that is not a date is shortened as
+        // it is written
+        assert_eq!(list_date("13 Oct", now), "13 Oct");
+        assert_eq!(crate::index::parse_date("Tue, 13 Oct 2026 10:05:00 +0200"), Some(at(8, 5)));
     }
 
     #[test]

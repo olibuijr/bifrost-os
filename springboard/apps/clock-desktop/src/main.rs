@@ -64,7 +64,14 @@ impl App for ClockApp {
     fn configure(&mut self, ctx: &Ctx) {
         let (w, h) = (ctx.cfg.w as i32, ctx.cfg.h as i32);
         match &mut self.clock {
-            Some(c) => c.set_size(w, h),
+            Some(c) => {
+                c.set_size(w, h);
+                // The runtime also calls this when Settings > Date & Time changes the clock style or the zone, and
+                // repaints: the clock takes the zone's offset at once, and the widget's times are written again.
+                let (unix, offset) = wall_time();
+                c.set_wall(unix, offset, bifrost_proto::sys::now_ms());
+                self.sync_world(ctx, false);
+            }
             None => {
                 // Once, at startup: nothing is left unsaved (alarms, timers, laps and cities are written on every change).
                 ctx.enable_sudden_termination();

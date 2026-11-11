@@ -50,6 +50,8 @@ pub struct AlertState {
     offset: i32,
     /// The all-day alert time the last plan used.
     all_day: u16,
+    /// `time_zone::conventions_revision` at the last plan: the bodies name a time of day in the person's clock style.
+    conventions: u32,
     /// (request id, due unix) of every request handed to the shell.
     scheduled: Vec<(String, i64)>,
     /// Unix second of the next re-plan.
@@ -108,10 +110,27 @@ pub fn step(
     load: impl FnOnce() -> Vec<Reminder>,
     offset_at: model::OffsetAt,
 ) -> Option<Change> {
+    step_at(state, now, gen, all_day_min, load, offset_at, bifrost_app::time_zone::conventions_revision())
+}
+
+/// `step` at a given `time_zone::conventions_revision`. When it changed since the last plan (the clock style or the
+/// system zone), every planned request is sent again, so its body names the time as the person now writes it; a
+/// request sent again under its identifier replaces the pending one.
+fn step_at(
+    state: &mut AlertState,
+    now: i64,
+    gen: u32,
+    all_day_min: u16,
+    load: impl FnOnce() -> Vec<Reminder>,
+    offset_at: model::OffsetAt,
+    conventions: u32,
+) -> Option<Change> {
     let offset = offset_at(now);
-    if state.synced && state.gen == gen && state.offset == offset && state.all_day == all_day_min && now < state.next_sync {
+    let restyled = state.synced && state.conventions != conventions;
+    if state.synced && state.gen == gen && state.offset == offset && state.all_day == all_day_min && !restyled && now < state.next_sync {
         return None;
     }
+    state.conventions = conventions;
     let first = !state.synced;
     state.synced = true;
     state.gen = gen;
@@ -129,7 +148,7 @@ pub fn step(
         .collect();
     let add: Vec<Planned> = planned
         .iter()
-        .filter(|p| !state.scheduled.iter().any(|(id, at)| *id == p.id && *at == p.at))
+        .filter(|p| restyled || !state.scheduled.iter().any(|(id, at)| *id == p.id && *at == p.at))
         .cloned()
         .collect();
     state.scheduled = planned.iter().map(|p| (p.id.clone(), p.at)).collect();
@@ -213,7 +232,7 @@ mod tests {
         assert_eq!(planned[0].at, BASE + 690 * 60);
         assert_eq!(planned[0].body, "Due in 30 minutes");
         assert_eq!(planned[0].delay_ms, 90 * 60 * 1000);
-        assert_eq!(planned[1].body, "Due 12:00 PM");
+        assert_eq!(planned[1].body, "Due 12:00");
     }
 
     #[test]
@@ -243,7 +262,7 @@ mod tests {
         assert_eq!(c.add.len(), 1);
         assert_eq!(c.add[0].id, "reminder-2-due");
         assert_eq!(c.add[0].delay_ms, 3_600_000);
-        assert_eq!(c.add[0].body, "Due 11:00 AM");
+        assert_eq!(c.add[0].body, "Due 11:00");
         assert_eq!(st.next_sync, BASE + 660 * 60);
         assert_eq!(st.wake(now, 5000.0), Some(5000.0 + 3600.0 * 1000.0));
     }
@@ -299,7 +318,7 @@ mod tests {
         assert!(planned[0].repeats);
         assert_eq!(planned[0].delay_ms, 60_000);
         assert_eq!(planned[0].at, BASE + 600 * 60, "its time is the due moment, so the request stays the same on later plans");
-        assert_eq!(planned[0].body, "Urgent: Due 10:00 AM");
+        assert_eq!(planned[0].body, "Urgent: Due 10:00");
         // not before it is due, not for an ordinary or a completed reminder, and not after a day
         assert!(plan(&[urgent.clone()], DAY, BASE + 590 * 60, &|_| 0).iter().all(|p| !p.repeats), "still ahead: the normal alert only");
         let mut ordinary = urgent.clone();
@@ -330,7 +349,7 @@ mod tests {
         let now = BASE + 6 * 3600;
         let planned = plan(&[dated.clone()], 8 * 60, now, &|_| 0);
         assert_eq!(planned[0].at, BASE + 8 * 3600);
-        assert_eq!(planned[0].body, "Due 8:00 AM");
+        assert_eq!(planned[0].body, "Due 08:00");
         let mut st = AlertState::default();
         step(&mut st, now, 0, 8 * 60, || vec![dated.clone()], &|_| 0);
         let quiet = step(&mut st, now + 10, 0, 8 * 60, || vec![dated.clone()], &|_| 0);
@@ -339,7 +358,7 @@ mod tests {
         assert!(!c.reset);
         assert_eq!(c.add.len(), 1, "the request is replaced with the later time");
         assert_eq!(c.add[0].at, BASE + 10 * 3600);
-        assert_eq!(c.add[0].body, "Due 10:00 AM");
+        assert_eq!(c.add[0].body, "Due 10:00");
     }
 
     #[test]
@@ -433,5 +452,23 @@ mod tests {
         let sent = ctx.take_sent();
         assert!(sent.iter().all(|m| !matches!(m, ToShell::ServiceCall { service, .. } if service == "notification-schedule")));
         assert!(!sent.is_empty());
+    }
+
+    #[test]
+    fn a_change_of_the_clock_style_sends_the_planned_alerts_again() {
+        let now = BASE + 600 * 60;
+        let items = vec![due_at(2, 20_000, 660)];
+        let mut st = AlertState::default();
+        let first = step_at(&mut st, now, 0, DAY, || items.clone(), &|_| 0, 7).unwrap();
+        assert!(first.reset);
+        assert_eq!(first.add.len(), 1);
+        assert!(step_at(&mut st, now + 10, 0, DAY, || items.clone(), &|_| 0, 7).is_none(), "nothing changed");
+        // Settings > Date & Time > 24-Hour Time was switched: the body names the time, so the request is replaced
+        let again = step_at(&mut st, now + 20, 0, DAY, || items.clone(), &|_| 0, 8).unwrap();
+        assert!(!again.reset && again.remove.is_empty());
+        assert_eq!(again.add.len(), 1);
+        assert_eq!(again.add[0].id, "reminder-2-due");
+        assert_eq!(again.add[0].body, format!("Due {}", model::clock_label(660)));
+        assert!(step_at(&mut st, now + 30, 0, DAY, || items.clone(), &|_| 0, 8).is_none(), "sent once");
     }
 }

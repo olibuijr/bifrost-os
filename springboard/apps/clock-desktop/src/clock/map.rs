@@ -79,7 +79,7 @@ pub fn daylight_text(city: &City, unix: i64) -> Option<String> {
     Some(match sun::daylight(unix, city.offset_at(unix), lat, lon) {
         Daylight::Times(rise, set) => {
             let (r, s) = (city.local(rise), city.local(set));
-            format!("Sunrise {:02}:{:02}  Sunset {:02}:{:02}", r.hour, r.min, s.hour, s.min)
+            format!("Sunrise {}  Sunset {}", super::time_text(r.hour, r.min), super::time_text(s.hour, s.min))
         }
         Daylight::MidnightSun => "Sun up all day".to_string(),
         Daylight::PolarNight => "Sun down all day".to_string(),
@@ -135,7 +135,7 @@ impl Clock {
             let Some((lat, lon)) = sun::coords(city.name) else { continue };
             dots.push(project(rect, lat as f32, lon as f32));
             let local = city.local(unix);
-            let time = format!("{:02}:{:02}", local.hour, local.min);
+            let time = super::time_text(local.hour, local.min);
             let w = ui.measure(city.name, MAC_BODY_PT, Weight::Semibold).max(ui.measure(&time, MAC_FOOTNOTE_PT, Weight::Regular));
             sizes.push((w, label_h));
             texts.push((city.name, time));

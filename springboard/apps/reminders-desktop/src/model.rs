@@ -988,10 +988,15 @@ pub fn due_unix(r: &Reminder, all_day_min: u16, offset_at: OffsetAt) -> Option<i
     })
 }
 
-/// "9:05 AM" for minute 545.
+/// The time of day at minute `min` of a day, in the person's clock style (Settings > Date & Time > 24-Hour Time, which
+/// the shell tells the app; `bifrost_app::time_zone`): "09:05" for minute 545, or "9:05 AM" with the switch off.
 pub fn clock_label(min: u16) -> String {
-    let (h, m) = (min / 60 % 24, min % 60);
-    format!("{}:{:02} {}", if h % 12 == 0 { 12 } else { h % 12 }, m, if h < 12 { "AM" } else { "PM" })
+    clock_label_in(min, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `clock_label` in a given clock style, written by the formatter of `time_zone::time_text`.
+pub fn clock_label_in(min: u16, h24: bool) -> String {
+    springboard::status::clock_in(i32::from(min / 60 % 24), i32::from(min % 60), h24)
 }
 
 /// Notification body of an alert for `r`.
@@ -1452,7 +1457,7 @@ mod tests {
         assert_eq!(due_unix(&r, 7 * 60, &device), Some(winter * 86_400 + 6 * 3600), "an unknown zone falls back to the device clock");
         let mut urgent = r.clone();
         urgent.urgent = true;
-        assert_eq!(urgent_text(&urgent, 9 * 60), "Urgent: Due 9:00 AM");
+        assert_eq!(urgent_text(&urgent, 9 * 60), "Urgent: Due 09:00");
     }
     #[test]
     fn date_only_reminders_alert_at_the_all_day_time_from_the_settings() {
@@ -1460,10 +1465,10 @@ mod tests {
         r.due = Some(20_000);
         let midnight = 20_000 * 86_400;
         assert_eq!(due_unix(&r, 7 * 60 + 30, &|_| 0), Some(midnight + 7 * 3600 + 1800));
-        assert_eq!(alert_text(&r, 17 * 60, false), "Due 5:00 PM");
+        assert_eq!(alert_text(&r, 17 * 60, false), "Due 17:00");
         r.time = Some(600);
         assert_eq!(due_unix(&r, 7 * 60, &|_| 0), Some(midnight + 600 * 60), "a reminder with a time ignores the all-day time");
-        assert_eq!(alert_text(&r, 17 * 60, false), "Due 10:00 AM");
+        assert_eq!(alert_text(&r, 17 * 60, false), "Due 10:00");
     }
     #[test]
     fn date_only_reminders_alert_at_nine_and_say_so() {
@@ -1472,7 +1477,7 @@ mod tests {
         r.due = Some(20_000);
         let midnight = 20_000 * 86_400;
         assert_eq!(due_unix(&r, DEFAULT_ALERT_MIN, &|_| 0), Some(midnight + 9 * 3600));
-        assert_eq!(alert_text(&r, DEFAULT_ALERT_MIN, false), "Due 9:00 AM");
+        assert_eq!(alert_text(&r, DEFAULT_ALERT_MIN, false), "Due 09:00");
         r.time = Some(9 * 60 + 30);
         assert_eq!(due_unix(&r, DEFAULT_ALERT_MIN, &|_| 0), Some(midnight + 9 * 3600 + 1800));
     }
@@ -1482,10 +1487,13 @@ mod tests {
         a.due = Some(TODAY);
         a.time = Some(600);
         a.early = Some(30);
-        assert_eq!(clock_label(545), "9:05 AM");
-        assert_eq!(clock_label(0), "12:00 AM");
-        assert_eq!(clock_label(13 * 60), "1:00 PM");
-        assert_eq!(alert_text(&a, DEFAULT_ALERT_MIN, false), "Due 10:00 AM");
+        // a morning, noon, an afternoon and midnight, in both clock styles
+        let labels = |h24: bool| [545, 12 * 60, 13 * 60, 0].map(|m| clock_label_in(m, h24));
+        assert_eq!(labels(false), ["9:05 AM", "12:00 PM", "1:00 PM", "12:00 AM"]);
+        assert_eq!(labels(true), ["09:05", "12:00", "13:00", "00:00"]);
+        // no shell speaks in a test, so the style is 24-hour: the same text as `time_zone::time_text`
+        assert_eq!(clock_label(545), bifrost_app::time_zone::time_text(9, 5));
+        assert_eq!(alert_text(&a, DEFAULT_ALERT_MIN, false), "Due 10:00");
         assert_eq!(alert_text(&a, DEFAULT_ALERT_MIN, true), "Due in 30 minutes");
     }
 }

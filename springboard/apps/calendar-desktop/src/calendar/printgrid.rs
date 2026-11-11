@@ -269,8 +269,16 @@ pub fn hour_range(day_start: u32, day_end: u32, spans: &[(u32, u32)]) -> (u32, u
     (h0, h1)
 }
 
-/// "9", "10", ... the label of an hour line.
+/// The label of an hour line in the person's clock style: "08:00", or the short "8a" and "5p" with 24-Hour Time off.
 fn hour_label(h: u32) -> String {
+    hour_label_in(h, bifrost_app::time_zone::uses_24_hour_clock())
+}
+
+/// `hour_label` in a given clock style.
+fn hour_label_in(h: u32, h24: bool) -> String {
+    if h24 {
+        return springboard::status::clock_in(h as i32, 0, true);
+    }
     match h {
         0 | 24 => "12a".to_string(),
         1..=11 => format!("{h}a"),
@@ -495,7 +503,14 @@ mod tests {
         assert!(t.contains("(Dentist) Tj") && t.contains("(Call) Tj") && t.contains("(Trip) Tj"));
         assert!(t.contains("(10:00 - 11:00) Tj"), "the block of a one hour event names its times");
         assert!(t.contains("(all-day) Tj"), "the band has its label");
-        assert!(t.contains("(8a) Tj") && t.contains("(5p) Tj"), "the hour labels of the working day");
+        assert!(t.contains("(08:00) Tj") && t.contains("(17:00) Tj"), "the hour labels of the working day");
+    }
+
+    #[test]
+    fn hour_labels_follow_the_clock_style() {
+        let labels = |h24: bool| [0, 8, 12, 17].map(|h| hour_label_in(h, h24));
+        assert_eq!(labels(true), ["00:00", "08:00", "12:00", "17:00"]);
+        assert_eq!(labels(false), ["12a", "8a", "12p", "5p"]);
     }
 
     #[test]

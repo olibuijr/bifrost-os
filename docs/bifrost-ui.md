@@ -2922,16 +2922,29 @@ Gaps: the date order, the first weekday and the region are not sent yet (`flags`
 reads the region from the shell's `settings.ini`, which a sandboxed app cannot see, so it falls back to `BIFROST_REGION`
 or `LANG` there; it should move to this message. Not yet checked on Midget.
 
-Apps that still write hours and minutes themselves (`{:02}:{:02}`), always 24-hour whatever the setting, and should
-move to `time_zone::time_text`: Calendar (`calendar.rs`, `calendar/connect.rs`), Clock (`system.rs`,
-`clock/map.rs`, `clock/intent.rs`, `clock/mod.rs`), Maps (`transit.rs`), Notes (`notes/store.rs`), Printers
-(`model.rs`), Reminders (`model.rs`), Mail (`message.rs`, the time of day), Keychain Access (`model.rs`) and Stickies
-(`dates.rs`). Mail and Printers also take one offset from `TimeZone::current()` for every date (wrong across a daylight
-saving change). The same pattern in Assistant, the browser's inspector, ColorSync Utility, Console, Photo Booth's
-trash, Wireless Diagnostics and Mail's message headers is a machine or log format and stays as it is.
+Every stock app that shows a time of day writes it with `time_zone::time_text` (or the `ClockStyle` behind it), so it
+follows 24-Hour Time, and reads local time from the system's zone at the instant shown
+(`TimeZone::auto_updating_current().seconds_from_gmt`, no fixed offset across a daylight saving change): Calendar
+(1.19.14: event times, the Day and Week hour gutter, the Day Starts and Day Ends choices, birthday alerts, the Up Next widget and
+the printed grid), Clock (1.6.11: world cards, the map, alarms, the widget and the intents), Maps (0.7.10: transit
+steps, in the agency's zone), Notes (1.24.16), Printers (0.8.7), Reminders (1.20.16: rows, alerts and the Today
+widget), Mail (0.17.20: the list and Show Activity), Keychain Access (0.1.12), Weather (1.9.10: the hourly strip and
+the sun times), Voice Memos (1.11.10), News (1.6.15) and Stocks (0.2.9: the exchange's time). Each has a pure
+`..._in(.., h24)` function under the one that reads the setting, because an app's tests cannot set the style
+(`apply_system` is crate-private; the default is 24-hour). Text that is cached or sent to the shell (Calendar's
+connect list, Clock's and Reminders' widget lines, Reminders' planned alerts, Notes' list, News' rows) is keyed on
+`conventions_revision()`. An hour with no minutes is `time_text(h, 0)` in 24-hour style ("08:00") and "8 AM" or
+"Noon" in 12-hour style (Calendar's `hour_label`).
+
+Still to move: Stickies (`dates.rs`), the hour column of Clock's alarm editor (24 rows, "00" to "23"), and the
+shell's own alarm text and alert times. Left as they are on purpose, as machine, log, file or interchange formats:
+Assistant's tool times, the browser's inspector, ColorSync Utility, Console, Photo Booth's trash, Screenshot and
+Voice Memos file names, Wireless Diagnostics, Mail's message headers, mbox lines and found-event times, Calendar's
+iCalendar text, and the Markdown checklist Reminders exports. Durations (timers, the stopwatch, playback positions)
+are not times of day.
 
 Gaps: Gregorian instants only; no names in languages other than English; the World Clock still uses its fixed city table
-(`shell/clock/tz.rs`) rather than `TimeZone`; apps have not moved to the SDK type. Tests live in `sdk/src/time_zone.rs`
+(`shell/clock/tz.rs`) rather than `TimeZone`. Tests live in `sdk/src/time_zone.rs`
 and need `/usr/share/zoneinfo`. Not yet checked on Midget.
 
 ### Preferences domains, time zones, calendars and more formatters (Core Foundation / Foundation parity)

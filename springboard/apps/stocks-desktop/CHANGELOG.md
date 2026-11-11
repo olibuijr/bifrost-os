@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.9
+
+- The time a quote was priced follows Settings > Date & Time > 24-Hour Time ("Priced 2026-10-22 4:00 PM" with it off). The date and time stay the exchange's own.
+
 ## 0.2.8
 
 - Compliance: the watchlist and the detail header use the spacing tokens and named constants; no change in behaviour.
