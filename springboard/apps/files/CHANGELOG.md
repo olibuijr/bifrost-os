@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.21
+
+- Every window follows Date & Time at once: a change of 24-Hour Time or the time zone repaints all open Files windows, and a second window follows Light and Dark and lays out for its own size after a resize. File > New Window and File > New Tab are in the File menu (Cmd+N, Cmd+T). A window opened with New Window is a full Files window with the toolbar in its title bar (on a shell that takes an extra window's controls and materials; on an older shell it keeps the system title bar and an opaque sidebar instead of an unblurred one). Edit > Undo is offered after a paste, a copying drop and Duplicate, moves the copies to the Trash, and names the item ("Undo Copy of “notes.txt”", "Undo Move of 3 Items"). Switching the view starts at the top after Select All and otherwise shows the selected item with a whole first line. While dragging, the status line names what the drop will do (Copy to another volume, Move within one). Items copied in one window can be pasted in every other, however the copy was made.
+
 ## 1.34.20
 
 - Dates follow Date & Time > 24-Hour Time and the system time zone, and change with them while a window is open: the list, the columns preview, the gallery, Get Info and the preview panel. Files gets both from the system (shell 0.10.52 or later; on an older shell the times stay in 24-hour style). The list, the gallery and Get Info write a date the same way: "Today at 2:05 PM", "4 Oct 2026 at 00:22".
