@@ -138,18 +138,19 @@ struct PictureJob {
 }
 
 impl PictureJob {
-    /// Encodes and writes the picture. The file written, or why it was not.
-    fn run(self) -> Result<PathBuf, String> {
+    /// Encodes and writes the picture. The file written and the pixels that are in it (the document's picture once the
+    /// save has reached its file, so the file is not decoded again to show what was just encoded), or why it was not.
+    fn run(self) -> Result<(PathBuf, bifrost_app::kit::Image), String> {
         let out = export::finish(&self.img, &self.marks, self.src, self.turns, &self.adjust, 1.0);
         export::write_image(&out, self.raster, &self.temp)?;
-        Ok(self.temp)
+        Ok((self.temp, out))
     }
 }
 
 /// A picture's save while a queue encodes it: the document's file, and where the result arrives. `pump` takes it.
 struct PictureSave {
     copy: PathBuf,
-    result: mpsc::Receiver<Result<PathBuf, String>>,
+    result: mpsc::Receiver<Result<(PathBuf, bifrost_app::kit::Image), String>>,
 }
 
 /// The status line while `path` is being saved.
@@ -266,6 +267,15 @@ struct Viewer {
     pending_save: Option<PathBuf>,
     /// A picture's save that is being encoded off the app loop.
     picture_save: Option<PictureSave>,
+    /// The pixels a picture's save wrote, and the document's file they were written for, until the save has reached
+    /// that file: they become the document's picture then (`adopt_saved`).
+    saved_picture: Option<(PathBuf, bifrost_app::kit::Image)>,
+    /// Whether the note of a save under way is on the disk (`origin::note_unfinished`); `pump` removes it when the
+    /// save has ended.
+    save_noted: bool,
+    /// The working copy that holds a save which did not reach its original before the app quit (found at launch):
+    /// the document is edited until it is saved.
+    unsaved_copy: Option<PathBuf>,
     /// The export waiting for the save panel's file (Export As, File > Export), until it is written or cancelled.
     pending_export: Option<PendingExport>,
     /// The original file of each working copy, for File > Save.
@@ -352,6 +362,9 @@ impl Viewer {
             signatures: Vec::new(),
             pending_save: None,
             picture_save: None,
+            saved_picture: None,
+            save_noted: false,
+            unsaved_copy: None,
             pending_export: None,
             origins: Origins::default(),
             released: Vec::new(),
@@ -456,6 +469,11 @@ impl Viewer {
         self.asking = None;
         self.authoring = None;
         self.pending_save = None;
+        // the pixels of a save still under way belong to the document that is being replaced
+        self.saved_picture = None;
+        if self.unsaved_copy.as_deref() != Some(path) {
+            self.unsaved_copy = None;
+        }
         // an export's job belongs to the document it was asked for; the panel's answer then finds nothing to write
         self.pending_export = None;
         // a save alert is about the document that is being replaced
@@ -572,7 +590,7 @@ impl Viewer {
     /// own (`pump` takes the result), so the window is not held while a large one is written. While a save is under
     /// way another one is not started: its answers from the shell would be taken for the first one's.
     fn start_save(&mut self) {
-        if self.picture_save.is_some() || self.pending_save.is_some() || self.pending_original.is_some() {
+        if self.saving() {
             return;
         }
         let Some((copy, job)) = self.prepare_save() else { return };
@@ -589,8 +607,47 @@ impl Viewer {
     #[cfg(test)]
     fn save_document(&mut self) {
         if let Some((copy, job)) = self.prepare_save() {
-            self.finish_save(copy, job.run());
+            let result = job.run();
+            self.picture_written(copy, result);
         }
+    }
+
+    /// Whether a save is under way: a picture is being encoded, a PDF is being written by its worker, or the saved
+    /// document is on its way into the original. Until it has ended the document is what the save holds: the window
+    /// takes no keys, menu commands or presses (`event`), so no edit is made that the end of the save would discard,
+    /// and the app stays alive when it is told to quit (`save_in_flight`).
+    fn saving(&self) -> bool {
+        self.picture_save.is_some() || self.pending_save.is_some() || self.pending_original.is_some()
+    }
+
+    /// Notes on the disk that a save of `copy` is under way, and where the saved document is once it is written
+    /// (`written`), so a save the app could not finish before it quit is not lost without a word (`recover_unfinished`).
+    fn note_save(&mut self, copy: &Path, written: Option<&Path>) {
+        if !self.data_dir.as_os_str().is_empty() {
+            self.save_noted = origin::note_unfinished(&self.data_dir, copy, written).is_ok();
+        }
+    }
+
+    /// A save was under way when the app last quit and did not end (`origin::take_unfinished`, read once at launch).
+    /// When the saved document had been written, it is put in place of the working copy and opened: the changes are
+    /// kept there, the title says "Edited", and File > Save writes them into the file. When it had not (the app was
+    /// gone before the picture was encoded), only the message can be given.
+    fn recover_unfinished(&mut self, copy: PathBuf, written: Option<PathBuf>) {
+        let name = name_of(&copy);
+        let kept = written.filter(|w| w.exists()).is_some_and(|w| origin::update_copy(&w, &copy).is_ok());
+        if kept {
+            // the markup is in the saved document now
+            let _ = document::save_marks(&self.data_dir, &copy, &[]);
+            self.open_path(&copy);
+            if self.doc.is_some() || self.loading.is_some() {
+                let message = format!("{name} was not saved to its file before Viewer quit. Your changes are kept here: choose File > Save to write them to the file.");
+                self.unsaved_copy = Some(copy);
+                self.after_open = self.loading.is_some().then(|| message.clone());
+                self.status = message;
+                return;
+            }
+        }
+        self.status = format!("The last changes to {name} were not saved before Viewer quit.");
     }
 
     /// The first half of a save. A PDF's save is handed to its worker (`pending_save`) and nothing is returned; for
@@ -607,6 +664,8 @@ impl Viewer {
             let job = pdfmarks::save_job(path.clone(), temp, doc.order.clone(), doc.turns.clone(), doc.marks.clone(), self.author(), pdfmarks::Insertion::None, doc.field_edits());
             if doc.send(job) {
                 self.status = saving_status(&path);
+                self.gesture = None;
+                self.note_save(&path, None);
                 self.pending_save = Some(path);
             } else {
                 self.status = "The document is not open.".into();
@@ -627,6 +686,9 @@ impl Viewer {
             temp: self.saving_file(&path, raster.ext()),
         };
         self.status = saving_status(&path);
+        // a drag that was under way is dropped: its release would be an edit made during the save
+        self.gesture = None;
+        self.note_save(&path, None);
         Some((path, job))
     }
 
@@ -634,7 +696,7 @@ impl Viewer {
     fn take_picture_save(&mut self) -> bool {
         let Some(save) = self.picture_save.take() else { return false };
         match save.result.try_recv() {
-            Ok(result) => self.finish_save(save.copy, result),
+            Ok(result) => self.picture_written(save.copy, result),
             Err(mpsc::TryRecvError::Empty) => {
                 self.picture_save = Some(save);
                 return false;
@@ -643,6 +705,16 @@ impl Viewer {
             Err(mpsc::TryRecvError::Disconnected) => self.status = "Save failed: the picture could not be written.".into(),
         }
         true
+    }
+
+    /// A picture's save was encoded and written into the data folder: the pixels are kept for the end of the save,
+    /// and the save goes on like a PDF's.
+    fn picture_written(&mut self, copy: PathBuf, result: Result<(PathBuf, bifrost_app::kit::Image), String>) {
+        let result = result.map(|(written, img)| {
+            self.saved_picture = Some((copy.clone(), img));
+            written
+        });
+        self.finish_save(copy, result);
     }
 
     /// The saved document was written into the data folder, by the PDF worker or by a picture's save.
@@ -662,6 +734,8 @@ impl Viewer {
                 if self.doc.as_ref().is_some_and(|d| d.path == copy) {
                     self.status = saving_status(&copy);
                 }
+                // from here on the saved document is whole: a quit that cuts the save off loses nothing
+                self.note_save(&copy, Some(&written));
                 self.pending_original = Some(OriginalSave { grant, check: None, request: None, copy, written });
             }
             None => {
@@ -716,14 +790,52 @@ impl Viewer {
         self.finish_copy_save(&copy, &written);
     }
 
-    /// Replaces the working copy with the saved document and opens it again, when it is still the open document.
+    /// Replaces the working copy with the saved document. When it is still the open document, it becomes the saved
+    /// one: a picture takes the pixels that were just encoded for it (`adopt_saved`), with no second decode of the
+    /// file on the app loop before "Saved" shows; a PDF, whose pages its worker draws, is opened again.
     fn finish_copy_save(&mut self, copy: &Path, written: &Path) {
         let name = name_of(copy);
+        let pixels = self.saved_picture.take().filter(|(of, _)| of == copy).map(|(_, img)| img);
         match origin::update_copy(written, copy) {
-            Ok(()) if self.doc.as_ref().is_some_and(|d| d.path == copy) => self.reopen(copy, format!("Saved {name}")),
+            Ok(()) if self.doc.as_ref().is_some_and(|d| d.path == copy) => {
+                self.unsaved_copy = None;
+                match pixels {
+                    Some(img) if self.doc.as_ref().is_some_and(|d| !d.is_pdf) => self.adopt_saved(copy, img, format!("Saved {name}")),
+                    _ => self.reopen(copy, format!("Saved {name}")),
+                }
+            }
             Ok(()) => {}
             Err(e) => self.status = format!("Saved {name}, but Viewer could not update its own copy: {e}"),
         }
+        self.save_ended();
+    }
+
+    /// The save has ended, saved or refused (the person was told): the note of it goes, so nothing is said about it
+    /// at the next launch.
+    fn save_ended(&mut self) {
+        if std::mem::take(&mut self.save_noted) {
+            origin::clear_unfinished(&self.data_dir);
+        }
+    }
+
+    /// The open picture was saved as `img` into `path`: the document becomes the saved file without reading it back.
+    /// What the save wrote into the pixels (the turn, the colour adjustment, the markup) is no longer applied on top,
+    /// Undo starts over as it does for a file that was just opened, and the view keeps its zoom mode: in Fit the
+    /// saved picture is fitted, at a chosen level it is centred.
+    fn adopt_saved(&mut self, path: &Path, img: bifrost_app::kit::Image, message: String) {
+        let Some(doc) = &mut self.doc else { return };
+        doc.adopt_saved(Rc::new(img));
+        self.adjust = Adjust::default();
+        self.editing = None;
+        self.selection = None;
+        self.history = History::default();
+        self.view.quarters = 0;
+        self.view.pan = (0.0, 0.0);
+        // the sidecar is emptied: the markup is in the file
+        self.save();
+        self.facts = inspector::read(path);
+        self.opened = origin::Stamp::at(path);
+        self.status = message;
     }
 
     /// The original could not be written (`code` is the shell's refusal; None is a failure while writing). The working
@@ -737,6 +849,9 @@ impl Viewer {
     /// Save As when it is still the open document. When the reason is that another app changed the file, the alert
     /// also offers Revert: the file as it is now, without the document's changes.
     fn refuse_save(&mut self, copy: &Path, reason: &str) {
+        // the pixels that were encoded for this save are not the document's: its changes stay unsaved
+        self.saved_picture = None;
+        self.save_ended();
         let name = name_of(copy);
         if !self.doc.as_ref().is_some_and(|d| d.path == copy) {
             self.status = format!("{name} could not be saved.");
@@ -876,7 +991,7 @@ impl Viewer {
 
     /// Whether File > Save has something to write: the document's own changes, or a picture's colour adjustment.
     fn edited(&self) -> bool {
-        self.doc.as_ref().is_some_and(|d| d.edited() || (!d.is_pdf && self.adjust != Adjust::default()))
+        self.doc.as_ref().is_some_and(|d| d.edited() || (!d.is_pdf && self.adjust != Adjust::default()) || self.unsaved_copy.as_deref() == Some(d.path.as_path()))
     }
 
     /// Tells the shell the document's name and whether it has unsaved changes, when they changed: the Window menu
@@ -931,7 +1046,10 @@ impl Viewer {
             }
         }
         self.save();
+        // the file is the same document: the zoom mode the person chose stays (the page and the pan start over)
+        let zoom = self.view.zoom;
         self.open_path(path);
+        self.view.zoom = zoom;
         self.status = message.clone();
         self.after_open = Some(message);
     }
@@ -1405,6 +1523,10 @@ impl Viewer {
                 let request = ctx.save_document(&pending.name, &[pending.ext]);
                 pending.request = Some(request);
             }
+        }
+        // a save that ended on another way (the picture could not be encoded, the worker failed)
+        if !self.saving() {
+            self.save_ended();
         }
         changed
     }
@@ -2956,6 +3078,10 @@ impl App for Viewer {
             self.sweep_copies();
             self.prefs = prefs::load(&self.data_dir);
             self.signatures = signature::load(&self.data_dir);
+            // a save that was cut off when the app last quit
+            if let Some((copy, written)) = origin::take_unfinished(&self.data_dir) {
+                self.recover_unfinished(copy, written);
+            }
         }
     }
 
@@ -3191,6 +3317,12 @@ impl App for Viewer {
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        // While a save is being written the document is what the save holds: keys, menu commands and presses are
+        // ignored until it has ended (the status line says "Saving"), so no edit is made that the saved document
+        // would then replace. A file sent to the app still opens; the save ends for the document it was started for.
+        if self.saving() && matches!(ev, Input::Key(_) | Input::Activate(_) | Input::Touch { .. }) {
+            return false;
+        }
         match ev {
             Input::Open(url) => match path_from_url(&url) {
                 Some(path) => {
@@ -3391,6 +3523,20 @@ impl App for Viewer {
         self.stop_editing();
         self.save();
         self.save_position();
+    }
+
+    /// A save's steps arrive with no input event (the encoded picture, the worker's PDF, the shell's answers), and
+    /// `tick` takes them and sends what follows: it runs in the background too while a save is under way, so a save
+    /// goes on when the window is closed or another app comes to the front.
+    fn ticks_in_background(&self) -> bool {
+        self.saving()
+    }
+
+    /// Quit while a save is under way: the app stays until the save has ended (or the runtime's wait is over). `tick`
+    /// no longer runs, so this takes the encoded picture or the worker's PDF and sends the request that follows.
+    fn save_in_flight(&mut self, ctx: &Ctx) -> bool {
+        self.pump(ctx);
+        self.saving()
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
@@ -4034,6 +4180,138 @@ mod tests {
         assert_eq!(v.status, "Saved b.png");
         assert_eq!(v.window_title(), "b.png");
         assert!(std::fs::read(&copy).unwrap().starts_with(b"\x89PNG"));
+        cleanup(&v);
+    }
+
+    /// While a save is under way the window takes no keys, menu commands or presses: an edit made then would be
+    /// discarded when the saved document takes the place of the open one. When the save has ended, they work again.
+    #[test]
+    fn edits_are_ignored_while_a_save_is_under_way() {
+        let (mut v, _copy) = viewer_on_copy("blocked");
+        v.set_origin("b.png", Some(([9; 16], None)));
+        let ctx = menu_ctx();
+        v.rotate(1);
+        v.save_document();
+        assert!(v.saving());
+        let rotate = Input::Activate(Action::RotateRight.id() as _);
+        assert!(!v.event(&ctx, rotate));
+        assert!(!v.event(&ctx, Input::Key(KeyInput::Code(39))));
+        assert_eq!(v.doc.as_ref().unwrap().turns, [1], "the document is as the save holds it");
+        assert!(!v.history.can_undo(), "no edit was recorded");
+        v.pump(&ctx);
+        v.original_checked(&ctx, None);
+        v.original_saved(None);
+        assert!(!v.saving());
+        assert_eq!(v.doc.as_ref().unwrap().turns, [0], "the turn is in the saved picture");
+        assert!(v.event(&ctx, Input::Activate(Action::RotateRight.id() as _)));
+        assert_eq!(v.doc.as_ref().unwrap().turns, [1], "after the save the command works again");
+        assert_eq!(v.window_title(), "b.png \u{2013} Edited");
+        cleanup(&v);
+    }
+
+    /// When the save has reached the file, the picture that was encoded for it becomes the document: the file is not
+    /// read and decoded again on the app loop, and the view keeps the zoom the person chose.
+    #[test]
+    fn a_saved_picture_takes_the_pixels_that_were_encoded_and_keeps_the_zoom() {
+        let (mut v, copy) = viewer_on_copy("adopt");
+        v.set_origin("b.png", Some(([9; 16], None)));
+        let ctx = menu_ctx();
+        v.doc.as_mut().unwrap().replace_picture(Rc::new(Image { w: 4, h: 2, px: vec![0xff00_00ff; 8] }));
+        v.rotate(1);
+        v.view.zoom = Zoom::Factor(2.0);
+        v.view.pan = (3.0, 4.0);
+        v.save_document();
+        // what the worker wrote is replaced by bytes no decoder reads: the file is not looked at again
+        let written = v.pending_original.as_ref().unwrap().written.clone();
+        std::fs::write(&written, b"not a picture").unwrap();
+        v.pump(&ctx);
+        v.original_checked(&ctx, None);
+        v.original_saved(None);
+        assert_eq!(std::fs::read(&copy).unwrap(), b"not a picture", "the working copy is what was written");
+        let doc = v.doc.as_ref().expect("the document stays open");
+        assert_eq!((doc.sizes.clone(), doc.turns.clone(), doc.marks.len()), (vec![(2, 4)], vec![0], 0), "turned as it was saved");
+        assert!(!v.edited() && v.saved_picture.is_none());
+        assert_eq!((v.view.zoom, v.view.quarters, v.view.pan), (Zoom::Factor(2.0), 0, (0.0, 0.0)));
+        assert_eq!(v.status, "Saved b.png");
+        assert!(!v.history.can_undo(), "Undo starts over, as for a file that was just opened");
+        // a save that is refused leaves the document, and the pixels encoded for it are dropped
+        v.rotate(1);
+        v.save_document();
+        assert!(v.saved_picture.is_some());
+        v.original_failed(Some(DocErrorCode::Denied));
+        assert!(v.saved_picture.is_none() && v.edited());
+        assert_eq!(v.doc.as_ref().unwrap().turns, [1]);
+        cleanup(&v);
+    }
+
+    /// Quit in the middle of a save: `save_in_flight` keeps the app alive and does what `tick` did, so the encoded
+    /// picture is taken and the look at the original is asked for, and it says the save has ended once the shell
+    /// committed it. A note of the save is on the disk until then.
+    #[test]
+    fn a_save_under_way_holds_the_quit_until_it_has_ended() {
+        let (mut v, copy) = viewer_on_copy("quit");
+        v.set_origin("b.png", Some(([9; 16], None)));
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
+        let ctx = menu_ctx();
+        assert!(!v.save_in_flight(&ctx) && !v.ticks_in_background(), "nothing to wait for");
+        v.start_save();
+        assert!(v.ticks_in_background(), "the save goes on when the window is closed or in the back");
+        assert_eq!(origin::take_unfinished(&v.data_dir), Some((copy.clone(), None)), "noted while the picture is encoded");
+        v.note_save(&copy, None);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while v.picture_save.is_some() {
+            assert!(std::time::Instant::now() < deadline, "the picture is written");
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            assert!(v.save_in_flight(&ctx), "the app is kept alive while the save is under way");
+        }
+        let sent = ctx.take_sent();
+        assert!(matches!(sent[..], [bifrost_app::proto::ToShell::DocReopen { grant: [9, ..], .. }]), "the next step leaves without a tick: {sent:?}");
+        let written = v.pending_original.as_ref().expect("on its way into the original").written.clone();
+        // the saved document is whole now: the note says where it is
+        let note = std::fs::read_to_string(v.data_dir.join("save/unfinished.txt")).unwrap();
+        assert_eq!(note, format!("{}\n{}\n", copy.display(), written.display()));
+        v.original_checked(&ctx, None);
+        assert!(v.save_in_flight(&ctx), "the commit is still to come");
+        v.original_saved(None);
+        assert!(!v.save_in_flight(&ctx), "the save has ended: the app may go");
+        assert!(!v.data_dir.join("save/unfinished.txt").exists(), "and nothing is left to say at the next launch");
+        assert_eq!(v.status, "Saved b.png");
+        cleanup(&v);
+    }
+
+    /// A save the app could not finish before it quit is found at the next launch: the saved document is kept in the
+    /// working copy and opened as an edited document; when the picture had not been encoded yet, the person is told.
+    #[test]
+    fn a_save_cut_off_by_a_quit_is_kept_and_said_at_the_next_launch() {
+        let (mut v, copy) = viewer_on_copy("recover");
+        v.set_origin("b.png", Some(([9; 16], None)));
+        v.doc = None;
+        let saved = export::png_bytes(&Image { w: 3, h: 1, px: vec![0xff00_ff00; 3] }).unwrap();
+        let written = v.data_dir.join("save/b.png");
+        std::fs::create_dir_all(written.parent().unwrap()).unwrap();
+        std::fs::write(&written, &saved).unwrap();
+        document::save_marks(&v.data_dir, &copy, &[rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 })]).unwrap();
+        origin::note_unfinished(&v.data_dir, &copy, Some(&written)).unwrap();
+        let (noted, at) = origin::take_unfinished(&v.data_dir).expect("the note of the last run");
+        v.recover_unfinished(noted, at);
+        assert_eq!(std::fs::read(&copy).unwrap(), saved, "the working copy holds the changes");
+        let doc = v.doc.as_ref().expect("it is open");
+        assert!(doc.path == copy && doc.sizes == [(3, 1)] && doc.marks.is_empty(), "the markup is in the saved picture, not on top of it again");
+        assert!(v.status.contains("was not saved to its file") && v.status.contains("File > Save"));
+        assert_eq!(v.window_title(), "b.png \u{2013} Edited", "it still has to be saved");
+        // File > Save writes it into the original, and then it is clean
+        let ctx = menu_ctx();
+        v.save_document();
+        v.pump(&ctx);
+        v.original_checked(&ctx, None);
+        v.original_saved(None);
+        assert_eq!(v.window_title(), "b.png");
+        // the app was gone before the picture was encoded: there is nothing to keep, and it is said
+        let mut v2 = Viewer::new();
+        v2.data_dir = v.data_dir.clone();
+        v2.recover_unfinished(copy.clone(), None);
+        assert!(v2.doc.is_none());
+        assert_eq!(v2.status, "The last changes to b.png were not saved before Viewer quit.");
         cleanup(&v);
     }
 

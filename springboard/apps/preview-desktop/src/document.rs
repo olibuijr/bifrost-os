@@ -230,6 +230,24 @@ impl Document {
         self.revision = self.revision.wrapping_add(1);
     }
 
+    /// The picture was saved as `img`: its pixels hold the turn, the colour adjustment and the markup. It is the
+    /// document's picture, and its picture as opened, from now on, with no turn and no markup of its own, as if the
+    /// saved file had just been opened; the thumbnails are drawn again. Nothing happens for a PDF.
+    pub fn adopt_saved(&mut self, img: Rc<Image>) {
+        if !matches!(self.source, Source::Picture(_)) {
+            return;
+        }
+        self.sizes = vec![(img.w, img.h)];
+        self.order = vec![0];
+        self.turns = vec![0];
+        self.marks.clear();
+        self.original = Some(img.clone());
+        self.source = Source::Picture(img);
+        self.drawn.borrow_mut().clear();
+        self.asked.borrow_mut().clear();
+        self.revision = self.revision.wrapping_add(1);
+    }
+
     /// Puts the picture as it was opened back, undoing every pixel edit. Nothing happens for a PDF.
     pub fn restore_original(&mut self) {
         if let Some(img) = self.original.clone() {
@@ -550,6 +568,25 @@ mod tests {
         assert!(!doc.edited(), "the picture as it was opened");
         doc.form_changed = true;
         assert!(doc.edited(), "a filled form field");
+    }
+
+    #[test]
+    fn a_saved_picture_is_adopted_as_the_document_with_nothing_left_to_save() {
+        let mut doc = picture_doc(4, 2);
+        doc.set_turn(0, 1);
+        doc.marks.push(Mark { kind: crate::model::MarkKind::Rect, page: 0, rect: crate::model::Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }, color: 0, text: String::new(), ink: Vec::new() });
+        let before = doc.revision;
+        let turned = doc.thumb(0).expect("a thumbnail");
+        doc.adopt_saved(Rc::new(Image { w: 2, h: 4, px: vec![7; 8] }));
+        assert!(!doc.edited(), "the saved picture is the document as opened");
+        assert_eq!((doc.sizes.clone(), doc.turn_of(0), doc.marks.len()), (vec![(2, 4)], 0, 0));
+        assert_ne!(doc.revision, before, "a drawn copy of the old pixels is stale");
+        assert!(!Rc::ptr_eq(&turned, &doc.thumb(0).unwrap()), "the thumbnail is drawn from the saved pixels");
+        assert_eq!(doc.picture(0).unwrap().px, vec![7; 8]);
+        // Revert to Original goes back to the saved picture, not to the one before the save
+        doc.replace_picture(Rc::new(Image { w: 1, h: 1, px: vec![0] }));
+        doc.restore_original();
+        assert_eq!(doc.sizes, [(2, 4)]);
     }
 
     #[test]

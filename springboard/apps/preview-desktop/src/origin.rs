@@ -237,6 +237,40 @@ pub fn update_copy(written: &Path, copy: &Path) -> std::io::Result<()> {
     std::fs::copy(written, copy).map(|_| ())
 }
 
+fn unfinished_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("save").join("unfinished.txt")
+}
+
+/// Notes that a save of the working copy `copy` is under way: one line with the copy's path, and a second with the
+/// file the saved document was written to (`written`) once it is whole. The note is removed when the save ends
+/// (`clear_unfinished`); one that is still there at the next launch is a save the app could not finish before it quit.
+pub fn note_unfinished(data_dir: &Path, copy: &Path, written: Option<&Path>) -> std::io::Result<()> {
+    let file = unfinished_path(data_dir);
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let written = written.map(|w| w.to_string_lossy().into_owned()).unwrap_or_default();
+    std::fs::write(file, format!("{}\n{written}\n", copy.to_string_lossy()))
+}
+
+/// Removes the note of a save that has ended.
+pub fn clear_unfinished(data_dir: &Path) {
+    let _ = std::fs::remove_file(unfinished_path(data_dir));
+}
+
+/// The save that was under way when the app last quit, if one was: the working copy, and the file the saved document
+/// was written to when it had been. The note is removed, so it is reported once. A written file is only named for a
+/// working copy, and only inside the app's own save folder: anything else in the note is not acted on.
+pub fn take_unfinished(data_dir: &Path) -> Option<(PathBuf, Option<PathBuf>)> {
+    let text = std::fs::read_to_string(unfinished_path(data_dir)).ok()?;
+    clear_unfinished(data_dir);
+    let mut lines = text.lines();
+    let copy = PathBuf::from(lines.next().filter(|l| !l.is_empty())?);
+    let ours = key_of(data_dir, &copy).is_some();
+    let written = lines.next().filter(|l| !l.is_empty()).map(PathBuf::from).filter(|w| ours && w.starts_with(data_dir.join("save")));
+    Some((copy, written))
+}
+
 /// The reason the alert gives when the original holds something else than it did when it was opened or last saved.
 pub const CHANGED: &str = "The file was changed by another app since it was opened.";
 
@@ -446,4 +480,31 @@ mod tests {
         assert!(failure_reason(Some(DocErrorCode::Stale)).contains("replaced"));
         assert_eq!(failure_reason(None), "The file could not be written.");
     }
+    #[test]
+    fn the_note_of_a_save_under_way_is_read_once_and_names_only_the_apps_own_files() {
+        let dir = std::env::temp_dir().join(format!("viewer-unfinished-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(take_unfinished(&dir), None, "no save was under way");
+        let copy = dir.join("opened/2/b.png");
+        let written = dir.join("save/b.png");
+        // the picture is still being encoded
+        note_unfinished(&dir, &copy, None).unwrap();
+        assert_eq!(take_unfinished(&dir), Some((copy.clone(), None)));
+        assert_eq!(take_unfinished(&dir), None, "it is reported once");
+        // the saved document is written and on its way into the original
+        note_unfinished(&dir, &copy, Some(&written)).unwrap();
+        assert_eq!(take_unfinished(&dir), Some((copy.clone(), Some(written.clone()))));
+        // the save ended
+        note_unfinished(&dir, &copy, Some(&written)).unwrap();
+        clear_unfinished(&dir);
+        assert_eq!(take_unfinished(&dir), None);
+        // a document opened by its path is named, but no file outside the save folder is ever put in a copy's place
+        let own = PathBuf::from("/home/someone/Pictures/b.png");
+        note_unfinished(&dir, &own, Some(&written)).unwrap();
+        assert_eq!(take_unfinished(&dir), Some((own, None)));
+        note_unfinished(&dir, &copy, Some(Path::new("/etc/hostname"))).unwrap();
+        assert_eq!(take_unfinished(&dir), Some((copy, None)));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
 }
