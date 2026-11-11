@@ -3648,6 +3648,10 @@ impl Shell {
                                 host.pointer_window = match app { AppId::ExternalWindow(_, id) => u32::from(id), _ => 0 };
                             }
                         }
+                        // the click that activates a window is a click in it: the window was raised above, it is its
+                        // app's key window before the press arrives (not a tick later, between the press and its
+                        // release), and the press and release go to the app as any other (click-through)
+                        self.sync_key_windows();
                         let b = w.body(&m);
                         let fx = self.with_size(b.w, b.h, |sh| sh.app_touch_single(app, Event::Down(x - b.x as f32, y - dy - b.y as f32), t));
                         return Some(fx);
@@ -4601,6 +4605,10 @@ mod w4_window_tests;
 
 #[cfg(all(test, feature = "desktop-wayland"))]
 mod launch_front_tests;
+
+/// The click that activates a window is delivered to it (click-through); a title bar press is the shell's.
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod activating_click_tests;
 
 /// E2E6 Search: whatever Search, the Apps grid, the Dock or `open-app` opens is the front window and keeps the
 /// keyboard, whatever focus the window server gives other windows on its own while the app maps (`FrontIntent`).
