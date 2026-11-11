@@ -2875,6 +2875,13 @@ this in 1.34.19 and kept "Today at 01:18" with 24-Hour Time off. The shell tells
   that does not send it keeps 24-hour time and the machine's zone, which the runtime reads from `/etc/localtime` at
   start (`/etc` and `/usr/share/zoneinfo` are visible in the sandbox). Before this, `TimeZone::current()` in an app was
   always the built-in default zone, because only the shell process set one.
+- Timing: the message goes to every running app, in front or not, in the tick that changes the setting
+  (`Shell::ext_tick` runs in every pass of the shell's loop, and the Settings click that flips the switch is such a
+  pass), and the app draws again at once, also while suspended. What was late up to 0.10.52 was the picture: new
+  pixels asked the shell for a frame only when they came from the app in front, so a window behind another app showed
+  its new times with the next frame something else caused, 5 to 20 s later. Now the pixels of any app with a window
+  on the desktop that is not minimized ask for a frame of the windows (`apphost::background_frame_shows`); no timer
+  was added.
 - API (`bifrost_app::time_zone`): `uses_24_hour_clock()` (Date & Time > 24-Hour Time), `time_text(hour, minute)` and
   `time_text_at(Date)` (a time of day as the menu bar writes it, `ClockStyle::time_text`: "14:05" or "2:05 PM"; the
   second reads the instant in the system zone), and `conventions_revision()`, which changes with either setting, for

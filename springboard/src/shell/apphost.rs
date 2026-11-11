@@ -604,6 +604,12 @@ pub(super) const WHEEL_DRAG_MS: f64 = 250.0;
 
 /// Counts one plain touch at `t` ms against the drag emulated for a wheel event (`left` touches, until `until`): true
 /// while the down, the move and the up of that drag are still due.
+/// Whether new pixels from the app in `slot`, which is not the app in front, are on screen: the desktop shows a
+/// window of it (its main window or an extra one) that is not minimized. Elsewhere only the front app is drawn.
+fn background_frame_shows(desk: Option<&super::desk::Desk>, slot: u8) -> bool {
+    desk.is_some_and(|d| d.wins.iter().any(|w| w.app.parent() == super::AppId::External(slot) && !w.minimized))
+}
+
 /// The window a context menu of the app in `slot` opens for, from the window the pointer last used there (`asked`):
 /// the desk window, its id for the app (0 the main window) and the pixels per unit of the point the app gave (1 for
 /// the main window, whose point is in surface pixels; `pt` for an extra window, whose point is in window points).
@@ -2906,6 +2912,12 @@ impl Shell {
                     // new pixels alone: the desktop republishes the windows, nothing else is drawn again
                     self.ext_frame = true;
                 }
+            } else if p.frame && background_frame_shows(self.desk.as_ref(), slot as u8) {
+                // an app behind the front one drew again (it was told a new clock style, time zone or appearance, or
+                // its window was resized): its window is on screen, so the pixels go up now. They used to wait for
+                // the next frame something else caused, seconds later (E2E7: Files behind Settings kept the 12-hour
+                // times after the menu bar had changed)
+                self.ext_frame = true;
             }
             for r in p.requests {
                 match r {
@@ -3304,6 +3316,9 @@ mod route_tests;
 
 #[cfg(test)]
 mod context_window_tests;
+
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod background_frame_tests;
 
 #[cfg(test)]
 mod service_manifest_tests;
