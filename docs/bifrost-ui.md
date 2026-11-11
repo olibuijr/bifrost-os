@@ -2963,6 +2963,13 @@ Apple's CoreSpotlight lets an app index its own content so system search finds i
   name (`quicksearch::indexed_groups`, `app_section_title`). Items of an uninstalled app are dropped when the installed
   list changes (`spotindex::forget_missing`, called from `installed_changed`); an empty list (registry not read yet) keeps
   every item.
+- Files in the panel (`shell/quicksearch_files.rs`, `quicksearch::fold_indexed_files`): the walk of the Files root and the
+  account's home lists files and folders (a folder is a "Folder" row: Return opens it in Files, Cmd+Return shows it in
+  the folder that holds it). A document the Files app indexed is a path: it becomes a file row unless the walk lists
+  that file already; one whose file is gone is not listed and is deleted from the index (`forget_gone_files`, off the
+  UI thread). "Show … in Folder" is listed after the files for the first file shown, the Top Hit included, on both
+  layouts; Cmd+Return does the same for the selected file. An app is found by a run of its name, its words' initials
+  or an alias (`name_match`), not by scattered letters.
 - Settings > Search store: `<data>/search-prefs.txt` (`shell/search_prefs.rs`) holds the sources the panel does not query
   (`off <section>`, e.g. `off Files`), the apps whose indexed items are hidden (`app <id>`) and the folders file search
   leaves out (`exclude <folder>`, Privacy). The panel applies them (`sources_of`, `indexed_groups`, file walk). The
