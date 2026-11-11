@@ -197,6 +197,10 @@ impl ActivityApp {
     }
 
     fn handle_event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        // a choice from a process row's menu: the rows carry the Process menu's ids
+        if let Input::ContextAction(id) = ev {
+            return self.run_menu_action(ctx, id);
+        }
         let Some(m) = &mut self.monitor else { return false };
         let changed = match ev {
             Input::Touch { kind, x, y, t, .. } => m.touch(&ctx.ui, kind, x, y, t),
@@ -217,6 +221,14 @@ impl ActivityApp {
                 }
                 true
             }
+            // a right click on a process row selects it and opens its menu; the choice comes back as a ContextAction
+            Input::Context { x, y } => match m.context_menu_at(&ctx.ui, x, y) {
+                Some(items) => {
+                    ctx.context_menu(x, y, items);
+                    true
+                }
+                None => false,
+            },
             _ => false,
         };
         ctx.wants_keyboard(m.search_focused);
@@ -472,8 +484,9 @@ impl App for ActivityApp {
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         if self.owners_request == Some(request) {
             self.owners_request = None;
-            if let (Some(m), Ok(answer)) = (&mut self.monitor, result) {
-                m.set_owners(sample::parse_owners(answer));
+            // no answer names nobody: the processes then keep the accounts their uids have in this sandbox
+            if let Some(m) = &mut self.monitor {
+                m.set_owners(result.as_ref().map(sample::parse_owners).unwrap_or_default());
             }
             return true;
         }
