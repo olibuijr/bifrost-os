@@ -156,7 +156,8 @@ impl Setting {
         }
     }
 
-    /// The menu title of this choice (the alert choices use the event editor's wording).
+    /// The menu title of this choice (the alert choices use the event editor's wording). The hours of the working day
+    /// are written in the person's clock style: "08:00" and "16:00", or "8 AM" and "4 PM" with 24-Hour Time off.
     pub fn title(self) -> String {
         match self {
             Setting::MondayFirst => "Start Week on Monday".into(),
@@ -165,16 +166,16 @@ impl Setting {
                 m if m % 60 == 0 => format!("{} Hours", m / 60),
                 m => format!("{m} Minutes"),
             },
-            Setting::DayStart(i) => format!("{} AM", DAY_STARTS[i]),
+            Setting::DayStart(i) => super::hour_label(u32::from(DAY_STARTS[i])),
             Setting::Alert(v) | Setting::AllDayAlert(v) => super::store::ALERTS[v as usize].to_string(),
             // the app names the calendars itself (`settings_items`), so this is only a fallback
             Setting::DefaultCalendar(_) => "Calendar".into(),
-            Setting::DayEnd(i) => format!("{} PM", DAY_ENDS[i] - 12),
+            Setting::DayEnd(i) => super::hour_label(u32::from(DAY_ENDS[i])),
             Setting::DaysPerWeek(i) => match DAYS_PER_WEEK[i] {
                 1 => "1 Day".into(),
                 n => format!("{n} Days"),
             },
-            Setting::BirthdayAlert(v) => super::birthdays::alert_title(v).to_string(),
+            Setting::BirthdayAlert(v) => super::birthdays::alert_title(v),
         }
     }
 }
@@ -474,7 +475,8 @@ mod tests {
         // odd values in the file keep the defaults
         let odd = Prefs::parse("day_end=3\ndays_per_week=9\nalert_birthday=40\n");
         assert_eq!((odd.day_end, odd.days_per_week, odd.alert_birthday), (18, 7, 0));
-        assert_eq!(Setting::DayEnd(0).title(), "4 PM");
+        assert_eq!(Setting::DayEnd(0).title(), "16:00", "24-hour time until the shell says otherwise");
+        assert_eq!(super::super::hour_label_in(u32::from(DAY_ENDS[0]), false), "4 PM");
         assert_eq!(Setting::DaysPerWeek(0).title(), "1 Day");
         assert_eq!(Setting::DaysPerWeek(4).title(), "5 Days");
     }
@@ -495,7 +497,8 @@ mod tests {
     fn titles_read_naturally() {
         let titles: Vec<String> = (0..DURATIONS.len()).map(|i| Setting::Length(i).title()).collect();
         assert_eq!(titles, vec!["30 Minutes", "1 Hour", "90 Minutes", "2 Hours"]);
-        assert_eq!(Setting::DayStart(2).title(), "8 AM");
+        assert_eq!(Setting::DayStart(2).title(), "08:00", "24-hour time until the shell says otherwise");
+        assert_eq!(super::super::hour_label_in(u32::from(DAY_STARTS[2]), false), "8 AM");
         assert_eq!(Setting::Alert(0).title(), "None");
         assert_eq!(Setting::AllDayAlert(6).title(), "1 day before");
     }

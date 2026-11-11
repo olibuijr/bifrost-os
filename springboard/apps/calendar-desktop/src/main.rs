@@ -32,6 +32,8 @@ use springboard::shell::keyboard::Out;
 struct CalendarApp {
     cal: Option<calendar::Calendar>,
     last_wall: f64,
+    /// `time_zone::conventions_revision` at the last `configure`: the clock style and the zone the times are written in.
+    conventions: u32,
     /// Shell services: alert requests, the Up Next timeline and the Dock badge.
     connect: Connect,
     /// Internet Accounts: the CalDAV calendars switched on for Calendars are read in the background.
@@ -204,8 +206,21 @@ impl App for CalendarApp {
 
     fn configure(&mut self, ctx: &Ctx) {
         let (w, h) = (ctx.cfg.w as i32, ctx.cfg.h as i32);
+        // Settings > Date & Time changed the clock style or the zone (the runtime calls this and repaints): the clock
+        // takes the zone's offset at once, and the Up Next entries and the alert requests are planned again.
+        let revision = bifrost_app::time_zone::conventions_revision();
+        let conventions_changed = self.conventions != revision;
+        self.conventions = revision;
         match &mut self.cal {
-            Some(c) => c.set_size(w, h),
+            Some(c) => {
+                c.set_size(w, h);
+                if conventions_changed {
+                    let mut wall = c.wall();
+                    wall.offset = Wall::sample(0.0).offset;
+                    c.set_wall(wall);
+                    self.connect.invalidate();
+                }
+            }
             None => {
                 // Every change is written when it is saved. The one thing held in memory is an event draft that is
                 // still open, and that is discarded on quit, so the shell may end the app at once.
@@ -843,5 +858,5 @@ fn pane_input(c: &mut calendar::Calendar, ctx: &Ctx, ev: Input) -> bool {
 }
 
 fn main() {
-    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars), jobs: HashMap::new(), fetcher: Fetcher::default(), attached: HashMap::new(), primary: None });
+    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, conventions: bifrost_app::time_zone::conventions_revision(), connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars), jobs: HashMap::new(), fetcher: Fetcher::default(), attached: HashMap::new(), primary: None });
 }

@@ -59,7 +59,7 @@ fn a_birthday_alert_fires_at_nine_o_clock_on_the_day_it_names() {
     assert_eq!(events.len(), 2);
     assert_eq!((events[0].start.date, events[0].start.minute, events[0].alarms.clone()), (day(10, 6), 540, vec![0]));
     assert_eq!(birthdays::ALERTS.len(), 5);
-    assert_eq!(birthdays::alert_title(3), "2 days before at 9 AM");
+    assert_eq!(birthdays::alert_title(3), "2 days before at 09:00", "24-hour time until the shell says otherwise");
 }
 
 #[test]
