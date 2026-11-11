@@ -60,13 +60,17 @@ pub(crate) const MENU_EMPTY_TRASH: u32 = 28;
 pub(crate) const MENU_ALIAS: u32 = 29;
 pub(crate) const MENU_COPY_PATH: u32 = 30;
 pub(crate) const MENU_SAVE_SEARCH: u32 = 31;
-/// File > New Window (⌘N): a second Files window at the home folder.
+/// File > New Window (⌘N): a second Files window at the folder of the window it is made from.
 pub(crate) const MENU_NEW_WINDOW: u32 = 32;
 /// View > Group By Name and Group By Size (the panel offers None, Kind and Date).
 pub(crate) const MENU_GROUP_NAME: u32 = 33;
 pub(crate) const MENU_GROUP_SIZE: u32 = 34;
 /// File > New Tab (⌘T): a tab at the open folder.
 pub(crate) const MENU_NEW_TAB: u32 = 35;
+/// File > Close Tab (⌘W): closes the open tab. Listed, and enabled, only while the window has more than one tab: the
+/// shell gives the key to an app's enabled item first, and with it taken moves its own Close Window to ⇧⌘W. With
+/// one tab the item is not there, and ⌘W is the shell's Close Window again.
+pub(crate) const MENU_CLOSE_TAB: u32 = 36;
 
 /// What the menu of the selected items depends on, so its layout can be checked without a window.
 #[derive(Clone, Copy, Debug, Default)]

@@ -715,6 +715,200 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// The four views, as `drop_window` takes them.
+    const DROP_VIEWS: [&str; 4] = ["icons", "list", "columns", "gallery"];
+
+    fn scratch(tag: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("files-dropview-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for dir in ["b/sub", "src", "a"] {
+            std::fs::create_dir_all(root.join(dir)).unwrap();
+        }
+        std::fs::write(root.join("b/note.txt"), "n").unwrap();
+        std::fs::write(root.join("src/d4.txt"), "x").unwrap();
+        root
+    }
+
+    fn row(dir: &Path, name: &str, is_dir: bool) -> Entry {
+        Entry { name: name.into(), path: dir.join(name), is_dir, size: 0, mtime: 0, kind: if is_dir { Kind::Folder } else { Kind::Text }, items: None }
+    }
+
+    /// A window that shows `root/b` (the folder `sub`, then the file `note.txt`) in `view`, and three points in it:
+    /// on the folder, on the file, and on the empty part of the view.
+    fn drop_window(root: &Path, view: &str) -> (Files, [(f32, f32); 3]) {
+        let dir = root.join("b");
+        let mut files = crate::tests::fixture(vec![row(&dir, "sub", true), row(&dir, "note.txt", false)]);
+        files.home = root.to_path_buf();
+        files.path = dir;
+        files.grid = view == "icons";
+        files.columns = view == "columns";
+        files.vo.gallery = view == "gallery";
+        // a window a drag is over shows its status line, which takes the bottom of the view
+        files.dragging = true;
+        let left = files.side() + 16.;
+        let points = match view {
+            "icons" => {
+                assert!(files.grid_cols() >= 3, "the fixture window holds three icons a line");
+                let y = files.rows_top() + 16. + 0.5 * files.grid_h();
+                [(left + 0.5 * files.grid_w(), y), (left + 1.5 * files.grid_w(), y), (left + 2.5 * files.grid_w(), y)]
+            }
+            "list" => {
+                let x = files.side() + 200.;
+                [(x, files.rows_top() + 16.), (x, files.rows_top() + 48.), (x, files.rows_top() + 5. * 32.)]
+            }
+            "columns" => {
+                let x = left + 10.;
+                [(x, files.rows_top() + 0.5 * ROW_H), (x, files.rows_top() + 1.5 * ROW_H), (x, files.rows_top() + 5. * ROW_H)]
+            }
+            _ => {
+                // the strip's thumbnails, and the large preview above them
+                let y = files.bottom() - 10.;
+                [(left + 0.5 * STRIP_CELL, y), (left + 1.5 * STRIP_CELL, y), (files.side() + 200., files.body_top() + 50.)]
+            }
+        };
+        assert_eq!(files.item_at(points[0].0, points[0].1), Some(0), "{view}: the first point is on the folder");
+        assert_eq!(files.item_at(points[1].0, points[1].1), Some(1), "{view}: the second point is on the file");
+        assert_eq!(files.item_at(points[2].0, points[2].1), None, "{view}: the third point is on no item");
+        (files, points)
+    }
+
+    fn drop_ctx() -> Ctx {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = bifrost_app::proto::Configure { w: 960, h: 630, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: false, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(springboard::font::Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    /// E2E8 09h: a file dragged from another Files window onto the rows of a list view stayed where it was. In every
+    /// view a drop on a folder goes into that folder, and a drop on a file or on the empty part goes into the folder
+    /// the window shows.
+    #[test]
+    fn a_drop_from_another_files_window_lands_in_every_view() {
+        let root = scratch("sibling");
+        let (shown, sub) = (root.join("b"), root.join("b/sub"));
+        for view in DROP_VIEWS {
+            let (mut files, [on_folder, on_file, on_empty]) = drop_window(&root, view);
+            files.drag_from_sibling(0x8000_0041, vec![root.join("src/d4.txt")]);
+            files.dragging = true;
+            assert_eq!(files.drop_target_at(on_folder.0, on_folder.1), Some(sub.clone()), "{view}: a folder takes the drop");
+            assert_eq!(files.drop_target_at(on_file.0, on_file.1), Some(shown.clone()), "{view}: a file's row is the window's folder");
+            assert_eq!(files.drop_target_at(on_empty.0, on_empty.1), Some(shown.clone()), "{view}: the empty part is the window's folder");
+            // a selection the window happens to have is not what is dragged
+            files.selection = vec![0, 1];
+            assert_eq!(files.drop_target_at(on_folder.0, on_folder.1), Some(sub.clone()), "{view}: a selected folder still takes it");
+            assert_eq!(files.drop_target_at(on_file.0, on_file.1), Some(shown.clone()), "{view}: and so does a selected file's row");
+            // the items are in the folder shown already: nowhere to drop them but a folder
+            files.selection.clear();
+            files.fx.drag_paths = vec![shown.join("note.txt")];
+            assert_eq!(files.drop_target_at(on_file.0, on_file.1), None, "{view}: nothing moves within its own folder");
+            assert_eq!(files.drop_target_at(on_folder.0, on_folder.1), Some(sub.clone()), "{view}: but into a folder of it");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Files another app drags over the window: the same targets, in every view.
+    #[test]
+    fn a_drop_from_another_app_lands_in_every_view() {
+        let root = scratch("foreign");
+        let (shown, sub) = (root.join("b"), root.join("b/sub"));
+        for view in DROP_VIEWS {
+            let (mut files, [on_folder, on_file, on_empty]) = drop_window(&root, view);
+            // the other app's session is over the window; its files arrive as grants, so the window knows no paths
+            files.dnd.foreign = Some(0x8000_0042);
+            files.dnd.foreign_items = 1;
+            files.dragging = true;
+            assert_eq!(files.drop_target_at(on_folder.0, on_folder.1), Some(sub.clone()), "{view}: a folder takes the drop");
+            assert_eq!(files.drop_target_at(on_file.0, on_file.1), Some(shown.clone()), "{view}: a file's row is the window's folder");
+            assert_eq!(files.drop_target_at(on_empty.0, on_empty.1), Some(shown.clone()), "{view}: the empty part is the window's folder");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The window's own drag: let go over one of the dragged items nothing moves, over another file of the same
+    /// folder nothing moves either, and the rows of a search take a drop on a folder only.
+    #[test]
+    fn a_windows_own_drag_moves_nothing_onto_itself_or_within_its_folder() {
+        let root = scratch("own");
+        let (shown, sub) = (root.join("b"), root.join("b/sub"));
+        for view in DROP_VIEWS {
+            let (mut files, [on_folder, on_file, on_empty]) = drop_window(&root, view);
+            files.selection = vec![1];
+            files.dragging = true;
+            files.fx.drag_paths = vec![shown.join("note.txt")];
+            assert_eq!(files.drop_target_at(on_file.0, on_file.1), None, "{view}: on the dragged file itself");
+            assert_eq!(files.drop_target_at(on_empty.0, on_empty.1), None, "{view}: it is in this folder already");
+            assert_eq!(files.drop_target_at(on_folder.0, on_folder.1), Some(sub.clone()), "{view}: into the folder");
+            // search hits: a hit's row is not the folder that is searched
+            let (mut hits, [on_folder, on_file, _]) = drop_window(&root, view);
+            hits.hits = Some(hits.rows.clone());
+            hits.drag_from_sibling(0x8000_0043, vec![root.join("src/d4.txt")]);
+            assert_eq!(hits.drop_target_at(on_file.0, on_file.1), None, "{view}: a file among search hits takes no drop");
+            assert_eq!(hits.drop_target_at(on_folder.0, on_folder.1), Some(sub.clone()), "{view}: a folder among them does");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The columns view: a drop over a column of a folder above the open one goes into that column's folder, or into
+    /// the folder row under the pointer.
+    #[test]
+    fn in_the_columns_view_a_drop_goes_into_the_folder_of_the_column_under_the_pointer() {
+        let root = scratch("columns");
+        std::fs::write(root.join("top.txt"), "t").unwrap();
+        let (mut files, [on_folder, on_file, on_empty]) = drop_window(&root, "columns");
+        // the column of `root` left of the open folder's: the folders `a` and `b` (the open one) and a file
+        files.ancestors = vec![(root.clone(), vec![row(&root, "a", true), row(&root, "b", true), row(&root, "top.txt", false)])];
+        assert_eq!(files.ancestor_shown(), 1);
+        let (x0, top) = (files.side() + 16. + 10., files.rows_top());
+        for (name, paths, foreign) in [("another window", vec![root.join("src/d4.txt")], false), ("another app", Vec::new(), true)] {
+            if foreign {
+                files.dnd.sibling = None;
+                files.fx.drag_paths.clear();
+                files.dnd.foreign = Some(0x8000_0045);
+            } else {
+                files.drag_from_sibling(0x8000_0044, paths);
+            }
+            files.dragging = true;
+            assert_eq!(files.drop_target_at(x0, top + 0.5 * ROW_H), Some(root.join("a")), "{name}: a folder row of the column");
+            assert_eq!(files.drop_target_at(x0, top + 1.5 * ROW_H), Some(root.join("b")), "{name}: the row of the open folder");
+            assert_eq!(files.drop_target_at(x0, top + 2.5 * ROW_H), Some(root.clone()), "{name}: a file's row is the column's folder");
+            assert_eq!(files.drop_target_at(x0, top + 6. * ROW_H), Some(root.clone()), "{name}: so is the empty part of the column");
+            // the open folder's own column is one column to the right
+            let x1 = x0 + files.vo.col_w;
+            assert_eq!(files.drop_target_at(x1, on_folder.1), Some(root.join("b/sub")), "{name}: a folder of the open column");
+            assert_eq!(files.drop_target_at(x1, on_file.1), Some(root.join("b")), "{name}: a file's row of the open column");
+            assert_eq!(files.drop_target_at(x1, on_empty.1), Some(root.join("b")), "{name}: the empty part of the open column");
+            // right of the columns, where a preview would be: the open folder
+            assert_eq!(files.drop_target_at(x1 + 2. * files.vo.col_w, on_empty.1), Some(root.join("b")), "{name}: beside the columns");
+        }
+        // items that are in a column's folder already do not drop on that column, and a dragged folder takes nothing
+        files.drag_from_sibling(0x8000_0046, vec![root.join("top.txt")]);
+        assert_eq!(files.drop_target_at(x0, top + 6. * ROW_H), None, "the item is in that folder already");
+        assert_eq!(files.drop_target_at(x0, top + 0.5 * ROW_H), Some(root.join("a")));
+        files.drag_from_sibling(0x8000_0047, vec![root.join("a")]);
+        assert_eq!(files.drop_target_at(x0, top + 0.5 * ROW_H), None, "a folder is not dropped into itself");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The whole way of the drop the tester made: the shell's hover and drop events for another window's session,
+    /// over a file's row of a list view.
+    #[test]
+    fn a_drop_on_a_list_row_of_another_window_moves_the_item_into_its_folder() {
+        let ctx = drop_ctx();
+        let root = scratch("perform");
+        let (mut files, [_, on_file, _]) = drop_window(&root, "list");
+        let session = 0x8000_0048;
+        let both = dragop::COPY | dragop::MOVE;
+        files.drag_from_sibling(session, vec![root.join("src/d4.txt")]);
+        assert!(files.drag_out_dest(&ctx, session, DragPhase::Updated, on_file.0, on_file.1, both, Vec::new()));
+        assert_eq!(files.drop_target, Some(root.join("b")), "the hover has a target: the shell is answered with the move");
+        assert!(files.fx.spring.is_none(), "the folder shown does not spring open under the drag");
+        assert!(files.drag_out_dest(&ctx, session, DragPhase::Perform, on_file.0, on_file.1, both, Vec::new()));
+        assert!(matches!(files.work.as_ref().map(|w| w.kind), Some(JobKind::Transfer(Op::Move))), "the drop moves the item");
+        assert_eq!(files.work.as_ref().map(|w| w.dest.clone()), Some(root.join("b")));
+        assert_eq!(files.work.as_ref().map(|w| w.sources.clone()), Some(vec![root.join("src/d4.txt")]));
+        assert!(!files.dragging && files.dnd.foreign.is_none(), "the drag is over in this window");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn a_session_ended_before_any_dest_event_leaves_the_drag_in_the_window() {
         assert!(session_refused(false, true), "refused at once: the drag goes on in the window");
