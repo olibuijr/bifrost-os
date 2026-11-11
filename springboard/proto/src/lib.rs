@@ -790,7 +790,10 @@ pub enum ToApp {
     /// A dragging session moves over the app's window (`NativeDraggingDestination`); `x`, `y` are window-local points.
     /// `items` are sent with `Entered` and `Perform`. For `Perform` the files of the items arrive first as `DocBatch`
     /// and `DocGranted` with `request == session`. Answer `Entered` and `Updated` with `ToShell::DragReply`.
-    DragDest { session: u32, phase: DragPhase, x: f32, y: f32, allowed: u8, items: Vec<DragItem> },
+    /// `window` is the window of the app the pointer is over (0 the main window, else the id of `WindowOpen`), in whose
+    /// pixels `x`, `y` are; a shell built before the field (up to 0.10.51) leaves it out and it reads as `None`. It is
+    /// the last field on the wire, so an app built before it reads the message as it always did.
+    DragDest { session: u32, phase: DragPhase, x: f32, y: f32, allowed: u8, items: Vec<DragItem>, window: Option<u32> },
     /// The session this app started ended (`draggingSession(_:endedAt:operation:)`); `op` is 0 when nobody took it.
     DragEnded { session: u32, op: u8 },
 }
@@ -1774,6 +1777,13 @@ impl<'a> Reader<'a> {
             return Ok(ModifierFlags::EMPTY);
         }
         Ok(ModifierFlags::from_bits_truncate(self.u32()?))
+    }
+    /// A trailing `u32` that a sender built before the field left out: `None` at the end of the packet.
+    fn tail_u32(&mut self) -> Result<Option<u32>, DecodeError> {
+        if self.0.is_empty() {
+            return Ok(None);
+        }
+        self.u32().map(Some)
     }
     fn items(&mut self) -> Result<Vec<(String, Vec<u8>)>, DecodeError> {
         let n = self.u32()? as usize;

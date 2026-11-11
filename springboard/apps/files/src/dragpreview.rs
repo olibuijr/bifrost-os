@@ -10,7 +10,10 @@ use springboard::files::fs::Kind;
 /// The canvas side in pixels; the shell's preview limit is half of it.
 const CANVAS: i32 = 64;
 
-/// The most device pixels a side of the drag image has (the shell's limit for one, `proto::rich::MAX_DRAG_IMAGE`).
+/// The most device pixels a side of the drag image has (the shell's limit for one, `proto::rich::MAX_DRAG_IMAGE`,
+/// 512): more than the largest icon of the icon view needs on a display of scale 3 (`GRID_ICON_MAX` 160 pt, 480 px),
+/// so the image is never smaller than the icon that was lifted. The limit was 128 px up to 0.10.51, which shrank
+/// every icon of more than 64 pt on a display of scale 2.
 pub(crate) const MAX_IMAGE_PX: u32 = bifrost_app::proto::rich::MAX_DRAG_IMAGE;
 /// The least side of the drag image, in points: a list or column row's small icon is lifted at this size, so the
 /// image is not lost under the pointer.
@@ -189,8 +192,14 @@ mod tests {
         assert_eq!(image_side(64., 1.0), 64);
         assert_eq!(image_side(64., 1.5625), 100);
         assert_eq!(image_side(16., 2.0), 64, "a row's small icon is lifted at the least size");
-        assert_eq!(image_side(128., 2.0), MAX_IMAGE_PX, "never more than the shell takes");
-        assert_eq!(MAX_IMAGE_PX, 128);
+        assert_eq!(image_side(96., 1.5625), 150, "a 96 pt icon is lifted whole (the old limit of 128 px shrank it)");
+        assert_eq!(image_side(128., 2.0), 256);
+        // the largest icon the view draws, on the densest display, is still under the limit
+        let largest = crate::views::icon::GRID_ICON_MAX;
+        assert_eq!(image_side(largest, 3.0), 480);
+        assert!(image_side(largest, 3.0) <= MAX_IMAGE_PX);
+        assert_eq!(image_side(400., 2.0), MAX_IMAGE_PX, "never more than the shell takes");
+        assert_eq!(MAX_IMAGE_PX, 512);
     }
 
     #[test]

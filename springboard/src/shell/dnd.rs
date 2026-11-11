@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 pub enum Zone {
     /// the Dock icon of the app with this icon key: the files open in it, as Open With does
     Dock(String),
-    /// the desktop: the files are copied into the account's Desktop folder
+    /// the desktop: the files are moved into the account's Desktop folder, or copied (`desktop_drop_op`)
     Desktop,
 }
 
@@ -39,6 +39,8 @@ pub enum Zone {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Target {
     pub slot: u8,
+    /// the app's window under the pointer: 0 its main window, else the id of the extra window (`WindowOpen { id }`)
+    pub window: u32,
     pub x: f32,
     pub y: f32,
 }
@@ -46,8 +48,8 @@ pub struct Target {
 /// What the shell must do after a pointer step.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Out {
-    /// send `DragDest` to `slot` (items are attached for `Entered` and `Perform`)
-    Dest { slot: u8, phase: DragPhase, x: f32, y: f32 },
+    /// send `DragDest` to `slot`, for its window `window` (items are attached for `Entered` and `Perform`)
+    Dest { slot: u8, window: u32, phase: DragPhase, x: f32, y: f32 },
     /// tell the source the session ended with `op`
     Ended { op: u8 },
 }
@@ -55,6 +57,8 @@ pub enum Out {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Over {
     slot: u8,
+    /// the window of the app in `slot` the pointer is over (0 its main window)
+    window: u32,
     x: f32,
     y: f32,
     /// the operation the destination last replied with, as it sent it (negotiated against the mask when read)
@@ -96,6 +100,20 @@ pub fn modifier_mask(allowed: u8, mods: ModifierFlags) -> u8 {
 /// of some item conforms to a registered type.
 pub fn accepts(registered: &[String], items: &[DragItem]) -> bool {
     items.iter().any(|i| i.types.iter().any(|t| registered.iter().any(|r| bifrost_ui::uttype::conforms(t, r))))
+}
+
+/// What a drop of files on the desktop does, from the source's mask as the held keys narrow it (`Session::mask`) and
+/// whether every file is on the volume of the Desktop folder: on the same volume the files move there, as a drop on
+/// a folder of the same disk does, and Option (a mask of copy alone) copies; from another volume they are copied,
+/// unless Command asks for the move. 0 when the source allows neither.
+pub fn desktop_drop_op(mask: u8, same_volume: bool) -> u8 {
+    if mask & dragop::MOVE != 0 && (same_volume || mask & dragop::COPY == 0) {
+        dragop::MOVE
+    } else if mask & dragop::COPY != 0 {
+        dragop::COPY
+    } else {
+        0
+    }
 }
 
 /// The operation a reply selects: the destination's bit if the source allows it, else none.
@@ -157,20 +175,22 @@ impl Session {
         match (self.over, target) {
             (None, None) => {}
             (None, Some(t)) => {
-                self.over = Some(Over { slot: t.slot, x: t.x, y: t.y, op: 0 });
-                out.push(Out::Dest { slot: t.slot, phase: DragPhase::Entered, x: t.x, y: t.y });
+                self.over = Some(Over { slot: t.slot, window: t.window, x: t.x, y: t.y, op: 0 });
+                out.push(Out::Dest { slot: t.slot, window: t.window, phase: DragPhase::Entered, x: t.x, y: t.y });
             }
-            (Some(o), Some(t)) if o.slot == t.slot => {
+            (Some(o), Some(t)) if o.slot == t.slot && o.window == t.window => {
                 self.over = Some(Over { x: t.x, y: t.y, ..o });
-                out.push(Out::Dest { slot: t.slot, phase: DragPhase::Updated, x: t.x, y: t.y });
+                out.push(Out::Dest { slot: t.slot, window: t.window, phase: DragPhase::Updated, x: t.x, y: t.y });
             }
+            // another window, of another app or of the same one: the old one is left and the new one entered, and
+            // the old one's answer does not carry over
             (Some(o), Some(t)) => {
-                out.push(Out::Dest { slot: o.slot, phase: DragPhase::Exited, x: o.x, y: o.y });
-                self.over = Some(Over { slot: t.slot, x: t.x, y: t.y, op: 0 });
-                out.push(Out::Dest { slot: t.slot, phase: DragPhase::Entered, x: t.x, y: t.y });
+                out.push(Out::Dest { slot: o.slot, window: o.window, phase: DragPhase::Exited, x: o.x, y: o.y });
+                self.over = Some(Over { slot: t.slot, window: t.window, x: t.x, y: t.y, op: 0 });
+                out.push(Out::Dest { slot: t.slot, window: t.window, phase: DragPhase::Entered, x: t.x, y: t.y });
             }
             (Some(o), None) => {
-                out.push(Out::Dest { slot: o.slot, phase: DragPhase::Exited, x: o.x, y: o.y });
+                out.push(Out::Dest { slot: o.slot, window: o.window, phase: DragPhase::Exited, x: o.x, y: o.y });
                 self.over = None;
             }
         }
@@ -192,11 +212,11 @@ impl Session {
         match self.over {
             Some(o) if op != 0 || o.slot == self.source => {
                 self.performing = Some(o.slot);
-                vec![Out::Dest { slot: o.slot, phase: DragPhase::Perform, x: o.x, y: o.y }]
+                vec![Out::Dest { slot: o.slot, window: o.window, phase: DragPhase::Perform, x: o.x, y: o.y }]
             }
             Some(o) => {
                 self.over = None;
-                vec![Out::Dest { slot: o.slot, phase: DragPhase::Exited, x: o.x, y: o.y }, Out::Ended { op: 0 }]
+                vec![Out::Dest { slot: o.slot, window: o.window, phase: DragPhase::Exited, x: o.x, y: o.y }, Out::Ended { op: 0 }]
             }
             None => vec![Out::Ended { op: 0 }],
         }
@@ -214,7 +234,7 @@ impl Session {
     pub fn cancel(&mut self) -> Vec<Out> {
         let mut out = Vec::new();
         if let Some(o) = self.over.take() {
-            out.push(Out::Dest { slot: o.slot, phase: DragPhase::Exited, x: o.x, y: o.y });
+            out.push(Out::Dest { slot: o.slot, window: o.window, phase: DragPhase::Exited, x: o.x, y: o.y });
         }
         out.push(Out::Ended { op: 0 });
         out
@@ -342,7 +362,9 @@ impl super::Shell {
             return None;
         }
         let b = w.body(&m);
-        Some(Target { slot, x: x - b.x as f32, y: y - b.y as f32 })
+        // the app's own id of the window: the app resolves the drop in that window, at a point in its pixels
+        let window = w.app.window_id().map_or(0, u32::from);
+        Some(Target { slot, window, x: x - b.x as f32, y: y - b.y as f32 })
     }
 
     /// Pointer events while a session is live. None when there is no session (the event goes on).
@@ -411,9 +433,10 @@ impl super::Shell {
 
     /// Hands the session's items to `zone`; returns the operation the source hears (0 when nothing took them). The Dock icon
     /// opens its app with the text and URLs (`ToApp::Open`, as a share does) and with the files (`inbound_files`); the desktop
-    /// copies the files and folders in the background (`dnd_copy_to_desktop`).
+    /// moves or copies the files and folders in the background (`dnd_drop_on_desktop`).
     fn dnd_zone_drop(&mut self, sess: &Session, zone: Zone, t: f64) -> u8 {
-        if sess.allowed & dragop::COPY == 0 {
+        // a Dock icon opens copies of the items; the desktop decides between a move and a copy itself
+        if zone != Zone::Desktop && sess.allowed & dragop::COPY == 0 {
             return 0;
         }
         let grants: Vec<GrantId> = sess.items.iter().filter_map(|i| if let Payload::File { grant, .. } = &i.payload { Some(*grant) } else { None }).collect();
@@ -451,41 +474,45 @@ impl super::Shell {
                     0
                 }
             }
-            Zone::Desktop => {
-                if self.dnd_copy_to_desktop(&sess.source_app, &grants) {
-                    dragop::COPY
-                } else {
-                    0
-                }
-            }
+            Zone::Desktop => self.dnd_drop_on_desktop(&sess.source_app, &grants, sess.mask()),
         }
     }
 
-    /// Copies the files and folders of `grants` (made for `source_app`) into the account's Desktop folder, made if missing.
-    /// The copy runs on its own thread, so the shell keeps drawing: a folder is copied with everything in it (`batch`), and
-    /// a name already there gets a number. The copy reads the paths, so the grants are not needed after this. True when the
-    /// copy was started.
+    /// Puts the files and folders of `grants` (made for `source_app`) into the account's Desktop folder, made if missing:
+    /// moved when they are on the Desktop's volume, copied from another one or when `mask` (the source's operations
+    /// under the held keys) leaves only the copy (`desktop_drop_op`). The work runs on its own thread, so the shell
+    /// keeps drawing: a folder goes with everything in it (`batch`), a name already there gets a number, and an item
+    /// that is on the Desktop already stays where it is. It reads the paths, so the grants are not needed after this.
+    /// Returns the operation started, 0 for none.
     #[cfg(not(feature = "desktop-wayland"))]
-    fn dnd_copy_to_desktop(&mut self, _source_app: &str, _grants: &[GrantId]) -> bool {
-        false
+    fn dnd_drop_on_desktop(&mut self, _source_app: &str, _grants: &[GrantId], _mask: u8) -> u8 {
+        0
     }
 
     #[cfg(feature = "desktop-wayland")]
-    fn dnd_copy_to_desktop(&mut self, source_app: &str, grants: &[GrantId]) -> bool {
-        let Some(b) = self.doc_broker() else { return false };
+    fn dnd_drop_on_desktop(&mut self, source_app: &str, grants: &[GrantId], mask: u8) -> u8 {
+        use std::os::unix::fs::MetadataExt;
+        let Some(b) = self.doc_broker() else { return 0 };
         let home = b.opener.home().to_path_buf();
         let sources: Vec<PathBuf> = grants.iter().filter_map(|g| b.grants.get(source_app, g).ok()).map(|g| home.join(&g.path)).filter(|p| p.symlink_metadata().is_ok()).collect();
         if sources.is_empty() {
-            return false;
+            return 0;
         }
         let desktop = home.join("Desktop");
         let _ = std::fs::create_dir_all(&desktop);
+        let volume = desktop.metadata().map(|m| m.dev()).ok();
+        let same_volume = volume.is_some() && sources.iter().all(|p| p.symlink_metadata().map(|m| m.dev()).ok() == volume);
+        let op = match desktop_drop_op(mask, same_volume) {
+            dragop::MOVE => batch::Op::Move,
+            dragop::COPY => batch::Op::Copy,
+            _ => return 0,
+        };
         crate::bare::sys::spawn_named("desktop-drop", move || {
             let mut keep_both = |_: &Path| Some((batch::Resolution::KeepBoth, true));
             let mut tick = |_: &batch::Progress| true;
-            batch::transfer(batch::Op::Copy, &sources, &desktop, &mut keep_both, &mut tick);
+            batch::transfer(op, &sources, &desktop, &mut keep_both, &mut tick);
         });
-        true
+        if op == batch::Op::Move { dragop::MOVE } else { dragop::COPY }
     }
 
     /// The grants a drag made for its file items go when the drag ends. The destinations' own grants stay.
@@ -507,7 +534,7 @@ impl super::Shell {
     fn dnd_apply(&mut self, outs: Vec<Out>) {
         for out in outs {
             match out {
-                Out::Dest { slot, phase, x, y } => {
+                Out::Dest { slot, window, phase, x, y } => {
                     let Some(s) = self.dnd.session.as_ref() else { continue };
                     let (id, allowed, source_app, source) = (s.id, s.mask(), s.source_app.clone(), s.source);
                     let mut items = Vec::new();
@@ -519,13 +546,13 @@ impl super::Shell {
                         if items.is_empty() {
                             // nothing could be handed over: the drop fails
                             let outs = self.dnd.session.as_mut().map(|s| s.performed(false)).unwrap_or_default();
-                            self.ext_send(slot as usize, &ToApp::DragDest { session: id, phase: DragPhase::Exited, x, y, allowed, items: Vec::new() });
+                            self.ext_send(slot as usize, &ToApp::DragDest { session: id, phase: DragPhase::Exited, x, y, allowed, items: Vec::new(), window: Some(window) });
                             self.dnd_apply(outs);
                             continue;
                         }
                     }
                     let _ = source;
-                    self.ext_send(slot as usize, &ToApp::DragDest { session: id, phase, x, y, allowed, items });
+                    self.ext_send(slot as usize, &ToApp::DragDest { session: id, phase, x, y, allowed, items, window: Some(window) });
                 }
                 Out::Ended { op } => {
                     if let Some(s) = self.dnd.session.take() {
@@ -665,10 +692,17 @@ mod tests {
         Session::new(INBOUND | 1, 0, "src", allowed, items, DragPreview::default())
     }
     fn at(slot: u8, x: f32, y: f32) -> Option<Target> {
-        Some(Target { slot, x, y })
+        Some(Target { slot, window: 0, x, y })
     }
     fn dest(slot: u8, phase: DragPhase, x: f32, y: f32) -> Out {
-        Out::Dest { slot, phase, x, y }
+        Out::Dest { slot, window: 0, phase, x, y }
+    }
+    /// The pointer over window `window` of the app in `slot`.
+    fn in_window(slot: u8, window: u32, x: f32, y: f32) -> Option<Target> {
+        Some(Target { slot, window, x, y })
+    }
+    fn dest_in(slot: u8, window: u32, phase: DragPhase, x: f32, y: f32) -> Out {
+        Out::Dest { slot, window, phase, x, y }
     }
     fn all(_: u8) -> bool {
         true
@@ -752,6 +786,28 @@ mod tests {
     }
 
     #[test]
+    fn a_drag_between_two_windows_of_one_app_leaves_one_and_enters_the_other() {
+        // the source is the main window of the app in slot 0; window 3 is a second window of the same app
+        let mut s = session(dragop::COPY | dragop::MOVE, vec![png()]);
+        assert_eq!(s.moved(in_window(0, 0, 10.0, 20.0), ALL), vec![dest_in(0, 0, DragPhase::Entered, 10.0, 20.0)]);
+        s.reply(0, dragop::MOVE);
+        assert_eq!(
+            s.moved(in_window(0, 3, 4.0, 5.0), ALL),
+            vec![dest_in(0, 0, DragPhase::Exited, 10.0, 20.0), dest_in(0, 3, DragPhase::Entered, 4.0, 5.0)],
+            "the same app, another window: the events name the window and carry its own coordinates"
+        );
+        assert_eq!(s.operation(), 0, "the first window's answer does not stand for the second");
+        assert_eq!(s.moved(in_window(0, 3, 6.0, 7.0), ALL), vec![dest_in(0, 3, DragPhase::Updated, 6.0, 7.0)]);
+        // the drop is the app's own: it performs in the window under the pointer, whatever it last replied
+        assert_eq!(s.release(), vec![dest_in(0, 3, DragPhase::Perform, 6.0, 7.0)]);
+        assert_eq!(s.performing, Some(0));
+        // given up over the second window, that window is the one left
+        let mut s = session(dragop::COPY, vec![png()]);
+        s.moved(in_window(0, 3, 1.0, 1.0), ALL);
+        assert_eq!(s.cancel(), vec![dest_in(0, 3, DragPhase::Exited, 1.0, 1.0), Out::Ended { op: 0 }]);
+    }
+
+    #[test]
     fn modifier_keys_narrow_the_mask_and_the_operation() {
         let both = dragop::COPY | dragop::MOVE;
         assert_eq!(modifier_mask(both, ModifierFlags::EMPTY), both);
@@ -769,6 +825,18 @@ mod tests {
         assert_eq!(s.operation(), 0, "a move reply does not stand while Option asks for a copy");
         s.reply(2, dragop::COPY);
         assert_eq!(s.operation(), dragop::COPY);
+    }
+
+    #[test]
+    fn a_drop_on_the_desktop_moves_on_the_same_volume_and_copies_otherwise() {
+        let both = dragop::COPY | dragop::MOVE;
+        assert_eq!(desktop_drop_op(both, true), dragop::MOVE, "the same disk: the file leaves its folder");
+        assert_eq!(desktop_drop_op(both, false), dragop::COPY, "another volume: a copy");
+        assert_eq!(desktop_drop_op(modifier_mask(both, ModifierFlags::OPTION), true), dragop::COPY, "Option copies");
+        assert_eq!(desktop_drop_op(modifier_mask(both, ModifierFlags::COMMAND), false), dragop::MOVE, "Command moves across volumes");
+        assert_eq!(desktop_drop_op(dragop::COPY, true), dragop::COPY, "a source that only offers copies");
+        assert_eq!(desktop_drop_op(dragop::LINK, true), 0);
+        assert_eq!(desktop_drop_op(0, true), 0);
     }
 
     #[test]
@@ -857,7 +925,8 @@ mod tests {
         let mut s = Session::new(1, 0, "a", dragop::COPY, vec![item], DragPreview { w: 2, h: 1, rgba: vec![9; 8] });
         assert_eq!(s.image_scale(2.0), 2.0, "a preview is in points: it is scaled to the display");
         // a size over the limit, or pixels that do not fill it, leave the preview
-        assert!(!s.set_device_image(129, 1, vec![0; 129 * 4]));
+        let over = bifrost_proto::rich::MAX_DRAG_IMAGE + 1;
+        assert!(!s.set_device_image(over, 1, vec![0; over as usize * 4]));
         assert!(!s.set_device_image(4, 4, vec![0; 3]));
         assert!(!s.device && s.preview.w == 2);
         // 128 by 128: a 64 pt icon on a display of scale 2

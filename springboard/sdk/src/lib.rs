@@ -997,6 +997,14 @@ pub trait App {
     fn drag(&mut self, _ctx: &Ctx, _ev: dnd::Event) -> bool {
         false
     }
+    /// A destination event of a drag (`dnd::Event::Dest`) with the window of the app the pointer is over: the main
+    /// window (`WindowId::MAIN`) or one the app opened, in whose pixels the event's point is. `None` when the shell
+    /// does not say (one up to 0.10.51): the event is then for the app as a whole, as `drag` always got it. The
+    /// default hands the event to `drag`, so an app with one drop window needs nothing; an app whose extra windows
+    /// take drops overrides this and finds the drop target in `window`. `Ended` events go to `drag`.
+    fn window_drag(&mut self, ctx: &Ctx, _window: Option<app_windows::WindowId>, ev: dnd::Event) -> bool {
+        self.drag(ctx, ev)
+    }
     /// State restoration (`NativeWindowRestoration`): the window's restoration identifier. `None` (the default) means the
     /// window is not restorable; the other restoration hooks are then never called. See `restoration`.
     fn restoration_identifier(&self) -> Option<&str> {

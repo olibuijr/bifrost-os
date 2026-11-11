@@ -1156,9 +1156,15 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         need_frame |= app.share_done(c, request, (!target.is_empty()).then_some(target));
                     }
                 }
-                ToApp::DragDest { session, phase, x, y, allowed, items } => {
+                ToApp::DragDest { session, phase, x, y, allowed, items, window } => {
                     if let Some(c) = &ctx {
-                        need_frame |= app.drag(c, crate::dnd::Event::Dest { session, phase, x, y, allowed, items });
+                        let window = window.map(crate::app_windows::WindowId);
+                        if crate::dnd::window_open(c, window) {
+                            need_frame |= app.window_drag(c, window, crate::dnd::Event::Dest { session, phase, x, y, allowed, items });
+                        } else if phase == crate::proto::DragPhase::Perform {
+                            // the window closed under the drag: nothing takes the drop, and the session must end
+                            crate::dnd::performed(c, session, false);
+                        }
                     }
                 }
                 ToApp::DragEnded { session, op } => {
