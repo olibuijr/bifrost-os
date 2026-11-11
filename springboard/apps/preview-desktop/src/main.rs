@@ -811,16 +811,29 @@ impl Viewer {
         self.unsaved_copy = None;
     }
 
-    /// Another document is to take the open one's place. When the open one has unsaved changes the question comes up
-    /// first (Save, Don't Save or Cancel, as at close and quit) and `next` waits for the answer; opening it at once
-    /// discarded the changes without a word. While a save is under way the document is what the save holds, which
-    /// reaches its file whatever opens meanwhile, so `next` opens at once.
+    /// Another document is to take the open one's place. When the open one has changes made in this run the question
+    /// comes up first (Save, Don't Save or Cancel, as at close and quit) and `next` waits for the answer; opening it
+    /// at once discarded the changes without a word. While a save is under way the document is what the save holds,
+    /// which reaches its file whatever opens meanwhile, so `next` opens at once.
+    ///
+    /// The document a cut-off save was recovered into (`recover_unfinished`) is put aside without a question while
+    /// nothing was changed in it since: its changes are in Viewer's copy, which stays in Open Recent and opens as an
+    /// edited document again, so nothing is discarded. That is the launch with a file to open: the person asked for
+    /// that file and gets it, under the alert that says where the changes of the other one are. A question about a
+    /// document they have not touched in this run took the alert's place and held their file back.
+    ///
+    /// The question never takes the place of that alert either: when it is due while the alert is up (the recovered
+    /// document was changed through the menu bar meanwhile), `next` waits and the question comes once the alert is
+    /// answered (`answer_save_alert`), one sheet after the other.
     fn open_next(&mut self, next: NextDocument) {
-        if self.edited() && !self.saving() {
-            self.ask_unsaved(Leaving::Open);
+        if !self.changed_in_this_run() || self.saving() {
+            self.open_now(next);
+        } else if self.save_alert.as_ref().is_some_and(|alert| alert.kind == AlertKind::Notice) {
+            self.drop_next();
             self.next_document = Some(next);
         } else {
-            self.open_now(next);
+            self.ask_unsaved(Leaving::Open);
+            self.next_document = Some(next);
         }
     }
 
@@ -1195,6 +1208,12 @@ impl Viewer {
             }
             // Cancel: the document stays as it is, and the one that was to take its place is given up
             (AlertKind::Unsaved(Leaving::Open), _) => self.drop_next(),
+            // OK: a document that waited behind the notice for the question about the open one's changes
+            (AlertKind::Notice, _) => {
+                if let Some(next) = self.next_document.take() {
+                    self.open_next(next);
+                }
+            }
             _ => {}
         }
     }
@@ -1320,9 +1339,16 @@ impl Viewer {
         Some(name_of(path))
     }
 
-    /// Whether File > Save has something to write: the document's own changes, or a picture's colour adjustment.
+    /// Whether File > Save has something to write: the changes made in this run, or the changes of a save the last
+    /// quit cut off, which are in Viewer's copy and not yet in the file (`recover_unfinished`).
     fn edited(&self) -> bool {
-        self.doc.as_ref().is_some_and(|d| d.edited() || (!d.is_pdf && self.adjust != Adjust::default()) || self.unsaved_copy.as_deref() == Some(d.path.as_path()))
+        self.changed_in_this_run() || self.doc.as_ref().is_some_and(|d| self.unsaved_copy.as_deref() == Some(d.path.as_path()))
+    }
+
+    /// Whether the document holds changes made in this run, which are nowhere but in the window: the document's own
+    /// changes, or a picture's colour adjustment. Another document taking its place would discard them.
+    fn changed_in_this_run(&self) -> bool {
+        self.doc.as_ref().is_some_and(|d| d.edited() || (!d.is_pdf && self.adjust != Adjust::default()))
     }
 
     /// Tells the shell the document's name and whether it has unsaved changes, when they changed: the Window menu
@@ -5771,7 +5797,8 @@ mod tests {
     }
 
     /// The alert about a save the last quit cut off stays up when the app was launched to open a file: that file
-    /// opens under it, and the copy that holds the changes is still an edited document when it is opened again.
+    /// opens under it with no question about the recovered document, which the person has not touched in this run,
+    /// and the copy that holds the changes is still an edited document when it is opened again.
     #[test]
     fn the_note_of_a_cut_off_save_stays_up_when_the_app_was_launched_with_a_file() {
         let (mut v, copy) = viewer_on_copy("recover-open");
@@ -5791,22 +5818,89 @@ mod tests {
         let other = v.data_dir.join("other.png");
         std::fs::write(&other, export::png_bytes(&Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] }).unwrap()).unwrap();
         let ctx = menu_ctx();
+        assert_eq!(v.window_title(), "b.png \u{2013} Edited", "the recovered copy is open until then");
         assert!(v.event(&ctx, Input::Open(other.display().to_string())));
         assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(other.clone()));
         assert_eq!(v.window_title(), "other.png");
+        assert!(v.next_document.is_none() && v.leave.is_none(), "nothing waits for a question");
         let sheet = v.save_sheet().expect("the alert is still up over the opened file");
         assert!(sheet.title.contains("b.png") && sheet.title.contains("was not saved"));
+        assert_eq!(sheet.default_button(), Some(ALERT_OK), "it is the notice, not a question about b.png");
+        assert_eq!(std::fs::read(&copy).unwrap(), saved, "the copy keeps the changes");
+        assert_eq!(v.recents.get(0), Some(other.as_path()));
+        assert_eq!(v.recents.get(1), Some(copy.as_path()), "and is in Open Recent");
         // Return is OK
         assert!(v.event(&ctx, Input::Key(KeyInput::Code(13))));
         assert!(v.save_alert.is_none());
-        // the copy still counts as unsaved when it is opened again
+        assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(other.clone()));
+        // the copy still counts as unsaved when it is opened again, by every way a file opens, with no question on the
+        // way there (other.png has no changes) nor on the way back (the copy was not changed in this run)
+        v.open_next(NextDocument::Path(copy.clone()));
+        assert_eq!(v.window_title(), "b.png \u{2013} Edited");
+        assert!(v.save_alert.is_none());
+        v.open_next(NextDocument::Path(other.clone()));
+        assert!(v.save_alert.is_none() && v.window_title() == "other.png");
         v.open_path(&copy);
         assert_eq!(v.window_title(), "b.png \u{2013} Edited");
+        // closing or quitting on it still asks: that is the last chance to write the changes into the file
+        assert!(!v.quit_requested(&ctx) && v.save_sheet().is_some_and(|s| s.default_button() == Some(ALERT_SAVE)));
+        v.answer_save_alert(ALERT_CANCEL);
+        // changed in this run it is asked about like any document
+        v.rotate(1);
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        assert!(v.save_sheet().is_some_and(|s| s.default_button() == Some(ALERT_SAVE)) && v.next_document.is_some());
+        assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(copy.clone()));
+        v.answer_save_alert(ALERT_CANCEL);
+        assert!(v.next_document.is_none() && v.edited());
         // nothing was kept (the app was gone before the picture was encoded): that is said in an alert too
         let mut v2 = Viewer::new();
         v2.data_dir = v.data_dir.clone();
         v2.recover_unfinished(copy.clone(), None);
         assert!(v2.save_sheet().is_some_and(|s| s.title.contains("were not saved") && s.default_button() == Some(ALERT_OK)));
+        cleanup(&v);
+    }
+
+    /// The question about unsaved changes never takes the place of the alert about a cut-off save, and never shows
+    /// with it: when the recovered document was changed while the alert is up (the menu bar still works) and another
+    /// file is to open, by any way a file opens, the file waits behind the alert and the question comes when the
+    /// alert is answered.
+    #[test]
+    fn the_question_about_changes_waits_for_the_note_of_a_cut_off_save() {
+        let (mut v, copy) = viewer_on_copy("recover-ask");
+        v.set_origin("b.png", Some(([9; 16], None)));
+        v.doc = None;
+        let written = v.data_dir.join("save/b.png");
+        std::fs::create_dir_all(written.parent().unwrap()).unwrap();
+        std::fs::write(&written, export::png_bytes(&Image { w: 3, h: 1, px: vec![0xff00_ff00; 3] }).unwrap()).unwrap();
+        v.recover_unfinished(copy.clone(), Some(written));
+        let other = v.data_dir.join("other.png");
+        let picture = export::png_bytes(&Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] }).unwrap();
+        std::fs::write(&other, &picture).unwrap();
+        let ctx = menu_ctx();
+        let notice = |v: &Viewer| v.save_sheet().is_some_and(|s| s.title.contains("was not saved") && s.default_button() == Some(ALERT_OK));
+        let question = |v: &Viewer| v.save_sheet().is_some_and(|s| s.title.contains("save the changes") && s.default_button() == Some(ALERT_SAVE));
+        let open_file = |v: &Viewer| v.doc.as_ref().map(|d| d.path.clone());
+        assert!(notice(&v));
+        // a change made from the menu bar while the alert is up
+        v.rotate(1);
+        // a file another app sends, Open Recent, a file the shell hands over: each waits, and the alert stays
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        assert!(notice(&v) && matches!(v.next_document, Some(NextDocument::Path(_))) && open_file(&v) == Some(copy.clone()));
+        v.recents.add(&other);
+        let at = (0..recents::MAX_RECENTS).find(|i| v.recents.get(*i) == Some(other.as_path())).expect("the file is in Open Recent");
+        assert!(v.open_menu(&ctx, MENU_RECENT + at as u32));
+        assert!(notice(&v) && open_file(&v) == Some(copy.clone()));
+        let handed = bifrost_app::Document { request: 77, grant: [7; 16], name: "other.png".into(), size: picture.len() as u64, mode: DocMode::Write, file: std::fs::File::open(&other).unwrap() };
+        assert!(v.document(&ctx, DocumentEvent::Opened(handed)));
+        assert!(notice(&v) && matches!(v.next_document, Some(NextDocument::Granted { .. })) && open_file(&v) == Some(copy.clone()));
+        assert!(v.edited() && v.doc.as_ref().unwrap().turns == [1], "the change is kept");
+        // OK: now the question, alone
+        assert!(v.event(&ctx, Input::Key(KeyInput::Code(13))));
+        assert!(question(&v) && v.next_document.is_some() && open_file(&v) == Some(copy.clone()));
+        // Cancel keeps the document and gives the file's grant back
+        v.answer_save_alert(ALERT_CANCEL);
+        assert!(v.save_alert.is_none() && v.next_document.is_none() && v.released.contains(&[7; 16]));
+        assert!(v.edited() && open_file(&v) == Some(copy.clone()));
         cleanup(&v);
     }
 

@@ -3,6 +3,7 @@
 ## 0.11.27
 
 - Opening another file while the document has unsaved changes asks whether to save them first: Save, Don't Save or Cancel. This covers a file opened from the file manager, File > Open, Open Recent, a dropped file and New from Clipboard. The other file used to open at once and the changes were lost.
+- A document whose save the last quit cut off is not asked about when another file opens and nothing was changed in it since: the file opens under the message, and the document stays in Open Recent as an edited one. When it was changed, the question comes after the message is answered, never together with it.
 - Don't Save and Revert put the fields of a PDF form back as the file has them; what was typed stayed in the fields.
 - In a narrow window no toolbar button is left out: Actual Size and Rotate Left move into the » menu at the end of the bar when there is no room for them. The last button keeps a margin to the window's edge. The window's minimum width is 760 points.
 - Saving a PNG keeps its physical pixel size, its text, its EXIF block and, for a picture without a colour profile, its gamma and colour space. Only the pixels were written before.
