@@ -932,7 +932,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-reminders"
-version = "1.20.15"
+version = "1.20.16"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
