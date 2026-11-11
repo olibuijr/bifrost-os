@@ -673,7 +673,7 @@ mod tests {
     use crate::shell::tests::ui;
 
     fn groups() -> Vec<Group> {
-        let n = |app, title: &str, id| Notification { image: None, app, title: title.into(), body: "body".into(), time: 0, id, thread: String::new() };
+        let n = |app, title: &str, id| Notification { image: None, app, title: title.into(), body: "body".into(), time: 0, id, thread: String::new(), reveal: None };
         vec![
             Group { app: AppId::Files, thread: String::new(), items: vec![n(AppId::Files, "Alarm", 9), n(AppId::Files, "Timer", 8), n(AppId::Files, "Older", 7), n(AppId::Files, "Oldest", 6), n(AppId::Files, "Ancient", 5)] },
             Group { app: AppId::Settings, thread: String::new(), items: vec![n(AppId::Settings, "Low Battery", 4)] },
@@ -879,7 +879,7 @@ mod tests {
             .map(|(i, a)| Group {
                 app: a.id,
                 thread: String::new(),
-                items: (0..counts[i % counts.len()]).map(|k| Notification { image: None, app: a.id, title: "Title".into(), body: "body".into(), time: 0, id: (i * 100 + k) as u64, thread: String::new() }).collect(),
+                items: (0..counts[i % counts.len()]).map(|k| Notification { image: None, app: a.id, title: "Title".into(), body: "body".into(), time: 0, id: (i * 100 + k) as u64, thread: String::new(), reveal: None }).collect(),
             })
             .collect()
     }

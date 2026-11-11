@@ -696,7 +696,7 @@ impl App {
         let acc = if light { self.accent.colours().1 } else { self.accent.colours().0 };
         let neutral = if light { pack(208, 208, 214, 255) } else { pack(58, 58, 60, 255) };
         let cx = self.w as f32 / 2.0;
-        let mut y = self.header_c(s, "Choose your look", "Pick light or dark, an accent colour and a wallpaper.", self.h as f32 * 0.05, fg, sub);
+        let mut y = self.header_c(s, "Choose your look", "Pick light or dark, an accent color and a wallpaper.", self.h as f32 * 0.05, fg, sub);
         let section = |this: &Self, s: &mut Surface, label: &str, row: usize, y: f32| {
             this.text(s, label, 13.0, Weight::Semibold, if this.look_row == row { acc } else { sub }, cx, y);
         };
@@ -719,7 +719,7 @@ impl App {
         }
         y += th + self.u(44.0);
         // accent colour
-        section(self, s, "Accent colour", 1, y);
+        section(self, s, "Accent color", 1, y);
         y += self.u(26.0);
         let n = Accent::ALL.len() as f32;
         let dgap = self.u(14.0);
@@ -744,7 +744,7 @@ impl App {
             self.hits.push((x - dgap / 2.0, y - self.u(4.0), d + dgap, d + self.u(8.0), Act::Tint(a)));
         }
         y += d + self.u(14.0);
-        let name = if self.accent == Accent::Multicolour { "Multicolour".to_string() } else { self.accent.label().to_string() };
+        let name = if self.accent == Accent::Multicolour { "Multicolor".to_string() } else { self.accent.label().to_string() };
         self.text(s, &name, 12.0, Weight::Regular, sub, cx, y);
         y += self.u(32.0);
         // wallpaper

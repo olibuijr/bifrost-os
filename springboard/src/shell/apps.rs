@@ -120,6 +120,22 @@ pub fn apps() -> &'static [AppDef] {
     Box::leak(v.into_boxed_slice())
 }
 
+/// The id the app list has for `app`: `app` itself when it is listed, else the installed package that stands in its
+/// place (`build_list` gives the entry of Files and of the browser the package's id, so the built-in id names no
+/// entry on a PC). A notification the shell posts for a built-in is filed under this id, or it has no icon, no name
+/// and no key to be saved under.
+pub fn listed_id(app: AppId) -> AppId {
+    listed_in(apps(), app)
+}
+
+/// `listed_id` over a given list (`all` as `build_list` makes it: the built-ins in `APPS` order, then the rest).
+fn listed_in(all: &[AppDef], app: AppId) -> AppId {
+    if all.iter().any(|a| a.id == app) {
+        return app;
+    }
+    APPS.iter().position(|a| a.id == app).and_then(|i| all.get(i)).map_or(app, |a| a.id)
+}
+
 /// The home-screen list for a set of installed apps: the built-in `APPS`, with the installed Files and Browser
 /// taking over their built-in entries (same position and icon key for Files), then every other installed app in
 /// slot order. Pure, so the Dock tests can model an install or an in-place update.
@@ -205,6 +221,18 @@ pub fn decode_icons(list: &[AppDef], size: usize) -> Vec<Option<Image>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_built_in_whose_place_a_package_took_is_listed_under_the_package() {
+        let files = APPS.iter().position(|a| a.id == AppId::Files).unwrap();
+        let mut pc = APPS.to_vec();
+        pc[files].id = AppId::External(3);
+        assert_eq!(listed_in(&pc, AppId::Files), AppId::External(3), "Files is the installed package on a PC");
+        assert_eq!(listed_in(&pc, AppId::Settings), AppId::Settings, "a listed built-in is itself");
+        assert_eq!(listed_in(&pc, AppId::External(3)), AppId::External(3));
+        assert_eq!(listed_in(&pc, AppId::External(9)), AppId::External(9), "an id that names nothing is left alone");
+        assert_eq!(listed_in(APPS, AppId::Files), AppId::Files, "without the package the built-in is listed");
+    }
 
     #[test]
     fn decode_icons_keeps_order_and_length() {

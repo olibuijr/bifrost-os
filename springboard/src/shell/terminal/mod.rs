@@ -97,7 +97,7 @@ const MENU: [&str; 39] = [
     "Move tab left",
     "Move tab right",
     "Copy Special: Text with Colors",
-    "Copy Special: Without Background Colour",
+    "Copy Special: Without Background Color",
     "Profile Editor",
 ];
 /// True for the Find line's "n of m" match count (secondary), false for "No matches" and warnings (red).

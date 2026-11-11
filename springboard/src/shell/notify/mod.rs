@@ -475,7 +475,10 @@ impl Shell {
 
     /// Like `notify_id`; with `banner` false the notification is only stored and listed (an app whose alert option
     /// was not granted), so no banner or wake is shown for it.
-    pub fn notify_id_banner(&mut self, n: Notification, banner: bool) -> u64 {
+    pub fn notify_id_banner(&mut self, mut n: Notification, banner: bool) -> u64 {
+        // a notice the shell posts for a built-in whose place an installed package took (Files on a PC) is that
+        // package's: under the built-in's id it had no icon and no name on its banner and was not saved
+        n.app = crate::shell::apps::listed_id(n.app);
         let app = n.app;
         let id = self.notify.store.push(n);
         // the app and the outcome only: the title and body stay out of the log
@@ -698,11 +701,16 @@ impl Shell {
     }
 
     /// Opens `app` from a banner, a lock-screen card or Notification Center:
-    /// whatever is on screen steps aside first.
+    /// whatever is on screen steps aside first. The click is taken as one on the app's newest notification.
     pub(super) fn open_from_notification(&mut self, app: AppId, t: f64) {
+        self.open_notification(None, app, t);
+    }
+
+    /// `open_from_notification` for a click on notification `id` of `app` (None: the app's newest one).
+    pub(super) fn open_notification(&mut self, id: Option<u64>, app: AppId, t: f64) {
         self.usernotif_tapped(app);
-        // the banner of a drop on the desktop shows the dropped item in Files (`dnd::desktop_drop_banner`)
-        if app == AppId::Files && self.dnd_desktop_reveal(t) {
+        // a notification that names a file shows it in Files ("Moved to Desktop", `dnd::desktop_drop_banner`)
+        if self.dnd_desktop_reveal(id, app, t) {
             return;
         }
         let link = app == AppId::Settings && self.notify.store.groups().iter().find(|g| g.app == app).is_some_and(|g| g.latest().title == "Software Update");

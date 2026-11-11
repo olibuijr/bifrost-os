@@ -921,7 +921,7 @@ fn screen_saver_options_are_saved_per_saver() {
     assert_eq!(prefs.get("ScreenSaver.Colours.speed"), None, "another saver's keys are untouched");
     // the next saver shows its own options
     pick(&mut st, &ui, &mut prefs, "Screen Saver", 1);
-    pick(&mut st, &ui, &mut prefs, "Colour Change", 2);
+    pick(&mut st, &ui, &mut prefs, "Color Change", 2);
     assert_eq!(prefs.get("ScreenSaver.Colours.speed"), Some("fast"));
     assert_eq!(prefs.get("ScreenSaver.Clock.move_every"), Some("30s"));
 }

@@ -364,6 +364,13 @@ struct RowImages {
     captions: Vec<Image>,
 }
 
+/// The fill of a pop-up menu drawn inside a page: the menu material's colour, opaque. `MATERIAL_MENU` is a straight-alpha
+/// tint meant to lie over a blurred backdrop; a page has none to give, and the tint alone let the rows behind the menu
+/// show through it (and, not being premultiplied, overflowed in Light). Its colour is the material's flat stand-in.
+fn popup_fill() -> u32 {
+    MATERIAL_MENU.now() | 0xff00_0000
+}
+
 /// The pop-up menu open on a row: the row, its menu, and the menu's label images and width in px.
 struct OpenPopup {
     g: usize,
@@ -737,6 +744,12 @@ impl NavBar {
     /// Whether the pill's forward half is enabled.
     pub fn has_forward(&self) -> bool {
         self.forward
+    }
+
+    /// Whether the bar is the desktop toolbar (the back and forward pill, the title beside it).
+    #[cfg(test)]
+    pub fn is_toolbar(&self) -> bool {
+        self.pill
     }
 
     /// Draws back and forward as one pill (the desktop toolbar). The title then sits left-aligned beside the pill in the
@@ -1530,11 +1543,14 @@ impl ListPage {
         Some((self.w as f32 - inset - w, top + y, w, len))
     }
 
-    /// The open pop-up menu: a translucent rounded card, a checkmark on the chosen item and the highlighted item filled.
+    /// The open pop-up menu: an opaque rounded card in the menu material's colour with the menus' hairline edge, a
+    /// checkmark on the chosen item and the highlighted item filled. The menu is drawn inside the page, where no blur
+    /// can be sampled under it, so its fill is opaque (`popup_fill`): the rows behind never read through it.
     fn draw_popup(&self, s: &mut Surface, ui: &Ui, pressed: Option<Hit>) {
         let (Some(p), Some((x, y, w, _))) = (&self.open, self.popup_rect(ui)) else { return };
         let (spans, total) = p.menu.rows(POPUP_ROW_PT, POPUP_SEP_PT, POPUP_PAD_PT);
-        s.fill_rrect(x, y, w, ui.pt(total), ui.pt(MENU_RADIUS_PT), MATERIAL_MENU.now());
+        s.fill_rrect(x, y, w, ui.pt(total), ui.pt(MENU_RADIUS_PT), popup_fill());
+        s.stroke_rrect(x, y, w, ui.pt(total), ui.pt(MENU_RADIUS_PT), ui.pt(0.5).max(1.0), super::ui::separator_now());
         for (k, item) in p.menu.items.iter().enumerate() {
             let (top, h) = spans[k];
             let ty = y + ui.pt(top);
@@ -2194,6 +2210,36 @@ mod tests {
         assert!(!page.popup_open());
         let (rx, rcy) = page.row_centre(&ui, 0, 1);
         assert_eq!(page.hit(&ui, rx, rcy), Some(Hit::Row(0, 1)), "closed, the row is tappable again");
+    }
+
+    #[test]
+    fn an_open_pop_up_menu_hides_what_is_behind_it() {
+        let ui = ui();
+        let choices = vec!["Bottom".to_string(), "Left".to_string(), "Right".to_string()];
+        let position = Item::new("Position").popup(choices, 0, Action::Pick(crate::shell::pages::Pick::AutoLock(0)));
+        let spec = Spec { id: PageId::AutoLock, title: "Dock".into(), large: false, groups: vec![Group::new(vec![position, Item::new("Animation").value("Funnel Effect")])] };
+        let mut page = ListPage::new(&ui, spec, 1200, 1920, Some("Back"));
+        assert!(page.open_popup(&ui, 0, 0));
+        assert_eq!(popup_fill() >> 24, 255, "the menu's fill is opaque");
+        // the menu drawn over black and over white: inside its edge the two results are the same pixel for pixel
+        let (mut dark, mut light) = (vec![pack(0, 0, 0, 255); 1200 * 1920], vec![pack(255, 255, 255, 255); 1200 * 1920]);
+        page.draw_popup(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut dark, y0: 0 }, &ui, None);
+        page.draw_popup(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut light, y0: 0 }, &ui, None);
+        let (x, y, w, h) = page.popup_rect(&ui).expect("open");
+        let inset = ui.pt(MENU_RADIUS_PT).ceil() + 2.0;
+        let (x0, x1, y0, y1) = ((x + inset) as usize, (x + w - inset) as usize, (y + inset) as usize, (y + h - inset) as usize);
+        assert!(x1 > x0 && y1 > y0, "the menu has an inside to compare");
+        for py in y0..y1 {
+            assert_eq!(dark[py * 1200 + x0..py * 1200 + x1], light[py * 1200 + x0..py * 1200 + x1], "row {py} shows what is behind the menu");
+        }
+        // and on the page itself the value of the row under the menu does not show: the menu's right-hand strip, past
+        // its labels, is the plain fill
+        let mut b = buf();
+        draw(&page, &ui, &mut b, None, 0.0);
+        let strip = (x + w - inset - ui.pt(4.0)) as usize;
+        for py in y0..y1 {
+            assert_eq!(b[py * 1200 + strip], dark[py * 1200 + strip], "row {py} of the menu's right-hand strip");
+        }
     }
 
     #[test]

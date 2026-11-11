@@ -23,7 +23,10 @@ use bifrost_ui::screensaver_manifest::SaverManifest;
 use bifrost_ui::Rect;
 
 /// The savers, in the order the Screen Saver page lists them. Index 0 is the default.
-pub const SAVERS: [&str; 3] = ["Clock", "Colours", "Black"];
+pub const SAVERS: [&str; 3] = ["Clock", "Colors", "Black"];
+/// The name each saver's options are saved under (`pref_key`), in `SAVERS` order. It does not follow the name the page
+/// shows: the second saver was listed as "Colours" before the interface took one spelling, and its saved options stay.
+const PREF_NAMES: [&str; 3] = ["Clock", "Colours", "Black"];
 /// Start After choices as (label, minutes); 0 is Never.
 pub const START_AFTER: [(&str, u32); 7] = [
     ("1 minute", 1),
@@ -49,7 +52,7 @@ pub fn saver_name(index: usize) -> &'static str {
 /// shows in Settings > Screen Saver. `SaverManifest::parse` turns each into the saver's view settings and sheet.
 const DESCRIPTORS: [&str; 3] = [
     "name = Clock\nframe_interval = 1\noption.show_date = bool true\noption.move_every = choice 30s,1m,5m 1m\noption.size = choice small,medium,large medium\n",
-    "name = Colours\nframe_interval = 0.1\noption.speed = choice slow,normal,fast normal\n",
+    "name = Colors\nframe_interval = 0.1\noption.speed = choice slow,normal,fast normal\n",
     "name = Black\n",
 ];
 
@@ -61,7 +64,7 @@ pub fn manifest(index: usize) -> Option<SaverManifest> {
 /// The preference key of one saver option. It has the form `ScreenSaver.<module>.<key>`, the same key space the SDK's
 /// per-module defaults use, so one module never reads another's values.
 pub fn pref_key(index: usize, key: &str) -> String {
-    format!("ScreenSaver.{}.{}", saver_name(index).replace('.', "_"), key)
+    format!("ScreenSaver.{}.{}", PREF_NAMES[index.min(PREF_NAMES.len() - 1)].replace('.', "_"), key)
 }
 
 /// The saver's configuration sheet with the values saved in `prefs` applied. A saved value the option refuses is
@@ -88,7 +91,7 @@ pub fn option_title(key: &str) -> String {
         "show_date" => "Show Date".to_string(),
         "move_every" => "Move Every".to_string(),
         "size" => "Clock Size".to_string(),
-        "speed" => "Colour Change".to_string(),
+        "speed" => "Color Change".to_string(),
         _ => capitalised(key),
     }
 }
@@ -386,6 +389,8 @@ mod tests {
     fn saved_option_values_load_and_bad_ones_are_skipped() {
         let mut prefs = Prefs::memory();
         assert_eq!(pref_key(0, "show_date"), "ScreenSaver.Clock.show_date");
+        assert_eq!(pref_key(1, "speed"), "ScreenSaver.Colours.speed", "the options saved under the saver's earlier name are kept");
+        assert_eq!(saver_name(1), "Colors");
         save_option(&mut prefs, 0, "show_date", "false");
         save_option(&mut prefs, 0, "move_every", "5m");
         save_option(&mut prefs, 0, "size", "huge");
