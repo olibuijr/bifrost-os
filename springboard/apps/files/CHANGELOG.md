@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.34.24
+
+- The Share and Tags buttons open when the mouse button goes down, as the toolbar's other pull-downs do: press, drag to a row and release chooses it, and a click leaves the menu or the Tags panel open (for Share this needs a shell that keeps a share menu open after the click that opened it). File > New Window (Cmd+N) opens at the home folder, in the view and at the size of the window in front; it opened at the folder of the window in front. Go to Folder starts with its path selected, so typing a path replaces it and the Right arrow keeps it to add to; Select All (Cmd+A), Cut, Copy, Paste and Undo act on the sheet's field instead of the folder behind it.
+
 ## 1.34.23
 
 - The text is in en_US spelling: "Click a color" in the tags panel of Get Info, "Canceled" for a stopped copy or server connection, and "unknown tag color" in the control socket error. The control socket fields are unchanged.

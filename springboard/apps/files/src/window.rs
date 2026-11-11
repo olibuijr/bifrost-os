@@ -351,9 +351,8 @@ impl Files {
         }
         if self.tag_panel {
             // a colour row toggles that colour on the selection; anywhere else closes the panel
-            let row = ((y - TAG_ROWS_TOP) / TAG_ROW).floor();
-            if x >= (self.side() + 16.) && x < self.w - 16. && (0. ..Tag::ALL.len() as f32).contains(&row) && y >= TAG_ROWS_TOP {
-                self.toggle_tag(Tag::ALL[row as usize]);
+            if let Some(tag) = self.tag_row_at(x, y) {
+                self.toggle_tag(tag);
             } else {
                 self.tag_panel = false;
                 self.revision += 1;
@@ -527,7 +526,7 @@ impl Files {
         let state = format!("{state}:{:?}", self.scope_bar.scope);
         let state = format!("{state}:{}", self.info.as_ref().map_or(0, |i| i.rows.len() * 10000 + i.mode.unwrap_or(0) as usize));
         let state = format!("{state}:{}", self.open_with.as_ref().map_or(0, |o| o.state()));
-        let state = format!("{state}:{:?}:{}", self.fx.goto.as_ref().map(|f| (f.to_string(), f.caret())), self.fx.copy_drag);
+        let state = format!("{state}:{:?}:{}", self.fx.goto.as_ref().map(|f| (f.to_string(), f.caret(), f.selection())), self.fx.copy_drag);
         let vo = &self.vo;
         let state = format!("{state}:{}:{}:{:?}:{}:{}:{}:{:?}:{}", vo.gallery, vo.asc, vo.group, vo.icon, vo.text, vo.col_w, vo.show, vo.expanded.len());
         // the clock style and the time zone the dates are written with: a change repaints every window that shows
