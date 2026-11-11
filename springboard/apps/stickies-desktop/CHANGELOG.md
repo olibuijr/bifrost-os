@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.11
+
+- The text is in en_US spelling: the Color menu, Text Color, Custom Color..., Capitalize, Undo Color, the Color arrangement, the hex color hints and the summary. Saved notes are unchanged.
+
 ## 0.10.10
 
 - A note that was moved, resized, collapsed or closed no longer leaves a copy of itself behind, on screen or under the pointer: clicks where a note used to be reach the window beneath, and only the notes themselves take clicks.

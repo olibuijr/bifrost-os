@@ -288,7 +288,7 @@ impl ColorMeter {
 
     /// The readout rows, label and value.
     pub fn rows(&self) -> Vec<(String, String)> {
-        let mut rows = vec![("Colour space".to_string(), self.space_title(self.space))];
+        let mut rows = vec![("Color space".to_string(), self.space_title(self.space))];
         match self.reading() {
             Some(r) => {
                 rows.push(("Hex".into(), color::hex(r.codes)));

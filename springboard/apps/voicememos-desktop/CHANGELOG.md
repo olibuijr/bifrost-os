@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.11.11
+
+- The text is in en_US spelling: Favorite, Favorites, No Favorites, Add to Favorites and Remove from Favorites.
+
 ## 1.11.10
 
 - The time a recording was made follows Settings > Date & Time > 24-Hour Time ("00:23", or "12:23 AM" with the switch off), at once when it changes. The day and time of a recording are read at the time zone's offset when it was made, so a recording from before a daylight saving change keeps its time. Durations are unchanged.

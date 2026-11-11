@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.13
+
+- The status line says "Export canceled" (en_US spelling).
+
 ## 0.5.12
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

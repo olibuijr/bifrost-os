@@ -878,7 +878,7 @@ pub fn plain_message(attachments: bool) -> &'static str {
     if attachments {
         "Text styles and attachments will be lost."
     } else {
-        "Text styles such as fonts and colours will be lost."
+        "Text styles such as fonts and colors will be lost."
     }
 }
 

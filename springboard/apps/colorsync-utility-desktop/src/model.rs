@@ -22,9 +22,9 @@ pub const CLASSES: &[(&str, &str)] = &[
     ("mntr", "Display device"),
     ("prtr", "Output device"),
     ("link", "Device link"),
-    ("spac", "Colour space"),
+    ("spac", "Color space"),
     ("abst", "Abstract"),
-    ("nmcl", "Named colour"),
+    ("nmcl", "Named color"),
 ];
 
 /// Colour spaces the specification defines, by signature. The n-colour spaces ('2CLR' to 'FCLR') are accepted by
@@ -36,7 +36,7 @@ const SPACES: &[(&str, &str)] = &[
     ("YCbr", "YCbCr"),
     ("Yxy ", "Yxy"),
     ("RGB ", "RGB"),
-    ("GRAY", "Greyscale"),
+    ("GRAY", "Grayscale"),
     ("HSV ", "HSV"),
     ("HLS ", "HLS"),
     ("CMYK", "CMYK"),
@@ -57,7 +57,7 @@ const TAG_NAMES: &[(&str, &str)] = &[
     ("gTRC", "Green tone curve"),
     ("rXYZ", "Red colorant"),
     ("rTRC", "Red tone curve"),
-    ("kTRC", "Grey tone curve"),
+    ("kTRC", "Gray tone curve"),
     ("wtpt", "Media white point"),
     ("bkpt", "Media black point"),
     ("chad", "Chromatic adaptation"),
@@ -335,13 +335,13 @@ impl Profile {
         if h.version.0 == 0 || h.version.0 > 5 {
             add(&mut out, Severity::Error, format!("the version {} is not defined", h.version_text()));
         } else if h.version.0 == 5 {
-            add(&mut out, Severity::Warning, "a version 5 (iccMAX) profile is not read by every colour engine");
+            add(&mut out, Severity::Warning, "a version 5 (iccMAX) profile is not read by every color engine");
         }
         if name_in(CLASSES, &h.class).is_none() {
             add(&mut out, Severity::Error, format!("the device class '{}' is not defined", h.class.trim_end()));
         }
         if !is_known_space(&h.space) {
-            add(&mut out, Severity::Error, format!("the colour space '{}' is not defined", h.space.trim_end()));
+            add(&mut out, Severity::Error, format!("the color space '{}' is not defined", h.space.trim_end()));
         }
         if h.pcs != "XYZ " && h.pcs != "Lab " {
             add(&mut out, Severity::Error, format!("the connection space '{}' is neither XYZ nor Lab", h.pcs.trim_end()));
@@ -386,7 +386,7 @@ impl Profile {
             }
         }
         if device && h.space == "GRAY" && !has("kTRC") {
-            add(&mut out, Severity::Error, "the greyscale profile has no 'kTRC' (Grey tone curve) tag");
+            add(&mut out, Severity::Error, "the grayscale profile has no 'kTRC' (Gray tone curve) tag");
         }
         if device && is_known_space(&h.space) && h.space != "RGB " && h.space != "GRAY" && !has("A2B0") {
             add(&mut out, Severity::Error, format!("the {} profile has no 'A2B0' device to PCS table", h.space.trim_end()));
@@ -438,7 +438,7 @@ pub fn header_rows(p: &Profile) -> Vec<(&'static str, String)> {
         ("Size", format!("{} bytes", h.size)),
         ("Version", h.version_text()),
         ("Device class", format!("{} ({})", class_name(&h.class), h.class.trim_end())),
-        ("Colour space", format!("{} ({})", space_name(&h.space), h.space.trim_end())),
+        ("Color space", format!("{} ({})", space_name(&h.space), h.space.trim_end())),
         ("Connection space", sig_text(&h.pcs)),
         (
             "Created",
@@ -475,7 +475,7 @@ pub fn class_name(sig: &str) -> &'static str {
 
 /// The name of a colour space signature.
 pub fn space_name(sig: &str) -> &'static str {
-    name_in(SPACES, sig).unwrap_or(if is_n_colour(sig) { "n-colour" } else { "Unknown space" })
+    name_in(SPACES, sig).unwrap_or(if is_n_colour(sig) { "n-color" } else { "Unknown space" })
 }
 
 /// The name of a tag the specification defines, or "Private or unnamed tag".
@@ -790,7 +790,7 @@ mod tests {
         assert_eq!(class_name("mntr"), "Display device");
         assert_eq!(class_name("zzzz"), "Unknown class");
         assert_eq!(space_name("RGB "), "RGB");
-        assert_eq!(space_name("2CLR"), "n-colour");
+        assert_eq!(space_name("2CLR"), "n-color");
         assert_eq!(tag_name("wtpt"), "Media white point");
         assert!(is_known_space("GRAY"));
         assert!(!is_known_space("ABCD"));

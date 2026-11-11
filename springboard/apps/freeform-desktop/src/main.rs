@@ -303,7 +303,7 @@ impl App for FreeformApp {
                     AppMenuItem::new(MENU_UNLOCK, "Unlock").key("cmd+alt+shift+l").enabled(flag(|c| c.can_unlock())),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_ALIGN_LEFT, "Align Left").enabled(two),
-                    AppMenuItem::new(MENU_ALIGN_CENTER, "Align Centre").enabled(two),
+                    AppMenuItem::new(MENU_ALIGN_CENTER, "Align Center").enabled(two),
                     AppMenuItem::new(MENU_ALIGN_RIGHT, "Align Right").enabled(two),
                     AppMenuItem::new(MENU_ALIGN_TOP, "Align Top").enabled(two),
                     AppMenuItem::new(MENU_ALIGN_MIDDLE, "Align Middle").enabled(two),

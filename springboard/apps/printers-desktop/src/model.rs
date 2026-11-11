@@ -803,7 +803,7 @@ pub const HELP: [(&str, &str); 6] = [
     ),
     (
         "Shortcuts and the widget",
-        "List Printers, Pause Printer, Resume Printer, Set Default Printer, Cancel Print Job and Print File are Shortcuts actions. The printers widget in Notification Centre shows what needs attention first.",
+        "List Printers, Pause Printer, Resume Printer, Set Default Printer, Cancel Print Job and Print File are Shortcuts actions. The printers widget in Notification Center shows what needs attention first.",
     ),
 ];
 

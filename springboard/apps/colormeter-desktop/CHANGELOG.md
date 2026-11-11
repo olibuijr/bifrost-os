@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.15
+
+- The text is in en_US spelling: "Color space" in the value rows, "color profile" in the profile message and "color" in the summary.
+
 ## 0.5.14
 
 - When the shell refuses a capture, the loupe shows the shell's reason ("Screen recording is off for Digital Color Meter.") instead of "Screen capture is not available".

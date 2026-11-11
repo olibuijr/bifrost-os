@@ -66,7 +66,7 @@ impl Transfer {
             Phase::Sending => format!("{} of {}", size_text(self.sent), size_text(self.file.size)),
             Phase::Sent => format!("Sent to {}", self.device_label),
             Phase::Failed(text) => text.clone(),
-            Phase::Cancelled => "Cancelled".into(),
+            Phase::Cancelled => "Canceled".into(),
         }
     }
 }

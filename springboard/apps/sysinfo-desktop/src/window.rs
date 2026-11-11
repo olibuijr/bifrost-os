@@ -367,7 +367,7 @@ impl SysInfo {
             return false;
         }
         if !self.loaded {
-            self.notice = Some("Reading the system profile was cancelled. Choose View > Refresh Information to read it again.".to_string());
+            self.notice = Some("Reading the system profile was canceled. Choose View > Refresh Information to read it again.".to_string());
         }
         true
     }

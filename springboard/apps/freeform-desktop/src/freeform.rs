@@ -1341,7 +1341,7 @@ impl Freeform {
             ToolbarItem::button(BAR_TEXT, "Text").in_group(1).selected(self.tool == Tool::Text),
             ToolbarItem::button(BAR_NOTE, "Note").in_group(1).selected(self.tool == Tool::Sticky),
             ToolbarItem::button(BAR_CONNECT, "Connect").in_group(1).selected(self.tool == Tool::Connect),
-            ToolbarItem::custom(BAR_COLORS, "Colours", WELL_PT * COLORS.len() as f32 + SPACE_S * 2.0),
+            ToolbarItem::custom(BAR_COLORS, "Colors", WELL_PT * COLORS.len() as f32 + SPACE_S * 2.0),
             ToolbarItem::flexible_space(),
             ToolbarItem::button(BAR_UNDO, "Undo").in_group(2).enabled(!self.undo.is_empty()),
             ToolbarItem::button(BAR_CLEAR, "Clear").in_group(2),

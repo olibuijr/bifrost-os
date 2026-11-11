@@ -187,8 +187,8 @@ fn undo_name(id: u32) -> Option<&'static str> {
         MENU_BOLD | MENU_ITALIC | MENU_UNDERLINE | MENU_STRIKE | MENU_OUTLINE | MENU_BIGGER | MENU_SMALLER | MENU_PASTE_STYLE | MENU_USE_DEFAULT => "Style",
         MENU_BASELINE_BASE..=82 | MENU_KERN_BASE..=85 | MENU_LIGATURE_BASE..=88 => "Style",
         MENU_SIZE_BASE..=8 => "Text Size",
-        MENU_INK_BASE..=64 => "Text Colour",
-        MENU_COLOUR_BASE..=15 => "Colour",
+        MENU_INK_BASE..=64 => "Text Color",
+        MENU_COLOUR_BASE..=15 => "Color",
         MENU_CUT => "Cut",
         MENU_PASTE | MENU_PASTE_PLAIN => "Paste",
         MENU_UPPER | MENU_LOWER | MENU_CAPITALISE => "Transformation",
@@ -838,7 +838,7 @@ impl StickiesApp {
             return false;
         }
         note.rgb = Some(rgb);
-        self.history.push("Colour", before);
+        self.history.push("Color", before);
         self.changed()
     }
 
@@ -1368,7 +1368,7 @@ impl StickiesApp {
                 AppMenuItem::submenu("Transformations"),
                 AppMenuItem::new(MENU_UPPER, "Make Upper Case").enabled(has_selection).depth(1),
                 AppMenuItem::new(MENU_LOWER, "Make Lower Case").enabled(has_selection).depth(1),
-                AppMenuItem::new(MENU_CAPITALISE, "Capitalise").enabled(has_selection).depth(1),
+                AppMenuItem::new(MENU_CAPITALISE, "Capitalize").enabled(has_selection).depth(1),
                 AppMenuItem::submenu("Speech"),
                 AppMenuItem::new(MENU_SPEAK_START, "Start Speaking").enabled(can_speak).depth(1),
                 AppMenuItem::new(MENU_SPEAK_STOP, "Stop Speaking").enabled(self.speaker.is_speaking()).depth(1),
@@ -1407,7 +1407,7 @@ impl StickiesApp {
             items.push(AppMenuItem::new(MENU_SIZE_BASE + i as u32, title).enabled(has_focus).checked(style.is_some_and(|s| s.size == size)));
         }
         items.push(AppMenuItem::separator());
-        items.push(AppMenuItem::submenu("Text Colour"));
+        items.push(AppMenuItem::submenu("Text Color"));
         for (i, ink) in Ink::ALL.iter().enumerate() {
             items.push(AppMenuItem::new(MENU_INK_BASE + i as u32, ink.name()).enabled(has_focus).checked(style.is_some_and(|s| s.ink == *ink)).depth(1));
         }
@@ -1429,8 +1429,8 @@ impl StickiesApp {
             .map(|(i, c)| AppMenuItem::new(MENU_COLOUR_BASE + i as u32, c.name()).enabled(has_focus).checked(colour == Some(*c)))
             .collect();
         items.push(AppMenuItem::separator());
-        items.push(AppMenuItem::new(MENU_COLOUR_CUSTOM, "Custom Colour...").enabled(has_focus).checked(note.is_some_and(|n| n.rgb.is_some())));
-        AppMenu { title: "Colour".into(), items }
+        items.push(AppMenuItem::new(MENU_COLOUR_CUSTOM, "Custom Color...").enabled(has_focus).checked(note.is_some_and(|n| n.rgb.is_some())));
+        AppMenu { title: "Color".into(), items }
     }
 
     fn window_menu(&self) -> AppMenu {
@@ -1914,7 +1914,7 @@ mod tests {
         assert!(app.colour_key(&KeyInput::Code(13)));
         assert!(app.colour_entry.is_none());
         assert_eq!(app.board.as_ref().unwrap().focused().unwrap().rgb, Some((10, 132, 255)));
-        assert_eq!(app.history.undo_title(), "Undo Colour");
+        assert_eq!(app.history.undo_title(), "Undo Color");
         assert!(app.undo());
         assert_eq!(app.board.as_ref().unwrap().focused().unwrap().rgb, None);
     }

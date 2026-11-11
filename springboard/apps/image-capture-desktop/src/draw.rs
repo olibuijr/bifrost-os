@@ -115,7 +115,7 @@ fn paint_scanner(p: &mut ImageCapture, s: &mut Surface, ui: &Ui, x0: f32, w: f32
     let settings: ScanSettings = p.model.settings();
     let rows = [
         ("Resolution", format!("{} dpi", settings.resolution_dpi)),
-        ("Colour", settings.color.label().to_string()),
+        ("Color", settings.color.label().to_string()),
         ("Format", settings.format.label().to_string()),
     ];
     for (k, (label, value)) in rows.iter().enumerate() {

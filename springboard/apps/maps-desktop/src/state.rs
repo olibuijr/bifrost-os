@@ -685,7 +685,7 @@ impl Maps {
             Some(p) => (p.title().to_string(), (p.lat, p.lon)),
             None => {
                 let (lat, lon) = self.view.centre();
-                ("Map centre".to_string(), (lat, lon))
+                ("Map center".to_string(), (lat, lon))
             }
         }
     }
@@ -953,7 +953,7 @@ impl Maps {
             (Some(h), _, _) if (h.lat, h.lon) != to => (h.title().to_string(), (h.lat, h.lon)),
             _ => {
                 let (lat, lon) = self.view.centre();
-                ("Map centre".to_string(), (lat, lon))
+                ("Map center".to_string(), (lat, lon))
             }
         };
         self.route_from = Some(from);
@@ -1230,7 +1230,7 @@ impl Maps {
                     (to, from) => {
                         self.profile = profile;
                         let (_, centre) = self.target();
-                        self.route_from = from.as_ref().and_then(at).or(Some(("Map centre".into(), centre)));
+                        self.route_from = from.as_ref().and_then(at).or(Some(("Map center".into(), centre)));
                         self.route_to = at(&to);
                         self.panel = Panel::Directions;
                         self.request_route()

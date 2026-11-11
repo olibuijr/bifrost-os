@@ -109,11 +109,11 @@ pub fn actions_from(move_to: &str, mark_read: &str, flag: &str) -> Result<Vec<Ac
     if !flag.trim().is_empty() {
         match color_named(flag) {
             Some(color) => actions.push(Action::Flag(color)),
-            None => return Err(format!("{} is not a flag colour", flag.trim())),
+            None => return Err(format!("{} is not a flag color", flag.trim())),
         }
     }
     if actions.is_empty() {
-        return Err("Choose what the rule does: a mailbox to move to, mark as read, or a flag colour".into());
+        return Err("Choose what the rule does: a mailbox to move to, mark as read, or a flag color".into());
     }
     Ok(actions)
 }
@@ -185,9 +185,9 @@ mod tests {
             actions_from("Receipts", "yes", "green").unwrap(),
             vec![Action::MoveTo("Receipts".into()), Action::MarkRead, Action::Flag(FlagColor::Green)]
         );
-        assert_eq!(actions_from("", "no", "").unwrap_err(), "Choose what the rule does: a mailbox to move to, mark as read, or a flag colour");
+        assert_eq!(actions_from("", "no", "").unwrap_err(), "Choose what the rule does: a mailbox to move to, mark as read, or a flag color");
         assert!(actions_from("", "maybe", "").unwrap_err().contains("yes or no"));
-        assert_eq!(actions_from("", "", "pink").unwrap_err(), "pink is not a flag colour");
+        assert_eq!(actions_from("", "", "pink").unwrap_err(), "pink is not a flag color");
     }
 
     #[test]

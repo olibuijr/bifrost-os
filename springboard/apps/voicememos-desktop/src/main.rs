@@ -176,7 +176,7 @@ impl App for VoiceMemosApp {
         }
 
         let mut library_items = vec![
-            AppMenuItem::new(voicememos::MENU_FAVORITE, "Favourite").key("cmd+d").checked(favorite).enabled(on),
+            AppMenuItem::new(voicememos::MENU_FAVORITE, "Favorite").key("cmd+d").checked(favorite).enabled(on),
             AppMenuItem::separator(),
             AppMenuItem::new(voicememos::MENU_NEW_FOLDER, "New Folder\u{2026}").key("cmd+shift+f"),
             AppMenuItem::new(voicememos::MENU_DELETE_FOLDER, "Delete Folder").enabled(in_folder),

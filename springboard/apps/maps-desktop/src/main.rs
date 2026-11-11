@@ -323,7 +323,7 @@ impl App for MapsApp {
                     AppMenuItem::separator(),
                     AppMenuItem::submenu("Distance Units"),
                     sub(item(w, Act::Units(UnitsSetting::Automatic), "Automatic", "")),
-                    sub(item(w, Act::Units(UnitsSetting::Kilometres), "Kilometres", "")),
+                    sub(item(w, Act::Units(UnitsSetting::Kilometres), "Kilometers", "")),
                     sub(item(w, Act::Units(UnitsSetting::Miles), "Miles", "")),
                     AppMenuItem::separator(),
                     item(w, Act::Measure, "Measure Distance", "cmd+shift+m"),

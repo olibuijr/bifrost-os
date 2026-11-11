@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.17
+
+- A stopped download says "Canceled" in the downloads list (en_US spelling); the control socket still reports the state as before.
+
 ## 0.17.16
 
 - A tab that is waiting for its first frame (just selected, or coming back after its memory was freed) shows the background its page had, not the window colour: a light page in the dark appearance no longer flashes dark when its tab is selected. A tab that was never drawn still shows the window colour of the current appearance.

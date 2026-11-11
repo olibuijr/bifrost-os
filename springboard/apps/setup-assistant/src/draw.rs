@@ -59,7 +59,7 @@ pub fn body(w: &Setup) -> Vec<String> {
         }
         Step::Accessibility => vec!["Allow a quick shortcut that starts the accessibility features.".into()],
         Step::Account => vec![format!("Signed in as {} ({}).", w.account.0, w.account.1), "You can change the picture and password in Settings.".into()],
-        Step::Appearance => vec!["Choose the look of the desktop and the colour that tints buttons, switches and selections.".into()],
+        Step::Appearance => vec!["Choose the look of the desktop and the color that tints buttons, switches and selections.".into()],
         Step::Privacy => vec![
             "Location Services lets apps use your location.".into(),
             "Analytics & Diagnostics sends crash reports to the developer.".into(),
@@ -88,7 +88,7 @@ pub fn paint(w: &mut Setup, s: &mut Surface, ui: &Ui) {
 
     if w.step == Step::Appearance {
         let y = CONTENT_Y + BTN_PT + GAP_PT + 40.0 - 26.0;
-        text_mid(&mut w.labels, s, ui, "Accent colour", MAC_CALLOUT_PT, Weight::Semibold, LABEL.now(), PAD_PT, y, cw);
+        text_mid(&mut w.labels, s, ui, "Accent color", MAC_CALLOUT_PT, Weight::Semibold, LABEL.now(), PAD_PT, y, cw);
     }
 
     for item in w.items() {

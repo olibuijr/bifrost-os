@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.13
+
+- The app is named Color Utility, and its text is in en_US spelling: color, grayscale, "Gray tone curve", "n-color". The app id and the program name are unchanged.
+
 ## 0.1.12
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.
