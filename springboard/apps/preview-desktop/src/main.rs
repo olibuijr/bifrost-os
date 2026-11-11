@@ -74,6 +74,10 @@ const MENU_SHOT_SCREEN: u32 = 0x5009;
 const TEXT_BOX: (f32, f32) = (0.3, 0.06);
 /// The width an inserted signature takes, as a share of the page.
 const SIGNATURE_WIDTH: f32 = 0.3;
+/// How long "Saved name" stays in the status line when nothing replaces it sooner, in ms (the clock of `App::tick`).
+/// The kit has no shared time for a passing message; this is the five seconds the system's other passing notes
+/// (an undo note, the autosave delay) use.
+const SAVED_STATUS_MS: f64 = 5000.0;
 /// The type a JPEG has on the pasteboard (the PNG type is `bifrost_app::pasteboard::PNG`).
 const JPEG: &str = "public.jpeg";
 
@@ -319,6 +323,10 @@ struct Viewer {
     inserted: Option<PathBuf>,
     /// The form widget that the keyboard is typing into.
     form_focus: Option<usize>,
+    /// "Saved name" while it is what the status line says, and when it goes (set by the first `tick` that sees it).
+    /// It says the document is as its file is, so it goes at the first edit after the save, and after
+    /// `SAVED_STATUS_MS` in any case.
+    saved_note: Option<(String, Option<f64>)>,
     /// The menu of the toolbar's `»` button, asked for by a press: where it opens (window pixels) and its items. The
     /// event that carried the press sends it to the shell.
     menu_request: Option<(f32, f32, Vec<ContextItem>)>,
@@ -387,6 +395,7 @@ impl Viewer {
             insert_at: None,
             inserted: None,
             form_focus: None,
+            saved_note: None,
             menu_request: None,
         }
     }
@@ -449,9 +458,58 @@ impl Viewer {
         if let Some(before) = before {
             if self.snapshot().as_ref() != Some(&before) {
                 self.history.record(before);
+                // the document is no longer what was saved
+                self.drop_saved_status();
             }
         }
         out
+    }
+
+    /// Notes that the status line says `message` ("Saved name"), so it is taken away again: at the first edit, or
+    /// when its time is up (`expire_saved_status`).
+    fn say_saved(&mut self, message: &str) {
+        self.saved_note = Some((message.to_string(), None));
+    }
+
+    /// Takes "Saved name" out of the status line, when that is still what it says. A message that replaced it stays.
+    /// True when the status line changed.
+    fn drop_saved_status(&mut self) -> bool {
+        let Some((message, _)) = self.saved_note.take() else { return false };
+        if self.after_open.as_deref() == Some(message.as_str()) {
+            self.after_open = None;
+        }
+        if self.status != message {
+            return false;
+        }
+        self.status.clear();
+        true
+    }
+
+    /// Run by `tick` at time `t` (ms): "Saved name" goes once the document has unsaved changes again (an edit that is
+    /// no undo step, such as typing into a form field, is seen here) and when it has been shown for
+    /// `SAVED_STATUS_MS`. True when the status line changed.
+    fn expire_saved_status(&mut self, t: f64) -> bool {
+        let Some((message, until)) = self.saved_note.clone() else { return false };
+        // a PDF is opened again after its save: the time starts when its pages are there
+        if self.loading.is_some() && self.after_open.as_deref() == Some(message.as_str()) {
+            return false;
+        }
+        if self.status != message {
+            // another message took its place
+            self.saved_note = None;
+            return false;
+        }
+        if self.edited() {
+            return self.drop_saved_status();
+        }
+        match until {
+            Some(until) if t >= until => self.drop_saved_status(),
+            Some(_) => false,
+            None => {
+                self.saved_note = Some((message, Some(t + SAVED_STATUS_MS)));
+                false
+            }
+        }
     }
 
     fn open_path(&mut self, path: &Path) {
@@ -799,10 +857,12 @@ impl Viewer {
         match origin::update_copy(written, copy) {
             Ok(()) if self.doc.as_ref().is_some_and(|d| d.path == copy) => {
                 self.unsaved_copy = None;
+                let message = format!("Saved {name}");
                 match pixels {
-                    Some(img) if self.doc.as_ref().is_some_and(|d| !d.is_pdf) => self.adopt_saved(copy, img, format!("Saved {name}")),
-                    _ => self.reopen(copy, format!("Saved {name}")),
+                    Some(img) if self.doc.as_ref().is_some_and(|d| !d.is_pdf) => self.adopt_saved(copy, img, message.clone()),
+                    _ => self.reopen(copy, message.clone()),
                 }
+                self.say_saved(&message);
             }
             Ok(()) => {}
             Err(e) => self.status = format!("Saved {name}, but Viewer could not update its own copy: {e}"),
@@ -2805,6 +2865,7 @@ impl Viewer {
                 if let Some(before) = before {
                     if self.snapshot().as_ref() != Some(&before) {
                         self.history.record(before);
+                        self.drop_saved_status();
                     }
                 }
             }
@@ -3482,6 +3543,7 @@ impl App for Viewer {
                 if saved_as {
                     let message = format!("Saved {}", name_of(&path));
                     self.status = message.clone();
+                    self.say_saved(&message);
                     self.after_open = self.loading.is_some().then_some(message);
                 }
             }
@@ -3515,10 +3577,16 @@ impl App for Viewer {
         }
     }
 
-    fn tick(&mut self, ctx: &Ctx, _t: f64) -> bool {
-        let changed = self.pump(ctx);
+    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        let mut changed = self.pump(ctx);
+        changed |= self.expire_saved_status(t);
         self.sync_document_state(ctx);
         changed
+    }
+
+    /// "Saved name" leaves the status line when its time is up: the loop wakes for it.
+    fn next_wake(&self, _t: f64) -> Option<f64> {
+        self.saved_note.as_ref().and_then(|(_, until)| *until)
     }
 
     fn suspend(&mut self, _ctx: &Ctx) {
@@ -4620,6 +4688,47 @@ mod tests {
         v.act(&ctx.ui, &lay, Action::ZoomOut);
         let Zoom::Factor(stepped) = v.view.zoom else { panic!("a chosen level") };
         assert!(stepped < fitted && stepped > fitted / 1.5, "{stepped} from {fitted}");
+        cleanup(&v);
+    }
+
+    /// "Saved name" says the document is as its file is: it goes at the first edit after the save (the title then
+    /// says "Edited"), and after `SAVED_STATUS_MS` when nothing is done. A message that took its place stays.
+    #[test]
+    fn saved_leaves_the_status_line_at_the_next_edit_and_when_its_time_is_up() {
+        let (mut v, _copy) = viewer_on_copy("saved-note");
+        let ctx = menu_ctx();
+        v.rotate(1);
+        v.save_document();
+        assert_eq!(v.status, "Saved b.png");
+        // the next turn: the title already says Edited, and the status no longer says Saved
+        assert!(v.event(&ctx, Input::Activate(Action::RotateRight.id() as _)));
+        assert_eq!(v.window_title(), "b.png \u{2013} Edited");
+        assert_eq!(v.status, "", "an edit after the save takes the message away");
+        assert!(v.saved_note.is_none());
+        // a view command is no edit: the message stays until its time is up
+        v.save_document();
+        assert_eq!(v.status, "Saved b.png");
+        assert!(v.event(&ctx, Input::Activate(Action::ZoomIn.id() as _)));
+        assert_eq!(v.status, "Saved b.png");
+        assert_eq!(v.next_wake(0.0), None, "the time starts at the first tick");
+        assert!(!v.expire_saved_status(1000.0));
+        assert_eq!(v.next_wake(1000.0), Some(1000.0 + SAVED_STATUS_MS), "the loop wakes when it is up");
+        assert!(!v.expire_saved_status(1000.0 + SAVED_STATUS_MS - 1.0));
+        assert_eq!(v.status, "Saved b.png");
+        assert!(v.expire_saved_status(1000.0 + SAVED_STATUS_MS), "a frame is asked for");
+        assert_eq!((v.status.as_str(), v.next_wake(0.0)), ("", None));
+        // an edit that is no undo step (a form field, a recovered copy) is seen by the tick
+        v.save_document();
+        v.unsaved_copy = v.doc.as_ref().map(|d| d.path.clone());
+        assert!(v.edited() && v.expire_saved_status(0.0));
+        assert_eq!(v.status, "");
+        v.unsaved_copy = None;
+        // a message that replaced "Saved" is not taken away in its name
+        v.save_document();
+        v.status = "Bookmarked page 1".into();
+        assert!(!v.expire_saved_status(0.0) && !v.expire_saved_status(1.0e9));
+        assert_eq!(v.status, "Bookmarked page 1");
+        assert!(v.saved_note.is_none());
         cleanup(&v);
     }
 }
