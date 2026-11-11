@@ -1452,11 +1452,11 @@ mod tests {
         assert!(!files.dragging);
         assert_eq!(files.scroll, 40.);
         assert!(files.hold_due().is_none() && !files.hold_tick(&ctx, hold + 1.), "the move ended the hold");
-        // still down long after the hold time: it goes on scrolling
-        files.route_input(&ctx, finger(TouchKind::Move, x, y - 60., hold + 100.));
+        // still down long after the hold time: it goes on scrolling (to the end of this folder, 44 pt down)
+        files.route_input(&ctx, finger(TouchKind::Move, x, y - 44., hold + 100.));
         assert!(!files.dragging && files.selection.is_empty());
-        assert_eq!(files.scroll, 60.);
-        files.route_input(&ctx, finger(TouchKind::Up, x, y - 60., hold + 120.));
+        assert_eq!(files.scroll, 44.);
+        files.route_input(&ctx, finger(TouchKind::Up, x, y - 44., hold + 120.));
         assert!(!files.dragging && files.selection.is_empty());
     }
     #[test]
