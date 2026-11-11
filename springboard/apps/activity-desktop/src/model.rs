@@ -883,6 +883,12 @@ pub fn percent(v: f32) -> String {
     format!("{v:.1}%")
 }
 
+/// A count with its noun in the form the count takes: "1 core", "8 cores", "1 process", "261 processes" (the kit's
+/// plural rules, `inflection::inflect_noun`).
+pub fn counted(n: usize, one: &str) -> String {
+    format!("{n} {}", bifrost_app::inflection::inflect_noun(bifrost_app::controls::language::Language::English, one, n as u64))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1007,6 +1013,16 @@ mod tests {
         assert_eq!(s.values().next(), Some(5.0));
         assert_eq!(s.last(), (HISTORY + 4) as f32);
         assert_eq!(s.peak(), (HISTORY + 4) as f32);
+    }
+
+    /// The footer and the graph captions read "1 process", "1 core", "1 interface", never "1 processes".
+    #[test]
+    fn a_count_takes_the_singular_for_one() {
+        assert_eq!(counted(1, "process"), "1 process");
+        assert_eq!(counted(261, "process"), "261 processes");
+        assert_eq!(counted(0, "process"), "0 processes");
+        assert_eq!((counted(1, "core"), counted(8, "core")), ("1 core".to_string(), "8 cores".to_string()));
+        assert_eq!((counted(1, "interface"), counted(2, "interface")), ("1 interface".to_string(), "2 interfaces".to_string()));
     }
 
     #[test]
