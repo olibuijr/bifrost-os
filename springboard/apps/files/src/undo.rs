@@ -16,6 +16,9 @@ pub(crate) enum Undo {
     Mode(Vec<(PathBuf, u32)>),
     /// Colour tags changed: (path, the tags it had before). Restored in the tag index by `Files::undo_file_op`.
     Tags(Vec<(PathBuf, Vec<Tag>)>),
+    /// Copies made by a paste, a copying drop or Duplicate (`duplicate`): where each one is. Undo moves them to the
+    /// Trash instead of deleting them, so a copy that replaced an item of the same name can still be put back.
+    Copy { made: Vec<PathBuf>, duplicate: bool },
 }
 
 impl Undo {
@@ -29,7 +32,50 @@ impl Undo {
             Undo::Alias(_) => "Make Alias",
             Undo::Mode(_) => "Permissions",
             Undo::Tags(_) => "Tags",
+            Undo::Copy { duplicate: true, .. } => "Duplicate",
+            Undo::Copy { .. } => "Copy",
         }
+    }
+    /// The items the step acted on, as they are named now (a trashed item by the name it had): what the Edit menu
+    /// names after the action.
+    fn items(&self) -> Vec<&Path> {
+        match self {
+            Undo::Move(pairs) => pairs.iter().map(|(_, now)| now.as_path()).collect(),
+            Undo::Trash(pairs) => pairs.iter().map(|(from, _)| from.as_path()).collect(),
+            Undo::NewFolder(path) | Undo::Alias(path) => vec![path.as_path()],
+            Undo::Mode(items) => items.iter().map(|(p, _)| p.as_path()).collect(),
+            Undo::Tags(items) => items.iter().map(|(p, _)| p.as_path()).collect(),
+            Undo::Copy { made, .. } => made.iter().map(PathBuf::as_path).collect(),
+        }
+    }
+    /// The Edit menu's Undo title: the action and what it acted on, as the reference file manager writes it
+    /// ("Undo Copy of “d4 2.txt”", "Undo Move of 3 Items").
+    pub(crate) fn title(&self) -> String {
+        undo_title(self.name(), &self.items())
+    }
+}
+
+/// "Undo `action` of “name”" for one item, "Undo `action` of N Items" for several, and "Undo `action`" when the step
+/// names none. A long name is cut in the middle so the menu stays a menu.
+pub(crate) fn undo_title(action: &str, items: &[&Path]) -> String {
+    const NAME_MAX: usize = 32;
+    match items {
+        [] => format!("Undo {action}"),
+        [one] => {
+            let name = one.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            if name.is_empty() {
+                return format!("Undo {action}");
+            }
+            let chars: Vec<char> = name.chars().collect();
+            let name = if chars.len() > NAME_MAX {
+                let (head, tail) = (NAME_MAX / 2, NAME_MAX / 2 - 1);
+                format!("{}\u{2026}{}", chars[..head].iter().collect::<String>(), chars[chars.len() - tail..].iter().collect::<String>())
+            } else {
+                name
+            };
+            format!("Undo {action} of \u{201C}{name}\u{201D}")
+        }
+        many => format!("Undo {action} of {} Items", many.len()),
     }
 }
 
@@ -99,6 +145,25 @@ pub(crate) fn undo_step(step: &Undo, bin: &Path) -> Result<String, String> {
         }
         // the tag index belongs to `Files`, which restores it (`restore_tags`) before this is reached
         Undo::Tags(_) => Ok("Restored the tags".into()),
+        Undo::Copy { made, .. } => {
+            let mut failed = None;
+            for copy in made {
+                // a copy that is gone already (moved, renamed or deleted since) is left alone
+                if copy.symlink_metadata().is_err() {
+                    failed = Some("The copy is no longer there".to_string());
+                    continue;
+                }
+                match trash::discard(copy, bin, trash::now_secs()) {
+                    Ok(stored) => {
+                        if let (Some(name), Some(parent)) = (stored.file_name(), copy.parent()) {
+                            record_origin(bin, &name.to_string_lossy(), parent);
+                        }
+                    }
+                    Err(e) => failed = Some(batch::friendly(&e)),
+                }
+            }
+            failed.map_or(Ok("Moved the copies to the Trash".into()), Err)
+        }
         Undo::NewFolder(path) => std::fs::remove_dir(path).map(|_| "Removed the new folder".into()).map_err(|_| "The new folder is no longer empty".into()),
         Undo::Alias(link) => match link.symlink_metadata() {
             Ok(md) if md.file_type().is_symlink() => std::fs::remove_file(link).map(|_| "Removed the alias".to_string()).map_err(|e| batch::friendly(&e)),
@@ -115,9 +180,10 @@ impl Files {
             self.undo.remove(0);
         }
     }
-    /// The Edit menu titles: the newest step's name ("Undo Trash"); Redo is not offered for file operations.
+    /// The Edit menu titles: the newest step's action and item ("Undo Trash of “a.txt”"); Redo is not offered for
+    /// file operations.
     pub(crate) fn file_undo_titles(&self) -> (String, String) {
-        (self.undo.last().map(|u| format!("Undo {}", u.name())).unwrap_or_default(), String::new())
+        (self.undo.last().map(Undo::title).unwrap_or_default(), String::new())
     }
     /// Edit > Undo for file operations.
     pub(crate) fn undo_file_op(&mut self) {
@@ -159,6 +225,53 @@ mod tests {
         assert_eq!(Undo::Trash(vec![]).name(), "Trash");
         assert_eq!(Undo::NewFolder(PathBuf::from("/d/n")).name(), "New Folder");
         assert_eq!(Undo::Tags(vec![]).name(), "Tags");
+    }
+
+    #[test]
+    fn the_undo_title_names_the_action_and_its_items() {
+        let copy = Undo::Copy { made: vec![PathBuf::from("/d/d4 2.txt")], duplicate: false };
+        assert_eq!(copy.title(), "Undo Copy of \u{201C}d4 2.txt\u{201D}");
+        let duplicates = Undo::Copy { made: vec![PathBuf::from("/d/a 2"), PathBuf::from("/d/b 2")], duplicate: true };
+        assert_eq!(duplicates.title(), "Undo Duplicate of 2 Items");
+        // a move names the item where it is now, a rename the new name, a trash the name it had
+        assert_eq!(Undo::Move(vec![(PathBuf::from("/a/f"), PathBuf::from("/b/f"))]).title(), "Undo Move of \u{201C}f\u{201D}");
+        assert_eq!(Undo::Move(vec![(PathBuf::from("/d/old"), PathBuf::from("/d/new"))]).title(), "Undo Rename of \u{201C}new\u{201D}");
+        assert_eq!(Undo::Trash(vec![(PathBuf::from("/d/gone.txt"), PathBuf::from("/bin/gone.txt.1"))]).title(), "Undo Trash of \u{201C}gone.txt\u{201D}");
+        assert_eq!(Undo::NewFolder(PathBuf::from("/d/New Folder")).title(), "Undo New Folder of \u{201C}New Folder\u{201D}");
+        assert_eq!(Undo::Trash(vec![]).title(), "Undo Trash", "a step that names nothing");
+        let long = Undo::Copy { made: vec![PathBuf::from(format!("/d/{}", "x".repeat(80)))], duplicate: false };
+        assert!(long.title().chars().count() < 60 && long.title().contains('\u{2026}'), "{}", long.title());
+    }
+
+    #[test]
+    fn undo_copy_moves_the_copies_to_the_trash_and_leaves_the_originals() {
+        let d = scratch("copy");
+        std::fs::write(d.join("d4.txt"), "original").unwrap();
+        std::fs::write(d.join("d4 2.txt"), "copy").unwrap();
+        let bin = trash::dir(&d);
+        let step = Undo::Copy { made: vec![d.join("d4 2.txt")], duplicate: false };
+        undo_step(&step, &bin).unwrap();
+        assert!(!d.join("d4 2.txt").exists(), "the copy left the folder");
+        assert_eq!(std::fs::read_to_string(d.join("d4.txt")).unwrap(), "original");
+        assert!(undo_step(&step, &bin).is_err(), "a second undo finds nothing");
+    }
+
+    #[test]
+    fn a_window_offers_undo_after_a_paste() {
+        let mut files = crate::tests::fixture(vec![]);
+        assert_eq!(files.file_undo_titles().0, "");
+        assert!(!files.edit_commands().supports(Command::Undo));
+        // what `finish_job` records for a paste that copied one file
+        let step = copy_undo(JobKind::Transfer(Op::Copy), &[PathBuf::from("/fixture/d4 2.txt")]).expect("a copy is undoable");
+        files.push_undo(step);
+        assert!(files.edit_commands().supports(Command::Undo));
+        assert_eq!(files.edit_undo_titles(), ("Undo Copy of \u{201C}d4 2.txt\u{201D}".to_string(), String::new()));
+        // Duplicate and files dropped by another app too; a move, a trash and a copy of nothing leave it to their own steps
+        assert!(matches!(copy_undo(JobKind::Duplicate, &[PathBuf::from("/d/a 2")]), Some(Undo::Copy { duplicate: true, .. })));
+        assert!(matches!(copy_undo(JobKind::Receive, &[PathBuf::from("/d/a")]), Some(Undo::Copy { duplicate: false, .. })));
+        assert!(copy_undo(JobKind::Transfer(Op::Move), &[PathBuf::from("/d/a")]).is_none());
+        assert!(copy_undo(JobKind::Trash, &[PathBuf::from("/d/a")]).is_none());
+        assert!(copy_undo(JobKind::Transfer(Op::Copy), &[]).is_none());
     }
 
     #[test]
