@@ -143,7 +143,7 @@ fn tag_named(name: &str) -> Result<Tag, RpcError> {
     Tag::ALL
         .into_iter()
         .find(|t| t.label().eq_ignore_ascii_case(name))
-        .ok_or_else(|| invalid(format!("unknown tag colour {name:?}; one of red orange yellow green blue purple gray")))
+        .ok_or_else(|| invalid(format!("unknown tag color {name:?}; one of red orange yellow green blue purple gray")))
 }
 fn tags_of(params: &Json, key: &str) -> Result<Option<Vec<Tag>>, RpcError> {
     strings_of(params, key)?.map(|names| names.iter().map(|n| tag_named(n)).collect()).transpose()

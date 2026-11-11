@@ -479,8 +479,8 @@ pub fn draw_colour_entry(c: &mut dyn Canvas, ui: &Ui, entry: &str) {
     let colour = swatch::parse(entry);
     let hint = match (colour, entry.chars().filter(char::is_ascii_hexdigit).count()) {
         (Some(_), _) => "Return to apply",
-        (None, 0) => "Type a hex colour",
-        (None, _) => "Not a colour yet",
+        (None, 0) => "Type a hex color",
+        (None, _) => "Not a color yet",
     };
     draw_entry(c, ui, entry, hint, colour.map(|(r, g, b)| rgba(r, g, b, 255)));
 }

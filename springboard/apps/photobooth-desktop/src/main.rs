@@ -826,7 +826,7 @@ impl App for PhotoBooth {
             }
             DocumentEvent::Failed { request, .. } => {
                 if self.export.as_ref().is_some_and(|(r, _)| *r == request) {
-                    self.status = "Export cancelled".to_string();
+                    self.status = "Export canceled".to_string();
                     self.export = None;
                     return true;
                 }

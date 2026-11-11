@@ -65,8 +65,8 @@ pub const TIPS: &[Tip] = &[
         id: "desktop-window-controls",
         collection: Collection::Desktop,
         title: "Window controls",
-        body: "Every window has three controls at its top left: close, minimise and zoom. In a window that uses the full size, the controls sit inside the sidebar and the toolbar shares the top row with the content.",
-        keywords: "close minimise zoom title bar traffic lights window",
+        body: "Every window has three controls at its top left: close, minimize and zoom. In a window that uses the full size, the controls sit inside the sidebar and the toolbar shares the top row with the content.",
+        keywords: "close minimize minimise zoom title bar traffic lights window",
     },
     Tip {
         id: "desktop-sheets",
@@ -109,7 +109,7 @@ pub const TIPS: &[Tip] = &[
         id: "files-sidebar-locations",
         collection: Collection::Files,
         title: "Sidebar locations",
-        body: "The Files sidebar lists Recents, Desktop, Documents, Downloads, Home, Computer and Trash. Each location has its own glyph, and the selected one is shown on a grey plate.",
+        body: "The Files sidebar lists Recents, Desktop, Documents, Downloads, Home, Computer and Trash. Each location has its own glyph, and the selected one is shown on a gray plate.",
         keywords: "sidebar recents desktop documents downloads home computer trash",
     },
     Tip {
@@ -145,8 +145,8 @@ pub const TIPS: &[Tip] = &[
         id: "apps-stickies-new-note",
         collection: Collection::Apps,
         title: "Make a sticky note",
-        body: "Stickies keeps floating notes in six colours. Every change is saved as you type, and the notes come back the next time you open the app. Double-press a note's title bar to collapse it out of the way.",
-        keywords: "stickies note colour save collapse title bar",
+        body: "Stickies keeps floating notes in six colors. Every change is saved as you type, and the notes come back the next time you open the app. Double-press a note's title bar to collapse it out of the way.",
+        keywords: "stickies note color colour save collapse title bar",
     },
     Tip {
         id: "apps-stickies-duplicate",
@@ -166,8 +166,8 @@ pub const TIPS: &[Tip] = &[
         id: "apps-stickies-text-size",
         collection: Collection::Apps,
         title: "Bigger and smaller text",
-        body: "Command and equals makes the text in a note bigger, and Command and minus makes it smaller. The Font menu also sets the text colour, underline and strikethrough, and can save a style as the default for new notes.",
-        keywords: "stickies font size bigger smaller colour underline",
+        body: "Command and equals makes the text in a note bigger, and Command and minus makes it smaller. The Font menu also sets the text color, underline and strikethrough, and can save a style as the default for new notes.",
+        keywords: "stickies font size bigger smaller color colour underline",
     },
     Tip {
         id: "apps-stickies-links",

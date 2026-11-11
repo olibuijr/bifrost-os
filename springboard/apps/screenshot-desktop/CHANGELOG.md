@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- The status line says "Timer canceled." (en_US spelling).
+
 ## 0.1.9
 
 - Quits at once on logout and shutdown (sudden termination), as it keeps nothing unsaved; adds the app compliance test.

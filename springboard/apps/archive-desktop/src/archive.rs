@@ -193,7 +193,7 @@ fn bad(msg: &str) -> io::Error {
 }
 
 fn cancelled() -> io::Error {
-    io::Error::new(io::ErrorKind::Interrupted, "Cancelled")
+    io::Error::new(io::ErrorKind::Interrupted, "Canceled")
 }
 
 /// A NUL-terminated text field.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.8
+
+- The help text says "Notification Center" (en_US spelling).
+
 ## 0.8.7
 
 - The Created column of the job list follows Settings > Date & Time > 24-Hour Time ("11:00", or "11:00 AM" with the switch off) and the system time zone, at once when either changes. Each job is read at the zone's offset at its own instant, so a job sent before a daylight saving change keeps its time.

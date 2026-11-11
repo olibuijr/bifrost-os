@@ -253,7 +253,7 @@ impl Arrange {
 
     pub fn title(self) -> &'static str {
         match self {
-            Arrange::Colour => "Colour",
+            Arrange::Colour => "Color",
             Arrange::Content => "Content",
             Arrange::Created => "Date Created",
             Arrange::Modified => "Date Modified",

@@ -579,7 +579,7 @@ impl Files {
                 self.fx.server.login = None;
                 // the try that asked is over; the sheet underneath goes back to waiting for an address
                 self.fx.server.job = None;
-                self.set_server_message("Cancelled.".to_string());
+                self.set_server_message("Canceled.".to_string());
             }
             LoginAct::Nothing => {}
         }

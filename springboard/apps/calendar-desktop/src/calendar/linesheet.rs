@@ -37,7 +37,7 @@ impl Purpose {
 
     fn hint(self) -> &'static str {
         match self {
-            Purpose::NewCalendar | Purpose::Rename(_) => "A calendar keeps its own events and colour, and can be hidden",
+            Purpose::NewCalendar | Purpose::Rename(_) => "A calendar keeps its own events and color, and can be hidden",
             Purpose::Subscribe => "A subscribed calendar is read-only and is refreshed about once an hour",
         }
     }

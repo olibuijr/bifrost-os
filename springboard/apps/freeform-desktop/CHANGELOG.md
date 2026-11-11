@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.13.9
+
+- The text is in en_US spelling: Align Center in the menu, Colors for the toolbar item, and "colors" in the summary.
+
 ## 1.13.8
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

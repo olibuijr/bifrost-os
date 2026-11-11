@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.19.15
+
+- The text is in en_US spelling: Calendar Color in the menu and its sheet, "color" in the new-calendar hint, "organizer" in the invitation reply message, and Labor Day in the holidays. The saved calendar file is unchanged.
+
 ## 1.19.14
 
 - Times follow Settings > Date & Time > 24-Hour Time and the system time zone, at once when either changes: the hour labels of the Day and Week grids ("08:00", or "8 AM" and "Noon" with the switch off), event times, the event editor, search results, the current-time line, printed pages, the Day Starts at, Day Ends at and birthday alert choices, and the Up Next widget. With AM and PM the hour gutter is wider so the current time fits.

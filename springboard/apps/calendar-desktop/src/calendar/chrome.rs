@@ -136,7 +136,7 @@ impl Calendar {
             return bars;
         }
         if self.colour_sheet.is_some() {
-            let title = "Calendar Colour";
+            let title = "Calendar Color";
             bars.push((
                 Toolbar::new(vec![
                     ToolbarItem::button(B_CANCEL, "Cancel"),

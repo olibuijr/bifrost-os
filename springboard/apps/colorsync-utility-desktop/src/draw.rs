@@ -97,7 +97,7 @@ fn paint_detail(w: &ColourUtility, labels: &mut TextCache, s: &mut Surface, ui: 
     let cw = w.content_w();
     let y = w.title_y();
     let Some(c) = &w.current else {
-        text(labels, s, ui, "Colour Utility", MAC_TITLE1_PT, Weight::Bold, LABEL.now(), x, y + 18.0, cw);
+        text(labels, s, ui, "Color Utility", MAC_TITLE1_PT, Weight::Bold, LABEL.now(), x, y + 18.0, cw);
         let hint = if w.found.is_empty() {
             w.status.as_str()
         } else {
@@ -237,7 +237,7 @@ fn paint_gamut(w: &ColourUtility, labels: &mut TextCache, s: &mut Surface, ui: &
     }
     let Some(g) = c.gamut else {
         text(labels, s, ui, "This profile has no colorant tags, so it has no gamut to plot.", MAC_BODY_PT, Weight::Regular, LABEL.now(), a.x, a.mid(0), a.w);
-        let why = "A gamut needs an RGB matrix profile with rXYZ, gXYZ and bXYZ tags. LUT, CMYK and greyscale profiles have none.";
+        let why = "A gamut needs an RGB matrix profile with rXYZ, gXYZ and bXYZ tags. LUT, CMYK and grayscale profiles have none.";
         text(labels, s, ui, why, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), a.x, a.mid(1), a.w);
         return;
     };
@@ -313,7 +313,7 @@ fn paint_gamut(w: &ColourUtility, labels: &mut TextCache, s: &mut Surface, ui: &
         text(labels, s, ui, &value, MAC_BODY_PT, Weight::Regular, LABEL.now(), rx + READOUT_KEY_PT, mid, rw - READOUT_KEY_PT);
     }
     let notes = [
-        "The chart is CIE 1931 xy with the spectral locus. The grey triangle is sRGB.",
+        "The chart is CIE 1931 xy with the spectral locus. The gray triangle is sRGB.",
         "The colorants are D50-adapted, so the sRGB ratio is an estimate.",
     ];
     let mut y = ra.top + NOTES_LINE as f32 * LINE_PT;

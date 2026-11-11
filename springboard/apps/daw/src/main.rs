@@ -708,7 +708,7 @@ impl Daw {
     /// Trim on: the whole song is selected, one bar at least. Trim again cancels.
     fn toggle_trim(&mut self) {
         if self.trim.take().is_some() {
-            self.status = "Trim cancelled".into();
+            self.status = "Trim canceled".into();
             return;
         }
         let Some(p) = self.project.as_ref() else { return };

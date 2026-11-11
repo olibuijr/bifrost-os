@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.11
+
+- The text is in en_US spelling: Kilometers in the units menu and "Map center" as the name of a route end. The saved units preference is unchanged.
+
 ## 0.7.10
 
 - The departure and arrival times of a transit journey follow Settings > Date & Time > 24-Hour Time ("14:20", or "2:20 PM" with the switch off), also for a journey already on screen when the setting changes. They stay in the time of the place the journey runs in.

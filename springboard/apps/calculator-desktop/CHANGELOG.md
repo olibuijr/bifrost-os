@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.14.8
+
+- The message for an unreadable rates file says "not recognized" (en_US spelling).
+
 ## 1.14.7
 
 - The daily exchange rate check runs on a utility dispatch queue instead of its own thread.

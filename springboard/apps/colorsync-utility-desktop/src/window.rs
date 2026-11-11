@@ -164,9 +164,9 @@ impl ColourUtility {
         self.selected = previous.and_then(|p| self.found.iter().position(|f| f.path == p));
         self.side_scroll = self.side_scroll.clamp(0.0, self.max_side_scroll());
         self.status = match self.found.len() {
-            0 => "No colour profiles were found in the system or user folders.".to_string(),
-            1 => "1 colour profile.".to_string(),
-            n => format!("{n} colour profiles."),
+            0 => "No color profiles were found in the system or user folders.".to_string(),
+            1 => "1 color profile.".to_string(),
+            n => format!("{n} color profiles."),
         };
         self.load_selected();
     }

@@ -5305,7 +5305,7 @@ mod tests {
             ("anim.gif", &animation[..], "anim.png", "Only the first of its 2 frames is in the copy."),
             ("still.webp", &still[..], "still.png", "Viewer cannot save WebP files"),
             ("deep.png", &deep[..], "deep copy.png", "8 bits a sample"),
-            ("tagged.png", &profiled[..], "tagged copy.png", "colour profile"),
+            ("tagged.png", &profiled[..], "tagged copy.png", "color profile"),
         ];
         for (name, bytes, suggested, says) in cases {
             let file = dir.join(name);

@@ -193,7 +193,7 @@ fn library_empty_text(tab: Tab, scope: Scope, scanning: bool, query: &str) -> (&
         (Tab::Albums, _) => "No Albums",
         (Tab::Songs, Scope::RecentlyAdded) => "Nothing Added Yet",
         (Tab::Songs, Scope::RecentlyPlayed) => "Nothing Played Yet",
-        (Tab::Songs, Scope::Favourites) => "No Favourites",
+        (Tab::Songs, Scope::Favourites) => "No Favorites",
         _ => "No Songs",
     };
     (title, ADD)
@@ -2806,7 +2806,7 @@ impl Music {
                 self.label(&mut band, ui, hint, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 / 2.0, mid + ui.pt(SPACE_L), 0.5);
             } else if page == Page::Root && self.tab == Tab::Songs && !self.library.is_empty() && self.view.is_empty() {
                 let (text, hint) = match (self.scope, self.search.is_empty()) {
-                    (Scope::Favourites, true) => ("No Favourites", "Choose Add to Favourites from a song's ... menu"),
+                    (Scope::Favourites, true) => ("No Favorites", "Choose Add to Favorites from a song's ... menu"),
                     (Scope::RecentlyPlayed, true) => ("Nothing Played Yet", "Songs you play show up here"),
                     _ => ("No Results", ""),
                 };
@@ -3205,7 +3205,7 @@ impl Music {
                 MenuItem::Rate => (format!("Rating: {}", stats::rating_text(self.stats.rating(&self.library.songs[song].path))), LABEL.now()),
                 MenuItem::ToggleFavourite => {
                     let favourite = self.stats.is_favourite(&self.library.songs[song].path);
-                    (String::from(if favourite { "Remove from Favourites" } else { "Add to Favourites" }), LABEL.now())
+                    (String::from(if favourite { "Remove from Favorites" } else { "Add to Favorites" }), LABEL.now())
                 }
                 MenuItem::Output(k) => match self.outputs.get(k) {
                     Some((id, name)) => (name.clone(), if self.output_now.as_ref() == Some(id) { PINK } else { LABEL.now() }),

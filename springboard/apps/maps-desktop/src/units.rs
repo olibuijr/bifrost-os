@@ -16,7 +16,7 @@ impl UnitsSetting {
     pub fn label(self) -> &'static str {
         match self {
             UnitsSetting::Automatic => "Automatic",
-            UnitsSetting::Kilometres => "Kilometres",
+            UnitsSetting::Kilometres => "Kilometers",
             UnitsSetting::Miles => "Miles",
         }
     }

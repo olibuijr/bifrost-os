@@ -228,7 +228,7 @@ impl DisplayProfile {
     /// Prepares the transform for the profile in `bytes`. `fallback_name` names it when it has no description. An error
     /// is a sentence: the bytes are not a profile, or it is one the transform cannot take (not an RGB profile).
     pub fn from_bytes(fallback_name: &str, bytes: &[u8]) -> Result<DisplayProfile, String> {
-        let profile = Profile::parse(bytes).map_err(|e| format!("{fallback_name} is not a colour profile ({e:?})."))?;
+        let profile = Profile::parse(bytes).map_err(|e| format!("{fallback_name} is not a color profile ({e:?})."))?;
         let name = profile.description(bytes).map(|d| d.trim().to_string()).filter(|d| !d.is_empty()).unwrap_or_else(|| fallback_name.to_string());
         let transform = ProfileToProfile::open(&Builtin::Srgb.bytes(), bytes, RenderingIntent::RelativeColorimetric, false)
             .map_err(|e| format!("{fallback_name} cannot be used as a display profile ({e:?})."))?;

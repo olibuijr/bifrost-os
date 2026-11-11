@@ -390,7 +390,7 @@ impl Action {
             Action::Darker => "Darker",
             Action::Saturate => "Saturate",
             Action::Desaturate => "Desaturate",
-            Action::ResetColour => "Reset Colour",
+            Action::ResetColour => "Reset Color",
             Action::ShowPages => "Pages",
             Action::ShowOutline => "Outline",
             Action::MovePageUp => "Move Page Up",

@@ -74,7 +74,7 @@ impl Scope {
             Scope::All => "Songs",
             Scope::RecentlyAdded => "Recently Added",
             Scope::RecentlyPlayed => "Recently Played",
-            Scope::Favourites => "Favourite Songs",
+            Scope::Favourites => "Favorite Songs",
         }
     }
 
@@ -272,7 +272,7 @@ mod tests {
         assert_eq!(view_with(&s, "abba", Scope::Favourites.sort(), Scope::Favourites, &st), [0], "the search applies inside a scope");
         assert!(view_with(&s, "wall", SortKey::Title, Scope::Favourites, &st).is_empty());
         assert_eq!(Scope::All.sort(), SortKey::Title);
-        assert_eq!(Scope::ALL.map(Scope::label), ["Songs", "Recently Added", "Recently Played", "Favourite Songs"]);
+        assert_eq!(Scope::ALL.map(Scope::label), ["Songs", "Recently Added", "Recently Played", "Favorite Songs"]);
     }
 
     #[test]
