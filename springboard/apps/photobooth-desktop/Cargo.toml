@@ -1,6 +1,6 @@
 [package]
 name = "bifrost-photobooth"
-version = "0.5.13"
+version = "0.5.14"
 edition = "2021"
 
 [dependencies]

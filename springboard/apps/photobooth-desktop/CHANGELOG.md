@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.14
+
+- With no camera the shutter is dimmed and does nothing: a press, Space, Return and Take Photo no longer start a countdown for a picture that cannot be taken. It works again as soon as a camera is open.
+
 ## 0.5.13
 
 - The status line says "Export canceled" (en_US spelling).
