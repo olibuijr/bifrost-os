@@ -114,7 +114,7 @@ impl NightShift {
                     Item::new("To").value(clock(self.end)).action(Action::Night(NightEdit::To)),
                 ]),
                 Group::new(vec![Item::new("Manually Enable").switch(self.manual, Action::Night(NightEdit::Manual))])
-                    .footer("Shifts the colours of the display to the warmer end of the spectrum. A window can run past midnight."),
+                    .footer("Shifts the colors of the display to the warmer end of the spectrum. A window can run past midnight."),
                 Group::new(vec![Item::slider(Ends::Warmth, self.warmth, Action::Slider(Slider::Warmth))]).header("COLOR TEMPERATURE"),
             ],
         }

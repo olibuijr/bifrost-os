@@ -93,7 +93,7 @@ impl ColorMode {
     /// The name shown in a scan window.
     pub fn label(self) -> &'static str {
         match self {
-            ColorMode::Color => "Colour",
+            ColorMode::Color => "Color",
             ColorMode::Gray => "Greyscale",
             ColorMode::Lineart => "Black & White",
         }

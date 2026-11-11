@@ -53,7 +53,7 @@ impl Shell {
         self.terminal_ui.message = match (mode, rtf.is_some()) {
             (Mode::Plain, _) => "Selection copied".into(),
             (Mode::Colors, true) => "Selection copied with colors".into(),
-            (Mode::ColorsNoBackground, true) => "Selection copied without background colour".into(),
+            (Mode::ColorsNoBackground, true) => "Selection copied without background color".into(),
             _ => "Selection copied as plain text".into(),
         };
         self.dirty = true;

@@ -2107,7 +2107,7 @@ pub fn appearance_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
     // each dot in the colour the controls take in the look on screen
     let light = bifrost_render::appearance::target_is_light();
     let dots: Vec<u32> = Accent::ALL.iter().map(|a| if light { a.colours().1 } else { a.colours().0 }).collect();
-    let highlight_names: Vec<String> = std::iter::once("Accent Colour".to_string()).chain(Accent::ALL.into_iter().skip(1).map(|a| a.label().to_string())).collect();
+    let highlight_names: Vec<String> = std::iter::once("Accent Color".to_string()).chain(Accent::ALL.into_iter().skip(1).map(|a| a.label().to_string())).collect();
     let highlight = d.highlight.min(highlight_names.len() - 1);
     let icon_style = icon_style_index().min(ICON_STYLES.len() - 1);
     let sidebar_icons = d.sidebar_icons.min(SIDEBAR_ICON_SIZES.len() - 1);
@@ -2116,14 +2116,14 @@ pub fn appearance_page(m: &Model<'_>, d: &DeskPrefs) -> Spec {
         Group::new(vec![Item::tiles("Appearance", modes.iter().map(|md| mode_label(*md).to_string()).collect(), now, Action::Pick(Pick::Appearance(now)))])
             .footer("Light and Dark change the look of the whole desktop and fade between them. Auto is light from 07:00 to 19:00 and dark at night."),
         Group::new(vec![
-            Item::swatches("Colour", dots, Accent::ALL.iter().map(|a| a.label().to_string()).collect(), accent_now, Action::Pick(Pick::Accent(accent_now))),
-            Item::new("Text highlight colour").popup(highlight_names, highlight, Action::Pick(Pick::Highlight(highlight))),
+            Item::swatches("Color", dots, Accent::ALL.iter().map(|a| a.label().to_string()).collect(), accent_now, Action::Pick(Pick::Accent(accent_now))),
+            Item::new("Text highlight color").popup(highlight_names, highlight, Action::Pick(Pick::Highlight(highlight))),
         ])
             .header("THEME")
-            .footer("The colour of buttons, links, switches, sliders and the selected sidebar row, and of selected text. Multicolour uses blue for controls."),
+            .footer("The color of buttons, links, switches, sliders and the selected sidebar row, and of selected text. Multicolor uses blue for controls."),
         // the footer explains the icon styles, so it closes that row's own group, not the one ending in Show scroll bars
         Group::new(vec![Item::new("Icon & widget style").popup(choice_labels(&ICON_STYLES), icon_style, Action::Pick(Pick::IconStyle(icon_style)))])
-            .footer("Dark draws app icons on a dark tile. Tinted draws them in the accent colour over grey."),
+            .footer("Dark draws app icons on a dark tile. Tinted draws them in the accent color over gray."),
         Group::new(vec![
             Item::new("Sidebar icon size").popup(choice_labels(&SIDEBAR_ICON_SIZES), sidebar_icons, Action::Pick(Pick::SidebarIcons(sidebar_icons))),
             Item::new("Show scroll bars").popup(choice_labels(&SCROLL_BAR_MODES), scroll_bars, Action::Pick(Pick::ScrollBars(scroll_bars))),
