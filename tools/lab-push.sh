@@ -57,5 +57,7 @@ M
 python3 tools/stage-assets.py --replace springboard/assets "$SYNC/assets"
 (cd "$SYNC/assets" && find . -type f -printf '%P\n' | grep -v '[][ ]') |
   while read -r f; do echo "assets/$f /usr/share/springboard/assets/$f 644"; done >> "$SYNC/manifest"
-ss -ltn | grep -q ":8078 " || (cd "$SYNC" && setsid python3 -m http.server 8078 --bind 10.99.0.1 >/dev/null 2>&1 </dev/null &)
+ss -ltn | grep -q ":8078 " || (cd "$SYNC" && exec setsid python3 -m http.server 8078 --bind 10.99.0.1) >/dev/null 2>&1 </dev/null &
+# the redirect is on the whole subshell: a waiting shell that kept this script's stdout held a caller's pipe open for as
+# long as the server ran (vm-cycle.py then sat in its 20 minute timeout)
 echo "pushed $(stat -c%s "$SYNC/bifrost-installer") bytes; lab hosts pick it up on their next boot (http://10.99.0.1:8078)"
