@@ -708,7 +708,7 @@ fn switches_persist_their_options() {
     assert!(!st.options().clock_24h);
     back(&mut st, &ui, &mut prefs);
     tap_row(&mut st, &ui, &mut prefs, "Keyboard");
-    tap_row(&mut st, &ui, &mut prefs, "Auto-Capitalisation");
+    tap_row(&mut st, &ui, &mut prefs, "Auto-Capitalization");
     assert_eq!(prefs.get("auto_caps"), Some("0"));
     back(&mut st, &ui, &mut prefs);
     back(&mut st, &ui, &mut prefs);

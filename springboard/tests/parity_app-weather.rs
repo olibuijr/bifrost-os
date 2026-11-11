@@ -58,7 +58,7 @@ fn nitrogen_dioxide_and_sulphur_dioxide_use_their_own_limits() {
     let so2 = Air { aqi: 41, no2: 30.0, so2: 250.0, ..Air::default() };
     assert_eq!(so2.main_pollutant(), (Pollutant::SulphurDioxide, 250.0));
     assert_eq!(Pollutant::NitrogenDioxide.name(), "Nitrogen dioxide");
-    assert_eq!(Pollutant::SulphurDioxide.name(), "Sulphur dioxide");
+    assert_eq!(Pollutant::SulphurDioxide.name(), "Sulfur dioxide");
 }
 
 #[test]

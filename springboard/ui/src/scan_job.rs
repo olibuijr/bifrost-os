@@ -94,7 +94,7 @@ impl ColorMode {
     pub fn label(self) -> &'static str {
         match self {
             ColorMode::Color => "Color",
-            ColorMode::Gray => "Greyscale",
+            ColorMode::Gray => "Grayscale",
             ColorMode::Lineart => "Black & White",
         }
     }

@@ -78,9 +78,9 @@ pub fn intents() -> Vec<Intent> {
         Intent::new("open-album", "Open Album", "Shows an album of the library.")
             .foreground()
             .param(Param::new("album", "Album", ParamType::Entity(ALBUM_TYPE.into()))),
-        Intent::new("set-photo-favourite", "Favourite Photo", "Adds a picture to the favourites or removes it.")
+        Intent::new("set-photo-favourite", "Favorite Photo", "Adds a picture to the favorites or removes it.")
             .param(Param::new("asset", "Photo", ParamType::Entity(ASSET_TYPE.into())))
-            .param(Param::new("favourite", "Favourite", ParamType::Bool).optional()),
+            .param(Param::new("favourite", "Favorite", ParamType::Bool).optional()),
     ]
 }
 
@@ -128,7 +128,7 @@ mod tests {
         assert_eq!(query_albums(&EntityQuery::Suggested).len(), SmartAlbum::ALL.len());
         let by_id = query_albums(&EntityQuery::Ids(vec!["favourites".into()]));
         assert_eq!(by_id.len(), 1);
-        assert_eq!(by_id[0].title, "Favourites");
+        assert_eq!(by_id[0].title, "Favorites");
         let by_text = query_albums(&EntityQuery::String(" SCREEN ".into()));
         assert_eq!(by_text.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), vec!["screenshots"]);
         assert!(query_albums(&EntityQuery::String("zzz".into())).is_empty());

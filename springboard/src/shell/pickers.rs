@@ -4,7 +4,7 @@
 
 use super::list::ROW_PT;
 use super::music::icons;
-use super::ui::{Ui, Weight, LABEL_2, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, menu_highlight, MENU_HIGHLIGHT_TEXT, MENU_RADIUS_PT, MENU_TINT, SECONDARY, accent_now, WHITE};
+use super::ui::{Ui, Weight, LABEL_2, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, menu_highlight, MENU_HIGHLIGHT_TEXT, MENU_RADIUS_PT, MENU_SOLID, SECONDARY, accent_now, WHITE};
 use crate::gfx::Surface;
 use bifrost_ui::route_picker::Destination;
 use bifrost_ui::Rect;
@@ -47,10 +47,17 @@ fn check(s: &mut Surface, (cx, cy): (f32, f32), size: f32, color: u32) {
     icons::fill_poly(s, &pts, color);
 }
 
+/// The fill of a picker's panel: the menu colour, opaque (`MENU_SOLID`). The pickers are drawn over the Control Center's
+/// modules with no blurred backdrop of their own, so the translucent menu tint let the labels under a picker show
+/// through it; pop-up menus inside a page are opaque for the same reason (`list.rs`, `popup_fill`).
+fn picker_fill() -> u32 {
+    MENU_SOLID.now()
+}
+
 /// The media picker: one row per item with its title, subtitle and a check mark when chosen, then a footer with the
 /// count. Rows that do not fit above the footer are not drawn. Disabled rows are dimmed.
 pub fn draw_media_picker(s: &mut Surface, ui: &Ui, panel: Rect, rows: &[PickerRow], footer: &str) {
-    s.fill_rrect(panel.x, panel.y, panel.w, panel.h, ui.pt(MENU_RADIUS_PT), MENU_TINT.now());
+    s.fill_rrect(panel.x, panel.y, panel.w, panel.h, ui.pt(MENU_RADIUS_PT), picker_fill());
     let row_h = ui.pt(ROW_PT);
     let list_bottom = panel.y + panel.h - ui.pt(FOOTER_PT);
     for (i, row) in rows.iter().enumerate() {
@@ -75,7 +82,7 @@ pub fn draw_media_picker(s: &mut Surface, ui: &Ui, panel: Rect, rows: &[PickerRo
 /// The route picker menu: one row per destination (local outputs first, as the model orders them), a check mark on
 /// the active route and a highlight under the row `hover` names.
 pub fn draw_route_menu(s: &mut Surface, ui: &Ui, panel: Rect, rows: &[Destination], hover: Option<usize>) {
-    s.fill_rrect(panel.x, panel.y, panel.w, panel.h, ui.pt(MENU_RADIUS_PT), MENU_TINT.now());
+    s.fill_rrect(panel.x, panel.y, panel.w, panel.h, ui.pt(MENU_RADIUS_PT), picker_fill());
     let row_h = ui.pt(ROW_PT);
     for (i, row) in rows.iter().enumerate() {
         let r = row_rect(panel, i, row_h);
@@ -150,5 +157,40 @@ mod tests {
             draw_media_picker(&mut s, &ui, Rect { x: 0.0, y: 0.0, w: 300.0, h: 180.0 }, &[], "0 selected");
         }
         assert_ne!(px[10 * w + 150], 0, "the picker material fills the panel");
+    }
+
+    /// Each picker drawn over black and over white: inside its rounded edge the two results are the same, pixel for
+    /// pixel, so nothing under a picker reads through it.
+    #[test]
+    fn a_picker_hides_what_is_behind_it() {
+        use crate::gfx::pack;
+        let ui = ui();
+        let (w, h) = (300usize, 260usize);
+        let panel = Rect { x: 10.0, y: 10.0, w: 240.0, h: 200.0 };
+        assert_eq!(picker_fill() >> 24, 255, "the picker's fill is opaque");
+        let routes = [dest("Speaker", true), dest("Headphones", false)];
+        let media = vec![PickerRow { title: "Song".into(), subtitle: "Artist".into(), chosen: true, enabled: true }];
+        let draw = |route: bool, under: u32| {
+            let mut px = vec![under; w * h];
+            {
+                let mut s = Surface { w, h, stride: w, px: &mut px, y0: 0 };
+                if route {
+                    draw_route_menu(&mut s, &ui, panel, &routes, Some(1));
+                } else {
+                    draw_media_picker(&mut s, &ui, panel, &media, "1 selected");
+                }
+            }
+            px
+        };
+        let inset = ui.pt(MENU_RADIUS_PT).ceil() + 2.0;
+        let (x0, x1) = ((panel.x + inset) as usize, (panel.x + panel.w - inset) as usize);
+        let (y0, y1) = ((panel.y + inset) as usize, (panel.y + panel.h - inset) as usize);
+        assert!(x1 > x0 && y1 > y0, "the panel has an inside to compare");
+        for route in [true, false] {
+            let (dark, light) = (draw(route, pack(0, 0, 0, 255)), draw(route, pack(255, 255, 255, 255)));
+            for py in y0..y1 {
+                assert_eq!(dark[py * w + x0..py * w + x1], light[py * w + x0..py * w + x1], "row {py} shows what is behind the picker (route menu: {route})");
+            }
+        }
     }
 }

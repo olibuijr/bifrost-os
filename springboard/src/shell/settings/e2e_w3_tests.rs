@@ -76,6 +76,26 @@ fn the_wallpaper_pane_has_the_toolbar_of_the_other_panes() {
     assert_eq!(st.page(), PageId::Wallpaper);
 }
 
+/// E2E rev 9: the Wallpaper pane's first row started 64 pt down (under the single-column status and navigation bars)
+/// where every other pane starts under the split layout's toolbar.
+#[test]
+fn the_wallpaper_pane_starts_under_the_toolbar_like_the_other_panes() {
+    use crate::shell::list::{nav_bottom, GROUP_GAP_PT};
+    use crate::shell::wallpaper_page::{dynamic_row, Tap};
+    let ui = crate::shell::tests::ui();
+    let (mut st, _prefs) = split(&ui);
+    st.open_page_id(&ui, PageId::Wallpaper, 0.0);
+    settle(&mut st, &ui);
+    let pane = st.pane();
+    let bar = ui.pt(pane.status_pt + pane.nav_pt);
+    assert!(bar < nav_bottom(&ui), "the split layout's toolbar is shorter than the single-column bars");
+    let (w, h) = (st.w, st.h);
+    let View::Wallpaper(page) = &st.stack.last().expect("the pane").view else { panic!("wallpaper page") };
+    let (x, y, rw, _) = page.placed(dynamic_row(&ui, w));
+    assert!((y - (bar + ui.pt(GROUP_GAP_PT))).abs() < 0.01, "the first row is one group gap under the toolbar: {y} px, toolbar {bar} px");
+    assert_eq!(page.tap(&ui, w, h, x + rw / 2.0, y + 1.0), Some(Tap::Dynamic), "and it answers a click where it is drawn");
+}
+
 /// W3-3: Esc pops a sub-page in the split layout, and is not used at the pane (so the shell leaves it alone).
 #[test]
 fn escape_pops_a_split_sub_page_and_stops_at_its_pane() {

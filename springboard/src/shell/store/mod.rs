@@ -647,7 +647,7 @@ impl AppStore {
         }
         let list: Vec<usize> = rest.by_ref().take(4).collect();
         if !list.is_empty() {
-            cards.push(Card::List { eyebrow: "OUR FAVOURITES", title: "Essential apps", apps: list });
+            cards.push(Card::List { eyebrow: "OUR FAVORITES", title: "Essential apps", apps: list });
         }
         cards.extend(rest.map(|app| Card::Story { app, tag: tag(app) }));
         cards
@@ -1001,7 +1001,7 @@ impl AppStore {
     fn start_queued(&mut self) {
         while let Some(id) = self.coord.start_next() {
             let Some(a) = self.find(&id).cloned() else {
-                self.coord.finish(&id, Err("the app is no longer in the catalogue".into()));
+                self.coord.finish(&id, Err("the app is no longer in the catalog".into()));
                 self.jobs.remove(&id);
                 continue;
             };

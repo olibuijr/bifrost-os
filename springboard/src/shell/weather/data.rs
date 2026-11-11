@@ -260,7 +260,7 @@ impl Pollutant {
             Pollutant::Pm10 => "PM10",
             Pollutant::Ozone => "Ozone",
             Pollutant::NitrogenDioxide => "Nitrogen dioxide",
-            Pollutant::SulphurDioxide => "Sulphur dioxide",
+            Pollutant::SulphurDioxide => "Sulfur dioxide",
         }
     }
 

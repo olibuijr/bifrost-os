@@ -903,6 +903,9 @@ impl Settings {
             // the same bar as a list pane's: on the desktop the back and forward pill with the title beside it (built
             // with the height alone it was a centred title and no pill, E2E rev 9)
             let pane = self.pane();
+            // and the content starts under that bar, where a list pane's does (it started under the single-column bar,
+            // 12 pt lower than the other panes in the split layout)
+            page.set_top(ui, pane.status_pt + pane.nav_pt);
             return Entry { id, nav: NavBar::new(ui, &title, back).height(pane.nav_pt).status(pane.status_pt).pill(ui, pane.status_pt == 0.0 && !pane.sidebar), title, view: View::Wallpaper(page) };
         }
         let spec = self.spec_for(id);
