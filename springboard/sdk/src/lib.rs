@@ -909,6 +909,19 @@ pub trait App {
     }
     /// The app left the foreground: save state. No frames are drawn until `resume`.
     fn suspend(&mut self, _ctx: &Ctx) {}
+    /// The app is ending (`ToApp::Quit`, `Ctx::terminate`) and `suspend` has run: is a save still under way that the
+    /// runtime cannot see? The runtime already waits for the saves the shell has in flight (`save_document`,
+    /// `save_document_in_place`, until their `Saved` or `Failed`). An app whose save has steps before or between those
+    /// (a picture encoded on a queue, a worker thread that writes the file, a look at the original with
+    /// `reopen_document` before the save in place) returns `true` while such a save has not ended. The runtime then
+    /// keeps the app alive, with its window already closed by the shell, delivers the shell's document answers to
+    /// `document` and calls this again every few milliseconds, until it returns `false` or the quit wait (one second)
+    /// has passed. `tick` no longer runs, so the call does what `tick` would for the save: it takes the worker's result
+    /// and sends the next request. A save that does not end in time is cut off like any other work, so an app keeps
+    /// what it needs to say so at its next launch. The default `false` is right for an app with no such steps.
+    fn save_in_flight(&mut self, _ctx: &Ctx) -> bool {
+        false
+    }
     fn resume(&mut self, _ctx: &Ctx) {}
     /// IME and keyboard composition (`NativeTextInputClient` / `NativeTextInput`): `SetMarkedText`, `UnmarkText`,
     /// `DeleteSurrounding` and accessory buttons, from Wayland `text-input-v3` or the on-screen keyboard. Apps with a
