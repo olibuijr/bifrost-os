@@ -2,8 +2,12 @@
 //! (mounted, unmounted, resized). It is the shell side of Disk Arbitration (`DARegisterDiskAppearedCallback` and its
 //! two siblings); the SDK side is `bifrost_app::disk_arbitration`. The model is `bifrost_core::disk_session`.
 //!
-//! The shell scans `/sys/block` and `/proc/mounts` (`bifrost_core::disk_scan`) every [`SCAN_EVERY_MS`]. The first scan
-//! only records the state; an app that wants the disks already there calls `list`.
+//! The shell scans `/sys/block` and `/proc/mounts` (`bifrost_core::disk_scan`) when something happened: the kernel
+//! made or removed a device node (`shell::block_watch`, a watch on `/dev` in the shell's poll set), a mount pass or
+//! an app's request ended. Nothing wakes the shell to scan otherwise. What the watch does not tell (a mount made by
+//! another program, a card put into a reader) is picked up by a scan at most every [`SCAN_FALLBACK_MS`] on a
+//! wake-up the shell has anyway; without the watch that is every [`SCAN_EVERY_MS`], as it was before the watch. The
+//! first scan only records the state; an app that wants the disks already there calls `list`.
 //!
 //! Methods (JSON params):
 //! - `list` -> `{disks: [disk]}`, a disk being `bifrost_core::disk_wire::encode_disk`
@@ -22,6 +26,11 @@
 //! - `eject_volume` `{target}` -> `{started}`: unmounts a removable volume's partition (`/dev/sdb1`) and powers its
 //!   disk off (`shell::volume_eject`), for the same callers and on the same thread pool; the outcome is the event
 //!   `volume_ejected` `{ok, target, device, powered_off, error}`. A sandboxed app cannot do this itself.
+//! - `mount_volume` `{target}` -> `{started}`: mounts a removable volume that is attached and not mounted, for the
+//!   same callers: the way back for a volume that was ejected and whose disk stayed (`shell::volume_mount`). The
+//!   target is checked like an eject's and then like a volume of the automatic pass (removable disks only, never a
+//!   disk the system uses, the same file systems and options). Refused while the screen is locked. The outcome is
+//!   the event `volume_mounted` `{target, ok, device, mount_point, name}` or `{target, ok, error}` to the caller.
 //!
 //! Events (to system apps, from `bifrost_core::disk_wire`): `disk_appeared`, `disk_disappeared`,
 //! `disk_description_changed`.
@@ -31,16 +40,22 @@
 //! `{ok, device, mount_point, name}`; when a mounted disk is pulled out its mount is taken away and the event is
 //! `volume_unmounted` `{ok, device, mount_point}`. These two go to system apps and to apps with the `storage`
 //! permission (`services::hears_volumes`), so the Files sidebar can follow them. A volume that does not mount is one
-//! "Disk Could Not Be Opened" notice. An ejected volume is not mounted again until it is unplugged.
+//! "Disk Could Not Be Opened" notice in plain words; the tool's message goes to the log. An ejected volume is not
+//! mounted again until it is unplugged or an app asks with `mount_volume`.
 //!
 //! When a removable whole disk (not a partition) appears, the shell also posts a "USB Disk Connected" notice in
-//! Settings. The notice is for the arrival only: the disk's partitions and the eject that follows get no notice.
+//! Settings. The notice is for the arrival only: the disk's partitions and the eject that follows get no notice. It
+//! waits for the mount that follows the arrival, and is left out when a volume of the disk did not mount: that disk
+//! gets the one "Disk Could Not Be Opened" notice and not a "ready to use" beside it ([`announced`]). While the
+//! screen is locked nothing is mounted, so the notice does not wait.
 //!
 //! The same arrival starts a probe on a thread (`bifrost_core::disk_magic`): the first sectors of each partition (or
 //! of the disk itself when it has none) are read and matched against the filesystems the system mounts. When a
 //! volume matches none (and is not an encrypted volume or swap), the shell posts a "Disk Not Readable" notice that
 //! points at Disk Utility, the counterpart of the reference's prompt for a disk it cannot read.
 use super::{Event, Shell, SystemService};
+use crate::shell::block_watch::{self, Change};
+use crate::shell::volume_mount::{self, Done};
 use crate::shell::apps::AppId;
 use crate::shell::notify::store::Notification;
 use bifrost_core::disk_events::{Disk, DiskEvent};
@@ -49,11 +64,38 @@ use bifrost_core::disk_scan;
 use bifrost_core::disk_session::Session;
 use bifrost_core::disk_wire;
 use bifrost_core::json::Json;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 
-/// The shell clock `t` of a service tick is in milliseconds. How often the device list is read again.
+/// The shell clock `t` of a service tick is in milliseconds. How often the device list is read again when there is
+/// no watch on `/dev`. Neither interval is a timer: a scan that is due waits for a tick the shell has anyway.
 pub const SCAN_EVERY_MS: f64 = 2_000.0;
+/// How often it is read again with the watch, for what the watch does not tell: a mount or an unmount made by
+/// another program, a card put into a reader that makes no new device node.
+pub const SCAN_FALLBACK_MS: f64 = 10_000.0;
+/// How often the loop looks for the end of an app's request (image, eject, mount) while one runs: often while it is
+/// young, seldom once it has run longer than [`JOB_QUICK_MS`] (an eject can wait on a long write).
+const JOB_POLL_MS: f64 = 100.0;
+const JOB_SLOW_POLL_MS: f64 = 1_000.0;
+const JOB_QUICK_MS: f64 = 2_000.0;
+
+/// Whether the device `name` (`sdb1`, `mmcblk1p1`) is the disk `disk` or one of its partitions: the disk's name and
+/// a number, after a `p` when the disk's own name ends in a digit.
+pub fn on_disk(name: &str, disk: &str) -> bool {
+    let Some(rest) = name.strip_prefix(disk).filter(|_| !disk.is_empty()) else { return false };
+    if rest.is_empty() {
+        return true;
+    }
+    let number = if disk.ends_with(|c: char| c.is_ascii_digit()) { rest.strip_prefix('p') } else { Some(rest) };
+    number.is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// The arrived disks that get their "USB Disk Connected" notice: all but the ones with a volume among `failed`
+/// (kernel names), which get the notice of the failure instead.
+pub fn announced<'a>(arrived: &'a [Disk], failed: &[String]) -> Vec<&'a Disk> {
+    arrived.iter().filter(|d| !failed.iter().any(|f| on_disk(f, &d.bsd_name))).collect()
+}
 
 pub struct Disks {
     session: Session,
@@ -64,8 +106,13 @@ pub struct Disks {
     /// Whether a snapshot has been taken; the first one is recorded without events.
     primed: bool,
     next_scan: f64,
-    /// The removable whole disks that appeared in the last read, waiting for their notice.
+    /// The removable whole disks that appeared in the last read.
     arrivals: Vec<Disk>,
+    /// The arrived disks whose notice waits for the mount that follows, and the volumes that did not mount.
+    connected: Vec<Disk>,
+    failed: Vec<String>,
+    /// When the newest app request started, in shell milliseconds.
+    job_from: f64,
     /// where the device nodes are (`/dev`)
     dev: PathBuf,
     /// the probes running for arrived disks: each sends the disk's label and a verdict per volume
@@ -93,6 +140,9 @@ impl Disks {
             primed: false,
             next_scan: 0.0,
             arrivals: Vec::new(),
+            connected: Vec::new(),
+            failed: Vec::new(),
+            job_from: 0.0,
             dev: PathBuf::from("/dev"),
             probes: Vec::new(),
             images: Default::default(),
@@ -155,6 +205,24 @@ impl Disks {
             .collect()
     }
 
+    /// One read of the device list on the tick, with what the watch on `/dev` saw since the last one. The scan
+    /// compares two lists, so a disk pulled and plugged in again between two reads looks unchanged to it; the watch
+    /// names both, and the mounting takes each in: a node removed for a device the list knew is a device that left,
+    /// a node made for a device the list knows now is one that arrived. A name the list never knew (a terminal, an
+    /// input node) is nothing.
+    fn scan(&mut self, changes: &[Change]) -> Vec<Event> {
+        let before: BTreeSet<String> = self.session.disks().iter().map(|d| d.bsd_name.clone()).collect();
+        let events = self.rescan();
+        for change in changes {
+            match change {
+                Change::Removed(name) if before.contains(name) => self.auto.unplugged(name),
+                Change::Added(name) if self.session.disks().iter().any(|d| d.bsd_name == *name) => self.auto.plugged(name),
+                _ => {}
+            }
+        }
+        events
+    }
+
     /// Answers one call from `app`.
     pub fn handle(&mut self, app: &str, method: &str, params: &Json) -> Result<Json, String> {
         match method {
@@ -205,14 +273,19 @@ impl SystemService for Disks {
         disk_wire::SERVICE
     }
 
-    fn call(&mut self, _shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, t: f64) -> Result<Json, String> {
         // an app that already reads and writes the whole home folder (Files) may have one of the account's disk images
         // mounted or released: privd checks the image itself, and the answer shows nothing of the other disks
         if crate::shell::disk_image::Jobs::handles(method) {
             if !super::app_has_permission(app_id, "storage") {
                 super::require_system_app(app_id, disk_wire::SERVICE)?;
             }
+            // nothing is mounted behind a locked screen, on request as little as by itself
+            if method == volume_mount::M_MOUNT && shell.is_locked() {
+                return Err("disks: no volume is mounted while the screen is locked".to_string());
+            }
             let started = self.images.start(app_id, method, params)?;
+            self.job_from = t;
             // an ejected volume stays ejected: it is not mounted again while it is still plugged in
             if method == crate::shell::volume_eject::M_EJECT {
                 self.auto.ejecting(&params.str_field("target").unwrap_or_default());
@@ -231,41 +304,75 @@ impl SystemService for Disks {
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         // a finished disk image request goes to the app that asked, on the tick it ends
         let ended = self.images.finished();
+        let requests_ended = !ended.is_empty();
         let mut events: Vec<Event> = ended.into_iter().map(|(app, event, body)| Event { app: Some(app), event: event.to_string(), body }).collect();
         // a finished pass over the removable volumes: its mounts and unmounts go to the apps that show volumes, and
         // what did not mount is one notice
-        if let Some(report) = self.auto.tick(t, shell.is_locked()) {
-            let sent = crate::shell::volume_mount::events(&report);
+        let report = self.auto.finish();
+        if let Some(report) = &report {
+            let sent = volume_mount::events(report);
             if !sent.is_empty() {
                 let listeners = super::volume_listeners();
                 events.extend(sent.iter().flat_map(|(event, body)| listeners.iter().map(move |app| Event { app: Some(app.clone()), event: event.to_string(), body: body.clone() })));
             }
-            if let Some(body) = crate::shell::volume_mount::failure_notice(&report) {
+            if let Some(body) = volume_mount::failure_notice(report) {
                 shell.notify(Notification::new(AppId::Settings, "Disk Could Not Be Opened", body, crate::bare::sys::wall_time().0));
             }
+            self.failed.extend(report.volumes.iter().filter(|v| matches!(v.done, Done::Failed(_))).map(|v| v.device.clone()));
         }
-        if t < self.next_scan {
-            return events;
+        // the device list is read when something happened to it: a device node came or went, a pass or a request
+        // changed the mounts; otherwise only when the slow interval is over and the shell is awake anyway. A unit
+        // test never watches the machine it runs on.
+        if !cfg!(test) {
+            block_watch::open();
         }
-        self.next_scan = t + SCAN_EVERY_MS;
-        events.extend(self.rescan());
-        // a claim does not outlive its app: a quit app would otherwise lock the disk against Disk Utility until restart
-        for owner in self.session.claim_owners() {
-            let running = crate::shell::apphost::slot_of(&owner).is_some_and(|slot| matches!(shell.ext.get(slot), Some(Some(_))));
-            if !running {
-                self.session.release_owner(&owner);
+        let (changes, lost) = block_watch::take();
+        if !self.primed || lost || !changes.is_empty() || requests_ended || report.is_some() || t >= self.next_scan {
+            self.next_scan = t + if block_watch::active() { SCAN_FALLBACK_MS } else { SCAN_EVERY_MS };
+            events.extend(self.scan(&changes));
+            // a claim does not outlive its app: a quit app would otherwise lock the disk against Disk Utility until restart
+            for owner in self.session.claim_owners() {
+                let running = crate::shell::apphost::slot_of(&owner).is_some_and(|slot| matches!(shell.ext.get(slot), Some(Some(_))));
+                if !running {
+                    self.session.release_owner(&owner);
+                }
+            }
+            for disk in std::mem::take(&mut self.arrivals) {
+                self.probe(&disk);
+                self.connected.push(disk);
             }
         }
-        let now = crate::bare::sys::wall_time().0;
-        for disk in std::mem::take(&mut self.arrivals) {
-            let label = if disk.model.is_empty() { disk.bsd_name.clone() } else { disk.model.clone() };
-            shell.notify(Notification::new(AppId::Settings, "USB Disk Connected", format!("{label} is ready to use"), now));
-            self.probe(&disk);
+        let locked = shell.is_locked();
+        self.auto.start(t, locked);
+        let now = || crate::bare::sys::wall_time().0;
+        // the arrival's notice waits for the mount that follows it, so a disk that did not open is not "ready to use"
+        let settled = !self.auto.mount_waiting();
+        if !self.connected.is_empty() && (locked || settled) {
+            let arrived = std::mem::take(&mut self.connected);
+            for disk in announced(&arrived, &self.failed) {
+                let label = if disk.model.is_empty() { disk.bsd_name.clone() } else { disk.model.clone() };
+                shell.notify(Notification::new(AppId::Settings, "USB Disk Connected", format!("{label} is ready to use"), now()));
+            }
+        }
+        if settled {
+            self.failed.clear();
         }
         for body in self.unreadable_notices() {
-            shell.notify(Notification::new(AppId::Settings, "Disk Not Readable", body, now));
+            shell.notify(Notification::new(AppId::Settings, "Disk Not Readable", body, now()));
         }
         events
+    }
+
+    fn next_wake(&self, shell: &Shell, t: f64) -> Option<f64> {
+        // a unit test's shell starts no pass and no request on the machine it runs on: it has nothing to wake for
+        if cfg!(test) {
+            return None;
+        }
+        let request = self.images.busy().then(|| t + if t - self.job_from > JOB_QUICK_MS { JOB_SLOW_POLL_MS } else { JOB_POLL_MS });
+        match (self.auto.next_wake(t, shell.is_locked()), request) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 }
 
@@ -439,6 +546,91 @@ mod tests {
         fs::remove_dir_all(sys.join("sdb")).unwrap();
         s.rescan();
         assert!(s.auto.next_pass(80_000.0, true, false).is_some_and(|p| p.sweep && !p.mount));
+    }
+
+    fn removable(name: &str) -> Disk {
+        Disk { bsd_name: name.into(), size: 1, removable: true, read_only: false, model: String::new(), mount_point: None }
+    }
+
+    #[test]
+    fn a_disk_pulled_and_plugged_in_again_between_two_scans_is_seen_through_the_watch() {
+        let (sys, mounts) = fixture("replug");
+        add_disk(&sys, "sdb", "1", "2000");
+        fs::write(&mounts, "/dev/sdb /run/media/me/Stick vfat rw 0 0\n").unwrap();
+        let mut s = Disks::at(&sys, &mounts);
+        s.scan(&[]);
+        let _ = s.auto.next_pass(0.0, false, false);
+        let _ = s.auto.next_pass(crate::shell::volume_mount::SETTLE_MS, false, false);
+        assert!(s.auto.is_handled("sdb"), "found mounted, it is left alone");
+        // the same name is back before the next scan, and the mount of the device that left is still in the table:
+        // the two lists are equal, so the scan alone reports nothing and would leave the stale mount in place
+        assert!(s.rescan().is_empty());
+        assert_eq!(s.auto.next_pass(10_000.0, false, false), None);
+        assert!(s.auto.is_handled("sdb"));
+        // with the watch's two events the device is new: forgotten, swept at once, then mounted
+        let seen = [Change::Removed("sdb".into()), Change::Added("sdb".into())];
+        assert!(s.scan(&seen).is_empty(), "still no change in the list");
+        assert!(!s.auto.is_handled("sdb"), "its stale mount does not make it decided on");
+        assert_eq!(s.auto.next_pass(20_000.0, false, false).map(|p| (p.mount, p.sweep)), Some((false, true)));
+        assert_eq!(s.auto.next_pass(20_000.0 + crate::shell::volume_mount::SETTLE_MS, false, false).map(|p| (p.mount, p.sweep)), Some((true, false)));
+    }
+
+    #[test]
+    fn a_node_that_is_no_disk_asks_for_nothing() {
+        let (sys, mounts) = fixture("nodes");
+        let mut s = Disks::at(&sys, &mounts);
+        s.scan(&[]);
+        let _ = s.auto.next_pass(0.0, false, false);
+        let _ = s.auto.next_pass(crate::shell::volume_mount::SETTLE_MS, false, false);
+        // a terminal and an input node come and go; a disk node is removed that the list never knew
+        let seen = [Change::Added("ttyACM0".into()), Change::Removed("ttyACM0".into()), Change::Removed("hidraw3".into()), Change::Removed("sdq".into()), Change::Added("sdq".into())];
+        assert!(s.scan(&seen).is_empty());
+        assert_eq!(s.auto.next_pass(10_000.0, false, false), None, "no sweep and no mount");
+        assert_eq!(s.auto.next_wake(10_000.0, false), None);
+        // a pull seen by the watch and by the scan is one device that left
+        add_disk(&sys, "sdb", "1", "2000");
+        s.scan(&[Change::Added("sdb".into())]);
+        assert_eq!(s.auto.next_pass(20_000.0, false, false), None, "the settling time first");
+        assert!(s.auto.next_pass(20_000.0 + crate::shell::volume_mount::SETTLE_MS, false, false).is_some_and(|p| p.mount));
+        fs::remove_dir_all(sys.join("sdb")).unwrap();
+        assert_eq!(names(&s.scan(&[Change::Removed("sdb".into())])), vec!["disk_disappeared:sdb"]);
+        assert_eq!(s.auto.next_pass(30_000.0, false, false).map(|p| (p.mount, p.sweep)), Some((false, true)));
+    }
+
+    #[test]
+    fn a_disk_that_did_not_open_is_not_announced_as_ready() {
+        assert!(on_disk("sdb", "sdb") && on_disk("sdb1", "sdb") && on_disk("sdb12", "sdb"));
+        assert!(on_disk("mmcblk1p1", "mmcblk1") && on_disk("nvme0n1p2", "nvme0n1") && on_disk("mmcblk1", "mmcblk1"));
+        assert!(!on_disk("sdba1", "sdb") && !on_disk("sdc1", "sdb") && !on_disk("sd", "sdb") && !on_disk("sdbp1", "sdb"));
+        assert!(!on_disk("mmcblk10", "mmcblk1") && !on_disk("mmcblk10p1", "mmcblk1") && !on_disk("mmcblk1p", "mmcblk1") && !on_disk("sdb1", ""));
+        let arrived = [removable("sdb"), removable("sdc"), removable("mmcblk1")];
+        let names = |failed: &[&str]| -> Vec<String> {
+            let failed: Vec<String> = failed.iter().map(|f| f.to_string()).collect();
+            announced(&arrived, &failed).into_iter().map(|d| d.bsd_name.clone()).collect()
+        };
+        assert_eq!(names(&[]), ["sdb", "sdc", "mmcblk1"]);
+        assert_eq!(names(&["sdb1"]), ["sdc", "mmcblk1"], "the failure's notice is the one notice for that disk");
+        assert_eq!(names(&["sdc", "mmcblk1p2"]), ["sdb"]);
+        assert_eq!(names(&["sdd1"]), ["sdb", "sdc", "mmcblk1"]);
+    }
+
+    #[test]
+    fn a_request_to_mount_is_refused_behind_a_locked_screen_and_for_a_target_that_is_no_device() {
+        let (sys, mounts) = fixture("request");
+        let mut s = Disks::at(&sys, &mounts);
+        let mut sh = crate::shell::tests::shell();
+        let target = |t: &str| obj(vec![("target", Json::Str(t.into()))]);
+        // the shell itself asks (an empty app id), so the answer is about the request and not about who asked
+        for bad in ["", "sdb1", "/dev/../etc/shadow", "/run/media/me/Stick", "/dev/sdb1 -o suid", "/dev/mapper/x"] {
+            assert!(s.call(&mut sh, "", volume_mount::M_MOUNT, &target(bad), 0.0).is_err(), "{bad}");
+        }
+        assert!(s.call(&mut sh, "", volume_mount::M_MOUNT, &Json::Null, 0.0).is_err());
+        sh.screen = crate::shell::Screen::Lock;
+        let refused = s.call(&mut sh, "", volume_mount::M_MOUNT, &target("/dev/sdzz9"), 0.0).unwrap_err();
+        assert!(refused.contains("locked"), "{refused}");
+        // an app without the storage permission that is no system app does not get that far
+        assert!(s.call(&mut sh, "com.example.other", volume_mount::M_MOUNT, &target("/dev/sdzz9"), 0.0).unwrap_err().contains("system apps"));
+        assert!(!s.images.busy(), "nothing was started");
     }
 
     #[test]
