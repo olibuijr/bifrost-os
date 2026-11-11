@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.12
+
+- Distances and the scale bar are metric unless you choose Miles in View > Distance Units. Automatic used to follow the language of the system's messages (en_US on an unchanged install), so the scale bar read in feet on a machine nobody had set to miles.
+
 ## 0.7.11
 
 - The text is in en_US spelling: Kilometers in the units menu and "Map center" as the name of a route end. The saved units preference is unchanged.

@@ -304,26 +304,13 @@ pub struct Maps {
     dirty_settings: bool,
 }
 
-/// True unless the region measures in miles. The region is the one chosen in Settings > Language & Region
-/// (what `Locale::current` reads, so an Icelandic region is metric whatever the environment says); an
-/// `LC_MEASUREMENT` in the environment decides first.
-pub fn region_is_metric() -> bool {
-    let measurement = std::env::var("LC_MEASUREMENT").ok().filter(|v| !v.is_empty());
-    match measurement {
-        Some(m) => metric_for_identifier(&m),
-        None => metric_for_region(bifrost_app::locale::Locale::current().region_code()),
-    }
-}
-
-/// Regions that show miles and feet: the US, Liberia, Myanmar and the UK.
-fn metric_for_region(region: Option<&str>) -> bool {
-    !matches!(region, Some("US" | "LR" | "MM" | "GB"))
-}
-
-/// A locale identifier such as `en_US.UTF-8` (`LC_MEASUREMENT`).
-fn metric_for_identifier(id: &str) -> bool {
-    metric_for_region(bifrost_app::locale::Locale::new(id).region_code())
-}
+/// What Distance Units > Automatic measures in until the person chooses Kilometers or Miles: metric. The system
+/// does not tell apps the region's measurement system (there is no locale message yet), and what the app read in its
+/// place was not the person's choice: the region of `Locale::current`, which is the language of messages (`LANG`,
+/// `en_US` on an install nobody changed) whenever the shell's settings file is not readable from the app. So a machine
+/// set to day-month dates and a 24-hour clock drew its scale bar in feet (E2E 9). When the system does say, its
+/// answer belongs in `Maps::region_metric`.
+pub const AUTOMATIC_IS_METRIC: bool = true;
 
 impl Maps {
     /// A map state with its own shared data, opened from the data folder (one window, or a test).
@@ -351,7 +338,7 @@ impl Maps {
             shared,
             view: MapView::new(lat, lon, zoom, width, height),
             map_type: MapType::from_key(&text("map_type")),
-            region_metric: region_is_metric(),
+            region_metric: AUTOMATIC_IS_METRIC,
             panel: Panel::None,
             query: TextField::new(),
             suggestor: Suggestor::default(),
@@ -1804,14 +1791,21 @@ mod tests {
         assert!(m.routes.is_empty());
     }
 
+    /// E2E 9: the scale bar read "200 ft" on a machine nobody had set to miles; the default came from `LANG`.
     #[test]
-    fn iceland_and_unset_regions_are_metric_and_the_us_is_not() {
-        assert!(metric_for_region(Some("IS")));
-        assert!(metric_for_region(None));
-        assert!(!metric_for_region(Some("US")));
-        assert!(!metric_for_region(Some("GB")));
-        assert!(metric_for_identifier("is_IS.UTF-8"));
-        assert!(!metric_for_identifier("en_US.UTF-8"));
+    fn units_are_metric_until_the_person_chooses_miles_in_the_app() {
+        let mut m = Maps::new(&dir("default-metric"), "1.0.0", 800.0, 600.0);
+        assert!(m.region_metric, "nothing in the environment makes a new map imperial");
+        assert_eq!(m.units_setting(), UnitsSetting::Automatic);
+        assert_eq!(m.units(), DistanceUnits::Metric);
+        let bar = crate::units::scale_bar(0.6, 100.0, m.units()).unwrap();
+        assert_eq!(bar.label, "50 m", "the scale bar counts in metres, not feet");
+        // the app's own setting is the one way to miles and feet
+        m.act(Act::Units(UnitsSetting::Miles), 0);
+        assert_eq!(m.units(), DistanceUnits::Imperial);
+        assert_eq!(crate::units::scale_bar(0.6, 100.0, m.units()).unwrap().label, "100 ft");
+        m.act(Act::Units(UnitsSetting::Automatic), 0);
+        assert_eq!(m.units(), DistanceUnits::Metric, "and Automatic is metric again");
     }
 
     #[test]
