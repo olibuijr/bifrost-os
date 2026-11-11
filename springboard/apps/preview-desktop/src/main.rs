@@ -2023,9 +2023,18 @@ impl Viewer {
         }
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let name = document::clipboard_file_name(&bytes, stamp);
-        match recents::keep_copy(&self.data_dir, &name, &bytes) {
+        self.open_pasted(&name, &bytes);
+    }
+
+    /// Keeps the clipboard picture `bytes` as the working copy `name` and opens it. Its place under `opened/` comes
+    /// from `Origins::place`, as for every other open: when a working copy of that name was made from a chosen file,
+    /// the picture gets a place of its own instead of being written over that copy and taking its original away. It
+    /// has no original itself, so File > Save writes its own file.
+    fn open_pasted(&mut self, name: &str, bytes: &[u8]) {
+        let place = self.origins.place(&recents::copy_name(name), None);
+        match recents::keep_copy_at(&self.data_dir, &place, bytes) {
             Ok(path) => {
-                self.set_origin(&name, None);
+                self.set_origin(&place, None);
                 self.open_path(&path)
             }
             Err(e) => self.status = format!("Could not keep the clipboard picture: {e}"),
@@ -4153,6 +4162,30 @@ mod tests {
         assert_eq!(std::fs::read(&copy).unwrap(), b"as opened");
         assert_eq!(v.origins.stamp_of(&v.data_dir, &copy), Some(mine), "a change by another app is still seen at the next save");
         assert_eq!(v.released, [[8; 16]]);
+        cleanup(&v);
+    }
+
+    /// A clipboard picture is kept like an opened file: it never takes the place, or the original, of a working copy
+    /// of the same name that was made from a chosen file.
+    #[test]
+    fn a_clipboard_picture_does_not_write_over_a_working_copy_of_the_same_name() {
+        let (mut v, copy) = viewer_on_copy("pasted-place");
+        let mine = origin::Stamp { dev: 1, ino: 10, secs: 100, nanos: 0, len: 9 };
+        v.set_origin("b.png", Some(([9; 16], Some(mine))));
+        // it is in Open Recent, so it is kept when another document opens
+        v.recents.add(&copy);
+        let picture = export::png_bytes(&Image { w: 3, h: 1, px: vec![0xff00_ff00; 3] }).unwrap();
+        v.open_pasted("b.png", &picture);
+        let pasted = v.data_dir.join("opened/2/b.png");
+        assert_eq!(v.doc.as_ref().expect("the pasted picture is open").path, pasted);
+        assert_eq!(std::fs::read(&pasted).unwrap(), picture);
+        assert_eq!(std::fs::read(&copy).unwrap(), b"as opened", "the other copy is not written over");
+        assert_eq!(v.origins.grant_of(&v.data_dir, &copy), Some([9; 16]), "and File > Save still reaches its original");
+        assert_eq!(v.origins.grant_of(&v.data_dir, &pasted), None, "the pasted picture is its own file");
+        assert!(v.released.is_empty(), "no grant was given up");
+        // a name no chosen file holds is used as it is
+        v.open_pasted("Clipboard 5.png", &picture);
+        assert_eq!(v.doc.as_ref().unwrap().path, v.data_dir.join("opened/Clipboard 5.png"));
         cleanup(&v);
     }
 
