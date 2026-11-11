@@ -746,6 +746,12 @@ impl NavBar {
         self.forward
     }
 
+    /// Whether the bar is the desktop toolbar (the back and forward pill, the title beside it).
+    #[cfg(test)]
+    pub fn is_toolbar(&self) -> bool {
+        self.pill
+    }
+
     /// Draws back and forward as one pill (the desktop toolbar). The title then sits left-aligned beside the pill in the
     /// title 3 style, not centred in the bar.
     pub fn pill(mut self, ui: &Ui, on: bool) -> Self {

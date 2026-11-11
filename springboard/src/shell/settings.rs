@@ -900,7 +900,10 @@ impl Settings {
             // the desktop applies a thumbnail on click (Golden Gate); the tablet keeps its preview with the Set buttons
             page.set_desktop(ui, super::pages::pointer_form());
             page.set_show_on(self.wallpaper_show_on);
-            return Entry { id, nav: NavBar::new(ui, &title, back).height(self.pane().nav_pt), title, view: View::Wallpaper(page) };
+            // the same bar as a list pane's: on the desktop the back and forward pill with the title beside it (built
+            // with the height alone it was a centred title and no pill, E2E rev 9)
+            let pane = self.pane();
+            return Entry { id, nav: NavBar::new(ui, &title, back).height(pane.nav_pt).status(pane.status_pt).pill(ui, pane.status_pt == 0.0 && !pane.sidebar), title, view: View::Wallpaper(page) };
         }
         let spec = self.spec_for(id);
         let mut spec = spec;
@@ -2252,13 +2255,17 @@ impl Settings {
         let Some(top) = self.stack.last_mut() else { return Outcome::Nothing };
         match &mut top.view {
             View::Wallpaper(page) => {
-                let back = top.nav.hit_back(ui, x, y);
+                let (back, forward) = (top.nav.hit_back(ui, x, y), top.nav.hit_forward(ui, x, y));
                 match ev {
                     Event::Down(..) => self.pressed_thumb = if page.previewing() { None } else { page.hit(ui, w, h, x, y) },
                     Event::Up(..) => {
                         let held = self.pressed_thumb.take();
                         if back {
                             return Outcome::Pop;
+                        }
+                        // the pill's forward half, as on a list pane (`ListPage::hit`)
+                        if forward {
+                            return Outcome::Activate(Hit::Forward);
                         }
                         if page.previewing() {
                             if let Some(tap) = page.tap(ui, w, h, x, y) {
