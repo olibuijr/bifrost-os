@@ -1507,6 +1507,8 @@ the windows behind the window. Ours, end to end:
   and `desk::window_materials` (`take_wayland_materials`, under the window's own frame id, `win_id`). An extra window
   that sends no controls keeps its whole band as the drag zone. Every extra window of an app built with this SDK now
   declares its materials on such a shell (a document app's second window gets the blur its main window has).
+  `ToShell::Controls` stays the main window's own list whichever window is key: `App::controls` plus the nodes the
+  kit recorded in the main window's draw; what an extra window's draw records is dropped (`draw_windows`).
 - Version guard: an app whose SDK protocol differs from the shell's (`Hello`, or packets that do not decode) is
   stopped, logged, and its window shows "This app needs an update" instead of black (`AppHost::incompatible`).
 - Shell: `AppHost::materials` holds the list; `Shell::take_wayland_materials` turns it into window px with a

@@ -1620,6 +1620,11 @@ fn draw_windows<A: App>(chan: &Channel, app: &mut A, ctx: &Ctx, pixels: &mut std
         );
         crate::widgets::set_vibrancy(vibrancy.0, vibrancy.1);
         let drawn = crate::widgets::take_frame_materials();
+        // The nodes the kit recorded while this window drew are not the main window's: `Controls` (and the tree and
+        // custom actions beside it) describe the main window alone, whichever window is key, and are taken right after
+        // its own draw. An extra window's controls go to the shell as `WindowChrome` (`App::window_controls`). Dropped
+        // here, or they pile up for as long as only extra windows draw.
+        bifrost_ui::ax::begin_frame();
         // a draw that changed nothing is done too: the window waits for the next event, not for a free slot
         p.first = false;
         p.dirty = false;
@@ -2596,6 +2601,8 @@ mod window_pixel_tests {
         }
         fn draw_window(&mut self, _ctx: &Ctx, window: WindowId, s: &mut Surface, _t: f64) -> Damage {
             self.drawn.push(window.0);
+            // a kit control of this window records itself, as it does in the main window's draw
+            bifrost_ui::ax::record(bifrost_ui::Role::Button, "Back", "", bifrost_ui::Rect { x: 4.0, y: 4.0, w: 8.0, h: 8.0 }, true);
             let mut d = Damage::new(s.w, s.h);
             d.all();
             d
@@ -2649,6 +2656,8 @@ mod window_pixel_tests {
         draw_windows(&a, &mut app, &ctx, &mut pixels, 0.0, false);
         assert_eq!(app.drawn, vec![id.0]);
         assert_eq!(pixels[&id.0].size, (40, 30));
+        // what the window's draw recorded is not kept for the main window's `Controls`
+        assert!(bifrost_ui::ax::take_frame().is_empty(), "an extra window's nodes are not the main window's");
         // nothing changed and no frame is due: the window is not drawn again
         draw_windows(&a, &mut app, &ctx, &mut pixels, 1.0, false);
         assert_eq!(app.drawn.len(), 1);
