@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.25
+
+- Quitting while a save is under way lets the save finish: the file is written before Viewer leaves. A save that could not finish in time is kept in Viewer's own copy and opened as an edited document at the next launch, with a message.
+- While a file is being saved the window takes no edits, so none is lost when the save completes; the save also goes on when the window is closed or another app is in front.
+- "Saved" shows sooner after a picture is saved: the picture is no longer read back from the file first. The zoom you chose stays after a save.
+- The thumbnail of a rotated page fits its tile in the sidebar instead of running past its edge.
+- Toolbar buttons that do not fit a narrow window are listed in a menu behind a » button at the end of the bar instead of being left out.
+- New from Clipboard no longer writes over the working copy of a file of the same name.
+
 ## 0.11.24
 
 - Save shows "Saving name…" as soon as it is asked for and "Saved name" when the file is written. A picture is encoded in the background, so the window is not held while a large one is saved.
