@@ -4427,7 +4427,8 @@ mod tests {
 
     /// A bar too narrow for every button shows the kit's `»` button; a press on it asks for a menu of the buttons that
     /// are not on the bar, so none is left out without a sign. A pull-down button that has no room is listed with the
-    /// entries of its own menu.
+    /// entries of its own menu. (420 px is narrower than the window can be made: the manifest's least width keeps the
+    /// primary buttons on the bar, see the next tests.)
     #[test]
     fn buttons_that_do_not_fit_are_listed_behind_the_overflow_button() {
         let ctx = menu_ctx();
@@ -4436,10 +4437,12 @@ mod tests {
         let lay = v.layout(&ctx.ui, 420, 800);
         let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, true, &title, Tool::Pan);
         let button = layout.overflow_button.expect("a 420 px window has no room for every button");
-        assert!(layout.overflow.contains(&canvas::ADJUST_MENU_ID), "the last button is the first to go: {:?}", layout.overflow);
+        assert!(layout.overflow.contains(&canvas::ADJUST_MENU_ID), "a bar this narrow has Adjust behind the button too: {:?}", layout.overflow);
         let on_bar = layout.visible.iter().filter(|(id, _)| *id != canvas::TITLE_ID).count();
         assert_eq!(on_bar + layout.overflow.len() + 1, bar.items.len(), "every button is on the bar or in the menu");
-        assert!(bar.items.iter().all(|item| item.id != Action::ActualSize.id() && item.id != Action::RotateLeft.id()), "the bar gave up what the View menu has before it left a button out");
+        for given_up in [Action::ActualSize, Action::RotateLeft] {
+            assert!(bar.items.iter().any(|item| item.id == given_up.id()) && layout.overflow.contains(&given_up.id()), "{given_up:?} is behind the button, not left out");
+        }
         let k = ctx.ui.pt(1.0);
         let at = ((button.x + button.w / 2.0) * k, (button.y + button.h / 2.0) * k);
         assert_eq!(canvas::button_hit(&ctx.ui, &lay, true, &title, Tool::Pan, at.0, at.1), None, "it is no action itself");
@@ -4468,13 +4471,24 @@ mod tests {
         cleanup(&v);
     }
 
-    /// The window as it opens (1200 px wide at the lab's scale and at the preview's, 768 points at the larger scale)
-    /// shows the sidebar button, the pages, the zoom, Fit, the turn and the Markup and Adjust buttons on the bar, with
-    /// no `»` button: whatever the document is called, with and without the sidebar, clean or edited.
-    #[test]
-    fn the_window_at_its_default_width_has_every_primary_button_on_the_bar() {
-        let ctx = menu_ctx();
-        let primary = [
+    /// The least window size the manifest allows, in points.
+    fn manifest_min_size() -> (i32, i32) {
+        let manifest = include_str!("../manifest.toml");
+        let line = manifest.lines().find(|l| l.starts_with("min_size")).expect("the manifest gives a least size");
+        let size = line.split('"').nth(1).expect("a quoted size");
+        let (w, h) = size.split_once('x').expect("width x height");
+        (w.parse().expect("a width"), h.parse().expect("a height"))
+    }
+
+    /// The kit's type at `scale` pixels to the point.
+    fn ui_at(scale: f32) -> Ui {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), scale)
+    }
+
+    /// The buttons every bar has, in bar order.
+    fn primary_buttons() -> [u32; 9] {
+        [
             Action::ToggleSidebar.id(),
             Action::Previous.id(),
             Action::Next.id(),
@@ -4484,33 +4498,126 @@ mod tests {
             Action::RotateRight.id(),
             canvas::MARKUP_MENU_ID,
             canvas::ADJUST_MENU_ID,
-        ];
+        ]
+    }
+
+    /// What must hold for the bar at every window width from the manifest's least: the title and every primary button
+    /// are on the bar, between the bar's start and the trailing margin; a button that is not on the bar is one of the
+    /// two the bar gives up, and is behind the `»` button, which is then on the bar and keeps the margin too; nothing
+    /// overlaps; and the buttons on the bar are in their order.
+    fn check_bar(ui: &Ui, lay: &Layout, title: &str, when: &str) -> (bifrost_app::controls::nav::Toolbar, bifrost_app::controls::nav::ToolbarLayout) {
+        let k = ui.pt(1.0);
+        let (bar, layout) = canvas::toolbar(ui, lay, true, title, Tool::Pan);
+        let (start, edge) = (lay.side as f32 / k, lay.w as f32 / k - canvas::TOOLBAR_TRAILING_PT);
+        let optional = [Action::ActualSize.id(), Action::RotateLeft.id()];
+        let (id, slot) = layout.visible[0];
+        assert_eq!(id, canvas::TITLE_ID, "{when}: the title leads");
+        assert!(slot.w >= canvas::TITLE_MIN_PT, "{when}: the title keeps its least width, has {}", slot.w);
+        for id in primary_buttons() {
+            assert!(layout.rect_of(id).is_some(), "{when}: {id:#x} is on the bar; behind the button: {:?}", layout.overflow);
+        }
+        for (id, r) in &layout.visible {
+            assert!(r.x >= start - 0.01 && r.x + r.w <= edge + 0.01, "{when}: {id:#x} at {r:?} is between {start} and the trailing margin at {edge}");
+        }
+        for pair in layout.visible.windows(2) {
+            assert!(pair[0].1.x + pair[0].1.w <= pair[1].1.x + 0.01, "{when}: {:#x} and {:#x} do not overlap", pair[0].0, pair[1].0);
+        }
+        for item in &bar.items {
+            assert!(layout.rect_of(item.id).is_some() || layout.overflow.contains(&item.id), "{when}: {} is on the bar or behind the button", item.label);
+        }
+        assert!(layout.overflow.iter().all(|id| optional.contains(id)), "{when}: only Actual Size and Rotate Left leave the bar: {:?}", layout.overflow);
+        match layout.overflow_button {
+            Some(button) => {
+                assert!(!layout.overflow.is_empty(), "{when}: the button is there for something");
+                let last = layout.visible.iter().map(|(_, r)| r.x + r.w).fold(0.0, f32::max);
+                assert!(button.x >= last - 0.01 && button.x + button.w <= edge + 0.01, "{when}: the button at {button:?} follows the bar and keeps the margin at {edge}");
+            }
+            None => assert!(layout.overflow.is_empty(), "{when}: nothing is off the bar without the button"),
+        }
+        let order: Vec<u32> = Action::toolbar().iter().map(|a| a.id()).chain([canvas::MARKUP_MENU_ID, canvas::ADJUST_MENU_ID]).collect();
+        let on_bar: Vec<u32> = layout.visible.iter().skip(1).map(|(id, _)| *id).collect();
+        assert_eq!(on_bar, order.iter().copied().filter(|id| on_bar.contains(id)).collect::<Vec<_>>(), "{when}: the buttons on the bar keep their order");
+        (bar, layout)
+    }
+
+    /// The window at exactly the manifest's least width, in the state that leaves the bar the least room (the sidebar
+    /// shown, the title saying "Edited"): the title, the sidebar button, the pages, the zoom, Fit, Rotate Right, Markup
+    /// and Adjust are on the bar inside the trailing margin, and Actual Size and Rotate Left are behind the `»`
+    /// button, whose menu lists them. At 0.11.26 those two were left out there with no button to reach them, and
+    /// Adjust touched the window's edge.
+    #[test]
+    fn the_narrowest_window_has_every_primary_button_on_the_bar_and_the_rest_behind_the_overflow_button() {
+        let (min_w, min_h) = manifest_min_size();
         let long = "a very long file name that goes on and on and on and on and on and on.png";
         let edited = format!("wide.png{}", canvas::EDITED_SUFFIX);
-        for width in [720, 768, 960, 1200] {
+        let long_edited = format!("{long}{}", canvas::EDITED_SUFFIX);
+        for scale in [1.0f32, 1.5625] {
+            let ui = ui_at(scale);
+            let width = (min_w as f32 * ui.pt(1.0)).round() as i32;
+            let height = (min_h as f32 * ui.pt(1.0)).round() as i32;
+            let lay = Layout::new(&ui, width, height);
+            assert!(lay.side > 0, "the sidebar is shown");
+            for title in [edited.as_str(), long_edited.as_str(), "wide.png", long, "a"] {
+                let (bar, layout) = check_bar(&ui, &lay, title, &format!("{min_w} points at {scale}, {title:?}"));
+                assert_eq!(layout.overflow, [Action::ActualSize.id(), Action::RotateLeft.id()], "{scale} {title:?}");
+                assert_eq!(canvas::overflow_actions(&bar, &layout), [(Action::ActualSize, true), (Action::RotateLeft, true)]);
+            }
+            // without the sidebar the bar starts after the window controls and has more room: the same holds
+            let mut bare = lay;
+            bare.side = 0;
+            check_bar(&ui, &bare, &edited, &format!("{min_w} points at {scale}, no sidebar"));
+        }
+        // a press on the button asks for the menu of the two
+        let ctx = menu_ctx();
+        let mut v = viewer_with(Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] });
+        v.rotate(1);
+        let title = v.window_title();
+        assert!(title.ends_with(canvas::EDITED_SUFFIX));
+        let lay = v.layout(&ctx.ui, min_w, min_h);
+        let (_, layout) = check_bar(&ctx.ui, &lay, &title, "the edited document");
+        let button = layout.overflow_button.expect("the button");
+        assert!(v.touch(&ctx.ui, min_w, min_h, TouchKind::Down, button.x + button.w / 2.0, button.y + button.h / 2.0));
+        let (_, _, items) = v.menu_request.take().expect("the press asks for the menu");
+        assert_eq!(items.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(), ["Actual Size", "Rotate Left"]);
+        assert!(items.iter().all(|i| i.enabled));
+        cleanup(&v);
+    }
+
+    /// At every width from the least to one with room for everything, with and without the sidebar and whatever the
+    /// document is called, no button is left out without the `»` button, the primary buttons are on the bar, and the
+    /// last thing on the bar keeps the trailing margin. A wide window shows every button and no `»` button.
+    #[test]
+    fn the_bar_drops_nothing_and_keeps_its_trailing_margin_at_every_width() {
+        let ctx = menu_ctx();
+        let (min_w, _) = manifest_min_size();
+        let long = "a very long file name that goes on and on and on and on and on and on.png";
+        let edited = format!("wide.png{}", canvas::EDITED_SUFFIX);
+        let mut shown_whole = false;
+        for width in min_w..=1400 {
             for sidebar in [true, false] {
                 for title in ["wide.png", edited.as_str(), long] {
                     let mut lay = Layout::new(&ctx.ui, width, 500);
                     if !sidebar {
                         lay.side = 0;
                     }
-                    let (bar, layout) = canvas::toolbar(&ctx.ui, &lay, true, title, Tool::Pan);
-                    assert!(layout.overflow.is_empty() && layout.overflow_button.is_none(), "{width} {sidebar} {title}: {:?}", layout.overflow);
-                    for id in primary {
-                        assert!(layout.rect_of(id).is_some(), "{width} {sidebar} {title}: {id:#x} is on the bar");
-                    }
-                    let right = layout.visible.iter().map(|(_, r)| r.x + r.w).fold(0.0, f32::max);
-                    assert!(right <= lay.w as f32 / ctx.ui.pt(1.0), "{width} {sidebar} {title}: nothing runs past the window");
-                    assert_eq!(bar.items[0].id, canvas::TITLE_ID);
+                    let (_, layout) = check_bar(&ctx.ui, &lay, title, &format!("{width} {sidebar} {title:?}"));
+                    // Rotate Left is given up before Actual Size
+                    assert!(layout.overflow.is_empty() || layout.overflow.contains(&Action::RotateLeft.id()), "{width} {sidebar} {title:?}: {:?}", layout.overflow);
+                    shown_whole |= layout.overflow.is_empty();
                 }
             }
         }
-        // a bar with room to spare also shows what it gave up: Actual Size and Rotate Left
-        let (_, roomy) = canvas::toolbar(&ctx.ui, &Layout::new(&ctx.ui, 2400, 500), true, "wide.png", Tool::Pan);
+        assert!(shown_whole);
+        let (_, roomy) = check_bar(&ctx.ui, &Layout::new(&ctx.ui, 1400, 500), &edited, "a wide window");
+        assert!(roomy.overflow.is_empty() && roomy.overflow_button.is_none());
         assert!(roomy.rect_of(Action::ActualSize.id()).is_some() && roomy.rect_of(Action::RotateLeft.id()).is_some());
-        // the manifest keeps the window from being made narrower than the bar's primary buttons
-        let manifest = include_str!("../manifest.toml");
-        assert!(manifest.contains("min_size = \"720x420\""), "the least width the test above covers");
+        // with no document there is no title, and the same holds for the greyed buttons
+        let (bar, layout) = canvas::toolbar(&ctx.ui, &Layout::new(&ctx.ui, min_w, 500), false, "", Tool::Pan);
+        assert!(bar.items.iter().all(|item| layout.rect_of(item.id).is_some() || layout.overflow.contains(&item.id)));
+        assert_eq!(layout.overflow.is_empty(), layout.overflow_button.is_none());
+        for id in primary_buttons() {
+            assert!(layout.rect_of(id).is_some(), "{id:#x} is on the empty window's bar");
+        }
     }
 
     /// The Markup and Adjust buttons ask for their menu once, at the press, anchored under the button; the release and
