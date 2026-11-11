@@ -4,7 +4,15 @@
 //!
 //! The `disks` service drives it ([`Auto`]): its device scan reports what appeared, went away or changed, and a
 //! moment after the last arrival (partitions show up after their disk) one pass runs on a thread, the way the disk
-//! image requests do. No app asks for a mount: every device name comes from the kernel's list under `/sys/block`.
+//! image requests do. Every device name of a pass comes from the kernel's list under `/sys/block`.
+//!
+//! The scan runs when the kernel made or removed a device node (`shell::block_watch`), so a plug is seen at once and
+//! an idle shell is not woken to look for one. The watch also names each node that left, which the scan alone cannot
+//! when a disk is pulled and plugged in again between two reads: such a name is forgotten like any other that left
+//! ([`Auto::unplugged`]), and a mount its old device left behind is taken away although the name is there again.
+//! While something is waiting the service asks the shell's loop for its next wake-up ([`Auto::next_wake`]): the end
+//! of the settling time, and a look now and then for the end of a running pass. With nothing waiting it asks for
+//! none.
 //!
 //! A pass is planned in two steps of pure functions. [`candidates`] picks the devices worth reading from the kernel's
 //! list, the mount table and the swap list: only disks the kernel marks removable or that sit on a bus things are
@@ -17,11 +25,29 @@
 //! a computer. For the same reason every mount here is `noexec` (an image's is not): what arrives on a stick is
 //! opened, not run.
 //!
-//! Nothing is mounted while the screen is locked or the login window is up; the pass waits for the unlock. A device
-//! that was decided on once (mounted, failed, nothing to mount, ejected by the person, or found mounted already) is
-//! not tried again until it is unplugged, so a failure is one notice and never a loop, and an ejected volume stays
-//! ejected. When a mounted disk is pulled out without an eject, its mounts under the media folders are taken away
-//! lazily and their empty folders removed.
+//! Nothing is mounted while the screen is locked or the login window is up; the pass waits for the unlock and starts
+//! on the first tick after it. A pass that was already running when the screen locked finishes what it started; no
+//! new one starts. Volumes that are mounted when the screen locks stay mounted: the lock hides the session, it does
+//! not end it, and a copy to the stick goes on behind it.
+//!
+//! This is a single-account computer (`Account::installed`): Log Out closes the apps and returns to the login window
+//! of the same shell, and the next person to sign in is the same account. So the volumes stay mounted over a log out
+//! too, as they do over a lock. They are the account's alone meanwhile: the media folder is `root:<group>` 0750 and a
+//! file system without owners is mounted with the account's ids and no access for others. There is no second account
+//! that could find them. When accounts are added, the end of a session has to unmount what was mounted for it.
+//!
+//! A device that was decided on once (mounted, failed, nothing to mount, ejected by the person, or found mounted
+//! already) is not tried again until it is unplugged, so a failure is one notice and never a loop, and an ejected
+//! volume stays ejected. When a mounted disk is pulled out without an eject, its mounts under the media folders are
+//! taken away lazily and their empty folders removed.
+//!
+//! An ejected volume whose disk is still attached (its power could not be turned off) can be mounted again on
+//! request: the `disks` method `mount_volume` `{target}` ([`mount_requested`]). The request is checked like an eject
+//! and then like a volume of a pass: a plain device name, a disk the kernel lists, the same [`candidates`] and
+//! [`plan_mounts`], the same options. It never reaches a disk a pass would not have mounted.
+//!
+//! A volume that does not mount is told to the person in plain words ([`plain_reason`]); the tool's own message goes
+//! to the log.
 
 use super::disk_image::{self, export_value, image_device_of, run};
 use super::volume_eject::valid_device;
@@ -31,12 +57,16 @@ use bifrost_core::json::Json;
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::Mutex;
 use std::time::Duration;
 
 /// The `disks` service events: a removable volume was mounted `{ok, device, mount_point, name}`, and the mount of a
 /// volume whose disk was pulled out was taken away `{ok, device, mount_point}`.
 pub const E_MOUNTED: &str = "volume_mounted";
 pub const E_UNMOUNTED: &str = "volume_unmounted";
+/// The `disks` service method that mounts one volume again on request ([`mount_requested`]); its outcome is
+/// `volume_mounted` `{target, ok, device, mount_point, name}` or `{target, ok, error}` to the app that asked.
+pub const M_MOUNT: &str = "mount_volume";
 
 /// Where a root shell mounts volumes, one folder per account.
 const MEDIA_ROOT: &str = "/run/media";
@@ -46,7 +76,16 @@ const SYS_BLOCK: &str = "/sys/block";
 /// Where the kernel lists every block device, disk or partition, by name.
 const SYS_CLASS_BLOCK: &str = "/sys/class/block";
 /// How long after the last arrival a pass waits, in shell milliseconds: a disk's partitions appear after the disk.
-pub const SETTLE_MS: f64 = 1_500.0;
+/// The kernel reads the partition table as it adds the disk, so the nodes follow each other within milliseconds.
+pub const SETTLE_MS: f64 = 400.0;
+/// How often the loop looks for the end of a running pass, in shell milliseconds: often while it is young (a pass
+/// over a healthy stick is done well inside a second), seldom once it has run longer than [`PASS_QUICK_MS`] (a
+/// medium that does not answer can hold the probe for half a minute).
+pub const PASS_POLL_MS: f64 = 100.0;
+pub const PASS_SLOW_POLL_MS: f64 = 1_000.0;
+pub const PASS_QUICK_MS: f64 = 2_000.0;
+/// One mount at a time: a pass and a request never mount the same volume twice.
+static MOUNTING: Mutex<()> = Mutex::new(());
 /// The most volumes one disk gives.
 const MAX_VOLUMES: usize = disk_image::MAX_VOLUMES;
 /// The folder name of a volume without a usable label.
@@ -186,6 +225,31 @@ pub fn candidates(disks: &[BlockDisk], mounts: &str, swaps: &str, handled: &BTre
             Some(Wanted { disk: d.name.clone(), read_only: d.read_only, whole: !d.parts.iter().any(mounted), parts })
         })
         .collect()
+}
+
+/// Checks a request to mount `device` (`/dev/sdb1`) against the kernel's `disks`, the mount table and the swap list,
+/// and returns what a pass would read of its disk. Refused: a path that is not a plain device name, a disk image's
+/// device, a device the kernel does not list, one that is mounted already, a disk that is not removable
+/// ([`eligible`]), a disk with any part in use by the system, and a device [`candidates`] leaves out of that disk
+/// (a partition without a size, the disk itself while one of its partitions is mounted).
+pub fn request(device: &str, disks: &[BlockDisk], mounts: &str, swaps: &str) -> Result<Wanted, String> {
+    let name = device.strip_prefix("/dev/").filter(|_| valid_device(device)).ok_or_else(|| format!("{device} is not a volume's device"))?;
+    if image_device_of(device).is_some() {
+        return Err(format!("{device} is a disk image's volume"));
+    }
+    let disk = disks.iter().find(|d| d.name == name || d.parts.iter().any(|p| p.name == name)).ok_or_else(|| format!("{device} is not connected"))?;
+    if !points_of(&bifrost_core::disk_scan::parse_mounts(mounts), name).is_empty() {
+        return Err(format!("{device} is mounted already"));
+    }
+    if !eligible(disk) {
+        return Err(format!("{device} is not a removable volume"));
+    }
+    let wanted = candidates(std::slice::from_ref(disk), mounts, swaps, &BTreeSet::new()).pop().ok_or_else(|| format!("{device} is in use by the system"))?;
+    let listed = if name == disk.name { wanted.whole } else { wanted.parts.iter().any(|p| p.name == name) };
+    if !listed {
+        return Err(format!("{device} is not a volume that can be mounted"));
+    }
+    Ok(wanted)
 }
 
 /// What a device holds, read from the device itself.
@@ -334,7 +398,7 @@ pub fn stale_mounts(mounts: &str, present: impl Fn(&str) -> bool) -> Vec<(String
 pub enum Done {
     /// mounted on this folder
     Mounted(String),
-    /// a volume that should have mounted did not: the reason
+    /// a volume that should have mounted did not: the reason in plain words ([`plain_reason`])
     Failed(String),
     /// nothing on it to mount
     Passed,
@@ -366,22 +430,57 @@ pub fn events(report: &Report) -> Vec<(&'static str, Json)> {
     removed.chain(mounted).collect()
 }
 
-/// The one notice for the volumes of a pass that did not mount, `None` when all did.
+/// The name a person knows the file system `fs` by ([`supported`]'s names).
+pub fn format_name(fs: &str) -> &'static str {
+    match fs {
+        "vfat" => "FAT",
+        "exfat" => "exFAT",
+        "ntfs3" => "NTFS",
+        "ext2" => "ext2",
+        "ext3" => "ext3",
+        "ext4" => "ext4",
+        "btrfs" => "Btrfs",
+        "xfs" => "XFS",
+        "f2fs" => "F2FS",
+        "iso9660" => "ISO 9660",
+        "udf" => "UDF",
+        _ => "unknown",
+    }
+}
+
+/// What the person is told when the mount of a volume of type `fs` failed with the tool's message `error`. The
+/// message itself is for the log. A type the kernel has no driver for (its module is not on this computer) is named;
+/// every other failure is one general sentence.
+pub fn plain_reason(fs: &str, error: &str) -> String {
+    if error.contains("unknown filesystem type") {
+        format!("This disk uses a format this computer cannot read: {}", format_name(fs))
+    } else {
+        "It may be damaged. The details are in the log.".to_string()
+    }
+}
+
+/// The one notice for the volumes of a pass that did not mount, `None` when all did. Each failure carries its
+/// reason in plain words ([`plain_reason`]); several volumes share one sentence when they failed alike.
 pub fn failure_notice(report: &Report) -> Option<String> {
     let failed: Vec<(&Outcome, &str)> = report
         .volumes
         .iter()
         .filter_map(|v| match &v.done {
-            Done::Failed(e) => Some((v, e.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("it could not be mounted"))),
+            Done::Failed(reason) => Some((v, reason.trim())),
             _ => None,
         })
         .collect();
     let named = |v: &Outcome| format!("\u{201c}{}\u{201d} ({})", v.name, v.device);
-    match failed.as_slice() {
-        [] => None,
-        [(v, reason)] => Some(format!("The volume {} could not be opened: {reason}", named(v))),
-        many => Some(format!("{} volumes could not be opened: {}.", many.len(), many.iter().map(|(v, _)| named(v)).collect::<Vec<_>>().join(", "))),
-    }
+    let (first, rest) = failed.split_first()?;
+    let alike = Some(first.1).filter(|r| !r.is_empty() && rest.iter().all(|(_, other)| other == r));
+    let head = match rest {
+        [] => format!("The volume {} could not be opened.", named(first.0)),
+        _ => format!("{} volumes could not be opened: {}.", failed.len(), failed.iter().map(|(v, _)| named(v)).collect::<Vec<_>>().join(", ")),
+    };
+    Some(match alike {
+        Some(reason) => format!("{head} {reason}"),
+        None => head,
+    })
 }
 
 /// What a pass does.
@@ -406,14 +505,24 @@ pub struct Auto {
     sweep: bool,
     /// When the waiting volumes are mounted, in shell milliseconds.
     due: Option<f64>,
+    /// The names that left since the last sweep. A mount of one of them is stale even when the name is there again:
+    /// the disk was pulled and plugged in between two scans, and the mount belongs to the device that left.
+    gone: BTreeSet<String>,
+    /// The names the running pass is sweeping: their mounts are on the way out.
+    sweeping: BTreeSet<String>,
+    /// The names that left while the running pass was at work: what it decided about them is not kept.
+    left: BTreeSet<String>,
     running: Option<Receiver<Report>>,
+    /// When the running pass started, in shell milliseconds.
+    started: f64,
 }
 
 impl Auto {
     /// Takes in one device scan: the `events` since the last one and the devices there now. The first scan asks for
     /// a pass over everything already plugged in. An arrival, or a medium put into a reader, asks for a mount; a
     /// device that went away is forgotten (it may be decided on again when it comes back) and asks for a sweep.
-    /// Every device seen mounted counts as decided on, so one unmounted by hand is not mounted again.
+    /// Every device seen mounted counts as decided on, so one unmounted by hand is not mounted again; but not one
+    /// whose name left and whose mount is still to be swept: that mount is the old device's, not this one's.
     pub fn observe(&mut self, events: &[DiskEvent], disks: &[Disk]) {
         if !std::mem::replace(&mut self.primed, true) {
             self.changed = true;
@@ -421,15 +530,8 @@ impl Auto {
         } else {
             for event in events {
                 match event {
-                    DiskEvent::Appeared(d) => {
-                        // a disk that had nothing to mount got a partition: the disk is looked at again
-                        self.handled.retain(|h| *h == d.bsd_name || !d.bsd_name.starts_with(h.as_str()));
-                        self.changed = true;
-                    }
-                    DiskEvent::Disappeared(name) => {
-                        self.handled.remove(name);
-                        self.sweep = true;
-                    }
+                    DiskEvent::Appeared(d) => self.plugged(&d.bsd_name),
+                    DiskEvent::Disappeared(name) => self.unplugged(name),
                     DiskEvent::DescriptionChanged { before, after } if before.size != after.size => {
                         self.handled.remove(&after.bsd_name);
                         self.changed = true;
@@ -438,7 +540,28 @@ impl Auto {
                 }
             }
         }
-        self.handled.extend(disks.iter().filter(|d| d.mount_point.is_some()).map(|d| d.bsd_name.clone()));
+        let stale = |name: &String| self.gone.contains(name) || self.sweeping.contains(name);
+        let mounted: Vec<String> = disks.iter().filter(|d| d.mount_point.is_some() && !stale(&d.bsd_name)).map(|d| d.bsd_name.clone()).collect();
+        self.handled.extend(mounted);
+    }
+
+    /// The device `name` arrived: a mount is asked for. A disk that had nothing to mount and now got a partition is
+    /// looked at again.
+    pub fn plugged(&mut self, name: &str) {
+        self.handled.retain(|h| h == name || !name.starts_with(h.as_str()));
+        self.changed = true;
+    }
+
+    /// The device `name` left: it is forgotten, so it is decided on again when it comes back, and a sweep is asked
+    /// for. The sweep takes its mounts away even if the name is back by then ([`stale_mounts`]), and a pass at work
+    /// right now does not get to mark it as decided on.
+    pub fn unplugged(&mut self, name: &str) {
+        self.handled.remove(name);
+        self.gone.insert(name.to_string());
+        if self.running.is_some() {
+            self.left.insert(name.to_string());
+        }
+        self.sweep = true;
     }
 
     /// The person asked to eject `device` (`/dev/sdb1`): it is not mounted again until it was unplugged.
@@ -473,13 +596,34 @@ impl Auto {
         Some(Pass { mount, sweep: std::mem::take(&mut self.sweep) })
     }
 
-    /// Takes in a finished pass: every device it decided on is left alone from now on.
+    /// Takes in a finished pass: every device it decided on is left alone from now on, except one that left while
+    /// the pass ran (the decision was about a device that is gone).
     pub fn absorb(&mut self, report: &Report) {
-        self.handled.extend(report.volumes.iter().map(|v| v.device.clone()));
+        let left = std::mem::take(&mut self.left);
+        self.handled.extend(report.volumes.iter().filter(|v| !left.contains(&v.device)).map(|v| v.device.clone()));
     }
 
-    /// Runs on the service's tick: collects the pass that ended, if one did, and starts the next one on a thread.
-    pub fn tick(&mut self, t: f64, locked: bool) -> Option<Report> {
+    /// Whether a mount is still to come for what arrived: asked for, settling, or a pass at work.
+    pub fn mount_waiting(&self) -> bool {
+        self.changed || self.due.is_some() || self.running.is_some()
+    }
+
+    /// When the service needs its next tick, in shell milliseconds; `None` when nothing is waiting, which is the
+    /// state of an idle desktop. A change not yet taken in and a sweep want the next tick; a mount wants the end of
+    /// its settling time, and nothing while the screen is locked (the unlock is input and brings its own tick); a
+    /// running pass is looked at every [`PASS_POLL_MS`], then every [`PASS_SLOW_POLL_MS`].
+    pub fn next_wake(&self, t: f64, locked: bool) -> Option<f64> {
+        if self.running.is_some() {
+            return Some(t + if t - self.started > PASS_QUICK_MS { PASS_SLOW_POLL_MS } else { PASS_POLL_MS });
+        }
+        if self.changed || self.sweep {
+            return Some(t);
+        }
+        self.due.filter(|_| !locked).map(|due| due.max(t))
+    }
+
+    /// Collects the pass that ended, if one did. Runs on the service's tick, before the device scan.
+    pub fn finish(&mut self) -> Option<Report> {
         let ended = match self.running.as_ref().map(Receiver::try_recv) {
             Some(Ok(report)) => Some(report),
             Some(Err(TryRecvError::Empty)) | None => None,
@@ -490,31 +634,83 @@ impl Auto {
         };
         if let Some(report) = &ended {
             self.running = None;
+            self.sweeping.clear();
             self.absorb(report);
-        }
-        if let Some(pass) = self.next_pass(t, locked, self.running.is_some()) {
-            // a unit test never reads or mounts the disks of the machine it runs on
-            if !cfg!(test) {
-                let handled = self.handled.clone();
-                let (tx, rx) = channel();
-                std::thread::spawn(move || {
-                    let _ = tx.send(run_pass(pass, &handled));
-                });
-                self.running = Some(rx);
-            }
         }
         ended
     }
+
+    /// Starts the next pass on a thread when one is due ([`Auto::next_pass`]). Runs on the service's tick, after
+    /// the device scan.
+    pub fn start(&mut self, t: f64, locked: bool) {
+        let Some(pass) = self.next_pass(t, locked, self.running.is_some()) else { return };
+        let gone = if pass.sweep { std::mem::take(&mut self.gone) } else { BTreeSet::new() };
+        // a unit test never reads or mounts the disks of the machine it runs on
+        if !cfg!(test) {
+            let handled = self.handled.clone();
+            self.sweeping = gone.clone();
+            let (tx, rx) = channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(run_pass(pass, &handled, &gone));
+            });
+            self.running = Some(rx);
+            self.started = t;
+        }
+    }
 }
 
-/// One pass, on its own thread: the sweep first, then the mounts.
-fn run_pass(pass: Pass, handled: &BTreeSet<String>) -> Report {
+/// Reads what the device `name` holds with `blkid -p`.
+fn probe(name: &str, partition: Option<u32>, read_only: bool) -> Held {
+    let device = format!("/dev/{name}");
+    parse_held(name, partition, read_only, &run("blkid", &["-p", "-o", "export", "--", device.as_str()]).unwrap_or_default())
+}
+
+/// Reads the devices of `disk` and plans its volumes. Also returns the names that were read, for the ones that hold
+/// nothing to mount: the disk itself only when it is the volume or has no partitions.
+fn read_plan(disk: &Wanted) -> (Vec<Planned>, Vec<String>) {
+    let whole = disk.whole.then(|| probe(&disk.disk, None, disk.read_only)).filter(|h| supported(&h.fs).is_some());
+    let parts: Vec<Held> = if whole.is_some() { Vec::new() } else { disk.parts.iter().map(|p| probe(&p.name, Some(p.number), disk.read_only || p.read_only)).collect() };
+    let read = if whole.is_some() || disk.parts.is_empty() { vec![disk.disk.clone()] } else { disk.parts.iter().map(|p| p.name.clone()).collect() };
+    (plan_mounts(whole.as_ref(), &parts), read)
+}
+
+/// Mounts the volume on `device` (`/dev/sdb1`) for the `disks` method `mount_volume`, on the request's thread: the
+/// request is checked against the kernel's list and the mount table now ([`request`]), the disk is read and planned
+/// as a pass does, and only a volume that plan holds is mounted, with a pass's options. Returns the result's fields
+/// (`device`, `mount_point`, `name`); a refusal and the tool's message are logged, the error that goes back is for
+/// the person.
+pub fn mount_requested(device: &str) -> Result<Vec<(&'static str, String)>, String> {
+    let _one = MOUNTING.lock().unwrap_or_else(|e| e.into_inner());
+    let refused = |e: String| {
+        eprintln!("disks: mount {device}: refused: {e}");
+        e
+    };
+    let mounts = std::fs::read_to_string("/proc/mounts").map_err(|e| e.to_string())?;
+    let swaps = std::fs::read_to_string("/proc/swaps").unwrap_or_default();
+    let wanted = request(device, &read_disks(Path::new(SYS_BLOCK)), &mounts, &swaps).map_err(refused)?;
+    let name = device.strip_prefix("/dev/").unwrap_or_default();
+    let (plan, _) = read_plan(&wanted);
+    let volume = plan.iter().find(|v| v.name == name).ok_or_else(|| refused(format!("{device} holds no volume this computer opens")))?;
+    let account = Account::installed().map_err(|e| refused(format!("no account to mount for: {e}")))?;
+    match mount_one(volume, &account, crate::privd::server::euid() == 0) {
+        Ok(folder) => Ok(vec![("device", device.to_string()), ("mount_point", folder), ("name", volume.folder.clone())]),
+        Err(e) => {
+            eprintln!("disks: mount {device} ({}) failed: {e}", volume.fs);
+            Err(plain_reason(volume.fs, &e))
+        }
+    }
+}
+
+/// One pass, on its own thread: the sweep first, then the mounts. `gone` are the names that left since the last
+/// sweep: a mount of one of them is taken away even when a device of that name is there again.
+fn run_pass(pass: Pass, handled: &BTreeSet<String>, gone: &BTreeSet<String>) -> Report {
+    let _one = MOUNTING.lock().unwrap_or_else(|e| e.into_inner());
     let as_root = crate::privd::server::euid() == 0;
     let mut report = Report::default();
-    let mounts = std::fs::read_to_string("/proc/mounts").unwrap_or_default();
+    let mut mounts = std::fs::read_to_string("/proc/mounts").unwrap_or_default();
     if pass.sweep && as_root {
         // a shell running as the account leaves this to the storage service, which made those mounts
-        for (device, point) in stale_mounts(&mounts, |name| Path::new(SYS_CLASS_BLOCK).join(name).exists()) {
+        for (device, point) in stale_mounts(&mounts, |name| !gone.contains(name) && Path::new(SYS_CLASS_BLOCK).join(name).exists()) {
             match run("umount", &["-l", "--", point.as_str()]) {
                 Ok(_) => {
                     let _ = std::fs::remove_dir(&point);
@@ -526,6 +722,10 @@ fn run_pass(pass: Pass, handled: &BTreeSet<String>) -> Report {
     }
     if !pass.mount {
         return report;
+    }
+    if !report.removed.is_empty() {
+        // the table without what was just taken away, so a name that came back is not taken for mounted
+        mounts = std::fs::read_to_string("/proc/mounts").unwrap_or_default();
     }
     let swaps = std::fs::read_to_string("/proc/swaps").unwrap_or_default();
     let wanted = candidates(&read_disks(Path::new(SYS_BLOCK)), &mounts, &swaps, handled);
@@ -543,25 +743,19 @@ fn run_pass(pass: Pass, handled: &BTreeSet<String>) -> Report {
         // the storage service learns of a new device from udev
         let _ = std::process::Command::new("udevadm").args(["settle", "--timeout=5"]).output();
     }
-    let probe = |name: &str, partition: Option<u32>, read_only: bool| {
-        let device = format!("/dev/{name}");
-        parse_held(name, partition, read_only, &run("blkid", &["-p", "-o", "export", "--", device.as_str()]).unwrap_or_default())
-    };
     for disk in &wanted {
-        let whole = disk.whole.then(|| probe(&disk.disk, None, disk.read_only)).filter(|h| supported(&h.fs).is_some());
-        let parts: Vec<Held> = if whole.is_some() { Vec::new() } else { disk.parts.iter().map(|p| probe(&p.name, Some(p.number), disk.read_only || p.read_only)).collect() };
-        let plan = plan_mounts(whole.as_ref(), &parts);
-        // what was read and holds nothing to mount is decided on too: the disk itself only when it has no partitions
-        let read: Vec<&str> = if whole.is_some() || disk.parts.is_empty() { vec![disk.disk.as_str()] } else { disk.parts.iter().map(|p| p.name.as_str()).collect() };
+        let (plan, read) = read_plan(disk);
+        // what was read and holds nothing to mount is decided on too
         for name in read.into_iter().filter(|n| !plan.iter().any(|v| v.name == *n)) {
-            report.volumes.push(Outcome { device: name.to_string(), name: String::new(), done: Done::Passed });
+            report.volumes.push(Outcome { device: name, name: String::new(), done: Done::Passed });
         }
         for volume in &plan {
             let done = match mount_one(volume, &account, as_root) {
                 Ok(folder) => Done::Mounted(folder),
                 Err(e) => {
+                    // the tool's message is for the log, the person gets the reason in plain words
                     eprintln!("disks: automount: /dev/{} ({}) not mounted: {e}", volume.name, volume.fs);
-                    Done::Failed(e)
+                    Done::Failed(plain_reason(volume.fs, &e))
                 }
             };
             report.volumes.push(Outcome { device: volume.name.clone(), name: volume.folder.clone(), done });
@@ -990,28 +1184,220 @@ mod tests {
         assert_eq!(sent[1].1.str_field("mount_point").as_deref(), Some("/run/media/me/E2EUSB"));
         assert_eq!(sent[1].1.str_field("name").as_deref(), Some("E2EUSB"));
         assert_eq!(failure_notice(&report), None);
-        report.volumes.push(outcome("sdc1", "Stick", Done::Failed("\nmount: /run/media/me/Stick: wrong fs type.\nmore".into())));
-        assert_eq!(failure_notice(&report).as_deref(), Some("The volume \u{201c}Stick\u{201d} (sdc1) could not be opened: mount: /run/media/me/Stick: wrong fs type."));
+        let no_driver = plain_reason("exfat", "mount: /run/media/me/Stick: unknown filesystem type 'exfat'.\n       dmesg(1) may have more information after failed mount system call.");
+        report.volumes.push(outcome("sdc1", "Stick", Done::Failed(no_driver.clone())));
+        assert_eq!(failure_notice(&report).as_deref(), Some("The volume \u{201c}Stick\u{201d} (sdc1) could not be opened. This disk uses a format this computer cannot read: exFAT"));
         assert_eq!(events(&report).len(), 2, "a failure is a notice, not an event");
-        report.volumes.push(outcome("sdc2", "Untitled", Done::Failed(String::new())));
+        // two volumes that failed alike are one notice with the one reason
+        report.volumes.push(outcome("sdc2", "Untitled", Done::Failed(no_driver)));
+        assert_eq!(
+            failure_notice(&report).as_deref(),
+            Some("2 volumes could not be opened: \u{201c}Stick\u{201d} (sdc1), \u{201c}Untitled\u{201d} (sdc2). This disk uses a format this computer cannot read: exFAT")
+        );
+        // two that failed differently are still one notice, without a reason that fits only one
+        report.volumes.pop();
+        report.volumes.push(outcome("sdc2", "Untitled", Done::Failed(plain_reason("ext4", "mount: wrong fs type, bad option, bad superblock on /dev/sdc2"))));
         assert_eq!(failure_notice(&report).as_deref(), Some("2 volumes could not be opened: \u{201c}Stick\u{201d} (sdc1), \u{201c}Untitled\u{201d} (sdc2)."));
         report.volumes.truncate(2);
         report.volumes.push(outcome("sdc2", "Untitled", Done::Failed("  ".into())));
-        assert_eq!(failure_notice(&report).as_deref(), Some("The volume \u{201c}Untitled\u{201d} (sdc2) could not be opened: it could not be mounted"));
+        assert_eq!(failure_notice(&report).as_deref(), Some("The volume \u{201c}Untitled\u{201d} (sdc2) could not be opened."));
+    }
+
+    #[test]
+    fn a_failed_mount_is_told_in_plain_words_and_never_as_the_tools_message() {
+        let raw = "mount: /run/media/me/Stick: unknown filesystem type 'exfat'.";
+        assert_eq!(plain_reason("exfat", raw), "This disk uses a format this computer cannot read: exFAT");
+        assert_eq!(plain_reason("ntfs3", "mount: /run/media/me/Data: unknown filesystem type 'ntfs3'."), "This disk uses a format this computer cannot read: NTFS");
+        // the storage service words it the same way
+        assert_eq!(plain_reason("exfat", "Error mounting /dev/sdb1 at /run/media/me/X: unknown filesystem type 'exfat'"), "This disk uses a format this computer cannot read: exFAT");
+        for other in ["mount: /run/media/me/Stick: wrong fs type, bad option, bad superblock on /dev/sdb1, missing codepage or helper program, or other error.", "mount: /dev/sdb1: can't read superblock.", "", "udisksctl could not run: No such file or directory"] {
+            let told = plain_reason("vfat", other);
+            assert_eq!(told, "It may be damaged. The details are in the log.");
+            assert!(!told.contains("mount:") && !told.contains("/dev/"), "{told}");
+        }
+        for fs in ["vfat", "exfat", "ntfs", "ext2", "ext3", "ext4", "btrfs", "xfs", "f2fs", "iso9660", "udf"] {
+            assert_ne!(format_name(supported(fs).unwrap()), "unknown", "{fs}");
+        }
+        assert_eq!(format_name("swap"), "unknown");
     }
 
     #[test]
     fn a_tick_in_a_test_starts_no_pass_on_the_machine() {
         let mut auto = Auto::default();
         auto.observe(&[], &[]);
-        assert_eq!(auto.tick(0.0, false), None);
-        assert_eq!(auto.tick(10_000.0, false), None);
+        assert_eq!(auto.finish(), None);
+        auto.start(0.0, false);
+        auto.start(10_000.0, false);
         assert!(auto.running.is_none());
         // a pass whose thread died is over, and the next one may start
         let (tx, rx) = channel::<Report>();
         drop(tx);
         auto.running = Some(rx);
-        assert_eq!(auto.tick(20_000.0, false), Some(Report::default()));
+        assert_eq!(auto.finish(), Some(Report::default()));
         assert!(auto.running.is_none());
+    }
+
+    fn mounted(device: &str, folder: &str) -> Report {
+        Report { volumes: vec![Outcome { device: device.into(), name: folder.into(), done: Done::Mounted(format!("/run/media/me/{folder}")) }], removed: Vec::new() }
+    }
+
+    #[test]
+    fn nothing_is_mounted_while_the_screen_is_locked() {
+        let mut auto = Auto::default();
+        // started at the login window with nothing plugged in: the first sweep, then nothing waits for a tick
+        auto.observe(&[], &[]);
+        auto.start(0.0, true);
+        assert!(auto.due.is_some() && !auto.sweep);
+        assert_eq!(auto.next_wake(1.0, true), None, "a locked screen is not woken for a mount that waits");
+        // a stick is attached while locked: no pass, however long it stays locked, and no wake-up either
+        auto.observe(&[DiskEvent::Appeared(disk("sdb", GB, None)), DiskEvent::Appeared(disk("sdb1", GB, None))], &[]);
+        assert_eq!(auto.next_wake(1_000.0, true), Some(1_000.0), "the arrival is taken in on the next tick");
+        for t in [1_000.0, 1_000.0 + SETTLE_MS, 600_000.0] {
+            assert_eq!(auto.next_pass(t, true, false), None, "locked at {t}");
+            assert_eq!(auto.next_wake(t, true), None);
+        }
+        // unlocked: the pass starts on that very tick, once
+        assert_eq!(auto.next_wake(600_001.0, false), Some(600_001.0));
+        assert_eq!(auto.next_pass(600_001.0, false, false), Some(Pass { mount: true, sweep: false }));
+        assert_eq!(auto.next_pass(600_002.0, false, false), None);
+        assert_eq!(auto.next_wake(600_002.0, false), None, "nothing waits: the idle desktop gets no wake-up");
+    }
+
+    #[test]
+    fn a_pass_running_at_the_lock_finishes_and_no_new_one_starts() {
+        let mut auto = Auto::default();
+        auto.observe(&[], &[]);
+        auto.start(0.0, false);
+        auto.start(SETTLE_MS, false);
+        // a pass over sdb is at work when the screen locks, and a second stick arrives behind the lock
+        let (tx, rx) = channel::<Report>();
+        auto.running = Some(rx);
+        auto.started = 1_000.0;
+        auto.observe(&[DiskEvent::Appeared(disk("sdc", GB, None))], &[]);
+        assert_eq!(auto.finish(), None, "still at work");
+        auto.start(1_100.0, true);
+        assert_eq!(auto.next_wake(1_100.0, true), Some(1_100.0 + PASS_POLL_MS), "the loop looks for its end");
+        assert_eq!(auto.next_wake(1_000.0 + PASS_QUICK_MS + 1.0, true), Some(1_000.0 + PASS_QUICK_MS + 1.0 + PASS_SLOW_POLL_MS), "seldom when it takes long");
+        // it finishes what it started
+        tx.send(mounted("sdb1", "Stick")).unwrap();
+        assert_eq!(auto.finish(), Some(mounted("sdb1", "Stick")));
+        assert!(auto.is_handled("sdb1") && auto.running.is_none());
+        // and nothing new starts behind the lock: the second stick waits
+        for t in [1_200.0, 1_200.0 + SETTLE_MS, 900_000.0] {
+            auto.start(t, true);
+            assert!(auto.running.is_none() && auto.due.is_some(), "locked at {t}");
+            assert_eq!(auto.next_pass(t, true, false), None);
+            assert_eq!(auto.next_wake(t, true), None);
+        }
+        assert!(!auto.is_handled("sdc"));
+        assert_eq!(auto.next_pass(900_001.0, false, false), Some(Pass { mount: true, sweep: false }), "the first tick after the unlock");
+    }
+
+    #[test]
+    fn a_disk_pulled_and_plugged_in_again_between_two_scans_is_a_new_device() {
+        let mut auto = Auto::default();
+        let there = [disk("sda", GB, None), disk("sda1", GB, Some("/run/media/me/E2EUSB"))];
+        auto.observe(&[], &there);
+        auto.start(0.0, false);
+        auto.start(SETTLE_MS, false);
+        assert!(auto.is_handled("sda1") && auto.gone.is_empty());
+        // the scan sees the same names as before and reports nothing; the watch saw both the pull and the plug
+        for name in ["sda1", "sda"] {
+            auto.unplugged(name);
+        }
+        for name in ["sda", "sda1"] {
+            auto.plugged(name);
+        }
+        // the old device's mount is still in the table at the next scan: it does not make the new one decided on
+        auto.observe(&[], &there);
+        assert!(!auto.is_handled("sda1") && !auto.is_handled("sda"), "decided on again");
+        auto.sweeping = set(&["sdx1"]);
+        auto.observe(&[], &[disk("sdx1", GB, Some("/run/media/me/Old")), disk("sdy1", GB, Some("/run/media/me/New"))]);
+        assert!(!auto.is_handled("sdx1") && auto.is_handled("sdy1"), "nor does a mount the running pass is taking away");
+        auto.sweeping.clear();
+        auto.handled.remove("sdy1");
+        assert_eq!(auto.gone, set(&["sda", "sda1"]));
+        assert_eq!(auto.next_wake(5_000.0, false), Some(5_000.0));
+        // the sweep goes first and takes the old device's mount away although the name is there again
+        let table = "/dev/sda1 /run/media/me/E2EUSB vfat rw 0 0\n/dev/sdb1 /run/media/me/Other vfat rw 0 0\n";
+        let present = |name: &str| !auto.gone.contains(name);
+        assert_eq!(stale_mounts(table, present), vec![("/dev/sda1".to_string(), "/run/media/me/E2EUSB".to_string())]);
+        auto.start(5_000.0, false);
+        assert!(auto.gone.is_empty() && !auto.sweep, "the sweep took the names with it");
+        // then the mount, a moment after the plug
+        assert_eq!(auto.next_wake(5_001.0, false), Some(5_000.0 + SETTLE_MS));
+        assert_eq!(auto.next_pass(5_000.0 + SETTLE_MS, false, false), Some(Pass { mount: true, sweep: false }));
+        assert_eq!(candidates(&[stick("sda", &["sda1"])], "", "", &auto.handled).len(), 1);
+    }
+
+    #[test]
+    fn what_a_pass_decided_about_a_device_that_left_meanwhile_is_not_kept() {
+        let mut auto = Auto::default();
+        auto.observe(&[], &[]);
+        let (tx, rx) = channel::<Report>();
+        auto.running = Some(rx);
+        // the stick is pulled while the pass that mounts it is at work
+        auto.unplugged("sdb1");
+        auto.unplugged("sdb");
+        let mut report = mounted("sdb1", "Stick");
+        report.volumes.push(Outcome { device: "sdc1".into(), name: "Card".into(), done: Done::Failed(plain_reason("vfat", "x")) });
+        tx.send(report).unwrap();
+        assert!(auto.finish().is_some());
+        assert!(!auto.is_handled("sdb1"), "plugged in again, it is looked at again");
+        assert!(auto.is_handled("sdc1"));
+        assert!(auto.left.is_empty());
+        // a device that leaves with no pass at work is not remembered for the next one
+        auto.unplugged("sdd1");
+        assert!(auto.left.is_empty());
+        auto.absorb(&mounted("sdd1", "Later"));
+        assert!(auto.is_handled("sdd1"));
+    }
+
+    #[test]
+    fn an_ejected_volume_that_stays_attached_can_be_mounted_again_on_request() {
+        let disks = [BlockDisk { removable: false, hotplug: false, ..stick("nvme0n1", &["nvme0n1p1", "nvme0n1p2"]) }, stick("sdb", &["sdb1", "sdb2"]), stick("sdc", &[]), stick("loop0", &["loop0p1"])];
+        let table = "/dev/nvme0n1p2 / ext4 rw 0 0\n/dev/nvme0n1p1 /boot vfat rw 0 0\n";
+        // the automatic pass leaves an ejected volume alone; the request reads the same disk the pass would
+        let wanted = request("/dev/sdb1", &disks, table, "").unwrap();
+        assert_eq!(names(std::slice::from_ref(&wanted)), vec![("sdb".to_string(), true, vec!["sdb1".to_string(), "sdb2".to_string()])]);
+        assert_eq!(wanted, candidates(&disks, table, "", &BTreeSet::new())[0], "the same filter as the automatic pass");
+        // a stick that is one file system without a partition table
+        assert!(request("/dev/sdc", &disks, table, "").is_ok_and(|w| w.whole && w.parts.is_empty()));
+        // with its other partition mounted the partition is still wanted, the disk itself is not a volume
+        let half = format!("{table}/dev/sdb2 /run/media/me/Two ext4 rw 0 0\n");
+        assert!(request("/dev/sdb1", &disks, &half, "").is_ok_and(|w| !w.whole));
+        assert_eq!(request("/dev/sdb", &disks, &half, "").unwrap_err(), "/dev/sdb is not a volume that can be mounted");
+    }
+
+    #[test]
+    fn a_request_to_mount_is_refused_for_everything_a_pass_would_not_mount() {
+        let system = BlockDisk { removable: false, hotplug: false, ..stick("nvme0n1", &["nvme0n1p1", "nvme0n1p2", "nvme0n1p3"]) };
+        let disks = [system, stick("sdb", &["sdb1", "sdb2"]), stick("loop0", &["loop0p1"]), stick("sda", &["sda1", "sda2", "sda3"])];
+        let table = "/dev/nvme0n1p2 / ext4 rw 0 0\n/dev/sda2 / ext4 rw 0 0\n/dev/sdb2 /run/media/me/Two ext4 rw 0 0\n";
+        let refused = |device: &str| request(device, &disks, table, "").unwrap_err();
+        // never a path, an option or a name that is not plain
+        for bad in ["", "sdb1", "/dev/", "/dev/../etc/shadow", "/dev/sdb1 -o suid", "/dev/mapper/x", "/run/media/me/Two", "-o", "/dev/sd*", "/dev/disk/by-label/E2EUSB"] {
+            assert_eq!(refused(bad), format!("{bad} is not a volume's device"));
+        }
+        assert_eq!(refused("/dev/loop0p1"), "/dev/loop0p1 is a disk image's volume");
+        assert_eq!(refused("/dev/sdz1"), "/dev/sdz1 is not connected");
+        assert_eq!(refused("/dev/sdb2"), "/dev/sdb2 is mounted already");
+        // never the system disk: not its unmounted partition, not the disk
+        assert_eq!(refused("/dev/nvme0n1p3"), "/dev/nvme0n1p3 is not a removable volume");
+        assert_eq!(refused("/dev/nvme0n1p1"), "/dev/nvme0n1p1 is not a removable volume");
+        assert_eq!(refused("/dev/nvme0n1"), "/dev/nvme0n1 is not a removable volume");
+        // nor a removable disk the system runs from, whichever part of it is asked for
+        assert_eq!(refused("/dev/sda1"), "/dev/sda1 is in use by the system");
+        assert_eq!(refused("/dev/sda3"), "/dev/sda3 is in use by the system");
+        assert_eq!(refused("/dev/sda"), "/dev/sda is in use by the system");
+        assert_eq!(request("/dev/sda3", &[stick("sda", &["sda1", "sda3"])], "", "/dev/sda1 partition 1 0 -2\n").unwrap_err(), "/dev/sda3 is in use by the system", "a disk with swap in use");
+        let mut built = stick("sdd", &["sdd1", "sdd2"]);
+        built.parts[1].held = true;
+        assert_eq!(request("/dev/sdd1", &[built], "", "").unwrap_err(), "/dev/sdd1 is in use by the system", "another device is built on the disk");
+        // a reader without a card, and an extended partition's placeholder
+        assert_eq!(request("/dev/sde", &[BlockDisk { size: 0, ..stick("sde", &[]) }], "", "").unwrap_err(), "/dev/sde is not a removable volume");
+        let mut old = stick("sdf", &["sdf1", "sdf5"]);
+        old.parts[0].size = 0;
+        assert_eq!(request("/dev/sdf1", &[old], "", "").unwrap_err(), "/dev/sdf1 is not a volume that can be mounted");
     }
 }
