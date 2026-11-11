@@ -2433,6 +2433,8 @@ impl Shell {
             due.add(Some(t + auto_flip_in_secs(unix + offset as i64) as f64 * 1000.0));
         }
         if self.bell.pending() { due.add(Some(t)); }
+        // files dropped on the desktop are on their way: their banner goes up when the move reports, and only until then
+        if self.dnd_desktop_pending() { due.add(Some(t + 50.0)); }
         // the Look Up popover fills its definition in when the dictionaries finish loading
         if self.look_up_waiting() { due.add(Some(t + 50.0)); }
         // a service waits on the front app's selection until its deadline, then takes the word at the caret
@@ -4425,6 +4427,7 @@ impl Shell {
         self.ota_tick(t);
         self.folder_actions_tick();
         self.file_import_tick();
+        self.dnd_desktop_tick();
         if self.weather_refresh.due(t) {
             self.weather_refresh.start(weather::data_path().into());
         }

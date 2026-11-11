@@ -699,6 +699,10 @@ impl Shell {
     /// whatever is on screen steps aside first.
     pub(super) fn open_from_notification(&mut self, app: AppId, t: f64) {
         self.usernotif_tapped(app);
+        // the banner of a drop on the desktop shows the dropped item in Files (`dnd::desktop_drop_banner`)
+        if app == AppId::Files && self.dnd_desktop_reveal(t) {
+            return;
+        }
         let link = app == AppId::Settings && self.notify.store.groups().iter().find(|g| g.app == app).is_some_and(|g| g.latest().title == "Software Update");
         self.open_from_notification_inner(app, t);
         if link && self.screen != Screen::Lock {

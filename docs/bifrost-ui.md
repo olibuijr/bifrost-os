@@ -1104,6 +1104,10 @@ the menu is a plain context menu (no icons, no "More..."), and Copy of a file co
   answered by the runtime (`performed(false)`). Files uses it to drop into the window under the pointer.
 - **Desktop**: files dropped on the desktop move there when they are on the Desktop folder's volume and the source
   allows the move (Option copies, as the narrowed mask says); from another volume they are copied.
+  The desktop draws no icons for the folder's items (there is no desktop icon layer), so when the files have arrived
+  the shell says where they went: a banner from Files, "Moved to Desktop" or "Copied to Desktop" with the item's name
+  (or the count), and a click on it shows the item selected in Files (`dnd::desktop_drop_banner`,
+  `Shell::dnd_desktop_tick`, `dnd_desktop_reveal`). A drop that failed says so ("Not Moved to Desktop" with the reason).
 - **Perform**: on release over a window that replied with an operation the shell first hands the files over, each as a fresh
   **read-only** grant made from the source's grant (`Broker::transfer`, a `DocBatch` and `DocGranted` with `request == session`),
   then sends `Perform` with the items; file items carry the new grant ids and a file that could not be handed over is dropped.
