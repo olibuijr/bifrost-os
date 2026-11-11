@@ -619,6 +619,9 @@ pub struct AppHost {
     exec: PathBuf,
     /// The appearance flags the app last received (`u32::MAX` until the first send).
     appearance_sent: u32,
+    /// The date and time conventions the app last received (`ToApp::DateTime`: flags and zone name); `None` until the
+    /// first send.
+    date_time_sent: Option<(u32, String)>,
     /// The input source the app last received (`ToApp::InputSource`); `None` until the first send.
     input_japanese: Option<bool>,
     /// The pasteboard change count the app last received (`ToApp::Pasteboard`); `None` until the first sync.
@@ -841,6 +844,7 @@ impl AppHost {
             id: id.to_string(),
             exec: PathBuf::new(),
             appearance_sent: u32::MAX,
+            date_time_sent: None,
             input_japanese: None,
             pb_sent: None,
             pb_noted: None,
@@ -967,6 +971,16 @@ impl AppHost {
         if self.appearance_sent != flags {
             self.appearance_sent = flags;
             self.send(&ToApp::Appearance { flags });
+        }
+    }
+
+    /// Tells the app the person's date and time conventions (`date_time_flags` and the system zone's name) on first
+    /// contact and whenever one of them changes, so an app writes times as the menu bar does without reading the
+    /// shell's settings.
+    pub fn sync_date_time(&mut self, flags: u32, zone: &str) {
+        if !matches!(&self.date_time_sent, Some((f, z)) if *f == flags && z == zone) {
+            self.date_time_sent = Some((flags, zone.to_string()));
+            self.send(&ToApp::DateTime { flags, zone: zone.to_string() });
         }
     }
 
@@ -2091,6 +2105,12 @@ pub fn icon_image(id: &str, size: usize) -> Option<crate::gfx::Image> {
 
 use super::{home_zone, keyboard::Out, AppId, Event, Screen, Shell};
 
+/// The date and time conventions an app writes its times with (`bifrost_proto::date_time` bits): `clock_24h` is
+/// Settings > Date & Time > 24-Hour Time.
+pub fn date_time_flags(clock_24h: bool) -> u32 {
+    if clock_24h { 0 } else { bifrost_proto::date_time::CLOCK_12_HOUR }
+}
+
 /// The system accessibility settings an app needs to draw itself (`bifrost_proto::appearance` bits).
 pub fn appearance_flags() -> u32 {
     use bifrost_proto::appearance::*;
@@ -2745,6 +2765,9 @@ impl Shell {
         // only once it comes to the front (0.10.39: Mail restored behind other windows drew at its launch size, black past it)
         let back_sizes: Vec<Option<(u32, u32)>> = (0..self.ext.len()).map(|slot| self.ext_back_size(slot, fg)).collect();
         let appearance = appearance_flags();
+        // Date & Time: the clock style of the menu bar and the zone the shell tells the time in
+        let date_time = date_time_flags(self.clock_style.use_24h);
+        let zone = crate::bare::timezone::current_name();
         let japanese = super::kb_layouts::active() == super::kb_layouts::Layout::Japanese;
         // the newest clipboard text an app asked for, and whether it must stay off the disk (a secret)
         let mut clip: Option<(String, bool)> = None;
@@ -2775,6 +2798,7 @@ impl Shell {
             }
             h.pb_may_write = h.may_write_clipboard(fg == Some(slot as u8), now);
             h.sync_appearance(appearance);
+            h.sync_date_time(date_time, &zone);
             h.sync_input_source(japanese);
             if fg == Some(slot as u8) && h.running() && h.size() != (cfg.w as usize, cfg.h as usize) {
                 h.configure(cfg);
