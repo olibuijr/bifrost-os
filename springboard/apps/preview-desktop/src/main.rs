@@ -138,6 +138,8 @@ struct PictureJob {
     turns: u8,
     adjust: Adjust,
     raster: Raster,
+    /// The document's file as it is now: what a PNG keeps besides its pixels is read from it (`export::write_saved`).
+    source: PathBuf,
     temp: PathBuf,
 }
 
@@ -146,7 +148,12 @@ impl PictureJob {
     /// save has reached its file, so the file is not decoded again to show what was just encoded), or why it was not.
     fn run(self) -> Result<(PathBuf, bifrost_app::kit::Image), String> {
         let out = export::finish(&self.img, &self.marks, self.src, self.turns, &self.adjust, 1.0);
-        export::write_image(&out, self.raster, &self.temp)?;
+        // only a PNG keeps anything of the file; a file that cannot be read any more has nothing to keep
+        let original = match self.raster {
+            Raster::Png => std::fs::read(&self.source).unwrap_or_default(),
+            Raster::Jpeg(_) => Vec::new(),
+        };
+        export::write_saved(&out, self.raster, &original, self.turns % 2 == 1, &self.temp)?;
         Ok((self.temp, out))
     }
 }
@@ -941,6 +948,7 @@ impl Viewer {
             turns: doc.turn_of(page),
             adjust: self.adjust,
             raster,
+            source: path.clone(),
             temp: self.saving_file(&path, raster.ext()),
         };
         self.status = saving_status(&path);
@@ -5188,16 +5196,171 @@ mod tests {
         cleanup(&v);
     }
 
+    /// Saving a PNG loses nothing of its pixels: opened, turned four quarter turns and saved, the file holds the pixels
+    /// it was opened with, bit for bit, at 8 bits a sample in the colour type it had (RGB, and RGBA for a picture with
+    /// transparency). One quarter turn saved and three more saved come back to them too. (The file is smaller than
+    /// one written without row filters, because the encoder filters each row and compresses harder; that is the only
+    /// difference.)
+    #[test]
+    fn a_png_opened_turned_four_times_and_saved_has_its_original_pixels() {
+        for (name, transparent, colour_type) in [("rgb", false, 2u8), ("rgba", true, 6u8)] {
+            let dir = std::env::temp_dir().join(format!("viewer-png-round-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            let mut px: Vec<u32> = (0..15u32).map(|i| 0xff00_0000 | (i * 17) | ((255 - i * 9) << 8) | ((i * 5 + 3) << 16)).collect();
+            if transparent {
+                px[4] = 0;
+            }
+            let original = Image { w: 5, h: 3, px };
+            let file = dir.join("round.png");
+            std::fs::write(&file, export::png_bytes(&original).unwrap()).unwrap();
+            let on_disk = || document::decode_picture(&std::fs::read(&file).unwrap()).expect("the saved file decodes");
+            let header = || {
+                let bytes = std::fs::read(&file).unwrap();
+                (bytes[24], bytes[25])
+            };
+            assert_eq!(header(), (8, colour_type), "{name}: the test file");
+            let mut v = Viewer::new();
+            v.data_dir = dir.join("data");
+            v.open_path(&file);
+            assert_eq!(pixels_of(&v), original.px, "{name}: as opened");
+            // four quarter turns are the picture as it was opened
+            for _ in 0..4 {
+                v.rotate(1);
+            }
+            v.save_document();
+            assert!(!v.saving() && v.save_alert.is_none(), "{name}: {}", v.status);
+            assert_eq!(on_disk(), original, "{name}: four turns and a save");
+            assert_eq!(header(), (8, colour_type), "{name}: the bit depth and the colour type stay");
+            // one quarter turn, saved: the turned pixels, each of them exact
+            v.rotate(1);
+            v.save_document();
+            let turned = model::rotate(&original, 1);
+            assert_eq!(on_disk(), turned, "{name}: one turn and a save");
+            assert_eq!(pixels_of(&v), turned.px, "{name}: the document is the saved picture");
+            // three more, saved: the original again
+            for _ in 0..3 {
+                v.rotate(1);
+            }
+            v.save_document();
+            assert!(!v.saving() && v.save_alert.is_none(), "{name}: {}", v.status);
+            assert_eq!(on_disk(), original, "{name}: back where it began");
+            assert_eq!(header(), (8, colour_type));
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    /// A picture whose metadata says it is to be turned opens upright, and a save writes the upright pixels with an
+    /// upright orientation: the turn is in the pixels or in the orientation, never in both, so the saved file shows
+    /// the same way in every app.
+    #[test]
+    fn a_picture_with_an_orientation_opens_upright_and_is_saved_upright_once() {
+        use springboard::cg::imageio::encode::{encode_png, PngOptions};
+        let dir = std::env::temp_dir().join(format!("viewer-png-orient-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (red, blue) = (0xff00_00ffu32, 0xffff_0000u32);
+        let stored = Image { w: 2, h: 1, px: vec![red, blue] };
+        // a little-endian block with one entry: orientation 6, the picture is to be turned a quarter turn clockwise
+        let exif = vec![0x49, 0x49, 0x2a, 0, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0];
+        let options = PngOptions { exif: Some(exif), ..Default::default() };
+        let file = dir.join("side.png");
+        std::fs::write(&file, encode_png(2, 1, &pixels::to_straight_rgba(&stored), &options).unwrap()).unwrap();
+        let orientation = || {
+            let bytes = std::fs::read(&file).unwrap();
+            let at = bytes.windows(4).position(|w| w == b"eXIf").expect("the EXIF chunk");
+            bytes[at + 4 + 18]
+        };
+        assert_eq!(orientation(), 6, "the test file");
+        let mut v = Viewer::new();
+        v.data_dir = dir.join("data");
+        v.open_path(&file);
+        let doc = v.doc.as_ref().expect("the picture opens");
+        assert_eq!(doc.sizes, [(1, 2)], "upright: the sides are swapped");
+        assert_eq!(pixels_of(&v), [red, blue], "the left pixel is on top");
+        assert!(!v.edited(), "opening changes nothing");
+        v.save_document();
+        assert!(!v.saving() && v.save_alert.is_none(), "{}", v.status);
+        assert_eq!(orientation(), 1, "the saved file says upright");
+        let again = document::decode_picture(&std::fs::read(&file).unwrap()).expect("the saved file decodes");
+        assert_eq!((again.w, again.h, again.px), (1, 2, vec![red, blue]), "and is the picture as it was shown, turned once");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Adjust > Brighter is half a stop of exposure: every colour value is multiplied by the square root of two, so
+    /// 100 becomes 141, up to full, which cannot go further. The step shows in the picture that is drawn and is what
+    /// Save writes, marks the document edited and is one Undo step; Reset Colour gives back exactly the pixels that
+    /// were opened. Four steps (two stops) are the most.
+    #[test]
+    fn brighter_changes_the_picture_by_half_a_stop_and_reset_colour_restores_it() {
+        let ctx = menu_ctx();
+        // red 100, green 60, blue 20; black; red full, green 200, blue 128; a dark grey
+        let px = vec![0xff14_3c64u32, 0xff00_0000, 0xff80_c8ff, 0xff0a_0a0a];
+        let mut v = viewer_with(Image { w: 2, h: 2, px: px.clone() });
+        let lay = v.layout(&ctx.ui, 1200, 780);
+        // the picture as the canvas draws it, and as Save writes it
+        let shown = |v: &Viewer| {
+            let doc = v.doc.as_ref().unwrap();
+            let img = doc.picture_rc().unwrap();
+            let drawn = document::adjusted(&img, &v.adjust);
+            assert_eq!(export::finish(&img, &doc.marks, 0, 0, &v.adjust, 1.0), drawn, "Save writes what is shown");
+            drawn.px
+        };
+        let channel = |p: u32, k: u32| ((p >> (8 * k)) & 0xff) as i32;
+        assert_eq!(shown(&v), px);
+        assert!(!v.edited());
+        assert!(v.act(&ctx.ui, &lay, Action::Brighter));
+        assert_eq!(v.adjust.exposure, 0.5, "one step is half a stop");
+        let bright = shown(&v);
+        for (k, was) in [(0u32, 100i32), (1, 60), (2, 20)] {
+            let want = (was as f32 * std::f32::consts::SQRT_2).round() as i32;
+            assert!((channel(bright[0], k) - want).abs() <= 1, "{was} becomes {want}, is {}", channel(bright[0], k));
+        }
+        assert!(channel(bright[0], 0) - 100 >= 40, "a step is plain to see: 100 becomes about 141");
+        assert_eq!(bright[1], px[1], "black stays black");
+        assert_eq!(channel(bright[2], 0), 255, "full stays full");
+        assert!(channel(bright[2], 1) > 200 && channel(bright[2], 2) > 128 + 40);
+        assert!(bright.iter().all(|p| p >> 24 == 255), "the picture stays opaque");
+        assert!(v.edited() && v.window_title().ends_with(canvas::EDITED_SUFFIX), "the document is edited");
+        assert!(v.history.can_undo(), "the step can be undone");
+        undo(&mut v);
+        assert_eq!(v.adjust, Adjust::default());
+        assert_eq!(shown(&v), px, "Undo gives the opened pixels back");
+        assert!(!v.edited());
+        // Darker is the same step the other way
+        assert!(v.act(&ctx.ui, &lay, Action::Darker));
+        assert!((channel(shown(&v)[0], 0) - 71).abs() <= 1, "100 becomes about 71");
+        assert!(v.act(&ctx.ui, &lay, Action::Brighter));
+        assert_eq!(shown(&v), px, "a step back is no change at all");
+        // two steps are a whole stop, and Reset Colour restores the pixels exactly
+        v.act(&ctx.ui, &lay, Action::Brighter);
+        v.act(&ctx.ui, &lay, Action::Brighter);
+        assert!((channel(shown(&v)[0], 0) - 200).abs() <= 1, "100 becomes 200");
+        assert!(v.act(&ctx.ui, &lay, Action::ResetColour));
+        assert_eq!(v.adjust, Adjust::default());
+        assert_eq!(shown(&v), px, "Reset Colour gives exactly the opened pixels");
+        assert!(!v.edited());
+        // the most is two stops: a fifth step changes nothing
+        for _ in 0..4 {
+            v.act(&ctx.ui, &lay, Action::Brighter);
+        }
+        let most = shown(&v);
+        assert_eq!(v.adjust.exposure, 2.0);
+        v.act(&ctx.ui, &lay, Action::Brighter);
+        assert_eq!(shown(&v), most);
+        cleanup(&v);
+    }
+
     /// In Fit the page keeps the margin to every edge of the canvas: at open, turned, cropped and at another window
     /// size. A page that filled the canvas's height sat flush under the toolbar and on the window's bottom edge.
     #[test]
     fn a_fitted_page_keeps_the_margin_to_every_edge_of_the_canvas() {
         let ctx = menu_ctx();
         let mut v = viewer_with(Image { w: 1600, h: 800, px: vec![0xff00_00ff; 1600 * 800] });
-        let inside = |v: &Viewer, w: i32, h: i32, when: &str| {
-            let lay = v.layout(&ctx.ui, w, h);
+        let inside_at = |v: &Viewer, ui: &Ui, w: i32, h: i32, when: &str| {
+            let lay = v.layout(ui, w, h);
             let m = lay.margin;
-            assert_eq!(m, ctx.ui.pt(canvas::FIT_MARGIN_PT) as i32);
+            assert_eq!(m, ui.pt(canvas::FIT_MARGIN_PT) as i32, "{when}: the one margin for all four sides");
             assert!(m > 0, "the window has a margin");
             let (cx, cy, cw, ch) = lay.canvas();
             let p = v.placed(&lay).expect("a picture");
@@ -5208,12 +5371,27 @@ mod tests {
             assert!(slack_x.min(slack_y) <= 1, "{when}: fitted");
             assert!((p.x - cx - (cx + cw - right)).abs() <= 1 && (p.y - cy - (cy + ch - bottom)).abs() <= 1, "{when}: centred");
         };
+        let inside = |v: &Viewer, w: i32, h: i32, when: &str| inside_at(v, &ctx.ui, w, h, when);
         inside(&v, 1200, 780, "at open");
         v.rotate(1);
         inside(&v, 1200, 780, "turned");
         v.rotate(1);
         inside(&v, 1200, 780, "turned twice");
         inside(&v, 700, 900, "a narrow window");
+        // the least window the manifest allows, with the sidebar shown and with a panel on the right as well, at
+        // every scale: the page still has the margin on all four sides
+        let (min_w, min_h) = manifest_min_size();
+        for scale in [1.0f32, 1.25, 1.5625, 2.0] {
+            let ui = ui_at(scale);
+            let (w, h) = ((min_w as f32 * scale).round() as i32, (min_h as f32 * scale).round() as i32);
+            for turns in 0..4 {
+                inside_at(&v, &ui, w, h, &format!("the least window at {scale}, turned {turns}"));
+                v.inspector = true;
+                inside_at(&v, &ui, w, h, &format!("the least window at {scale} with the Inspector, turned {turns}"));
+                v.inspector = false;
+                v.rotate(1);
+            }
+        }
         v.sidebar = false;
         inside(&v, 1200, 780, "without the sidebar");
         v.selection = Some((0, Norm { x: 0.0, y: 0.0, w: 0.5, h: 1.0 }));

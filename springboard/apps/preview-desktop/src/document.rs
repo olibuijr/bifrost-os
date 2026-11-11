@@ -383,9 +383,15 @@ impl Document {
 
 /// Decodes the bytes of a picture file. An SVG document is not one of the raster formats `ImageSource` reads from a
 /// header, so it is drawn at its own size by the decoder every other picture view uses (`imageio::decode`).
+///
+/// The picture is turned upright by the orientation its metadata gives (a camera's EXIF, a PNG's `eXIf`), as every
+/// other view of it shows it. The pixels are what a save writes, and a save writes no orientation but upright
+/// (`export::kept_png_chunks`; a JPEG is saved without EXIF), so the turn is in the pixels or in the metadata, never in
+/// both. Decoded as stored, a photo taken on its side opened on its side and was saved that way with its
+/// orientation gone.
 pub fn decode_picture(bytes: &[u8]) -> Result<Image, SourceError> {
     match ImageSource::new(bytes) {
-        Ok(source) => source.decode(),
+        Ok(source) => source.decode_upright(),
         Err(SourceError::NotImage) => imageio::decode(bytes).ok_or(SourceError::NotImage),
         Err(e) => Err(e),
     }
