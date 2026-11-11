@@ -22,7 +22,7 @@ use bifrost_app::control::RpcError;
 use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
 use bifrost_app::controls::Rect;
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
-use bifrost_app::kit::canvas::Canvas;
+use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::print::{Orientation, PrintError, PrintInfo, PrintOperation};
@@ -1619,8 +1619,20 @@ impl App for StickiesApp {
         true
     }
 
+    /// Every frame paints the whole surface (it is erased first, see `draw_canvas`), so the runtime need not bring the
+    /// buffer up to date with the frame before.
+    fn full_redraw(&self) -> bool {
+        true
+    }
+
     fn draw_canvas(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, _t: f64) -> Damage {
         let (w, h) = canvas.size();
+        // The surface is transparent between the notes, and the buffer handed in still holds an earlier frame (the
+        // runtime clears nothing). Without this erase a note that moved, shrank, collapsed or closed stayed in the
+        // buffer: on screen, and in the input shape the shell takes from these pixels (a borderless window has the
+        // pointer exactly where its alpha is above zero), so the place a note had been kept swallowing presses meant
+        // for the window beneath. `fill_rect` writes the pixels as they are: this is an erase, not a blend.
+        canvas.fill_rect(RectF::new(0.0, 0.0, w as f32, h as f32), 0);
         self.refresh_marks(ctx);
         if let Some(board) = &self.board {
             board::draw(canvas, &ctx.ui, board, &self.marks);
@@ -2068,6 +2080,33 @@ mod tests {
             assert!(!ids[i + 1..].contains(a));
         }
         assert_eq!(undo_name(MENU_ARRANGE_BASE + 4), Some("Arrange"), "Location");
+    }
+
+    /// E2E rev 9 (B56): the shell gives the board's transparent surface the pointer where it has pixels, so a frame
+    /// starts from an erased surface: a note that moved or closed leaves nothing where it was, and the input shape is
+    /// the notes as they are now.
+    #[test]
+    fn a_frame_keeps_no_pixels_of_a_note_that_moved_or_closed() {
+        let dir = std::env::temp_dir().join(format!("stickies-erase-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let ctx = ctx_in(&dir);
+        let mut app = app_with(&["one"]);
+        let (w, h) = (ctx.cfg.w as usize, ctx.cfg.h as usize);
+        let mut px = vec![0u32; w * h];
+        let covered = |px: &[u32], x: usize, y: usize| px[y * w + x] >> 24 != 0;
+        // the note is 220 by 200 pt at (40, 60), one px a point
+        app.draw_canvas(&ctx, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 0.0);
+        assert!(covered(&px, 60, 100), "the note is drawn");
+        assert!(!covered(&px, 420, 100), "and nothing beside it");
+        app.board.as_mut().unwrap().notes[0].x = 400.0;
+        app.draw_canvas(&ctx, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 0.0);
+        assert!(!covered(&px, 60, 100), "nothing is left where the note was");
+        assert!(covered(&px, 420, 100), "and it is drawn where it is now");
+        app.board.as_mut().unwrap().notes.clear();
+        app.draw_canvas(&ctx, &mut Surface { w, h, stride: w, px: &mut px, y0: 0 }, 0.0);
+        assert!(px.iter().all(|p| *p == 0), "a board with no notes is a wholly transparent surface");
+        assert!(app.full_redraw(), "the runtime copies nothing up for a frame that paints everything");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

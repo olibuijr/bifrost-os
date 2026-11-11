@@ -11,17 +11,28 @@ use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sheet;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role, TextField};
-use bifrost_app::kit::ui::{MAC_BODY_PT, SPACE_S};
+use bifrost_app::kit::ui::{MAC_BODY_PT, SPACE_S, SPACE_XS};
 use bifrost_app::kit::{Scroller, TextCache, Ui, Weight};
-use bifrost_app::layout::UNIFIED_BAR_PT;
+use bifrost_app::layout::{SIDEBAR_MAX_PT, SIDEBAR_MIN_PT, UNIFIED_BAR_PT};
 use bifrost_app::widgets::{CAPSULE_PT, TOOLBAR_GAP_PT};
 use bifrost_app::TouchKind;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-/// Sidebar width (points) and the inset of the content from it and from the window edge.
-pub const SIDE_PT: f32 = 180.0;
+/// The side of a source-list row's glyph at the medium sidebar icon size (points), as `widgets::source_list` draws it.
+const SIDE_GLYPH_PT: f32 = 20.0;
+/// The inset of the content from the sidebar and from the window edge.
 const INSET_PT: f32 = 16.0;
+
+/// The sidebar's width (points) for row labels at most `label_pt` wide beside a glyph `glyph_pt` across, so that no
+/// label is cut ("Applications in the Last 8 Hours" read "Applications in…" in a fixed 180 pt column). It follows the
+/// row `widgets::source_list` draws: the selection plate is inset by `SPACE_S + SPACE_XS / 2` on each side and padded
+/// by `SPACE_S` inside, and the glyph and `SPACE_S` come before the label. One point is spare for the pixel rounding of
+/// the label's room. Kept within the kit's sidebar range (`layout::SIDEBAR_MIN_PT` to `SIDEBAR_MAX_PT`).
+pub fn side_width(label_pt: f32, glyph_pt: f32) -> f32 {
+    let inset = SPACE_S + SPACE_XS / 2.0;
+    (2.0 * inset + 2.0 * SPACE_S + glyph_pt + SPACE_S + label_pt + 1.0).ceil().clamp(SIDEBAR_MIN_PT, SIDEBAR_MAX_PT)
+}
 /// The tab control: its height and its widest size.
 const SEG_H_PT: f32 = 24.0;
 const SEG_MAX_PT: f32 = 460.0;
@@ -249,6 +260,8 @@ pub enum Press {
 pub struct Geo {
     pub w: f32,
     pub h: f32,
+    /// The sidebar's width (`Monitor::side`).
+    pub side: f32,
     pub content_x: f32,
     pub content_w: f32,
     pub seg_y: f32,
@@ -328,6 +341,8 @@ pub struct Monitor {
     pub dock_update: Option<DockContent>,
     /// The app's storage folder, where the diagnostics archive is prepared.
     pub data_dir: PathBuf,
+    /// The sidebar width last measured, with what it was measured at (`side`).
+    side_cache: std::cell::Cell<Option<([u32; 4], f32)>>,
 }
 
 impl Monitor {
@@ -375,6 +390,7 @@ impl Monitor {
             dock_mode: DockMode::Off,
             dock_update: None,
             data_dir: PathBuf::new(),
+            side_cache: std::cell::Cell::new(None),
         }
     }
 
@@ -814,7 +830,7 @@ impl Monitor {
         let g = self.geo(ui);
         let h = QUIT_HEAD_PT + QUIT_FOOT_PT;
         let top = UNIFIED_BAR_PT + GAP_PT;
-        Rect { x: SIDE_PT + ((g.w - SIDE_PT - SHEET_W_PT) / 2.0).max(0.0), y: ((g.h - h) / 2.0).max(top), w: SHEET_W_PT, h }
+        Rect { x: g.side + ((g.w - g.side - SHEET_W_PT) / 2.0).max(0.0), y: ((g.h - h) / 2.0).max(top), w: SHEET_W_PT, h }
     }
 
     /// A release on the quit confirmation: Cancel closes it; Quit and Force Quit send their signal to that process.
@@ -870,7 +886,7 @@ impl Monitor {
         let g = self.geo(ui);
         let h = SHEET_HEAD_PT + model::SIGNALS.len() as f32 * SHEET_ROW_PT + SHEET_FOOT_PT;
         let top = UNIFIED_BAR_PT + GAP_PT;
-        Rect { x: SIDE_PT + ((g.w - SIDE_PT - SHEET_W_PT) / 2.0).max(0.0), y: ((g.h - h) / 2.0).max(top), w: SHEET_W_PT, h }
+        Rect { x: g.side + ((g.w - g.side - SHEET_W_PT) / 2.0).max(0.0), y: ((g.h - h) / 2.0).max(top), w: SHEET_W_PT, h }
     }
 
     /// A release on the sheet: a row chooses its signal, Cancel closes it, Send closes it and signals the process.
@@ -987,10 +1003,28 @@ impl Monitor {
 
     // --- layout ---
 
+    /// The sidebar's width in points: as wide as its longest row label needs (`side_width`), measured in the weight
+    /// the selected row is drawn in (the widest), at the text size, Bold Text setting and sidebar icon size in use.
+    /// Measured again only when one of those changes.
+    pub fn side(&self, ui: &Ui) -> f32 {
+        let glyph = bifrost_app::controls::sidebar::scaled_row(SIDE_GLYPH_PT, bifrost_app::kit::ui::sidebar_icon_scale());
+        let key = [ui.s.to_bits(), ui.text_scale.to_bits(), u32::from(ui.bold), glyph.to_bits()];
+        if let Some((seen, width)) = self.side_cache.get() {
+            if seen == key {
+                return width;
+            }
+        }
+        let label_px = Filter::ALL.iter().map(|f| ui.measure(f.label(), MAC_BODY_PT, Weight::Bold)).fold(0.0f32, f32::max);
+        let width = side_width(label_px / ui.pt(1.0).max(0.001), glyph);
+        self.side_cache.set(Some((key, width)));
+        width
+    }
+
     pub fn geo(&self, ui: &Ui) -> Geo {
         let k = ui.pt(1.0);
         let (w, h) = (self.w / k, self.h / k);
-        let content_x = SIDE_PT + INSET_PT;
+        let side = self.side(ui);
+        let content_x = side + INSET_PT;
         let content_w = (w - content_x - INSET_PT).max(0.0);
         let seg_y = UNIFIED_BAR_PT + GAP_PT;
         let graph_y = seg_y + SEG_H_PT + GAP_PT;
@@ -999,6 +1033,7 @@ impl Monitor {
         Geo {
             w,
             h,
+            side,
             content_x,
             content_w,
             seg_y,
@@ -1098,10 +1133,11 @@ impl Monitor {
     }
 
     fn sidebar_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<u32> {
-        if x >= SIDE_PT {
+        let side = self.side(ui);
+        if x >= side {
             return None;
         }
-        let bounds = Rect { x: 0.0, y: 0.0, w: SIDE_PT, h: self.h / ui.pt(1.0) };
+        let bounds = Rect { x: 0.0, y: 0.0, w: side, h: self.h / ui.pt(1.0) };
         self.sidebar().hit(bounds, SIDE_SCROLL, x, y)
     }
 
@@ -1124,7 +1160,8 @@ impl Monitor {
     /// The toolbar band's rectangle: the capsule row over the content.
     pub fn band(&self, ui: &Ui) -> Rect {
         let w = self.w / ui.pt(1.0);
-        Rect { x: SIDE_PT + 12.0, y: (UNIFIED_BAR_PT - CAPSULE_PT) / 2.0, w: (w - SIDE_PT - 24.0).max(0.0), h: CAPSULE_PT }
+        let side = self.side(ui);
+        Rect { x: side + 12.0, y: (UNIFIED_BAR_PT - CAPSULE_PT) / 2.0, w: (w - side - 24.0).max(0.0), h: CAPSULE_PT }
     }
 
     fn bar(&self) -> Toolbar {
@@ -1297,7 +1334,7 @@ impl Monitor {
                 }
                 let g = self.geo(ui);
                 let seg = self.seg_rect(ui);
-                self.press = if x < SIDE_PT {
+                self.press = if x < g.side {
                     Press::Sidebar
                 } else if y < UNIFIED_BAR_PT {
                     self.toolbar_hit(ui, x, y).map_or(Press::None, Press::Toolbar)
@@ -1423,14 +1460,14 @@ impl Monitor {
         if self.tab == Tab::Network {
             let (rx, tx) = (s.ifaces.iter().map(|i| i.rx_total).sum::<u64>(), s.ifaces.iter().map(|i| i.tx_total).sum::<u64>());
             return format!(
-                "{} processes with TCP connections   {} interfaces   Received {}   Sent {}",
-                self.rows.len(),
-                s.ifaces.len(),
+                "{} with TCP connections   {}   Received {}   Sent {}",
+                model::counted(self.rows.len(), "process"),
+                model::counted(s.ifaces.len(), "interface"),
                 model::bytes(rx),
                 model::bytes(tx)
             );
         }
-        let procs = format!("{} processes", s.procs.len());
+        let procs = model::counted(s.procs.len(), "process");
         let cpu = format!("CPU {}", model::percent(s.cpu.busy));
         let mem = format!("Memory {} of {}", model::bytes(s.memory.used()), model::bytes(s.memory.total));
         format!("{procs}   {cpu}   {mem}")
@@ -1456,6 +1493,42 @@ const SIGTERM: i32 = 15;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// E2E rev 9 (B54): the sidebar was a fixed 180 pt and cut five of its ten labels ("System Proces…").
+    #[test]
+    fn the_sidebar_is_as_wide_as_its_longest_label_needs_within_the_kit_range() {
+        // plate insets 2 x 10, plate padding 2 x 8, glyph 20, gap 8, then the label and one spare point
+        assert_eq!(side_width(195.0, 20.0), 260.0);
+        assert_eq!(side_width(195.4, 24.0), 265.0, "a larger sidebar icon takes its room, and the width is whole points");
+        assert_eq!(side_width(40.0, 20.0), SIDEBAR_MIN_PT, "short labels keep the kit's narrowest sidebar");
+        assert_eq!(side_width(900.0, 20.0), SIDEBAR_MAX_PT, "and no label makes it wider than the kit's widest");
+    }
+
+    #[test]
+    fn every_sidebar_label_has_room_in_the_measured_sidebar() {
+        use bifrost_app::kit::Font;
+        let assets = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets");
+        let data: &'static [u8] = Box::leak(std::fs::read(format!("{assets}/SFUI.ttf")).unwrap().into_boxed_slice());
+        for scale in [1.0, 1.25, 1.5625] {
+            let ui = Ui::new(Font::parse(data).unwrap(), scale);
+            let m = Monitor::new(1200.0 * scale, 780.0 * scale);
+            let side = m.side(&ui);
+            assert!((SIDEBAR_MIN_PT..=SIDEBAR_MAX_PT).contains(&side), "{side}");
+            assert!(side < SIDEBAR_MAX_PT, "the longest label fits below the kit's cap at the default text size: {side}");
+            assert_eq!(m.side(&ui), side, "the same answer from the cache");
+            let g = m.geo(&ui);
+            assert_eq!((g.side, g.content_x), (side, side + INSET_PT), "the content starts after the sidebar");
+            // the room `widgets::source_list` leaves a row's label, in pixels: from after the glyph to the plate's padding
+            let inset = SPACE_S + SPACE_XS / 2.0;
+            let glyph = bifrost_app::controls::sidebar::scaled_row(SIDE_GLYPH_PT, bifrost_app::kit::ui::sidebar_icon_scale());
+            let room = (ui.pt(side - inset - SPACE_S) as i32) as f32 - ui.pt(inset + SPACE_S + glyph + SPACE_S);
+            for f in Filter::ALL {
+                let label = f.label();
+                assert!(ui.measure(label, MAC_BODY_PT, Weight::Bold) <= room, "{label} at scale {scale}");
+                assert_eq!(ui.fit(label, MAC_BODY_PT, room), label, "{label} is not cut at scale {scale}");
+            }
+        }
+    }
 
     #[test]
     fn the_inspector_needs_a_selected_process() {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.12
+
+- The sidebar is wide enough for its labels: "System Processes", "Inactive Processes", "Windowed Processes", "Selected Processes" and "Applications in the Last 8 Hours" are no longer cut.
+- Counts read "1 process", "1 core" and "1 interface" for one.
+- Process > Inspect Process has the key Cmd+I.
+
 ## 0.10.11
 
 - Rebuilt with the SDK fixes from the review wave: a document saved in place on quit reaches the shell, a semaphore signal releases one waiter, and queue waits no longer hold the pool.

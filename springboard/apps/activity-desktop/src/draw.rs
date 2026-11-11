@@ -8,7 +8,7 @@ use crate::model::{self, bytes, energy, percent, rate, Column, SortKey, Tab, DIS
 use crate::sample::{ProcSample, Snapshot};
 use crate::window::{
     quit_sheet_buttons, signal_sheet_buttons, signal_sheet_row, Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, INSPECT_BODY_Y_PT, INSPECT_PAD_PT, INSPECT_ROW_PT,
-    INSPECT_SEGMENTS, REPORT_LINE_PT, ROW_PT, SIDE_PT, SIDE_SCROLL,
+    INSPECT_SEGMENTS, REPORT_LINE_PT, ROW_PT, SIDE_SCROLL,
 };
 use bifrost_app::controls::Rect;
 use bifrost_app::controls::prefs_layout::m;
@@ -269,9 +269,9 @@ impl Monitor {
     }
 
     fn draw_sidebar(&self, ui: &Ui, s: &mut Surface, g: &Geo) {
-        let bounds = Rect { x: 0.0, y: 0.0, w: SIDE_PT, h: g.h };
+        let bounds = Rect { x: 0.0, y: 0.0, w: g.side, h: g.h };
         widgets::source_list(s, ui, bounds, &self.sidebar(), SIDE_SCROLL, None);
-        s.fill_rect(ui.pt(SIDE_PT) as usize - 1, 0, 1, self.h as usize, SEPARATOR_C.now());
+        s.fill_rect(ui.pt(g.side) as usize - 1, 0, 1, self.h as usize, SEPARATOR_C.now());
     }
 
     fn draw_tabs(&self, ui: &Ui, s: &mut Surface) {
@@ -347,7 +347,7 @@ impl Monitor {
                 Graph {
                     title: "Network",
                     value: format!("Received {}   Sent {}", rate(rx), rate(tx)),
-                    detail: format!("{n} interfaces, loopback not counted. The table counts TCP sockets of your processes."),
+                    detail: format!("{}, loopback not counted. The table counts TCP sockets of your processes.", model::counted(n, "interface")),
                     plots: vec![(h.net_rx.values().collect(), SYSTEM_BLUE.now()), (h.net_tx.values().collect(), SYSTEM_GREEN.now())],
                     scale: h.net_rx.peak().max(h.net_tx.peak()).max(NET_FLOOR),
                 }
@@ -385,7 +385,7 @@ impl Monitor {
         let cores = self.history.cores.len();
         let busy = self.snapshot.as_ref().map_or(0.0, |snap| snap.cpu.busy);
         text(&mut self.labels, s, ui, "CPU History", MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x, r.y + 16.0, w);
-        let detail = format!("{cores} cores   Total {}", percent(busy));
+        let detail = format!("{}   Total {}", model::counted(cores, "core"), percent(busy));
         text(&mut self.labels, s, ui, &detail, MAC_SUBHEAD_PT, Weight::Regular, LABEL.now(), x, r.y + 34.0, w);
         self.core_strips(ui, s, x, r.y + 48.0, w, r.h - 58.0);
     }
@@ -454,7 +454,7 @@ impl Monitor {
         let cores = self.history.cores.len();
         let busy = self.snapshot.as_ref().map_or(0.0, |snap| snap.cpu.busy);
         text(&mut self.labels, s, ui, "CPU History", MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), CARD_PAD, 18.0, w - 2.0 * CARD_PAD);
-        let detail = format!("{cores} cores   Total {}", percent(busy));
+        let detail = format!("{}   Total {}", model::counted(cores, "core"), percent(busy));
         text(&mut self.labels, s, ui, &detail, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), CARD_PAD, 36.0, w - 2.0 * CARD_PAD);
         self.core_strips(ui, s, CARD_PAD, 52.0, w - 2.0 * CARD_PAD, h - 52.0 - CARD_PAD);
     }
@@ -525,7 +525,7 @@ impl Monitor {
 
     /// The toolbar band, the table header (with the sort arrow), the footer and the toolbar's search field.
     fn draw_chrome(&mut self, ui: &Ui, s: &mut Surface, g: &Geo) {
-        let x0 = SIDE_PT;
+        let x0 = g.side;
         widgets::toolbar_band(s, ui, Rect { x: x0, y: 0.0, w: g.w - x0, h: UNIFIED_BAR_PT });
         let (bar, layout) = self.bar_layout(ui);
         widgets::toolbar(s, ui, self.band(ui), &bar, None);
