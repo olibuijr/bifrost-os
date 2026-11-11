@@ -710,8 +710,10 @@ impl Viewer {
     }
 
     /// File > Save: the markup, page order and turns are written into the file the document was opened from, and the
-    /// file is opened again. A picture is written as a picture in the format of its file; a PDF is written by its
-    /// worker. Either way the saved document is first written into the data folder, and `save_written` takes it on.
+    /// file is opened again. A picture is written as a picture in the format its file has, when that loses nothing
+    /// the file holds (`document::Stored::in_place`); any other picture is saved as a copy and its file is left alone
+    /// (`save_copy`). A PDF is written by its worker. The saved document is first written into the data folder, and
+    /// `save_written` takes it on.
     /// The status says "Saving name…" at once, in the frame of the key press: a picture is encoded on a queue of its
     /// own (`pump` takes the result), so the window is not held while a large one is written. While a save is under
     /// way another one is not started: its answers from the shell would be taken for the first one's.
@@ -869,6 +871,10 @@ impl Viewer {
         if self.saving() {
             return;
         }
+        // Save was answered and the document is saved as a copy (`save_copy`): the save panel has not answered yet
+        if !discarded && self.saving_copy() {
+            return;
+        }
         self.leave = None;
         if discarded || (!self.edited() && self.save_alert.is_none()) {
             match leaving {
@@ -937,10 +943,17 @@ impl Viewer {
             }
             return None;
         }
+        // The file is written only in the format its bytes have, and only when it holds nothing a save would lose.
+        // A save in place wrote PNG data into a file called .gif, .webp, .tif, .bmp, .ico or .svg, which no other app
+        // could open any more, reduced a 16-bit PNG to 8 bits and dropped a colour profile.
+        let Some(format) = doc.stored.in_place() else {
+            self.save_copy();
+            return None;
+        };
         let page = self.view.page;
         let src = doc.source_of(page)?;
         let img = doc.picture(page)?;
-        let raster = raster_of(&path, self.jpeg_quality);
+        let raster = raster_for(format, self.jpeg_quality);
         let job = PictureJob {
             img: (*img).clone(),
             marks: doc.marks.clone(),
@@ -1234,18 +1247,50 @@ impl Viewer {
         }
     }
 
-    /// Save As: the document as it is, in the format of its file and at its own size, goes into a file chosen in the
-    /// save panel (the export path).
+    /// Save As: the document as it is, at its own size, goes into a file chosen in the save panel (the export path).
+    /// A picture is written as a JPEG when its file holds one and as a PNG otherwise.
     fn save_as(&mut self) {
         let Some(doc) = &self.doc else { return };
         if doc.is_pdf {
             self.export_pdf();
             return;
         }
-        let raster = raster_of(&doc.path, self.jpeg_quality);
+        let raster = raster_for(doc.stored.copy_format(), self.jpeg_quality);
         let scale = std::mem::replace(&mut self.export_scale, 1.0);
         self.export_raster(raster);
         self.export_scale = scale;
+    }
+
+    /// File > Save for a picture whose file is not written (`document::Stored::in_place` is None): a format the app
+    /// reads and does not write (GIF, WebP, TIFF, BMP, an icon, SVG), an animation, a PNG of 16 bits a sample, or a
+    /// picture with a colour profile. The file stays as it is. The picture as it is shown goes the Save As way
+    /// instead: the save panel suggests the file's name with the copy's extension (`Stored::copy_name`), the status
+    /// line says why (`Stored::copy_reason`), and the chosen file becomes the document once it is written, so the
+    /// title names it and the next File > Save writes it. While the panel is up another Save asks for no second one.
+    fn save_copy(&mut self) {
+        if self.saving_copy() {
+            return;
+        }
+        let Some(doc) = &self.doc else { return };
+        let stored = doc.stored;
+        let name = name_of(&doc.path);
+        // an export that was still waiting for its panel is replaced by this one
+        self.pending_export = None;
+        let scale = std::mem::replace(&mut self.export_scale, 1.0);
+        self.export_raster(raster_for(stored.copy_format(), self.jpeg_quality));
+        self.export_scale = scale;
+        // nothing waits when the picture could not be encoded: the status says so
+        if let Some(pending) = self.pending_export.as_mut() {
+            pending.adopt = true;
+            pending.name = stored.copy_name(&name);
+            self.status = stored.copy_reason(&name);
+        }
+    }
+
+    /// Whether a Save As waits for its file: the save panel is up, or the chosen file is being committed. The file
+    /// becomes the document then.
+    fn saving_copy(&self) -> bool {
+        self.pending_export.as_ref().is_some_and(|p| p.adopt) || self.adopting.is_some()
     }
 
     /// Save As from the save alert: as `save_as`, and the chosen file becomes the document once it is saved.
@@ -3314,10 +3359,12 @@ impl Viewer {
     }
 }
 
-/// The format File > Save and Save As write a picture in: the format of its file for a JPEG, PNG for every other.
-fn raster_of(path: &Path, jpeg_quality: u8) -> Raster {
-    match path.extension().and_then(|e| e.to_str()) {
-        Some(ext) if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") => Raster::Jpeg(jpeg_quality),
+/// What a picture is written as for `format`, which is PNG or JPEG (`document::Stored::in_place`, `copy_format`): a
+/// JPEG at the quality File > JPEG Quality gives, a PNG otherwise. The format comes from the bytes of the file, not
+/// from its name.
+fn raster_for(format: bifrost_app::image_source::Format, jpeg_quality: u8) -> Raster {
+    match format {
+        bifrost_app::image_source::Format::Jpeg => Raster::Jpeg(jpeg_quality),
         _ => Raster::Png,
     }
 }
@@ -3844,13 +3891,24 @@ impl App for Viewer {
         }
         if saved_as {
             // Save As wrote the document into this file: it is the same document under its new name, with nothing
-            // left to ask about
+            // left to ask about. A close, a quit or another document that waited for this save (Save in the
+            // unsaved-changes question, for a picture that is saved as a copy) is not given up by the open:
+            // `finish_leaving` carries it out now that the save has ended.
+            let leave = self.leave;
+            let next = self.next_document.take();
             if let Some(path) = self.open_granted(&doc.name, doc.grant, stamp, &bytes) {
+                // a picture's colour adjustment is in the saved file: applied again it would show twice, and the
+                // document that was just saved would count as edited
+                if self.doc.as_ref().is_some_and(|d| !d.is_pdf) {
+                    self.adjust = Adjust::default();
+                }
                 let message = format!("Saved {}", name_of(&path));
                 self.status = message.clone();
                 self.say_saved(&message);
                 self.after_open = self.loading.is_some().then_some(message);
             }
+            self.leave = leave;
+            self.next_document = next;
         } else {
             // a file chosen in the open panel, sent by the file manager or dropped on the window: it takes the open
             // document's place, after the question about that one's unsaved changes
@@ -5194,6 +5252,155 @@ mod tests {
         assert_eq!(v.adjust, Adjust::default(), "the adjustment is in the file, not applied a second time");
         assert!(!v.edited());
         cleanup(&v);
+    }
+
+    /// File > Save never writes a file in another format than the one its bytes have, and never a file that holds
+    /// more than a save would write. A GIF, a WebP picture, a PNG of 16 bits a sample and a PNG with a colour profile
+    /// stay as they are, byte for byte: Save asks for a new file in the save panel instead, suggesting the name with
+    /// .png (and " copy" when the file is a PNG already), and the status line says why and how much of an animation
+    /// is in the copy. At 0.11.27's start Save wrote PNG data into the .gif and the .webp, which nothing else could
+    /// open then, 8 bits into the 16-bit PNG, and dropped the profile.
+    #[test]
+    fn save_on_a_picture_viewer_cannot_write_back_asks_for_a_copy_and_leaves_the_file_alone() {
+        use springboard::cg::imageio::encode::{encode_png, encode_png16, PngOptions};
+        use springboard::cg::imageio::{gif, webp};
+        let dir = std::env::temp_dir().join(format!("viewer-save-copy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let ctx = menu_ctx();
+        // 3 by 2 pixels: a red frame and a blue one
+        let first: Vec<u8> = [255u8, 0, 0, 255].repeat(6);
+        let second: Vec<u8> = [0u8, 0, 255, 255].repeat(6);
+        let animation = gif::encode(3, 2, &[gif::GifFrame { rgba: &first, delay_ms: 100 }, gif::GifFrame { rgba: &second, delay_ms: 100 }], Some(0)).unwrap();
+        let still = webp::encode(3, 2, &first, None, None, None).unwrap();
+        let deep = encode_png16(3, 2, &[0xffffu16, 0x1234, 0, 0xffff].repeat(6), &PngOptions::default()).unwrap();
+        let profiled = encode_png(3, 2, &first, &PngOptions { icc: Some(("p".into(), vec![1, 2, 3, 4])), ..Default::default() }).unwrap();
+        let cases: [(&str, &[u8], &str, &str); 4] = [
+            ("anim.gif", &animation[..], "anim.png", "Only the first of its 2 frames is in the copy."),
+            ("still.webp", &still[..], "still.png", "Viewer cannot save WebP files"),
+            ("deep.png", &deep[..], "deep copy.png", "8 bits a sample"),
+            ("tagged.png", &profiled[..], "tagged copy.png", "colour profile"),
+        ];
+        for (name, bytes, suggested, says) in cases {
+            let file = dir.join(name);
+            std::fs::write(&file, bytes).unwrap();
+            let mut v = Viewer::new();
+            v.data_dir = dir.join(format!("data-{name}"));
+            v.open_path(&file);
+            assert!(v.doc.is_some(), "{name}: {}", v.status);
+            assert_eq!(v.doc.as_ref().unwrap().stored.in_place(), None, "{name}");
+            v.rotate(1);
+            assert!(v.edited(), "{name}");
+            v.save_document();
+            v.pump(&ctx);
+            assert_eq!(std::fs::read(&file).unwrap(), bytes, "{name}: the file is not written");
+            assert!(!v.saving() && v.pending_original.is_none() && v.save_alert.is_none(), "{name}: nothing is saved in place");
+            let pending = v.pending_export.as_ref().unwrap_or_else(|| panic!("{name}: the save panel is asked for"));
+            assert_eq!((pending.name.as_str(), pending.ext, pending.adopt), (suggested, "png", true), "{name}");
+            assert!(matches!(pending.what, Export::Picture(ref png) if png.starts_with(b"\x89PNG")), "{name}: a PNG waits for the chosen file");
+            let request = pending.request;
+            assert!(request.is_some(), "{name}: the panel was asked for");
+            assert!(v.status.contains(says) && v.status.contains(&format!("{name} stays as it is")), "{name}: {}", v.status);
+            assert!(v.edited(), "{name}: the changes are unsaved until the copy is written");
+            // Save again while the panel is up asks for no second panel, and still writes nothing
+            v.start_save();
+            v.pump(&ctx);
+            assert_eq!(v.pending_export.as_ref().and_then(|p| p.request), request, "{name}");
+            assert_eq!(std::fs::read(&file).unwrap(), bytes, "{name}");
+            cleanup(&v);
+        }
+        // The whole way, for a file the shell handed over and with Save chosen in the question at close: neither the
+        // file nor Viewer's working copy of it is written, the window waits for the save panel, and the chosen file
+        // is the document afterwards: the title names it, File > Save writes it, and it leads Open Recent.
+        let mut v = Viewer::new();
+        v.data_dir = dir.join("data-granted");
+        let copy = v.open_granted("anim.gif", [7; 16], None, &animation).expect("the working copy");
+        assert_eq!(pixels_of(&v), vec![0xff00_00ffu32; 6], "the first frame is what is shown");
+        assert_eq!(v.doc.as_ref().unwrap().stored.frames, 2);
+        v.rotate(1);
+        v.adjust.exposure = 0.5;
+        v.ask_unsaved(Leaving::Close);
+        v.answer_save_alert(ALERT_SAVE);
+        v.pump(&ctx);
+        assert!(v.leave.is_some() && !v.saving() && v.saving_copy(), "the close waits for the save panel");
+        assert_eq!(std::fs::read(&copy).unwrap(), animation, "the working copy is not written");
+        let request = v.pending_export.as_ref().and_then(|p| p.request).expect("the save panel is asked for");
+        let chosen = dir.join("chosen.png");
+        let to = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(true).open(&chosen).unwrap();
+        v.document(&ctx, DocumentEvent::SaveTo(bifrost_app::Document { request, grant: [8; 16], name: "anim.png".into(), size: 0, mode: DocMode::Write, file: to }));
+        assert!(std::fs::read(&chosen).unwrap().starts_with(b"\x89PNG"), "the copy is a PNG");
+        assert!(v.saving_copy() && v.leave.is_some(), "the commit is waited for");
+        let saved = bifrost_app::Document { request, grant: [8; 16], name: "anim.png".into(), size: 0, mode: DocMode::Write, file: std::fs::File::open(&chosen).unwrap() };
+        assert!(v.document(&ctx, DocumentEvent::Saved(saved)));
+        assert_eq!(v.status, "Saved anim.png");
+        assert!(v.leave.is_some(), "the close is carried out by the next turn, not given up");
+        {
+            let doc = v.doc.as_ref().expect("the copy is the document");
+            assert_ne!(doc.path, copy);
+            assert_eq!(doc.sizes, [(2, 3)], "the picture as it was shown, turned");
+            assert_eq!(doc.stored.in_place(), Some(bifrost_app::image_source::Format::Png), "the next Save writes the PNG itself");
+            assert_eq!(v.origins.grant_of(&v.data_dir, &doc.path), Some([8; 16]), "through the chosen file's grant");
+            assert_eq!(v.recents.get(0), Some(doc.path.as_path()));
+        }
+        assert_eq!(v.window_title(), "anim.png");
+        assert_eq!(v.adjust, Adjust::default(), "the colour adjustment is in the saved picture");
+        assert!(!v.edited() && !v.saving_copy());
+        assert_eq!(std::fs::read(&copy).unwrap(), animation, "the GIF's copy is as it was opened");
+        v.pump(&ctx);
+        assert!(v.leave.is_none(), "the window closed once the copy was saved");
+        cleanup(&v);
+        // Cancel in the save panel keeps the document, its changes and the window
+        let mut v = Viewer::new();
+        v.data_dir = dir.join("data-cancelled");
+        let copy = v.open_granted("anim.gif", [7; 16], None, &animation).expect("the working copy");
+        v.rotate(1);
+        v.ask_unsaved(Leaving::Quit);
+        v.answer_save_alert(ALERT_SAVE);
+        v.pump(&ctx);
+        let request = v.pending_export.as_ref().and_then(|p| p.request).expect("the save panel is asked for");
+        assert!(v.document(&ctx, DocumentEvent::Failed { request, code: DocErrorCode::Cancelled }));
+        v.pump(&ctx);
+        assert!(v.leave.is_none() && !v.saving_copy() && v.edited());
+        assert!(!ctx.take_terminate(), "nothing quits");
+        assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(copy.clone()));
+        assert_eq!(std::fs::read(&copy).unwrap(), animation);
+        cleanup(&v);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A PNG of 8 bits a sample without a colour profile and a JPEG are still saved into their own file, in the
+    /// format their bytes have whatever the file is called: a JPEG named .png is written as a JPEG, not as a PNG.
+    #[test]
+    fn save_writes_a_plain_png_and_a_jpeg_in_place_in_the_format_their_bytes_have() {
+        let dir = std::env::temp_dir().join(format!("viewer-save-in-place-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let img = Image { w: 3, h: 2, px: vec![0xff20_60a0; 6] };
+        let png = export::png_bytes(&img).unwrap();
+        let jpeg = export::encode(&img, Raster::Jpeg(export::JPEG_QUALITY)).unwrap();
+        let png_magic: &[u8] = b"\x89PNG";
+        let jpeg_magic: &[u8] = &[0xff, 0xd8, 0xff];
+        let cases: [(&str, &[u8], &[u8]); 4] = [("a.png", &png[..], png_magic), ("a.jpg", &jpeg[..], jpeg_magic), ("named.png", &jpeg[..], jpeg_magic), ("named.jpg", &png[..], png_magic)];
+        for (name, bytes, magic) in cases {
+            let file = dir.join(name);
+            std::fs::write(&file, bytes).unwrap();
+            let mut v = Viewer::new();
+            v.data_dir = dir.join(format!("data-{name}"));
+            v.open_path(&file);
+            assert!(v.doc.as_ref().is_some_and(|d| d.stored.in_place().is_some()), "{name}: {}", v.status);
+            v.rotate(1);
+            v.save_document();
+            assert!(v.pending_export.is_none() && !v.saving() && v.save_alert.is_none(), "{name}: {}", v.status);
+            assert_eq!(v.status, format!("Saved {name}"));
+            let now = std::fs::read(&file).unwrap();
+            assert!(now.starts_with(magic), "{name}: the file keeps the format its bytes had");
+            assert_ne!(now, bytes, "{name}: the turned picture is in the file");
+            let saved = document::decode_picture(&now).expect("the saved file decodes");
+            assert_eq!((saved.w, saved.h), (2, 3), "{name}");
+            assert!(!v.edited(), "{name}");
+            cleanup(&v);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Saving a PNG loses nothing of its pixels: opened, turned four quarter turns and saved, the file holds the pixels
