@@ -179,6 +179,20 @@ enum AlertKind {
     Changed,
     /// Revert was chosen: asks before the document's changes are discarded.
     ConfirmRevert,
+    /// The window is being closed or the app quit with unsaved changes: Save, Don't Save or Cancel.
+    Unsaved(Leaving),
+    /// Something the person has to be told once (a save the last quit cut off): OK.
+    Notice,
+}
+
+/// What the person asked for when the unsaved-changes question came up, done once it is answered with Save (after the
+/// save has ended) or Don't Save.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Leaving {
+    /// The close control or Cmd+W: the window is ordered out and the app stays.
+    Close,
+    /// Quit.
+    Quit,
 }
 
 /// The alert shown when the original could not be written.
@@ -196,6 +210,19 @@ const ALERT_CANCEL: u32 = 2;
 /// Revert in the alert about a file another app changed, and Revert in the confirmation that follows it.
 const ALERT_REVERT: u32 = 3;
 const ALERT_CONFIRM_REVERT: u32 = 4;
+/// Save and Don't Save in the unsaved-changes question, and OK in a notice.
+const ALERT_SAVE: u32 = 5;
+const ALERT_DONT_SAVE: u32 = 6;
+const ALERT_OK: u32 = 7;
+
+/// The reason the alert gives when the shell did not answer a step of a save in time (`Viewer::expire_save`).
+const NO_ANSWER: &str = "The system did not answer in time.";
+
+/// How long the shell may take to answer a step of a save into the original (the look at the file, the file to write
+/// into, the commit), in ms: the time the kit gives a system service to answer. Neither step waits for the person.
+fn save_answer_ms() -> f64 {
+    bifrost_app::service_client::DEFAULT_TIMEOUT.as_secs_f64() * 1000.0
+}
 
 /// What an export writes into the chosen file.
 enum Export {
@@ -323,6 +350,14 @@ struct Viewer {
     inserted: Option<PathBuf>,
     /// The form widget that the keyboard is typing into.
     form_focus: Option<usize>,
+    /// The step of a save into the original the shell has been asked for and has not answered (its request), and when
+    /// the wait for it is over (`expire_save`).
+    save_wait: Option<(u32, f64)>,
+    /// The requests of saves that were given up: an answer that arrives after all is dropped.
+    abandoned: Vec<u32>,
+    /// The close or quit that waits for the unsaved-changes question's answer to be carried out: after the save has
+    /// ended (false), or at once because the changes were discarded (true). `finish_leaving` does it.
+    leave: Option<(Leaving, bool)>,
     /// "Saved name" while it is what the status line says, and when it goes (set by the first `tick` that sees it).
     /// It says the document is as its file is, so it goes at the first edit after the save, and after
     /// `SAVED_STATUS_MS` in any case.
@@ -395,6 +430,9 @@ impl Viewer {
             insert_at: None,
             inserted: None,
             form_focus: None,
+            save_wait: None,
+            abandoned: Vec::new(),
+            leave: None,
             saved_note: None,
             menu_request: None,
         }
@@ -529,13 +567,14 @@ impl Viewer {
         self.pending_save = None;
         // the pixels of a save still under way belong to the document that is being replaced
         self.saved_picture = None;
-        if self.unsaved_copy.as_deref() != Some(path) {
-            self.unsaved_copy = None;
-        }
         // an export's job belongs to the document it was asked for; the panel's answer then finds nothing to write
         self.pending_export = None;
-        // a save alert is about the document that is being replaced
-        self.save_alert = None;
+        // a save alert, or the question at close or quit, is about the document that is being replaced; what the
+        // person was to be told about the last quit is not: a file the app was launched with opens under it
+        if !self.save_alert.as_ref().is_some_and(|alert| alert.kind == AlertKind::Notice) {
+            self.save_alert = None;
+        }
+        self.leave = None;
         self.after_open = None;
         self.doc = None;
         self.loading = None;
@@ -672,8 +711,8 @@ impl Viewer {
 
     /// Whether a save is under way: a picture is being encoded, a PDF is being written by its worker, or the saved
     /// document is on its way into the original. Until it has ended the document is what the save holds: the window
-    /// takes no keys, menu commands or presses (`event`), so no edit is made that the end of the save would discard,
-    /// and the app stays alive when it is told to quit (`save_in_flight`).
+    /// takes nothing that would change it (`event`; what only changes the view still works), so no edit is made that
+    /// the end of the save would discard, and the app stays alive when it is told to quit (`save_in_flight`).
     fn saving(&self) -> bool {
         self.picture_save.is_some() || self.pending_save.is_some() || self.pending_original.is_some()
     }
@@ -702,10 +741,87 @@ impl Viewer {
                 self.unsaved_copy = Some(copy);
                 self.after_open = self.loading.is_some().then(|| message.clone());
                 self.status = message;
+                // The status line is cleared when the app was launched to open a file, which then takes this
+                // document's place: the alert stays up over it and says where the changes are.
+                self.tell(
+                    format!("\u{201c}{name}\u{201d} was not saved to its file before Viewer quit."),
+                    format!("Your changes are kept in Viewer\u{2019}s copy. Open {name} from File > Open Recent and choose File > Save to write them to the file."),
+                );
                 return;
             }
         }
         self.status = format!("The last changes to {name} were not saved before Viewer quit.");
+        self.tell(format!("The last changes to \u{201c}{name}\u{201d} were not saved before Viewer quit."), "They could not be kept.".into());
+    }
+
+    /// Raises an alert that only says something, with OK. It stays up when another document opens.
+    fn tell(&mut self, title: String, message: String) {
+        self.save_alert = Some(SaveAlert { kind: AlertKind::Notice, title, message, focus: None });
+    }
+
+    /// The close control, Cmd+W or Quit with unsaved changes: asks whether to save them first.
+    fn ask_unsaved(&mut self, leaving: Leaving) {
+        let name = self.document_name().unwrap_or_default();
+        self.save_alert = Some(SaveAlert {
+            kind: AlertKind::Unsaved(leaving),
+            title: format!("Do you want to save the changes made to \u{201c}{name}\u{201d}?"),
+            message: "Your changes will be lost if you don\u{2019}t save them.".into(),
+            focus: None,
+        });
+    }
+
+    /// Don't Save: the document goes back to what its file holds, so nothing of the changes is kept for the next
+    /// launch either (the markup's sidecar is emptied with them).
+    fn discard_changes(&mut self) {
+        self.revert();
+        self.history = History::default();
+        self.unsaved_copy = None;
+    }
+
+    /// Carries out the close or quit the unsaved-changes question was asked for, once no save is under way: after
+    /// Don't Save at once, after Save when the save has ended and the document is clean. A save that failed (its
+    /// alert is up, or the document is still edited) keeps the window and the app: the person has to see why.
+    fn finish_leaving(&mut self, ctx: &Ctx) {
+        let Some((leaving, discarded)) = self.leave else { return };
+        if self.saving() {
+            return;
+        }
+        self.leave = None;
+        if discarded || (!self.edited() && self.save_alert.is_none()) {
+            match leaving {
+                Leaving::Close => ctx.close_main_window(),
+                Leaving::Quit => ctx.terminate(),
+            }
+        }
+    }
+
+    /// Run by `tick` at time `t` (ms): the shell is given `save_answer_ms` to answer each step of a save into the
+    /// original. When it does not, the save fails as a refused one does: the alert says the file could not be saved
+    /// and offers Save As, the document stays edited, and the window takes input again. Without this a shell that
+    /// never answered left the save under way for good, and the window deaf. True when the save was given up.
+    fn expire_save(&mut self, t: f64) -> bool {
+        let Some(request) = self.pending_original.as_ref().and_then(|p| p.request.or(p.check)) else {
+            self.save_wait = None;
+            return false;
+        };
+        match self.save_wait {
+            Some((waiting, until)) if waiting == request => {
+                if t < until {
+                    return false;
+                }
+                self.save_wait = None;
+                // an answer that arrives after all finds no save: it must not be taken for a file to open
+                self.abandoned.push(request);
+                let Some(OriginalSave { copy, .. }) = self.pending_original.take() else { return false };
+                self.refuse_save(&copy, NO_ANSWER);
+                true
+            }
+            // a step was just asked for: its time starts now
+            _ => {
+                self.save_wait = Some((request, t + save_answer_ms()));
+                false
+            }
+        }
     }
 
     /// The first half of a save. A PDF's save is handed to its worker (`pending_save`) and nothing is returned; for
@@ -936,6 +1052,13 @@ impl Viewer {
             AlertKind::Changed => vec![save_as, SheetButton::new(ALERT_REVERT, "Revert", ButtonRole::Normal), cancel],
             // discarding changes is never what Return does: Cancel answers Escape, Revert is pressed
             AlertKind::ConfirmRevert => vec![SheetButton::new(ALERT_CONFIRM_REVERT, "Revert", ButtonRole::Destructive), cancel],
+            // Save is what Return does; Don't Save loses the changes, so it is pressed (or Cmd+D)
+            AlertKind::Unsaved(_) => vec![
+                SheetButton::new(ALERT_SAVE, "Save", ButtonRole::Default),
+                SheetButton::new(ALERT_DONT_SAVE, "Don\u{2019}t Save", ButtonRole::Destructive),
+                cancel,
+            ],
+            AlertKind::Notice => vec![SheetButton::new(ALERT_OK, "OK", ButtonRole::Default)],
         };
         Some(Sheet::alert(&alert.title, &alert.message, buttons).with_focus(alert.focus))
     }
@@ -956,6 +1079,15 @@ impl Viewer {
                 });
             }
             (AlertKind::ConfirmRevert, ALERT_CONFIRM_REVERT) => self.revert_to_disk(),
+            // Save: the window closes or the app quits when the save has ended (`finish_leaving`)
+            (AlertKind::Unsaved(leaving), ALERT_SAVE) => {
+                self.leave = Some((leaving, false));
+                self.start_save();
+            }
+            (AlertKind::Unsaved(leaving), ALERT_DONT_SAVE) => {
+                self.discard_changes();
+                self.leave = Some((leaving, true));
+            }
             _ => {}
         }
     }
@@ -1108,8 +1240,11 @@ impl Viewer {
         self.save();
         // the file is the same document: the zoom mode the person chose stays (the page and the pan start over)
         let zoom = self.view.zoom;
+        // nor does a close or quit that waits for this save end here: only another document opening drops it
+        let leave = self.leave;
         self.open_path(path);
         self.view.zoom = zoom;
+        self.leave = leave;
         self.status = message.clone();
         self.after_open = Some(message);
     }
@@ -1588,6 +1723,8 @@ impl Viewer {
         if !self.saving() {
             self.save_ended();
         }
+        // the close or quit that waited for the save
+        self.finish_leaving(ctx);
         changed
     }
 
@@ -2597,6 +2734,71 @@ impl Viewer {
         }
     }
 
+    /// What `App::event` does with an input once it is known that no save holds it back.
+    fn handle(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        match ev {
+            Input::Open(url) => match path_from_url(&url) {
+                Some(path) => {
+                    self.open_path(&path);
+                    true
+                }
+                None => false,
+            },
+            Input::Key(key) => self.key(ctx, key),
+            Input::Activate(id) => self.track(|viewer| viewer.menu_action(ctx, id as u32)),
+            // a choice from a toolbar menu (Markup, Adjust, the `»` button): the action the row stands for
+            Input::ContextAction(id) => self.track(|viewer| viewer.menu_action(ctx, id)),
+            Input::Touch { kind, x, y, .. } => {
+                let (w, h) = self.size(ctx);
+                let changed = self.touch(&ctx.ui, w, h, kind, x, y);
+                if let Some((x, y, items)) = self.menu_request.take() {
+                    if !items.is_empty() {
+                        ctx.context_menu(x, y, items);
+                    }
+                }
+                changed
+            }
+            _ => false,
+        }
+    }
+
+    /// A press, drag or release while a save is under way. The document is what the save holds, so nothing that would
+    /// change it is taken: no markup, no page is chosen, no menu opens. What only changes the view still works: the
+    /// toolbar's view buttons (`Action::view_only`), dragging the sidebar's list, and dragging (or scrolling) the page.
+    fn touch_while_saving(&mut self, ui: &Ui, width: i32, height: i32, kind: TouchKind, x: f32, y: f32) -> bool {
+        if self.save_alert.is_some() || self.mode == Mode::Slideshow {
+            return false;
+        }
+        let lay = self.layout(ui, width, height);
+        let viewing = matches!(self.gesture, Some(Gesture::Pan { .. } | Gesture::Scroll { .. }));
+        match kind {
+            TouchKind::Down => {
+                if let Some(action) = canvas::button_hit(ui, &lay, self.doc.is_some(), &self.window_title(), self.tool, x, y) {
+                    return action.view_only() && self.act(ui, &lay, action);
+                }
+                if self.doc.is_none() || y < lay.bar as f32 {
+                    return false;
+                }
+                let (cx, _, cw, _) = lay.canvas();
+                if x < lay.side as f32 {
+                    self.gesture = Some(Gesture::Scroll { last: y });
+                } else if x < (cx + cw) as f32 && self.mode == Mode::Page {
+                    self.gesture = Some(Gesture::Pan { last: (x, y) });
+                } else {
+                    return false;
+                }
+                true
+            }
+            TouchKind::Move => viewing && self.touch_move(ui, &lay, x, y),
+            TouchKind::Up | TouchKind::Cancel => {
+                if viewing {
+                    self.gesture = None;
+                }
+                viewing
+            }
+        }
+    }
+
     fn touch(&mut self, ui: &Ui, width: i32, height: i32, kind: TouchKind, x: f32, y: f32) -> bool {
         let lay = self.layout(ui, width, height);
         if self.save_alert.is_some() {
@@ -3382,36 +3584,27 @@ impl App for Viewer {
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
-        // While a save is being written the document is what the save holds: keys, menu commands and presses are
-        // ignored until it has ended (the status line says "Saving"), so no edit is made that the saved document
-        // would then replace. A file sent to the app still opens; the save ends for the document it was started for.
-        if self.saving() && matches!(ev, Input::Key(_) | Input::Activate(_) | Input::ContextAction(_) | Input::Touch { .. }) {
-            return false;
-        }
-        match ev {
-            Input::Open(url) => match path_from_url(&url) {
-                Some(path) => {
-                    self.open_path(&path);
-                    true
+        // While a save is being written the document is what the save holds: keys, menu commands and presses that
+        // would change it are ignored until it has ended (the status line says "Saving"), so no edit is made that
+        // the saved document would then replace. What only changes the view (the zoom, Fit, the sidebar, a drag of
+        // the page) still works. A file sent to the app still opens; the save ends for the document it was started for.
+        if self.saving() {
+            let view_only = |id: u32| Action::from_id(id).is_some_and(Action::view_only);
+            match &ev {
+                Input::Key(_) => return false,
+                Input::Activate(id) if !view_only(*id as u32) => return false,
+                Input::ContextAction(id) if !view_only(*id) => return false,
+                Input::Touch { kind, x, y, .. } => {
+                    let (w, h) = self.size(ctx);
+                    return self.touch_while_saving(&ctx.ui, w, h, *kind, *x, *y);
                 }
-                None => false,
-            },
-            Input::Key(key) => self.key(ctx, key),
-            Input::Activate(id) => self.track(|viewer| viewer.menu_action(ctx, id as u32)),
-            // a choice from a toolbar menu (Markup, Adjust, the `»` button): the action the row stands for
-            Input::ContextAction(id) => self.track(|viewer| viewer.menu_action(ctx, id)),
-            Input::Touch { kind, x, y, .. } => {
-                let (w, h) = self.size(ctx);
-                let changed = self.touch(&ctx.ui, w, h, kind, x, y);
-                if let Some((x, y, items)) = self.menu_request.take() {
-                    if !items.is_empty() {
-                        ctx.context_menu(x, y, items);
-                    }
-                }
-                changed
+                _ => {}
             }
-            _ => false,
         }
+        let changed = self.handle(ctx, ev);
+        // an answer to the question at close or quit that needs no save (Don't Save) is carried out now
+        self.finish_leaving(ctx);
+        changed
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
@@ -3450,6 +3643,18 @@ impl App for Viewer {
     /// The answer to the open panel: the chosen file is copied into the app's data folder and opened from there, and
     /// its grant is kept so File > Save writes the chosen file. The answers to that save arrive here too.
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        // An answer to a step of a save that was given up (`expire_save`): the save has failed and the person was
+        // told, so the file the answer carries is not taken for a document to open. (A late file to write into is
+        // refused below, as any file nothing waits for.)
+        let late = match &ev {
+            DocumentEvent::Opened(doc) | DocumentEvent::Saved(doc) => Some(doc.request),
+            DocumentEvent::Failed { request, .. } => Some(*request),
+            _ => None,
+        };
+        if let Some(at) = late.and_then(|request| self.abandoned.iter().position(|given_up| *given_up == request)) {
+            self.abandoned.swap_remove(at);
+            return false;
+        }
         let mut saved_as = false;
         let doc = match ev {
             DocumentEvent::SaveTo(mut doc) if self.saving_original(doc.request) => {
@@ -3583,14 +3788,50 @@ impl App for Viewer {
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         let mut changed = self.pump(ctx);
+        changed |= self.expire_save(t);
         changed |= self.expire_saved_status(t);
         self.sync_document_state(ctx);
         changed
     }
 
-    /// "Saved name" leaves the status line when its time is up: the loop wakes for it.
+    /// The loop wakes when "Saved name" is to leave the status line, and when the wait for the shell's answer to a
+    /// save is over.
     fn next_wake(&self, _t: f64) -> Option<f64> {
-        self.saved_note.as_ref().and_then(|(_, until)| *until)
+        let saved = self.saved_note.as_ref().and_then(|(_, until)| *until);
+        let answer = self.save_wait.map(|(_, until)| until);
+        match (saved, answer) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    }
+
+    /// The close control and Cmd+W ask the app: a document with unsaved changes asks Save, Don't Save or Cancel first.
+    fn handles_close_request(&self) -> bool {
+        true
+    }
+
+    /// The window closes at once when the document has no unsaved changes. With changes the question comes up, and
+    /// the window closes once it is answered with Don't Save, or with Save when the save has ended. While a save is
+    /// already under way the window closes when that has ended.
+    fn close_requested(&mut self, ctx: &Ctx) -> bool {
+        if self.saving() {
+            self.leave = Some((Leaving::Close, false));
+        } else if self.edited() {
+            self.ask_unsaved(Leaving::Close);
+        } else {
+            ctx.close_main_window();
+        }
+        true
+    }
+
+    /// Quit asks the same question. A save that is under way needs none: the app is kept until it has ended
+    /// (`save_in_flight`). A window that is closed has nothing to ask on: its document was saved or given up then.
+    fn quit_requested(&mut self, ctx: &Ctx) -> bool {
+        if self.saving() || !self.edited() || !ctx.windows().main_shown() {
+            return true;
+        }
+        self.ask_unsaved(Leaving::Quit);
+        false
     }
 
     fn suspend(&mut self, _ctx: &Ctx) {
@@ -3609,6 +3850,8 @@ impl App for Viewer {
     /// Quit while a save is under way: the app stays until the save has ended (or the runtime's wait is over). `tick`
     /// no longer runs, so this takes the encoded picture or the worker's PDF and sends the request that follows.
     fn save_in_flight(&mut self, ctx: &Ctx) -> bool {
+        // the app is leaving already: nothing waits for the save to close or quit
+        self.leave = None;
         self.pump(ctx);
         self.saving()
     }
@@ -4835,6 +5078,247 @@ mod tests {
         assert!(!v.expire_saved_status(0.0) && !v.expire_saved_status(1.0e9));
         assert_eq!(v.status, "Bookmarked page 1");
         assert!(v.saved_note.is_none());
+        cleanup(&v);
+    }
+
+    /// A context for a window of the default size at scale 1, for presses on the toolbar and the canvas.
+    fn window_ctx() -> Ctx {
+        let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/SFUI.ttf")).unwrap().into_boxed_slice());
+        let cfg = bifrost_app::proto::Configure { w: 1200, h: 780, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
+        Ctx::testing(Ui::new(bifrost_app::kit::Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    fn touch_at(kind: TouchKind, x: f32, y: f32) -> Input {
+        Input::Touch { kind, id: 0, x, y, t: 0.0, source: Default::default(), mods: Default::default() }
+    }
+
+    /// While a save is under way the commands that only change the view still work (the zoom, Fit, the sidebar, a
+    /// drag of the page), from the menus and from the toolbar; what would change the document waits for the save.
+    #[test]
+    fn view_commands_work_while_a_save_is_under_way_and_edits_wait() {
+        use bifrost_app::proto::ToShell;
+        let (mut v, _copy) = viewer_on_copy("view-while-saving");
+        v.set_origin("b.png", Some(([9; 16], None)));
+        let ctx = window_ctx();
+        v.rotate(1);
+        v.tool = Tool::Highlight;
+        v.save_document();
+        assert!(v.saving());
+        // from the menus
+        assert!(v.event(&ctx, Input::Activate(Action::ZoomIn.id() as _)));
+        assert!(matches!(v.view.zoom, Zoom::Factor(_)), "Zoom In works");
+        assert!(v.event(&ctx, Input::Activate(Action::FitWindow.id() as _)));
+        assert_eq!(v.view.zoom, Zoom::Fit);
+        assert!(v.event(&ctx, Input::Activate(Action::ToggleSidebar.id() as _)) && !v.sidebar);
+        assert!(v.event(&ctx, Input::Activate(Action::ToggleSidebar.id() as _)) && v.sidebar);
+        assert!(!v.event(&ctx, Input::Activate(Action::RotateRight.id() as _)), "an edit waits");
+        assert!(!v.event(&ctx, Input::ContextAction(Action::Brighter.id())));
+        assert!(!v.event(&ctx, Input::Activate(Action::Save.id() as _)));
+        assert!(!v.event(&ctx, Input::Activate(MENU_OPEN as _)));
+        // from the toolbar
+        let lay = v.layout(&ctx.ui, 1200, 780);
+        let (_, layout) = canvas::toolbar(&ctx.ui, &lay, true, &v.window_title(), v.tool);
+        let centre = |id: u32| layout.rect_of(id).map(|r| (r.x + r.w / 2.0, r.y + r.h / 2.0)).expect("on the bar");
+        let (x, y) = centre(Action::ZoomOut.id());
+        assert!(v.event(&ctx, touch_at(TouchKind::Down, x, y)));
+        assert!(matches!(v.view.zoom, Zoom::Factor(_)), "the Zoom Out button works");
+        v.event(&ctx, touch_at(TouchKind::Up, x, y));
+        let (x, y) = centre(Action::RotateRight.id());
+        assert!(!v.event(&ctx, touch_at(TouchKind::Down, x, y)), "the Rotate button waits");
+        let (x, y) = centre(canvas::MARKUP_MENU_ID);
+        assert!(!v.event(&ctx, touch_at(TouchKind::Down, x, y)));
+        assert!(ctx.take_sent().iter().all(|m| !matches!(m, ToShell::ContextMenu { .. })), "no menu of edits opens");
+        // a drag over the page moves the view and makes no mark, whatever tool is chosen
+        let (cx, cy, cw, ch) = lay.canvas();
+        let (x, y) = ((cx + cw / 2) as f32, (cy + ch / 2) as f32);
+        assert!(v.event(&ctx, touch_at(TouchKind::Down, x, y)));
+        assert!(matches!(v.gesture, Some(Gesture::Pan { .. })));
+        v.event(&ctx, touch_at(TouchKind::Move, x + 40.0, y + 30.0));
+        assert!(v.event(&ctx, touch_at(TouchKind::Up, x + 40.0, y + 30.0)));
+        assert!(v.gesture.is_none());
+        let doc = v.doc.as_ref().unwrap();
+        assert!(doc.marks.is_empty() && doc.turns == [1], "the document is as the save holds it");
+        assert!(!v.history.can_undo(), "no edit was recorded");
+        assert!(!Action::Next.view_only() && !Action::Crop.view_only() && Action::ZoomIn.view_only());
+        cleanup(&v);
+    }
+
+    /// The shell is given a bounded time to answer each step of a save. When it never does, the save fails with the
+    /// alert a refused save shows, the document stays edited and the window takes input again; an answer that
+    /// arrives after all is dropped.
+    #[test]
+    fn a_save_the_shell_never_answers_fails_after_a_bounded_wait() {
+        let (mut v, copy) = viewer_on_copy("no-answer");
+        v.set_origin("b.png", Some(([9; 16], None)));
+        v.doc.as_mut().unwrap().marks.push(rect_mark(Norm { x: 0.0, y: 0.0, w: 0.5, h: 0.5 }));
+        let ctx = menu_ctx();
+        let wait = save_answer_ms();
+        assert!(wait >= 1000.0 && wait <= 60_000.0, "seconds, not a moment and not for good");
+        assert!(!v.expire_save(0.0) && v.next_wake(0.0).is_none(), "no save, no wait");
+        v.save_document();
+        v.pump(&ctx);
+        let check = v.pending_original.as_ref().unwrap().check.expect("the look at the original is asked for");
+        assert!(!v.expire_save(1000.0));
+        assert_eq!(v.next_wake(1000.0), Some(1000.0 + wait), "the loop wakes when the wait is over");
+        assert!(!v.expire_save(1000.0 + wait - 1.0) && v.saving());
+        assert!(v.expire_save(1000.0 + wait), "a frame is asked for");
+        assert!(!v.saving() && v.pending_original.is_none() && v.next_wake(0.0).is_none());
+        let sheet = v.save_sheet().expect("the alert is up");
+        assert!(sheet.title.contains("b.png") && sheet.title.contains("could not be saved"));
+        assert!(sheet.message.contains("did not answer") && sheet.message.contains("Save As"));
+        assert_eq!(sheet.default_button(), Some(ALERT_SAVE_AS));
+        assert_eq!(v.window_title(), "b.png \u{2013} Edited");
+        assert_eq!(std::fs::read(&copy).unwrap(), b"as opened");
+        v.pump(&ctx);
+        assert!(!v.data_dir.join("save/unfinished.txt").exists(), "the person was told: nothing is left for the next launch");
+        // the answer arrives after all: it is not taken for anything
+        assert_eq!(v.abandoned, [check]);
+        assert!(!v.document(&ctx, DocumentEvent::Failed { request: check, code: DocErrorCode::NotFound }));
+        assert!(v.abandoned.is_empty() && v.save_sheet().is_some_and(|s| s.message.contains("did not answer")));
+        // the window takes input again
+        assert!(v.key(&ctx, KeyInput::Code(27)) && v.save_alert.is_none());
+        assert!(v.event(&ctx, Input::Activate(Action::RotateRight.id() as _)));
+        // each step has its own time: the look is answered, and the wait starts over for the save in place
+        v.save_document();
+        v.pump(&ctx);
+        assert!(!v.expire_save(0.0));
+        v.original_checked(&ctx, None);
+        assert!(v.pending_original.as_ref().unwrap().request.is_some());
+        assert!(!v.expire_save(wait - 1.0), "a new step, a new wait");
+        assert!(!v.expire_save(2.0 * wait - 2.0));
+        assert!(v.expire_save(2.0 * wait - 1.0));
+        assert!(!v.saving() && v.save_alert.is_some() && v.edited());
+        cleanup(&v);
+    }
+
+    /// The alert about a save the last quit cut off stays up when the app was launched to open a file: that file
+    /// opens under it, and the copy that holds the changes is still an edited document when it is opened again.
+    #[test]
+    fn the_note_of_a_cut_off_save_stays_up_when_the_app_was_launched_with_a_file() {
+        let (mut v, copy) = viewer_on_copy("recover-open");
+        v.set_origin("b.png", Some(([9; 16], None)));
+        v.doc = None;
+        let saved = export::png_bytes(&Image { w: 3, h: 1, px: vec![0xff00_ff00; 3] }).unwrap();
+        let written = v.data_dir.join("save/b.png");
+        std::fs::create_dir_all(written.parent().unwrap()).unwrap();
+        std::fs::write(&written, &saved).unwrap();
+        origin::note_unfinished(&v.data_dir, &copy, Some(&written)).unwrap();
+        let (noted, at) = origin::take_unfinished(&v.data_dir).expect("the note of the last run");
+        v.recover_unfinished(noted, at);
+        let sheet = v.save_sheet().expect("the person is told");
+        assert!(sheet.title.contains("b.png") && sheet.title.contains("was not saved") && sheet.message.contains("Open Recent"));
+        assert_eq!(sheet.default_button(), Some(ALERT_OK));
+        // the launch goes on to open the file it was started for
+        let other = v.data_dir.join("other.png");
+        std::fs::write(&other, export::png_bytes(&Image { w: 2, h: 2, px: vec![0xff00_00ff; 4] }).unwrap()).unwrap();
+        let ctx = menu_ctx();
+        assert!(v.event(&ctx, Input::Open(other.display().to_string())));
+        assert_eq!(v.doc.as_ref().map(|d| d.path.clone()), Some(other.clone()));
+        assert_eq!(v.window_title(), "other.png");
+        let sheet = v.save_sheet().expect("the alert is still up over the opened file");
+        assert!(sheet.title.contains("b.png") && sheet.title.contains("was not saved"));
+        // Return is OK
+        assert!(v.event(&ctx, Input::Key(KeyInput::Code(13))));
+        assert!(v.save_alert.is_none());
+        // the copy still counts as unsaved when it is opened again
+        v.open_path(&copy);
+        assert_eq!(v.window_title(), "b.png \u{2013} Edited");
+        // nothing was kept (the app was gone before the picture was encoded): that is said in an alert too
+        let mut v2 = Viewer::new();
+        v2.data_dir = v.data_dir.clone();
+        v2.recover_unfinished(copy.clone(), None);
+        assert!(v2.save_sheet().is_some_and(|s| s.title.contains("were not saved") && s.default_button() == Some(ALERT_OK)));
+        cleanup(&v);
+    }
+
+    /// The close control and Quit ask about unsaved changes: Cancel keeps everything, Save leaves once the save has
+    /// ended, Don't Save gives the changes up and leaves at once. A clean document needs no question.
+    #[test]
+    fn closing_or_quitting_with_unsaved_changes_asks_and_then_leaves() {
+        use bifrost_app::proto::ToShell;
+        let closed = |ctx: &Ctx| ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowClose { .. }));
+        let (mut v, copy) = viewer_on_copy("ask");
+        assert!(v.handles_close_request(), "the app answers the close control itself");
+        // a clean document: no question
+        let ctx = menu_ctx();
+        assert!(v.quit_requested(&ctx) && v.save_alert.is_none());
+        assert!(v.close_requested(&ctx) && v.save_alert.is_none());
+        assert!(closed(&ctx), "the window closes at once");
+        // an edited one: the close control asks, and Cancel keeps the window and the changes
+        let ctx = menu_ctx();
+        v.rotate(1);
+        assert!(v.close_requested(&ctx));
+        assert!(!closed(&ctx), "the window stays while the question is up");
+        let sheet = v.save_sheet().expect("the question");
+        assert!(sheet.title.contains("b.png") && sheet.title.contains("save the changes"));
+        assert_eq!(sheet.default_button(), Some(ALERT_SAVE));
+        assert_eq!(sheet.buttons.iter().map(|b| b.id).collect::<Vec<_>>(), [ALERT_SAVE, ALERT_DONT_SAVE, ALERT_CANCEL]);
+        assert!(v.event(&ctx, Input::Key(KeyInput::Code(27))));
+        assert!(v.save_alert.is_none() && v.leave.is_none() && v.edited());
+        assert!(!closed(&ctx) && !ctx.take_terminate());
+        // Quit asks too, and Save (Return) quits when the save has ended, not before
+        assert!(!v.quit_requested(&ctx), "the quit waits for the answer");
+        assert!(v.save_sheet().is_some());
+        assert!(v.event(&ctx, Input::Key(KeyInput::Code(13))));
+        assert!(v.save_alert.is_none() && v.saving());
+        assert!(!ctx.take_terminate(), "not while the save is under way");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while v.saving() {
+            assert!(std::time::Instant::now() < deadline, "the picture is written");
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            v.pump(&ctx);
+        }
+        assert!(ctx.take_terminate(), "the app quits once the file is written");
+        assert!(!v.edited() && v.leave.is_none());
+        assert!(std::fs::read(&copy).unwrap().starts_with(b"\x89PNG"));
+        // Don't Save: the changes go and the window closes at once
+        v.rotate(1);
+        assert!(v.close_requested(&ctx) && v.save_alert.is_some());
+        v.answer_save_alert(ALERT_DONT_SAVE);
+        v.finish_leaving(&ctx);
+        assert!(closed(&ctx));
+        assert!(!v.edited() && v.doc.as_ref().unwrap().turns == [0] && !v.history.can_undo());
+        // a window that is closed has nothing to ask on
+        v.rotate(1);
+        assert!(v.quit_requested(&ctx) && v.save_alert.is_none());
+        cleanup(&v);
+    }
+
+    /// A save that fails after Save was chosen keeps the window: the alert says why. A close asked for while a save
+    /// is already under way needs no question and closes when the save has ended.
+    #[test]
+    fn a_failed_save_keeps_the_window_and_a_close_during_a_save_waits_for_it() {
+        use bifrost_app::proto::ToShell;
+        let closed = |ctx: &Ctx| ctx.take_sent().iter().any(|m| matches!(m, ToShell::WindowClose { .. }));
+        let (mut v, _copy) = viewer_on_copy("ask-refused");
+        v.set_origin("b.png", Some(([9; 16], None)));
+        let ctx = menu_ctx();
+        v.rotate(1);
+        assert!(v.close_requested(&ctx));
+        // Save was chosen (the picture is written here at once, as `save_document` does for the tests)
+        v.save_alert = None;
+        v.leave = Some((Leaving::Close, false));
+        v.save_document();
+        v.pump(&ctx);
+        assert!(v.leave.is_some() && !closed(&ctx), "the close waits for the save");
+        v.original_failed(Some(DocErrorCode::Denied));
+        v.pump(&ctx);
+        assert!(v.leave.is_none() && !closed(&ctx), "the save failed: the window stays");
+        assert!(v.save_sheet().is_some_and(|s| s.title.contains("could not be saved")) && v.edited());
+        // a close while a save is under way
+        v.save_alert = None;
+        v.save_document();
+        v.pump(&ctx);
+        assert!(v.close_requested(&ctx));
+        assert!(v.save_alert.is_none() && !closed(&ctx), "no question: the save is on its way");
+        v.original_checked(&ctx, None);
+        v.original_saved(None);
+        v.pump(&ctx);
+        assert!(closed(&ctx) && !v.edited());
+        // quitting during a save is held by `save_in_flight`, with no question
+        v.rotate(1);
+        v.save_document();
+        assert!(v.quit_requested(&ctx) && v.save_alert.is_none());
         cleanup(&v);
     }
 }

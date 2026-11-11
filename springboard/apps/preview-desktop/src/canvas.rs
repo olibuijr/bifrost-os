@@ -311,8 +311,8 @@ pub const ACTIONS: &[Action] = &[
 
 /// The buttons that sit on the toolbar themselves, in order: the sidebar, the pages, the zoom and the turn. The markup
 /// tools and the colour adjustments follow them behind one pull-down button each (`MARKUP_MENU`, `ADJUST_MENU`); the
-/// rest are in the menus only. Twenty-one buttons in a row needed twice the default window's width, so most of them
-/// sat behind the bar's `»` button.
+/// rest are in the menus only. One button for each tool and adjustment needed far more than the default window's
+/// width, so most of them sat behind the bar's `»` button.
 const TOOLBAR: &[Action] = &[
     Action::ToggleSidebar,
     Action::Previous,
@@ -486,6 +486,26 @@ impl Action {
             Action::QualityLow => Some(50),
             _ => None,
         }
+    }
+
+    /// Whether the action only changes how the document is shown (the zoom, the sidebar, the Inspector, the
+    /// magnifier) and leaves the document as it is. These work while a save is under way; everything else waits.
+    pub fn view_only(self) -> bool {
+        matches!(
+            self,
+            Action::ZoomIn
+                | Action::ZoomOut
+                | Action::ActualSize
+                | Action::FitWindow
+                | Action::ToggleSidebar
+                | Action::ShowPages
+                | Action::ShowOutline
+                | Action::ShowNotes
+                | Action::ShowBookmarks
+                | Action::ShowSearch
+                | Action::Inspector
+                | Action::ToggleMagnifier
+        )
     }
 
     /// The buttons that sit on the toolbar themselves, in order.
