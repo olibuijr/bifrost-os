@@ -1011,7 +1011,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stickies"
-version = "0.10.9"
+version = "0.10.10"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
